@@ -342,12 +342,64 @@ export function useDetachCompany() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (payload: { note?: string; proposal: File; letter: File }) => {
-      const form = new FormData();
-      if (payload.note?.trim()) form.append("note", payload.note.trim());
-      form.append("proposal", payload.proposal);
-      form.append("letter", payload.letter);
+    mutationFn: async (payload?: { note?: string }) => {
       const res = await api<{ data: Customer }>("/profile/company/detach", {
+        method: "POST",
+        body: JSON.stringify({ note: payload?.note?.trim() || undefined }),
+      });
+      return res.data;
+    },
+    onSuccess: (customer) => {
+      queryClient.setQueryData(queryKeys.customer.me, customer);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.customer.me });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions });
+      void queryClient.invalidateQueries({ queryKey: ["company-membership-requests"] });
+    },
+  });
+}
+
+export type CompanyMemberOption = {
+  public_id?: string | null;
+  name?: string | null;
+  phone_number?: string | null;
+  email?: string | null;
+  gender?: string | null;
+  nationality?: string | null;
+  birthdate?: string | null;
+  identification_type?: string | null;
+  identification_number?: string | null;
+  role?: string | null;
+  is_active?: boolean;
+  is_owner?: boolean;
+};
+
+export function useCompanyMembers(enabled: boolean) {
+  return useQuery({
+    queryKey: ["company-members"],
+    enabled,
+    queryFn: async () => {
+      const res = await api<{ data: CompanyMemberOption[] }>("/profile/company/members");
+      return res.data;
+    },
+  });
+}
+
+export function useTransferOwnership() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: {
+      target_customer: string;
+      letter: File;
+      note?: string;
+    }) => {
+      const form = new FormData();
+      form.append("target_customer", payload.target_customer);
+      form.append("letter", payload.letter);
+      if (payload.note?.trim()) {
+        form.append("note", payload.note.trim());
+      }
+      const res = await api<{ data: Customer }>("/profile/company/transfer-ownership", {
         method: "POST",
         body: form,
       });
@@ -356,6 +408,7 @@ export function useDetachCompany() {
     onSuccess: (customer) => {
       queryClient.setQueryData(queryKeys.customer.me, customer);
       void queryClient.invalidateQueries({ queryKey: queryKeys.customer.me });
+      void queryClient.invalidateQueries({ queryKey: ["company-members"] });
     },
   });
 }

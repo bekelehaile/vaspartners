@@ -144,4 +144,25 @@ class Company extends Model
 
         return $status?->isApproved() === true && $this->is_active;
     }
+
+    protected static function normalizeIdentityCode(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $normalized = strtoupper(preg_replace('/\s+/', '', trim($value)) ?? '');
+
+        return $normalized === '' ? null : $normalized;
+    }
+
+    public function setTinAttribute(?string $value): void
+    {
+        $this->attributes['tin'] = self::normalizeIdentityCode($value) ?? '';
+    }
+
+    public function setLicenseNumberAttribute(?string $value): void
+    {
+        $this->attributes['license_number'] = self::normalizeIdentityCode($value);
+    }
 }

@@ -42,6 +42,7 @@ class CompanyChangeRequestResource extends Resource
     {
         $count = CompanyChangeRequest::query()
             ->where('status', CompanyChangeStatus::Pending)
+            ->where('type', CompanyChangeType::TransferOwnership)
             ->count();
 
         return $count > 0 ? (string) $count : null;
@@ -69,6 +70,9 @@ class CompanyChangeRequestResource extends Resource
             ])->columns(2),
             Section::make('Partner')->schema([
                 TextEntry::make('customer.name')
+                    ->label(fn (CompanyChangeRequest $record): string => $record->type === CompanyChangeType::TransferOwnership
+                        ? 'Current owner'
+                        : 'Partner')
                     ->url(fn (CompanyChangeRequest $record): ?string => $record->customer
                         ? CustomerResource::getUrl('view', ['record' => $record->customer])
                         : null),
@@ -76,6 +80,17 @@ class CompanyChangeRequestResource extends Resource
                 TextEntry::make('customer.email'),
                 TextEntry::make('customer.identification_number')->label('ID number'),
             ])->columns(2),
+            Section::make('Proposed new owner')
+                ->visible(fn (CompanyChangeRequest $record): bool => $record->type === CompanyChangeType::TransferOwnership)
+                ->schema([
+                    TextEntry::make('targetCustomer.name')
+                        ->label('New owner')
+                        ->url(fn (CompanyChangeRequest $record): ?string => $record->targetCustomer
+                            ? CustomerResource::getUrl('view', ['record' => $record->targetCustomer])
+                            : null),
+                    TextEntry::make('targetCustomer.phone_number')->label('Phone'),
+                    TextEntry::make('targetCustomer.email')->label('Email'),
+                ])->columns(2),
             Section::make('Company')->schema([
                 TextEntry::make('company.name')
                     ->url(fn (CompanyChangeRequest $record): ?string => $record->company
@@ -87,6 +102,11 @@ class CompanyChangeRequestResource extends Resource
                 TextEntry::make('company.email'),
                 TextEntry::make('company.address')->columnSpanFull(),
             ])->columns(2),
+            Section::make('Transfer letter')
+                ->visible(fn (CompanyChangeRequest $record): bool => $record->type === CompanyChangeType::TransferOwnership)
+                ->schema([
+                    TextEntry::make('letter_original_name')->label('Letter PDF')->placeholder('—'),
+                ]),
             Section::make('Detach documents')
                 ->visible(fn (CompanyChangeRequest $record): bool => $record->type === CompanyChangeType::Detach)
                 ->schema([
@@ -102,7 +122,7 @@ class CompanyChangeRequestResource extends Resource
                 TextEntry::make('admin_note')->label('Decision note')->columnSpanFull()->placeholder('—'),
             ])->columns(2),
             Section::make('Owner approval')
-                ->description('Membership (attach) requests are decided by the company owner in the partner portal.')
+                ->description('Membership (join) requests are decided by the company owner in the partner portal. Ownership transfer requires admin approval with a letter.')
                 ->visible(fn (CompanyChangeRequest $record): bool => $record->type === CompanyChangeType::Attach
                     && $record->status === CompanyChangeStatus::Pending)
                 ->schema([
@@ -126,10 +146,17 @@ class CompanyChangeRequestResource extends Resource
                     default => 'gray',
                 }),
                 TextColumn::make('customer.name')
-                    ->label('Partner')
+                    ->label('Requester')
                     ->searchable()
                     ->url(fn (CompanyChangeRequest $record): ?string => $record->customer
                         ? CustomerResource::getUrl('view', ['record' => $record->customer])
+                        : null),
+                TextColumn::make('targetCustomer.name')
+                    ->label('New owner')
+                    ->placeholder('—')
+                    ->toggleable()
+                    ->url(fn (CompanyChangeRequest $record): ?string => $record->targetCustomer
+                        ? CustomerResource::getUrl('view', ['record' => $record->targetCustomer])
                         : null),
                 TextColumn::make('company.name')
                     ->label('Company')
@@ -162,12 +189,14 @@ class CompanyChangeRequestResource extends Resource
                     ->label('Approve')
                     ->color('success')
                     ->icon('heroicon-o-check-circle')
-                    ->visible(fn (CompanyChangeRequest $record) => $record->status === CompanyChangeStatus::Pending
-                        && $record->type === CompanyChangeType::Detach)
+                    ->visible(fn (CompanyChangeRequest $record): bool => $record->status === CompanyChangeStatus::Pending
+                        && $record->type === CompanyChangeType::TransferOwnership)
                     ->form([
                         Textarea::make('admin_note')->label('Note to partner (optional)'),
                     ])
                     ->requiresConfirmation()
+                    ->modalHeading('Approve ownership transfer')
+                    ->modalDescription('The selected member becomes the sole owner. The current owner becomes a member.')
                     ->action(function (CompanyChangeRequest $record, array $data, CompanyMembershipService $membership) {
                         $membership->approve($record, auth()->user(), $data['admin_note'] ?? null);
                     }),
@@ -175,8 +204,8 @@ class CompanyChangeRequestResource extends Resource
                     ->label('Reject')
                     ->color('danger')
                     ->icon('heroicon-o-x-circle')
-                    ->visible(fn (CompanyChangeRequest $record) => $record->status === CompanyChangeStatus::Pending
-                        && $record->type === CompanyChangeType::Detach)
+                    ->visible(fn (CompanyChangeRequest $record): bool => $record->status === CompanyChangeStatus::Pending
+                        && $record->type === CompanyChangeType::TransferOwnership)
                     ->form([
                         Textarea::make('admin_note')->label('Reason for partner')->required(),
                     ])

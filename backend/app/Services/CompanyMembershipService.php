@@ -274,8 +274,8 @@ class CompanyMembershipService
     }
 
     /**
-     * Personal leave: member/owner detaches themselves from the current company immediately.
-     * No admin approval. Membership (join) still requires company-owner approval.
+     * Personal leave: partner detaches themselves from the current company immediately.
+     * No admin approval or PDFs. Joining still requires company-owner approval.
      */
     public function leaveCompany(Customer $customer, ?string $note = null): Customer
     {
@@ -291,6 +291,12 @@ class CompanyMembershipService
             ]);
         }
 
+        if ($this->pendingRequestFor($customer)) {
+            throw ValidationException::withMessages([
+                'company' => 'You have a pending membership request. Wait for a decision or cancel it first.',
+            ]);
+        }
+
         $this->assertOwnerMayLeave($customer);
 
         $company = $customer->company;
@@ -299,42 +305,57 @@ class CompanyMembershipService
         }
 
         $owner = $company->ownerCustomer();
-        $this->unlinkCustomer($customer, $company);
+        $companyId = $company->id;
 
-        if ($owner && (int) $owner->id !== (int) $customer->id) {
-            $this->notifications->memberLeftCompany($company, $owner, $customer, $note);
-        }
+        return DB::transaction(function () use ($customer, $company, $companyId, $owner, $note) {
+            CompanyChangeRequest::query()->create([
+                'customer_id' => $customer->id,
+                'company_id' => $companyId,
+                'type' => CompanyChangeType::Detach,
+                'status' => CompanyChangeStatus::Approved,
+                'customer_note' => filled($note) ? trim($note) : null,
+                'admin_note' => 'Personal leave — no admin approval required.',
+                'reviewed_by_customer_id' => $customer->id,
+                'reviewed_at' => now(),
+            ]);
 
-        return $customer->fresh(['company', 'memberships.company']);
-    }
+            $this->unlinkCustomer($customer, $company);
 
-    /** @deprecated Use leaveCompany — detach is personal and immediate. */
-    public function requestDetach(
-        Customer $customer,
-        ?string $note,
-        UploadedFile $proposal,
-        UploadedFile $letter,
-    ): CompanyChangeRequest {
-        unset($proposal, $letter);
-        $this->leaveCompany($customer, $note);
+            if ($owner && (int) $owner->id !== (int) $customer->id) {
+                DB::afterCommit(function () use ($company, $owner, $customer, $note) {
+                    $this->notifications->memberLeftCompany(
+                        $company->fresh(),
+                        $owner->fresh(),
+                        $customer->fresh(),
+                        $note,
+                    );
+                });
+            }
 
-        // Keep return type for any legacy callers; mark as auto-approved audit row.
-        return CompanyChangeRequest::query()->create([
-            'customer_id' => $customer->id,
-            'company_id' => $customer->current_company_id ?? $customer->memberships()->latest('id')->value('company_id'),
-            'type' => CompanyChangeType::Detach,
-            'status' => CompanyChangeStatus::Approved,
-            'customer_note' => filled($note) ? trim($note) : null,
-            'admin_note' => 'Personal leave (no admin approval).',
-            'reviewed_by_customer_id' => $customer->id,
-            'reviewed_at' => now(),
-        ]);
+            return $customer->fresh(['company', 'memberships.company']);
+        });
     }
 
     public function approve(CompanyChangeRequest $request, User|Customer $actor, ?string $adminNote = null): CompanyChangeRequest
     {
         if ($request->status !== CompanyChangeStatus::Pending) {
             throw ValidationException::withMessages(['status' => 'This request was already decided.']);
+        }
+
+        if ($request->type === CompanyChangeType::Detach) {
+            throw ValidationException::withMessages([
+                'status' => 'Leaving a company is personal and immediate. Partners detach themselves in the portal — no approval is needed.',
+            ]);
+        }
+
+        if ($request->type === CompanyChangeType::TransferOwnership) {
+            if (! $actor instanceof User) {
+                throw ValidationException::withMessages([
+                    'status' => 'Ownership transfer must be approved by an administrator.',
+                ]);
+            }
+
+            return $this->approveOwnershipTransfer($request, $actor, $adminNote);
         }
 
         if ($request->type === CompanyChangeType::Attach && $actor instanceof User) {
@@ -357,36 +378,17 @@ class CompanyMembershipService
             $customer = $request->customer;
             $company = $request->company;
 
-            if ($request->type === CompanyChangeType::Attach) {
-                if ($this->membershipFor($customer, $company)) {
-                    throw ValidationException::withMessages([
-                        'status' => 'Customer is already a member of this company.',
-                    ]);
-                }
-                if (! $company->hasOwner()) {
-                    throw ValidationException::withMessages([
-                        'status' => 'This company has no owner. Attach cannot be approved until an owner exists.',
-                    ]);
-                }
-                $this->linkCustomer($customer, $company, CompanyRole::Member, switchTo: false);
-            } else {
-                if (! $this->membershipFor($customer, $company)) {
-                    throw ValidationException::withMessages([
-                        'status' => 'Customer is no longer linked to this company.',
-                    ]);
-                }
-                // Temporarily set context so owner-leave checks use this company.
-                $previous = $customer->current_company_id;
-                $customer->forceFill(['current_company_id' => $company->id])->save();
-                try {
-                    $this->assertOwnerMayLeave($customer->fresh());
-                    $this->unlinkCustomer($customer->fresh(), $company);
-                } finally {
-                    if ($previous && (int) $previous !== (int) $company->id) {
-                        $customer->forceFill(['current_company_id' => $previous])->save();
-                    }
-                }
+            if ($this->membershipFor($customer, $company)) {
+                throw ValidationException::withMessages([
+                    'status' => 'Customer is already a member of this company.',
+                ]);
             }
+            if (! $company->hasOwner()) {
+                throw ValidationException::withMessages([
+                    'status' => 'This company has no owner. Attach cannot be approved until an owner exists.',
+                ]);
+            }
+            $this->linkCustomer($customer, $company, CompanyRole::Member, switchTo: false);
 
             $request->fill([
                 'status' => CompanyChangeStatus::Approved,
@@ -408,7 +410,19 @@ class CompanyMembershipService
             throw ValidationException::withMessages(['status' => 'This request was already decided.']);
         }
 
-        if ($request->type === CompanyChangeType::Attach && $actor instanceof User) {
+        if ($request->type === CompanyChangeType::Detach) {
+            throw ValidationException::withMessages([
+                'status' => 'Leaving a company is personal and immediate. Partners detach themselves in the portal — no approval is needed.',
+            ]);
+        }
+
+        if ($request->type === CompanyChangeType::TransferOwnership) {
+            if (! $actor instanceof User) {
+                throw ValidationException::withMessages([
+                    'status' => 'Ownership transfer must be rejected by an administrator.',
+                ]);
+            }
+        } elseif ($request->type === CompanyChangeType::Attach && $actor instanceof User) {
             throw ValidationException::withMessages([
                 'status' => 'Membership (attach) requests must be rejected by the company owner in the partner portal.',
             ]);
@@ -431,9 +445,152 @@ class CompanyMembershipService
             'reviewed_at' => now(),
         ])->save();
 
-        $this->notifications->companyChangeDecided($request->fresh(['customer', 'company']));
+        $this->notifications->companyChangeDecided($request->fresh(['customer', 'company', 'targetCustomer']));
 
-        return $request->fresh(['customer', 'company', 'reviewer', 'customerReviewer']);
+        return $request->fresh(['customer', 'company', 'reviewer', 'customerReviewer', 'targetCustomer']);
+    }
+
+    /**
+     * Owner requests to transfer ownership to another active member (letter PDF required).
+     * Admin must approve in Filament.
+     */
+    public function requestOwnershipTransfer(
+        Customer $owner,
+        string $newOwnerPublicId,
+        UploadedFile $letter,
+        ?string $note = null,
+    ): CompanyChangeRequest {
+        $this->assertIsActiveOwner($owner);
+
+        if ($this->pendingRequestFor($owner)) {
+            throw ValidationException::withMessages([
+                'company' => 'You already have a pending company request.',
+            ]);
+        }
+
+        $company = $owner->company;
+        if (! $company?->isApproved()) {
+            throw ValidationException::withMessages([
+                'company' => 'Ownership can only be transferred after the company is approved.',
+            ]);
+        }
+
+        $newOwner = Customer::query()->where('public_id', $newOwnerPublicId)->first();
+        if (! $newOwner) {
+            throw ValidationException::withMessages([
+                'target_customer' => 'Selected partner was not found.',
+            ]);
+        }
+
+        if ((int) $newOwner->id === (int) $owner->id) {
+            throw ValidationException::withMessages([
+                'target_customer' => 'Choose a different partner as the new owner.',
+            ]);
+        }
+
+        $membership = $this->membershipFor($newOwner, $company);
+        if (! $membership || ! $membership->is_active) {
+            throw ValidationException::withMessages([
+                'target_customer' => 'The new owner must be an active member of this company.',
+            ]);
+        }
+
+        $letterMeta = $this->storePdf($owner, $letter, 'letter');
+
+        $request = CompanyChangeRequest::query()->create([
+            'customer_id' => $owner->id,
+            'company_id' => $company->id,
+            'target_customer_id' => $newOwner->id,
+            'type' => CompanyChangeType::TransferOwnership,
+            'status' => CompanyChangeStatus::Pending,
+            'customer_note' => filled($note) ? trim($note) : null,
+            'letter_disk' => $letterMeta['disk'],
+            'letter_path' => $letterMeta['path'],
+            'letter_original_name' => $letterMeta['original_name'],
+            'letter_size_bytes' => $letterMeta['size'],
+        ]);
+
+        $this->notifications->companyChangeRequested($request->load(['company', 'customer', 'targetCustomer']));
+
+        return $request;
+    }
+
+    protected function approveOwnershipTransfer(CompanyChangeRequest $request, User $admin, ?string $adminNote = null): CompanyChangeRequest
+    {
+        return DB::transaction(function () use ($request, $admin, $adminNote) {
+            $request->loadMissing(['customer', 'company', 'targetCustomer']);
+            $company = $request->company;
+            $currentOwner = $request->customer;
+            $newOwner = $request->targetCustomer;
+
+            if (! $company || ! $currentOwner || ! $newOwner) {
+                throw ValidationException::withMessages(['status' => 'Transfer request is incomplete.']);
+            }
+
+            $ownerMembership = CompanyMembership::query()
+                ->where('company_id', $company->id)
+                ->where('customer_id', $currentOwner->id)
+                ->where('role', CompanyRole::Owner->value)
+                ->first();
+
+            if (! $ownerMembership) {
+                throw ValidationException::withMessages([
+                    'status' => 'Requester is no longer the company owner.',
+                ]);
+            }
+
+            $this->transferOwnership($company, $newOwner, $admin);
+
+            $request->fill([
+                'status' => CompanyChangeStatus::Approved,
+                'admin_note' => filled($adminNote) ? trim($adminNote) : null,
+                'reviewed_by_user_id' => $admin->id,
+                'reviewed_by_customer_id' => null,
+                'reviewed_at' => now(),
+            ])->save();
+
+            $this->notifications->companyChangeDecided($request->fresh(['customer', 'company', 'targetCustomer']));
+
+            return $request->fresh(['customer', 'company', 'reviewer', 'targetCustomer']);
+        });
+    }
+
+    /**
+     * Members of the current company (Fayda identity fields for the portal roster).
+     * Any active member of an approved company may view the list.
+     *
+     * @return \Illuminate\Support\Collection<int, array<string, mixed>>
+     */
+    public function listCurrentCompanyMembers(Customer $viewer)
+    {
+        $this->assertCanAccessCompany($viewer);
+
+        return CompanyMembership::query()
+            ->with('customer')
+            ->where('company_id', $viewer->current_company_id)
+            ->orderByRaw("CASE WHEN role = 'owner' THEN 0 ELSE 1 END")
+            ->orderBy('id')
+            ->get()
+            ->map(function (CompanyMembership $m) {
+                $c = $m->customer;
+                $role = $m->role instanceof CompanyRole ? $m->role->value : (string) $m->role;
+
+                return [
+                    'public_id' => $c?->public_id,
+                    'name' => $c?->name,
+                    'phone_number' => $c?->phone_number,
+                    'email' => $c?->email,
+                    'gender' => $c?->gender,
+                    'nationality' => $c?->nationality,
+                    'birthdate' => optional($c?->birthdate)?->toDateString() ?? $c?->birthdate,
+                    'identification_type' => $c?->identification_type,
+                    'identification_number' => $c?->identification_number,
+                    'role' => $role,
+                    'is_active' => (bool) $m->is_active,
+                    'is_owner' => $role === CompanyRole::Owner->value,
+                ];
+            })
+            ->values();
     }
 
     /**
@@ -575,7 +732,7 @@ class CompanyMembershipService
     {
         if (! $customer->current_company_id) {
             throw ValidationException::withMessages([
-                'company' => 'Select or create a company before continuing.',
+                'company' => 'Create a company with a unique TIN (or join an approved company) before using VAS services.',
             ]);
         }
 
@@ -588,7 +745,13 @@ class CompanyMembershipService
         $customer->loadMissing('company');
         if (! $customer->company?->isApproved()) {
             throw ValidationException::withMessages([
-                'company' => 'Your company profile is waiting for admin approval. You can use services after it is approved.',
+                'company' => 'Services are locked until an administrator approves your company profile for this TIN. Complete company details and wait for approval.',
+            ]);
+        }
+
+        if (! filled($customer->company->tin)) {
+            throw ValidationException::withMessages([
+                'company' => 'A valid company TIN is required before using VAS services.',
             ]);
         }
     }
@@ -696,6 +859,9 @@ class CompanyMembershipService
     {
         $customer->loadMissing(['company', 'memberships.company']);
         $pending = $this->pendingRequestFor($customer);
+        if ($pending) {
+            $pending->loadMissing(['company', 'targetCustomer']);
+        }
         $company = $customer->company;
         $approvalStatus = $company?->approval_status instanceof CompanyApprovalStatus
             ? $company->approval_status
@@ -715,7 +881,7 @@ class CompanyMembershipService
         $canDetach = (bool) $customer->current_company_id
             && $membershipActive
             && $companyApproved
-            && (! $isOwner || $memberCount <= 1);
+            && ! $isOwner;
         $pendingMembershipCount = ($isOwner && $membershipActive && $companyApproved && $customer->current_company_id)
             ? CompanyChangeRequest::query()
                 ->where('company_id', $customer->current_company_id)
@@ -744,7 +910,8 @@ class CompanyMembershipService
         $data['company_membership_active'] = $membershipActive;
         $data['company_can_detach'] = $canDetach;
         $data['company_can_edit'] = $canEditCompany;
-        $data['company_needs_ownership_transfer'] = $isOwner && $memberCount > 1 && $membershipActive && $companyApproved;
+        // Owner must transfer ownership (admin-approved) before they can leave.
+        $data['company_needs_ownership_transfer'] = $isOwner && $membershipActive && (bool) $customer->current_company_id;
         $data['pending_membership_requests_count'] = $pendingMembershipCount;
         $data['profile_completed'] = $customer->profile_completed;
         $data['memberships'] = $customer->memberships
@@ -787,6 +954,10 @@ class CompanyMembershipService
                 'name' => $pending->company->name,
                 'tin' => $pending->company->tin,
                 'license_number' => $pending->company->license_number,
+            ] : null,
+            'target_customer' => $pending->targetCustomer ? [
+                'public_id' => $pending->targetCustomer->public_id,
+                'name' => $pending->targetCustomer->name,
             ] : null,
             'created_at' => optional($pending->created_at)?->toIso8601String(),
             'has_proposal' => $pending->hasProposal(),
@@ -850,23 +1021,20 @@ class CompanyMembershipService
         ])->save();
     }
 
-    /** Owner may leave only when they are the sole person on the company. */
+    /**
+     * Company owner cannot leave while they are still the owner.
+     * They must request an ownership transfer (letter + admin approval) first,
+     * then leave as a member.
+     */
     protected function assertOwnerMayLeave(Customer $customer): void
     {
         if ($this->roleOf($customer) !== CompanyRole::Owner || ! $customer->current_company_id) {
             return;
         }
 
-        $others = CompanyMembership::query()
-            ->where('company_id', $customer->current_company_id)
-            ->where('customer_id', '!=', $customer->id)
-            ->count();
-
-        if ($others > 0) {
-            throw ValidationException::withMessages([
-                'company' => 'Company owner cannot leave while other members remain. Ask an admin to transfer ownership first.',
-            ]);
-        }
+        throw ValidationException::withMessages([
+            'company' => 'Company owner cannot leave. Transfer ownership to another active member first (letter required; admin must approve). After you are no longer the owner, you can leave as a member.',
+        ]);
     }
 
     protected function normalizeCode(string $value): string
@@ -891,13 +1059,13 @@ class CompanyMembershipService
 
         if ($tinQuery->exists()) {
             throw ValidationException::withMessages([
-                'company_tin' => 'A company with this TIN already exists. Use “Attach to existing company” instead.',
+                'company_tin' => 'This TIN is already registered to another company. TINs are unique — use “Join existing company” with the matching license number, or contact an administrator.',
             ]);
         }
 
         if ($licenseQuery->exists()) {
             throw ValidationException::withMessages([
-                'company_license_number' => 'A company with this license number already exists. Use “Attach to existing company” instead.',
+                'company_license_number' => 'This license number is already registered to another company. Use “Join existing company” with the matching TIN, or contact an administrator.',
             ]);
         }
     }

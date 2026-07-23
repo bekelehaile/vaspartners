@@ -7,8 +7,9 @@ import { getToken } from "@/lib/api";
 import { useCustomer, useLogout } from "@/hooks/use-customer";
 
 /**
- * Auth + company-profile gate for all /portal routes.
- * Incomplete profiles are forced to /portal/company.
+ * Auth + approved-company gate for all /portal routes.
+ * Partners cannot use services until their company TIN is admin-approved.
+ * Incomplete / pending profiles are forced to /portal/company.
  */
 export function PortalGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -17,6 +18,7 @@ export function PortalGuard({ children }: { children: ReactNode }) {
   const { data: me, isLoading, isError, error } = useCustomer();
 
   const onCompanyPage = pathname === "/portal/company";
+  const canUseServices = !!me?.profile_completed;
 
   useEffect(() => {
     if (!getToken()) {
@@ -28,10 +30,10 @@ export function PortalGuard({ children }: { children: ReactNode }) {
       router.replace("/");
       return;
     }
-    if (me && !me.profile_completed && !onCompanyPage) {
+    if (me && !canUseServices && !onCompanyPage) {
       router.replace("/portal/company");
     }
-  }, [me, isLoading, isError, onCompanyPage, router]);
+  }, [me, isLoading, isError, canUseServices, onCompanyPage, router]);
 
   if (!getToken() || isLoading || !me) {
     return (
@@ -51,12 +53,14 @@ export function PortalGuard({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!me.profile_completed && !onCompanyPage) {
+  if (!canUseServices && !onCompanyPage) {
     return (
       <main className="auth-wait">
         <div>
           <div className="spinner" aria-hidden />
-          <p className="muted">Company profile required — redirecting…</p>
+          <p className="muted">
+            Approved company required — redirecting…
+          </p>
         </div>
       </main>
     );

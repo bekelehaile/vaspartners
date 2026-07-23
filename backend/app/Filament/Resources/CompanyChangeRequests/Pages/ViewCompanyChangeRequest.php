@@ -36,7 +36,8 @@ class ViewCompanyChangeRequest extends ViewRecord
             Action::make('download_letter')
                 ->label('Download letter')
                 ->icon('heroicon-o-arrow-down-tray')
-                ->visible(fn () => $record->type === CompanyChangeType::Detach && $record->hasLetter())
+                ->visible(fn () => in_array($record->type, [CompanyChangeType::Detach, CompanyChangeType::TransferOwnership], true)
+                    && $record->hasLetter())
                 ->action(function () use ($record, $membership) {
                     $meta = $membership->downloadPath($record, 'letter');
                     abort_unless($meta && Storage::disk($meta['disk'])->exists($meta['path']), 404);
@@ -47,11 +48,13 @@ class ViewCompanyChangeRequest extends ViewRecord
                 ->label('Approve')
                 ->color('success')
                 ->visible(fn () => $record->status === CompanyChangeStatus::Pending
-                    && $record->type === CompanyChangeType::Detach)
+                    && $record->type === CompanyChangeType::TransferOwnership)
                 ->form([
                     Textarea::make('admin_note')->label('Note to partner (optional)'),
                 ])
                 ->requiresConfirmation()
+                ->modalHeading('Approve ownership transfer')
+                ->modalDescription('The selected member becomes the sole owner. The current owner becomes a member.')
                 ->action(function (array $data) use ($record, $membership) {
                     $membership->approve($record, auth()->user(), $data['admin_note'] ?? null);
                     $this->refreshFormData(['status', 'admin_note', 'reviewed_at', 'reviewed_by_user_id', 'reviewed_by_customer_id']);
@@ -60,7 +63,7 @@ class ViewCompanyChangeRequest extends ViewRecord
                 ->label('Reject')
                 ->color('danger')
                 ->visible(fn () => $record->status === CompanyChangeStatus::Pending
-                    && $record->type === CompanyChangeType::Detach)
+                    && $record->type === CompanyChangeType::TransferOwnership)
                 ->form([
                     Textarea::make('admin_note')->label('Reason for partner')->required(),
                 ])

@@ -84,14 +84,14 @@ export function PortalSettingsMenu({
             role="menuitem"
             onClick={close}
           >
-            Company info
+            Company profile
           </Link>
           <Link
-            href="/portal/company#contact-info"
+            href="/portal/company#company-members-panel"
             role="menuitem"
             onClick={close}
           >
-            Company contact
+            Company members
           </Link>
         </div>
       )}

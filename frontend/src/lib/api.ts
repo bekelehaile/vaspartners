@@ -8,6 +8,8 @@ export type Customer = {
   gender?: string | null;
   nationality?: string | null;
   birthdate?: string | null;
+  identification_type?: string | null;
+  identification_number?: string | null;
   company_id?: number | null;
   current_company_id?: number | null;
   company_role?: string | null;
@@ -48,7 +50,7 @@ export type Customer = {
   pending_membership_requests_count?: number;
   pending_company_request?: {
     public_id: string;
-    type: "attach" | "detach";
+    type: "attach" | "detach" | "transfer_ownership";
     status: string;
     customer_note?: string | null;
     company?: {
@@ -56,6 +58,10 @@ export type Customer = {
       name: string;
       tin: string;
       license_number?: string | null;
+    } | null;
+    target_customer?: {
+      public_id: string;
+      name: string;
     } | null;
     created_at?: string | null;
     has_proposal?: boolean;

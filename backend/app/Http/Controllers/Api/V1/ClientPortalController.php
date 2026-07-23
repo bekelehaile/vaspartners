@@ -183,11 +183,17 @@ class ClientPortalController extends Controller
         return response()->json(['data' => $ticket], 201);
     }
 
-    public function subscriptions(Request $request)
+    public function subscriptions(Request $request, CompanyMembershipService $membership)
     {
         /** @var \App\Models\Customer $customer */
         $customer = $request->user();
-        if (! $customer->hasActiveCompanyMembership()) {
+
+        try {
+            $membership->assertCanAccessCompany($customer);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $message = collect($e->errors())->flatten()->first()
+                ?: 'Complete and get your company TIN approved before viewing subscriptions.';
+
             return response()->json([
                 'data' => [],
                 'current_page' => 1,
@@ -196,9 +202,7 @@ class ClientPortalController extends Controller
                 'total' => 0,
                 'pending_new_service_ids' => [],
                 'pending_requests' => [],
-                'message' => $customer->current_company_id && ! $customer->hasActiveCompanyMembership()
-                    ? 'Your company membership is disabled.'
-                    : 'Complete your company profile to view subscriptions.',
+                'message' => $message,
             ]);
         }
 
@@ -497,15 +501,44 @@ class ClientPortalController extends Controller
 
         $data = $request->validate([
             'note' => ['nullable', 'string', 'max:2000'],
-            'proposal' => ['required', 'file'],
-            'letter' => ['required', 'file'],
         ]);
 
-        $change = $membership->requestDetach(
+        $fresh = $membership->leaveCompany($customer, $data['note'] ?? null);
+
+        return response()->json([
+            'data' => $membership->serializeCustomer($fresh),
+            'message' => 'You have left the company.',
+        ]);
+    }
+
+    public function companyMembers(Request $request, CompanyMembershipService $membership)
+    {
+        return response()->json([
+            'data' => $membership->listCurrentCompanyMembers($request->user()),
+        ]);
+    }
+
+    public function requestTransferOwnership(Request $request, CompanyMembershipService $membership)
+    {
+        /** @var \App\Models\Customer $customer */
+        $customer = $request->user();
+        if (! $customer->hasActiveCompanyMembership()) {
+            return response()->json([
+                'message' => 'Your membership for this company is disabled. Contact an administrator.',
+            ], 403);
+        }
+
+        $data = $request->validate([
+            'target_customer' => ['required', 'string', 'max:64'],
+            'letter' => ['required', 'file'],
+            'note' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $change = $membership->requestOwnershipTransfer(
             $customer,
-            $data['note'] ?? null,
-            $request->file('proposal'),
+            $data['target_customer'],
             $request->file('letter'),
+            $data['note'] ?? null,
         );
 
         return response()->json([
@@ -515,6 +548,7 @@ class ClientPortalController extends Controller
                 'type' => $change->type->value,
                 'status' => $change->status->value,
             ],
+            'message' => 'Ownership transfer submitted. An administrator must approve it.',
         ], 201);
     }
 }

@@ -17,6 +17,7 @@ class CompanyChangeRequest extends Model
         'public_id',
         'customer_id',
         'company_id',
+        'target_customer_id',
         'type',
         'status',
         'customer_note',
@@ -63,6 +64,11 @@ class CompanyChangeRequest extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    public function targetCustomer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class, 'target_customer_id');
     }
 
     public function reviewer(): BelongsTo

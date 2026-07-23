@@ -11,6 +11,7 @@ export function LandingServicesSection() {
   const { data: me } = useCustomer();
   const [openId, setOpenId] = useState<number | null>(null);
   const signedIn = !!me;
+  const canRequest = !!me?.profile_completed;
 
   const rows = useMemo(
     () =>
@@ -28,8 +29,8 @@ export function LandingServicesSection() {
       <span className="section-label">Our services</span>
       <h2>Comprehensive VAS solutions</h2>
       <p className="section-lead">
-        Browse the Ethio telecom VAS partners catalog. Select a service to see details, then sign in
-        to submit a request.
+        Browse the Ethio telecom VAS partners catalog. Service requests require an
+        administrator-approved company TIN.
       </p>
 
       {isLoading && (
@@ -52,6 +53,7 @@ export function LandingServicesSection() {
               index={index}
               open={openId === service.id}
               signedIn={signedIn}
+              canRequest={canRequest}
               onToggle={() => setOpenId((id) => (id === service.id ? null : service.id))}
             />
           ))}
@@ -70,16 +72,23 @@ function ServiceRow({
   index,
   open,
   signedIn,
+  canRequest,
   onToggle,
 }: {
   service: Service;
   index: number;
   open: boolean;
   signedIn: boolean;
+  canRequest: boolean;
   onToggle: () => void;
 }) {
   const requisitions = service.requisitions ?? [];
   const panelId = `service-detail-${service.id}`;
+  const requestHref = canRequest
+    ? `/portal/requests/new?intent=${
+        service.is_subscription_based === false ? "manage" : "subscribe"
+      }&service=${service.id}`
+    : "/portal/company";
 
   return (
     <li
@@ -130,13 +139,11 @@ function ServiceRow({
         <div className="landing-service-actions">
           {signedIn ? (
             <Link
-              href={`/portal/requests/new?intent=${
-                service.is_subscription_based === false ? "manage" : "subscribe"
-              }&service=${service.id}`}
+              href={requestHref}
               className="btn-primary"
               style={{ padding: "0.55rem 1rem" }}
             >
-              Request this service
+              {canRequest ? "Request this service" : "Complete company approval first"}
             </Link>
           ) : (
             <a className="btn-primary" href={faydaLoginUrl()} style={{ padding: "0.55rem 1rem" }}>

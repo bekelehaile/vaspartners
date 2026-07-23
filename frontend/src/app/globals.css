@@ -406,6 +406,37 @@ textarea {
   font-size: 0.95rem;
 }
 
+.settings-block-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.settings-block-title-row h3 {
+  margin: 0;
+}
+
+.company-portal-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.company-members-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.company-members-list .fayda-readonly {
+  margin: 0;
+}
+
+.company-profile-dl {
+  margin-top: 0.25rem;
+}
+
 .notif-bell {
   position: relative;
 }

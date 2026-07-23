@@ -36,8 +36,13 @@ function LandingInner() {
             )}
             <div className="hero-actions">
               {me ? (
-                <Link className="btn-hero" href="/portal">
-                  Go to my portal →
+                <Link
+                  className="btn-hero"
+                  href={me.profile_completed ? "/portal" : "/portal/company"}
+                >
+                  {me.profile_completed
+                    ? "Go to my portal →"
+                    : "Complete company setup →"}
                 </Link>
               ) : (
                 <a className="btn-hero" href={faydaLoginUrl()}>

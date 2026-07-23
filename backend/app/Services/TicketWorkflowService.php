@@ -31,6 +31,7 @@ class TicketWorkflowService
     public function __construct(
         protected SubscriptionLifecycleService $subscriptions,
         protected PartnerNotificationService $notifications,
+        protected CompanyMembershipService $membership,
     ) {}
 
     public function transition(Ticket $ticket, TicketStatus $to, mixed $actor = null, ?string $note = null, array $meta = []): void
@@ -220,6 +221,11 @@ class TicketWorkflowService
     public function createTicket(Customer $customer, array $data): Ticket
     {
         return DB::transaction(function () use ($customer, $data) {
+            // Hard gate: no VAS service requests until the company TIN is admin-approved.
+            if (empty($data['skip_open_limit'])) {
+                $this->membership->assertCanAccessCompany($customer);
+            }
+
             $service = Service::query()->findOrFail($data['service_id']);
             $requisition = Requisition::query()->findOrFail($data['requisition_id']);
 
@@ -232,14 +238,6 @@ class TicketWorkflowService
             $this->assertOpenTicketLimit($customer, $requisition, $data);
 
             $this->subscriptions->assertTicketAllowed($customer, $data, $requisition, $service);
-
-            if (empty($data['skip_open_limit']) && ! $customer->hasActiveCompanyMembership()) {
-                throw ValidationException::withMessages([
-                    'profile' => $customer->company_id && $customer->company_membership_active === false
-                        ? 'Your membership for this company is disabled. Contact an administrator.'
-                        : 'Please complete your company details before submitting a service request.',
-                ]);
-            }
 
             $subscriptionId = $data['subscription_id'] ?? null;
             if (! $subscriptionId && ($requisition->requires_active_subscription || $requisition->renews_subscription || $requisition->terminates_subscription)) {

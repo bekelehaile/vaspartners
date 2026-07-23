@@ -8,6 +8,7 @@ import type {
 import { useForm } from "@tanstack/react-form";
 import { useRouter } from "next/navigation";
 import { Customer } from "@/lib/api";
+import { FaydaIdentityPanel } from "@/components/FaydaIdentityPanel";
 import {
   CompanyProfileValues,
   companyProfileSchema,
@@ -155,38 +156,17 @@ export function CompanyProfileForm({
       </div>
 
       {me && (
-        <section id="fayda-identity" className="settings-block fayda-readonly">
-          <div className="settings-block-head">
-            <h3>Fayda identity</h3>
-            <p className="muted">From National ID — read-only. Contact Fayda support if this is wrong.</p>
-          </div>
-          <dl className="fayda-dl">
-            <div>
-              <dt>Full name</dt>
-              <dd>{me.name || "—"}</dd>
-            </div>
-            <div>
-              <dt>Phone</dt>
-              <dd>{me.phone_number || "—"}</dd>
-            </div>
-            <div>
-              <dt>Email</dt>
-              <dd>{me.email || "—"}</dd>
-            </div>
-            <div>
-              <dt>Gender</dt>
-              <dd>{me.gender || "—"}</dd>
-            </div>
-            <div>
-              <dt>Nationality</dt>
-              <dd>{me.nationality || "—"}</dd>
-            </div>
-            <div>
-              <dt>Birthdate</dt>
-              <dd>{me.birthdate || "—"}</dd>
-            </div>
-          </dl>
-        </section>
+        <FaydaIdentityPanel
+          id="fayda-identity"
+          title="Your Fayda identity"
+          description="Personal details from National ID (Fayda) — not company data. Contact Fayda if anything is wrong."
+          person={me}
+          badge={
+            me.company_role === "owner" ? (
+              <span className="service-meta">Company owner</span>
+            ) : undefined
+          }
+        />
       )}
 
       {mutation.isError && (
@@ -202,8 +182,10 @@ export function CompanyProfileForm({
           <>
             <section id="company-info" className="settings-block">
               <div className="settings-block-head">
-                <h3>Company info</h3>
-                <p className="muted">Organisation identity and address.</p>
+                <h3>Company profile</h3>
+                <p className="muted">
+                  Organisation TIN, license, and address — separate from your Fayda identity.
+                </p>
               </div>
               <div className="form-grid">
                 <form.Field name="company_name">

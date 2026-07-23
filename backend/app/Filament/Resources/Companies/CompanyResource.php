@@ -62,7 +62,8 @@ class CompanyResource extends Resource
                 ->label('TIN')
                 ->required()
                 ->unique(ignoreRecord: true)
-                ->maxLength(64),
+                ->maxLength(64)
+                ->helperText('Must be unique across all companies. Partners cannot use services until this profile is approved.'),
             TextInput::make('license_number')
                 ->label('License number')
                 ->required()
@@ -71,7 +72,9 @@ class CompanyResource extends Resource
             TextInput::make('phone')->tel()->maxLength(32),
             TextInput::make('email')->email()->maxLength(255),
             Textarea::make('address')->rows(3)->columnSpanFull(),
-            Toggle::make('is_active')->label('Active')->default(true),
+            Toggle::make('is_active')
+                ->label('Active')
+                ->helperText('Normally set by Approve profile. Inactive companies cannot use VAS services.'),
         ])->columns(2);
     }
 

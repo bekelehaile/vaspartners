@@ -5,7 +5,6 @@ namespace App\Filament\Resources\Companies\RelationManagers;
 use App\Enums\CompanyRole;
 use App\Filament\Resources\Customers\CustomerResource;
 use App\Models\CompanyMembership;
-use App\Models\Customer;
 use App\Services\CompanyMembershipService;
 use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
@@ -30,7 +29,7 @@ class MembersRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->description('A partner may belong to many companies. Each company still has exactly one owner.')
+            ->description('Ownership transfers are requested by the company owner (with a letter PDF) and approved under Company change requests. Admins enable or disable member access here.')
             ->modifyQueryUsing(fn ($query) => $query->with('customer')->orderByRaw("CASE WHEN role = 'owner' THEN 0 ELSE 1 END")->orderBy('id'))
             ->columns([
                 TextColumn::make('customer.name')->searchable()->sortable(),
@@ -59,37 +58,6 @@ class MembersRelationManager extends RelationManager
                     ->url(fn (CompanyMembership $record): string => $record->customer
                         ? CustomerResource::getUrl('view', ['record' => $record->customer])
                         : '#'),
-                Action::make('make_owner')
-                    ->label('Make owner')
-                    ->icon('heroicon-o-star')
-                    ->color('warning')
-                    ->visible(fn (CompanyMembership $record): bool => ! $record->isOwner() && $record->is_active)
-                    ->requiresConfirmation()
-                    ->modalHeading('Transfer company ownership')
-                    ->modalDescription(fn (CompanyMembership $record): string => 'Make '.($record->customer?->name ?: 'this partner').' the sole owner. The current owner becomes a member.')
-                    ->action(function (CompanyMembership $record, CompanyMembershipService $membership): void {
-                        try {
-                            if (! $record->customer) {
-                                return;
-                            }
-                            $membership->transferOwnership(
-                                $this->getOwnerRecord(),
-                                $record->customer,
-                                auth()->user(),
-                            );
-
-                            Notification::make()
-                                ->title('Ownership transferred')
-                                ->success()
-                                ->send();
-                        } catch (Throwable $e) {
-                            Notification::make()
-                                ->title('Could not transfer ownership')
-                                ->body($e->getMessage())
-                                ->danger()
-                                ->send();
-                        }
-                    }),
                 Action::make('disable_membership')
                     ->label('Disable access')
                     ->icon('heroicon-o-no-symbol')

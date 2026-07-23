@@ -25,6 +25,8 @@ Route::prefix('v1')->group(function () {
         Route::post('profile/company/attach', [ClientPortalController::class, 'requestAttachCompany']);
         Route::post('profile/company/detach', [ClientPortalController::class, 'requestDetachCompany']);
         Route::post('profile/company/switch', [ClientPortalController::class, 'switchCompany']);
+        Route::get('profile/company/members', [ClientPortalController::class, 'companyMembers']);
+        Route::post('profile/company/transfer-ownership', [ClientPortalController::class, 'requestTransferOwnership']);
         Route::get('profile/company/membership-requests', [ClientPortalController::class, 'membershipRequests']);
         Route::post('profile/company/membership-requests/{changeRequest}/approve', [ClientPortalController::class, 'approveMembershipRequest']);
         Route::post('profile/company/membership-requests/{changeRequest}/reject', [ClientPortalController::class, 'rejectMembershipRequest']);

@@ -173,7 +173,7 @@ class PartnerNotificationService
 
     public function companyChangeRequested(CompanyChangeRequest $request): void
     {
-        $request->loadMissing(['customer', 'company.owner']);
+        $request->loadMissing(['customer', 'company', 'targetCustomer']);
 
         if ($request->type === \App\Enums\CompanyChangeType::Attach) {
             $owner = $request->company?->ownerCustomer();
@@ -202,15 +202,27 @@ class PartnerNotificationService
             return;
         }
 
-        $this->notifyStaffDatabase(
-            $this->managementUsers(),
-            $request->type->label().' pending',
-            sprintf(
-                '%s requested to leave %s (%s).',
+        $body = match ($request->type) {
+            \App\Enums\CompanyChangeType::TransferOwnership => sprintf(
+                '%s requests ownership transfer of %s (%s) to %s.',
+                $request->customer?->name ?: 'Owner',
+                $request->company?->name ?: 'a company',
+                $request->company?->tin ?: 'TIN n/a',
+                $request->targetCustomer?->name ?: 'a member',
+            ),
+            default => sprintf(
+                '%s submitted %s for %s (%s).',
                 $request->customer?->name ?: 'A partner',
+                $request->type->label(),
                 $request->company?->name ?: 'a company',
                 $request->company?->tin ?: 'TIN n/a',
             ),
+        };
+
+        $this->notifyStaffDatabase(
+            $this->managementUsers(),
+            $request->type->label().' pending',
+            $body,
             null,
             CompanyChangeRequestResource::getUrl('view', ['record' => $request]),
         );
@@ -218,7 +230,7 @@ class PartnerNotificationService
 
     public function companyChangeDecided(CompanyChangeRequest $request): void
     {
-        $request->loadMissing(['customer', 'company']);
+        $request->loadMissing(['customer', 'company', 'targetCustomer']);
         $customer = $request->customer;
         if (! $customer) {
             return;
@@ -228,6 +240,8 @@ class PartnerNotificationService
         $template = match (true) {
             $request->type === \App\Enums\CompanyChangeType::Attach && $approved => 'company_attach_approved',
             $request->type === \App\Enums\CompanyChangeType::Attach && ! $approved => 'company_attach_rejected',
+            $request->type === \App\Enums\CompanyChangeType::TransferOwnership && $approved => 'company_transfer_approved',
+            $request->type === \App\Enums\CompanyChangeType::TransferOwnership && ! $approved => 'company_transfer_rejected',
             $request->type === \App\Enums\CompanyChangeType::Detach && $approved => 'company_detach_approved',
             default => 'company_detach_rejected',
         };
@@ -236,6 +250,7 @@ class PartnerNotificationService
             'customer_name' => $customer->name ?: 'Partner',
             'company_name' => $request->company?->name ?: 'the company',
             'company_tin' => $request->company?->tin ?: '',
+            'applicant_name' => $request->targetCustomer?->name ?: 'the new owner',
             'note' => filled($request->admin_note) ? trim((string) $request->admin_note) : '',
             'tt_number' => '',
             'service' => '',
@@ -259,6 +274,26 @@ class PartnerNotificationService
             template: $template,
             url: '/portal/company',
         ));
+
+        // Also notify proposed new owner on transfer decisions.
+        if ($request->type === \App\Enums\CompanyChangeType::TransferOwnership && $request->targetCustomer) {
+            $target = $request->targetCustomer;
+            $targetPlaceholders = [
+                ...$placeholders,
+                'customer_name' => $target->name ?: 'Partner',
+            ];
+            $targetSms = $this->render('templates', $template, $targetPlaceholders);
+            $targetPortal = $this->render('portal', $template, $targetPlaceholders);
+            if (filled($target->phone_number)) {
+                $this->sms->send($target->phone_number, $targetSms);
+            }
+            $target->notify(new PartnerPortalNotification(
+                title: $this->titleFor($template),
+                body: Str::limit($targetPortal, 280),
+                template: $template,
+                url: '/portal/company',
+            ));
+        }
     }
 
     public function companyProfileSubmitted(Customer $customer): void
@@ -312,6 +347,31 @@ class PartnerNotificationService
         if ($approved) {
             $this->profileCompleted($owner->fresh(['company']));
         }
+    }
+
+    public function memberLeftCompany(Company $company, Customer $owner, Customer $member, ?string $note = null): void
+    {
+        $placeholders = [
+            'customer_name' => $owner->name ?: 'Partner',
+            'applicant_name' => $member->name ?: 'A partner',
+            'company_name' => $company->name ?: 'your company',
+            'company_tin' => $company->tin ?: '',
+            'note' => filled($note) ? trim($note) : '',
+        ];
+
+        $smsBody = $this->render('templates', 'company_member_left', $placeholders);
+        $portalBody = $this->render('portal', 'company_member_left', $placeholders);
+
+        if (filled($owner->phone_number)) {
+            $this->sms->send($owner->phone_number, $smsBody);
+        }
+
+        $owner->notify(new PartnerPortalNotification(
+            title: $this->titleFor('company_member_left'),
+            body: Str::limit($portalBody, 280),
+            template: 'company_member_left',
+            url: '/portal/company',
+        ));
     }
 
     public function profileCompleted(Customer $customer): void
@@ -443,6 +503,9 @@ class PartnerNotificationService
             'company_membership_requested' => 'Membership request',
             'company_profile_approved' => 'Company approved',
             'company_profile_rejected' => 'Company needs updates',
+            'company_member_left' => 'Member left company',
+            'company_transfer_approved' => 'Ownership transfer approved',
+            'company_transfer_rejected' => 'Ownership transfer rejected',
             default => 'Portal update',
         };
     }
