@@ -28,6 +28,10 @@ class TicketResource extends Resource
 
     protected static string|\UnitEnum|null $navigationGroup = 'Tickets';
 
+    protected static ?string $navigationLabel = 'All tickets';
+
+    protected static ?int $navigationSort = 2;
+
     protected static ?string $recordTitleAttribute = 'tt_number';
 
     public static function form(Schema $schema): Schema
@@ -43,41 +47,73 @@ class TicketResource extends Resource
                 TextColumn::make('customer.name')->label('Customer')->toggleable(),
                 TextColumn::make('customer.phone_number')->label('Phone')->toggleable(),
                 TextColumn::make('service.name')->sortable(),
+                TextColumn::make('requisition.name')->label('Type')->toggleable(),
                 TextColumn::make('status')->badge(),
                 TextColumn::make('document_review_status')->label('Docs')->badge(),
                 TextColumn::make('assignee.name')->label('AM'),
                 TextColumn::make('currentApprover.name')->label('Approver'),
                 TextColumn::make('created_at')->dateTime()->sortable(),
             ])
+            ->defaultSort('created_at', 'desc')
             ->filters([
                 SelectFilter::make('status')->options(collect(TicketStatus::cases())->mapWithKeys(
                     fn (TicketStatus $s) => [$s->value => $s->label()]
                 )),
-                SelectFilter::make('queue')->options([
-                    'recent' => 'Recent (unassigned open)',
-                    'my' => 'My tickets',
-                    'approval' => 'My approval queue',
-                    'closed' => 'Closed',
-                ])->query(function (Builder $query, array $data) {
-                    $value = $data['value'] ?? null;
-                    $userId = auth()->id();
-                    return match ($value) {
-                        'recent' => $query->where('status', TicketStatus::Open)->whereNull('assigned_to_user_id'),
-                        'my' => $query->where('assigned_to_user_id', $userId)->whereNull('current_approver_user_id'),
-                        'approval' => $query->where('current_approver_user_id', $userId)
-                            ->whereNotIn('status', [TicketStatus::Completed, TicketStatus::Closed]),
-                        'closed' => $query->where('status', TicketStatus::Closed),
-                        default => $query,
-                    };
-                }),
+                SelectFilter::make('queue')
+                    ->label('Queue')
+                    ->options([
+                        'recent' => 'Unassigned (open)',
+                        'my' => 'Assigned to me',
+                        'approval' => 'My approval queue',
+                        'closed' => 'Closed',
+                    ])
+                    ->query(function (Builder $query, array $data) {
+                        $value = $data['value'] ?? null;
+                        $userId = auth()->id();
+
+                        return match ($value) {
+                            'recent' => $query->where('status', TicketStatus::Open)->whereNull('assigned_to_user_id'),
+                            'my' => $query->where('assigned_to_user_id', $userId),
+                            'approval' => $query->where('current_approver_user_id', $userId)
+                                ->whereNotIn('status', [TicketStatus::Completed, TicketStatus::Closed]),
+                            'closed' => $query->where('status', TicketStatus::Closed),
+                            default => $query,
+                        };
+                    }),
             ])
             ->recordActions([
+                Action::make('assign_to_me')
+                    ->label('Assign to me')
+                    ->icon('heroicon-o-user-plus')
+                    ->color('primary')
+                    ->visible(fn (Ticket $record) => $record->status === TicketStatus::Open
+                        && blank($record->assigned_to_user_id)
+                        && auth()->user()
+                        && ! auth()->user()->is_management)
+                    ->requiresConfirmation()
+                    ->modalHeading('Take this ticket')
+                    ->modalDescription('Assign this service request to yourself as account manager.')
+                    ->action(function (Ticket $record, TicketWorkflowService $workflow) {
+                        $workflow->assign(
+                            $record,
+                            auth()->user(),
+                            auth()->user(),
+                            null,
+                            'Self-assigned by account manager',
+                        );
+                    }),
                 Action::make('assign')
-                    ->visible(fn (Ticket $record) => $record->status === TicketStatus::Open && blank($record->assigned_to_user_id))
+                    ->label('Assign AM')
+                    ->visible(fn (Ticket $record) => $record->status === TicketStatus::Open
+                        && blank($record->assigned_to_user_id))
                     ->form([
                         Select::make('assigned_to_user_id')
                             ->label('Account manager')
-                            ->options(fn () => User::query()->where('is_active', true)->where('is_management', false)->pluck('name', 'id'))
+                            ->options(fn () => User::query()
+                                ->where('is_active', true)
+                                ->where('is_management', false)
+                                ->orderBy('name')
+                                ->pluck('name', 'id'))
                             ->required()
                             ->searchable()
                             ->preload(),

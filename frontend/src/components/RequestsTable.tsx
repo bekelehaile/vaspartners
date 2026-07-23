@@ -224,7 +224,7 @@ export function RequestsTable({
                 <td colSpan={columns.length} className="data-table-empty">
                   {hasFilters
                     ? "No requests match your filters."
-                    : "No requests yet. Submit a service request when you are ready."}
+                    : "No requests yet. Use New subscription or Manage service above to get started."}
                 </td>
               </tr>
             ) : (

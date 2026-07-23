@@ -17,17 +17,15 @@ function GearIcon() {
       width="18"
       height="18"
     >
-      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
       <circle cx="12" cy="12" r="3" />
     </svg>
   );
 }
 
 export function PortalSettingsMenu({
-  onLogout,
   onNavigate,
 }: {
-  onLogout?: () => void;
   onNavigate?: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -75,6 +73,13 @@ export function PortalSettingsMenu({
       {open && (
         <div className="portal-settings-menu" id={menuId} role="menu">
           <Link
+            href="/portal/company#fayda-identity"
+            role="menuitem"
+            onClick={close}
+          >
+            Fayda identity
+          </Link>
+          <Link
             href="/portal/company#company-info"
             role="menuitem"
             onClick={close}
@@ -86,16 +91,8 @@ export function PortalSettingsMenu({
             role="menuitem"
             onClick={close}
           >
-            Contact info
+            Company contact
           </Link>
-          {onLogout && (
-            <>
-              <div className="portal-settings-divider" role="separator" />
-              <button type="button" role="menuitem" onClick={onLogout}>
-                Sign out
-              </button>
-            </>
-          )}
         </div>
       )}
     </div>

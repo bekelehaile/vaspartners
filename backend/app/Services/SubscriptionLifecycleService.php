@@ -34,19 +34,25 @@ class SubscriptionLifecycleService
         }
 
         if ($requisition->creates_subscription && $service->is_subscription_based) {
-            $exists = Subscription::query()
+            if ($this->customerHasAliveSubscription($customerId, $service->id)) {
+                throw ValidationException::withMessages([
+                    'service_id' => 'You already have an active subscription for this service. Use manage / renew / terminate instead of starting another.',
+                ]);
+            }
+
+            $pendingNew = Ticket::query()
                 ->where('customer_id', $customerId)
                 ->where('service_id', $service->id)
+                ->where('requisition_id', $requisition->id)
                 ->whereIn('status', [
-                    SubscriptionStatus::Active->value,
-                    SubscriptionStatus::PendingRenewal->value,
-                    SubscriptionStatus::Grace->value,
+                    TicketStatus::Open->value,
+                    TicketStatus::InProgress->value,
                 ])
                 ->exists();
 
-            if ($exists) {
+            if ($pendingNew) {
                 throw ValidationException::withMessages([
-                    'service_id' => 'You already have an active subscription for this service. Use renew, upgrade, or terminate instead.',
+                    'service_id' => 'You already have a new-subscription request in progress for this service.',
                 ]);
             }
 
@@ -86,6 +92,21 @@ class SubscriptionLifecycleService
         return DB::transaction(function () use ($ticket) {
             if ($ticket->subscription_id) {
                 return $ticket->subscription()->firstOrFail();
+            }
+
+            // Serialize activation per Fayda customer + service to prevent double subscriptions.
+            Subscription::query()
+                ->where('customer_id', $ticket->customer_id)
+                ->where('service_id', $ticket->service_id)
+                ->lockForUpdate()
+                ->get();
+
+            $existing = $this->aliveSubscriptionFor($ticket->customer_id, $ticket->service_id);
+            if ($existing) {
+                $ticket->subscription_id = $existing->id;
+                $ticket->save();
+
+                return $existing;
             }
 
             $interval = $ticket->service->renewal_interval
@@ -224,6 +245,16 @@ class SubscriptionLifecycleService
                 ->first();
         }
 
+        return $this->aliveSubscriptionFor((int) $customerId, $serviceId);
+    }
+
+    public function customerHasAliveSubscription(int $customerId, int $serviceId): bool
+    {
+        return $this->aliveSubscriptionFor($customerId, $serviceId) !== null;
+    }
+
+    protected function aliveSubscriptionFor(int $customerId, int $serviceId): ?Subscription
+    {
         return Subscription::query()
             ->where('customer_id', $customerId)
             ->where('service_id', $serviceId)
@@ -232,7 +263,7 @@ class SubscriptionLifecycleService
                 SubscriptionStatus::PendingRenewal->value,
                 SubscriptionStatus::Grace->value,
             ])
-            ->latest('id')
+            ->orderBy('id')
             ->first();
     }
 }

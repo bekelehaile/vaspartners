@@ -146,10 +146,45 @@ export function CompanyProfileForm({
         <h2>{isUpdate ? "Organisation settings" : "Company / organisation profile"}</h2>
         <p className="muted">
           {isUpdate
-            ? "Keep company and contact details current so our team can process VAS requests."
+            ? "Keep company details current. Your Fayda national ID identity below cannot be changed here."
             : "Fayda verified your national ID. Complete your organisation details before you can submit VAS service requests."}
         </p>
       </div>
+
+      {me && (
+        <section id="fayda-identity" className="settings-block fayda-readonly">
+          <div className="settings-block-head">
+            <h3>Fayda identity</h3>
+            <p className="muted">From National ID — read-only. Contact Fayda support if this is wrong.</p>
+          </div>
+          <dl className="fayda-dl">
+            <div>
+              <dt>Full name</dt>
+              <dd>{me.name || "—"}</dd>
+            </div>
+            <div>
+              <dt>Phone</dt>
+              <dd>{me.phone_number || "—"}</dd>
+            </div>
+            <div>
+              <dt>Email</dt>
+              <dd>{me.email || "—"}</dd>
+            </div>
+            <div>
+              <dt>Gender</dt>
+              <dd>{me.gender || "—"}</dd>
+            </div>
+            <div>
+              <dt>Nationality</dt>
+              <dd>{me.nationality || "—"}</dd>
+            </div>
+            <div>
+              <dt>Birthdate</dt>
+              <dd>{me.birthdate || "—"}</dd>
+            </div>
+          </dl>
+        </section>
+      )}
 
       {mutation.isError && (
         <div className="alert" role="alert">
@@ -208,8 +243,8 @@ export function CompanyProfileForm({
 
             <section id="contact-info" className="settings-block">
               <div className="settings-block-head">
-                <h3>Contact info</h3>
-                <p className="muted">How we reach your organisation.</p>
+                <h3>Company contact</h3>
+                <p className="muted">Organisation phone and email (not your Fayda personal identity).</p>
               </div>
               <div className="form-grid">
                 <form.Field name="company_phone">

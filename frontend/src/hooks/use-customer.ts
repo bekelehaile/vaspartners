@@ -3,9 +3,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import {
+  BlogPost,
   Customer,
   DocumentRequirement,
+  FaqItem,
+  GalleryItem,
   Service,
+  Subscription,
   Ticket,
   api,
   clearToken,
@@ -33,10 +37,39 @@ export function useFaqs() {
   return useQuery({
     queryKey: queryKeys.catalog.faqs,
     queryFn: async () => {
-      const res = await api<{ data: { id: number; question: string; answer: string }[] }>(
-        "/faqs"
-      );
-      return Array.isArray(res.data) ? res.data.slice(0, 12) : [];
+      const res = await api<{ data: FaqItem[] }>("/faqs");
+      return Array.isArray(res.data) ? res.data : [];
+    },
+  });
+}
+
+export function useBlogPosts() {
+  return useQuery({
+    queryKey: queryKeys.catalog.blogPosts,
+    queryFn: async () => {
+      const res = await api<{ data: BlogPost[] }>("/blog-posts");
+      return Array.isArray(res.data) ? res.data : [];
+    },
+  });
+}
+
+export function useBlogPost(slug: string) {
+  return useQuery({
+    queryKey: queryKeys.catalog.blogPost(slug),
+    enabled: !!slug,
+    queryFn: async () => {
+      const res = await api<{ data: BlogPost }>(`/blog-posts/${encodeURIComponent(slug)}`);
+      return res.data;
+    },
+  });
+}
+
+export function useGallery() {
+  return useQuery({
+    queryKey: queryKeys.catalog.gallery,
+    queryFn: async () => {
+      const res = await api<{ data: GalleryItem[] }>("/gallery");
+      return Array.isArray(res.data) ? res.data : [];
     },
   });
 }
@@ -47,6 +80,26 @@ export function useServices() {
     queryFn: async () => {
       const res = await api<{ data: Service[] }>("/services");
       return res.data ?? [];
+    },
+  });
+}
+
+export function useSubscriptions(options?: { enabled?: boolean }) {
+  const enabled = options?.enabled ?? true;
+  return useQuery({
+    queryKey: queryKeys.subscriptions,
+    enabled: enabled && !!getToken(),
+    queryFn: async () => {
+      const res = await api<{
+        data: Subscription[];
+        pending_new_service_ids?: number[];
+      }>("/subscriptions?per_page=100");
+      return {
+        items: Array.isArray(res.data) ? res.data : [],
+        pendingNewServiceIds: Array.isArray(res.pending_new_service_ids)
+          ? res.pending_new_service_ids.map(Number)
+          : [],
+      };
     },
   });
 }
@@ -157,19 +210,25 @@ export function useCreateTicket() {
 
   return useMutation({
     mutationFn: async (values: TicketCreateValues) => {
+      const payload: Record<string, unknown> = {
+        service_id: Number(values.service_id),
+        requisition_id: Number(values.requisition_id),
+        description: values.description.trim(),
+      };
+      if (values.subscription_id) {
+        payload.subscription_id = Number(values.subscription_id);
+      }
+
       const res = await api<{ data: Ticket }>("/tickets", {
         method: "POST",
-        body: JSON.stringify({
-          service_id: Number(values.service_id),
-          requisition_id: Number(values.requisition_id),
-          description: values.description.trim(),
-        }),
+        body: JSON.stringify(payload),
       });
       return res.data;
     },
     onSuccess: (ticket) => {
       queryClient.setQueryData(queryKeys.ticket(ticket.public_id), ticket);
       void queryClient.invalidateQueries({ queryKey: queryKeys.customer.tickets });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions });
     },
   });
 }
@@ -188,8 +247,29 @@ export function useUploadTicketDocument(publicId: string) {
       const body = new FormData();
       body.append("document_type_id", String(documentTypeId));
       body.append("file", file);
-      await api(`/tickets/${publicId}/documents`, { method: "POST", body });
-      return { documentTypeId, fileName: file.name };
+      const res = await api<{
+        data: { id: number; original_name: string; document_type_id: number };
+      }>(`/tickets/${publicId}/documents`, { method: "POST", body });
+      return {
+        documentId: res.data.id,
+        documentTypeId: res.data.document_type_id ?? documentTypeId,
+        fileName: res.data.original_name || file.name,
+      };
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.ticket(publicId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.customer.tickets });
+    },
+  });
+}
+
+export function useDeleteTicketDocument(publicId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (documentId: number) => {
+      await api(`/tickets/${publicId}/documents/${documentId}`, { method: "DELETE" });
+      return documentId;
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.ticket(publicId) });

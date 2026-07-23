@@ -130,7 +130,9 @@ function ServiceRow({
         <div className="landing-service-actions">
           {signedIn ? (
             <Link
-              href={`/portal/requests/new?service=${service.id}`}
+              href={`/portal/requests/new?intent=${
+                service.is_subscription_based === false ? "manage" : "subscribe"
+              }&service=${service.id}`}
               className="btn-primary"
               style={{ padding: "0.55rem 1rem" }}
             >

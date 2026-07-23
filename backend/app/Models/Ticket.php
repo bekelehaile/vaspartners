@@ -36,6 +36,10 @@ class Ticket extends Model
         ];
     }
 
+    protected $appends = [
+        'documents_locked',
+    ];
+
     public function uniqueIds(): array
     {
         return ['public_id'];
@@ -44,6 +48,16 @@ class Ticket extends Model
     public function getRouteKeyName(): string
     {
         return 'public_id';
+    }
+
+    public function customerDocumentsAreLocked(): bool
+    {
+        return $this->status->locksCustomerDocuments();
+    }
+
+    public function getDocumentsLockedAttribute(): bool
+    {
+        return $this->customerDocumentsAreLocked();
     }
 
     public function customer(): BelongsTo { return $this->belongsTo(Customer::class); }

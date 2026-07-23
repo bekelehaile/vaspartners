@@ -10,23 +10,20 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use LogicException;
 
 /**
  * Partner identity from Fayda on sign-in; company details completed afterwards.
+ * Fayda identity fields are immutable outside Fayda sync.
  */
 class Customer extends Authenticatable
 {
     use HasApiTokens, HasFactory, HasUlids, Notifiable, SoftDeletes;
 
-    protected $fillable = [
-        'public_id',
+    /** @var list<string> */
+    public const FAYDA_ATTRIBUTES = [
         'sub',
         'name',
-        'company_name',
-        'company_tin',
-        'company_phone',
-        'company_email',
-        'company_address',
         'phone_number',
         'email',
         'gender',
@@ -36,6 +33,14 @@ class Customer extends Authenticatable
         'birthdate',
         'picture',
         'address',
+    ];
+
+    protected $fillable = [
+        'company_name',
+        'company_tin',
+        'company_phone',
+        'company_email',
+        'company_address',
         'is_active',
         'is_banned',
         'profile_completed_at',
@@ -49,6 +54,9 @@ class Customer extends Authenticatable
         'profile_completed',
     ];
 
+    /** Allow Fayda sync to write identity fields once per save. */
+    protected bool $allowFaydaSync = false;
+
     protected function casts(): array
     {
         return [
@@ -58,6 +66,52 @@ class Customer extends Authenticatable
             'is_banned' => 'boolean',
             'profile_completed_at' => 'datetime',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::saving(function (Customer $customer): void {
+            if ($customer->allowFaydaSync) {
+                return;
+            }
+
+            $dirtyFayda = array_values(array_intersect(
+                array_keys($customer->getDirty()),
+                self::FAYDA_ATTRIBUTES
+            ));
+
+            if ($dirtyFayda === []) {
+                return;
+            }
+
+            // Strip accidental mutations instead of hard-failing mass updates from tools.
+            foreach ($dirtyFayda as $attribute) {
+                $customer->setAttribute($attribute, $customer->getOriginal($attribute));
+            }
+        });
+    }
+
+    /**
+     * Apply identity fields from Fayda / eSignet userinfo only.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    public function syncFromFayda(array $attributes): void
+    {
+        $payload = array_intersect_key($attributes, array_flip(self::FAYDA_ATTRIBUTES));
+
+        if ($payload === []) {
+            throw new LogicException('No Fayda identity attributes provided.');
+        }
+
+        $this->allowFaydaSync = true;
+
+        try {
+            $this->forceFill($payload);
+            $this->save();
+        } finally {
+            $this->allowFaydaSync = false;
+        }
     }
 
     public function uniqueIds(): array

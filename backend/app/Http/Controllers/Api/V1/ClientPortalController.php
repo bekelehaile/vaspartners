@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
-use App\Models\Faq;
 use App\Models\Service;
 use App\Models\ServiceRequisitionDocument;
 use App\Models\Subscription;
@@ -11,6 +10,7 @@ use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Models\TicketDocument;
 use App\Services\PartnerNotificationService;
+use App\Services\TicketDocumentService;
 use App\Services\TicketWorkflowService;
 use Illuminate\Http\Request;
 
@@ -51,19 +51,13 @@ class ClientPortalController extends Controller
         ]);
 
         $rows = ServiceRequisitionDocument::query()
-            ->with('documentType')
+            ->with(['documentType' => fn ($q) => $q->where('is_active', true)])
             ->where($data)
+            ->whereHas('documentType', fn ($q) => $q->where('is_active', true))
             ->orderBy('sort_order')
             ->get();
 
         return response()->json(['data' => $rows]);
-    }
-
-    public function faqs()
-    {
-        return response()->json([
-            'data' => Faq::query()->where('is_active', true)->orderBy('sort_order')->get(),
-        ]);
     }
 
     public function tickets(Request $request)
@@ -143,39 +137,62 @@ class ClientPortalController extends Controller
 
     public function subscriptions(Request $request)
     {
+        $customerId = $request->user()->id;
+
         $rows = Subscription::query()
             ->with(['service:id,name,slug,renewal_interval'])
-            ->where('customer_id', $request->user()->id)
+            ->where('customer_id', $customerId)
             ->latest('id')
-            ->paginate(20);
+            ->paginate(100);
 
-        return response()->json($rows);
+        $pendingNewServiceIds = Ticket::query()
+            ->where('customer_id', $customerId)
+            ->whereIn('status', ['open', 'in_progress'])
+            ->whereHas('requisition', fn ($q) => $q->where('creates_subscription', true))
+            ->pluck('service_id')
+            ->unique()
+            ->values();
+
+        return response()->json([
+            'data' => $rows->items(),
+            'current_page' => $rows->currentPage(),
+            'last_page' => $rows->lastPage(),
+            'per_page' => $rows->perPage(),
+            'total' => $rows->total(),
+            'pending_new_service_ids' => $pendingNewServiceIds,
+        ]);
     }
 
-    public function uploadDocument(Request $request, Ticket $ticket)
+    public function uploadDocument(Request $request, Ticket $ticket, TicketDocumentService $documents)
     {
         abort_unless($ticket->customer_id === $request->user()->id, 404);
 
         $data = $request->validate([
-            'document_type_id' => ['required', 'exists:document_types,id'],
-            'file' => ['required', 'file', 'max:10240'],
+            'document_type_id' => ['required', 'integer', 'exists:document_types,id'],
+            'file' => ['required', 'file'],
         ]);
 
-        $file = $data['file'];
-        $path = $file->store('tickets/'.$ticket->public_id, 'local');
-
-        $doc = TicketDocument::query()->create([
-            'ticket_id' => $ticket->id,
-            'document_type_id' => $data['document_type_id'],
-            'disk' => 'local',
-            'path' => $path,
-            'original_name' => $file->getClientOriginalName(),
-            'mime_type' => $file->getClientMimeType(),
-            'size_bytes' => $file->getSize(),
-            'uploaded_by_customer_id' => $request->user()->id,
-        ]);
+        $doc = $documents->storeForCustomer(
+            $ticket,
+            $request->user(),
+            (int) $data['document_type_id'],
+            $data['file'],
+        );
 
         return response()->json(['data' => $doc], 201);
+    }
+
+    public function deleteDocument(
+        Request $request,
+        Ticket $ticket,
+        TicketDocument $document,
+        TicketDocumentService $documents,
+    ) {
+        abort_unless($ticket->customer_id === $request->user()->id, 404);
+
+        $documents->deleteForCustomer($ticket, $document, $request->user());
+
+        return response()->json(['message' => 'Document removed.']);
     }
 
     public function comment(Request $request, Ticket $ticket)

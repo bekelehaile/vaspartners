@@ -15,9 +15,13 @@ export const queryKeys = {
   catalog: {
     faqs: ["catalog", "faqs"] as const,
     services: ["catalog", "services"] as const,
+    blogPosts: ["catalog", "blog-posts"] as const,
+    blogPost: (slug: string) => ["catalog", "blog-posts", slug] as const,
+    gallery: ["catalog", "gallery"] as const,
     documentRequirements: (serviceId: string, requisitionId: string) =>
       ["catalog", "document-requirements", serviceId, requisitionId] as const,
   },
+  subscriptions: ["customer", "subscriptions"] as const,
   ticket: (publicId: string) => ["ticket", publicId] as const,
   notifications: ["customer", "notifications"] as const,
 };

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\ClientPortalController;
 use App\Http\Controllers\Api\V1\FaydaAuthController;
 use App\Http\Controllers\Api\V1\NotificationController;
+use App\Http\Controllers\Api\V1\WebsiteContentController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -11,7 +12,10 @@ Route::prefix('v1')->group(function () {
 
     Route::get('services', [ClientPortalController::class, 'services']);
     Route::get('document-requirements', [ClientPortalController::class, 'documentRequirements']);
-    Route::get('faqs', [ClientPortalController::class, 'faqs']);
+    Route::get('faqs', [WebsiteContentController::class, 'faqs']);
+    Route::get('blog-posts', [WebsiteContentController::class, 'blogPosts']);
+    Route::get('blog-posts/{slug}', [WebsiteContentController::class, 'blogPost']);
+    Route::get('gallery', [WebsiteContentController::class, 'gallery']);
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('auth/me', [FaydaAuthController::class, 'me']);
@@ -26,6 +30,7 @@ Route::prefix('v1')->group(function () {
         Route::post('tickets', [ClientPortalController::class, 'storeTicket']);
         Route::get('tickets/{ticket}', [ClientPortalController::class, 'showTicket']);
         Route::post('tickets/{ticket}/documents', [ClientPortalController::class, 'uploadDocument']);
+        Route::delete('tickets/{ticket}/documents/{document}', [ClientPortalController::class, 'deleteDocument']);
         Route::post('tickets/{ticket}/comments', [ClientPortalController::class, 'comment']);
         Route::get('subscriptions', [ClientPortalController::class, 'subscriptions']);
     });

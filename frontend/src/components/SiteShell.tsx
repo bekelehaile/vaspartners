@@ -54,12 +54,19 @@ export function SiteShell({
           <nav className="topnav" aria-label="Primary">
             {me ? (
               <div className="portal-header-actions">
-                <PortalSettingsMenu onLogout={onLogout} />
+                <PortalSettingsMenu />
                 {me.profile_completed && <NotificationBell />}
+                {onLogout && (
+                  <button type="button" className="portal-signout-btn" onClick={onLogout}>
+                    Sign out
+                  </button>
+                )}
               </div>
             ) : (
               <>
                 <a href="/#services">Services</a>
+                <a href="/#blog">Blog</a>
+                <a href="/#gallery">Gallery</a>
                 <a href="/#faq">FAQ</a>
                 <a className="btn-login" href={faydaLoginUrl()}>
                   <LogInIcon />
@@ -85,16 +92,31 @@ export function SiteShell({
             <div className="mobile-sheet-card">
               {me ? (
                 <div className="portal-header-actions portal-header-actions-mobile">
-                  <PortalSettingsMenu
-                    onLogout={onLogout}
-                    onNavigate={() => setOpen(false)}
-                  />
+                  <PortalSettingsMenu onNavigate={() => setOpen(false)} />
                   {me.profile_completed && <NotificationBell />}
+                  {onLogout && (
+                    <button
+                      type="button"
+                      className="portal-signout-btn"
+                      onClick={() => {
+                        setOpen(false);
+                        onLogout();
+                      }}
+                    >
+                      Sign out
+                    </button>
+                  )}
                 </div>
               ) : (
                 <>
                   <a href="/#services" onClick={() => setOpen(false)}>
                     Services
+                  </a>
+                  <a href="/#blog" onClick={() => setOpen(false)}>
+                    Blog
+                  </a>
+                  <a href="/#gallery" onClick={() => setOpen(false)}>
+                    Gallery
                   </a>
                   <a href="/#faq" onClick={() => setOpen(false)}>
                     FAQ

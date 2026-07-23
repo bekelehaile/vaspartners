@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useForm } from "@tanstack/react-form";
 import { useParams } from "next/navigation";
-import { NewRequestButton, PortalPageHeader } from "@/components/PortalPageHeader";
+import { JourneyLaunchActions, PortalPageHeader } from "@/components/PortalPageHeader";
 import { StatusJourney, StatusPill } from "@/components/StatusJourney";
+import { TicketDocumentsPanel } from "@/components/TicketDocumentsPanel";
 import { usePostTicketComment, useTicket } from "@/hooks/use-customer";
 import { statusCopy } from "@/lib/api";
 import { commentSchema } from "@/lib/schemas/ticket";
@@ -51,7 +52,7 @@ export default function RequestDetailPage() {
         actions={
           <>
             {ticket && <StatusPill status={ticket.status} />}
-            <NewRequestButton />
+            <JourneyLaunchActions />
           </>
         }
       />
@@ -89,17 +90,7 @@ export default function RequestDetailPage() {
               )}
 
               <h2 style={{ marginTop: "1.5rem" }}>Documents</h2>
-              {!ticket.documents?.length ? (
-                <div className="empty">No documents uploaded yet.</div>
-              ) : (
-                <ul style={{ margin: 0, paddingLeft: "1.1rem" }}>
-                  {ticket.documents.map((d) => (
-                    <li key={d.id}>
-                      {d.document_type?.name || "Document"} — {d.original_name}
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <TicketDocumentsPanel ticket={ticket} mode="manage" />
             </section>
 
             <aside className="panel">

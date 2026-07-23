@@ -37,3 +37,17 @@ export function NewRequestButton({
     </Link>
   );
 }
+
+/** Dual CTAs for the two partner journeys. */
+export function JourneyLaunchActions() {
+  return (
+    <div className="journey-launch">
+      <Link href="/portal/requests/new?intent=subscribe" className="btn-primary">
+        New subscription
+      </Link>
+      <Link href="/portal/requests/new?intent=manage" className="btn-ghost">
+        Manage service
+      </Link>
+    </div>
+  );
+}

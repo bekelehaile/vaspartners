@@ -4,6 +4,8 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { SiteShell } from "@/components/SiteShell";
+import { LandingBlogSection } from "@/components/LandingBlogSection";
+import { LandingGallerySection } from "@/components/LandingGallerySection";
 import { LandingServicesSection } from "@/components/LandingServicesSection";
 import { faydaLoginUrl } from "@/lib/api";
 import { useCustomer, useFaqs, useLogout } from "@/hooks/use-customer";
@@ -64,6 +66,10 @@ function LandingInner() {
       </div>
 
       <LandingServicesSection />
+
+      <LandingBlogSection />
+
+      <LandingGallerySection />
 
       <div className="feature-band">
         <section className="section" id="how-it-works">

@@ -16,6 +16,7 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 
 class CustomerResource extends Resource
 {
@@ -37,7 +38,9 @@ class CustomerResource extends Resource
     public static function infolist(Schema $schema): Schema
     {
         return $schema->components([
-            Section::make('Fayda identity')->schema([
+            Section::make('Fayda identity')
+                ->description('Verified by Fayda (National ID). These fields cannot be edited in admin or the partner portal — only Fayda login may refresh them.')
+                ->schema([
                 TextEntry::make('public_id'),
                 TextEntry::make('sub')->label('Fayda sub'),
                 TextEntry::make('name'),
@@ -52,7 +55,9 @@ class CustomerResource extends Resource
                     fn ($state) => is_array($state) ? json_encode($state) : $state
                 )->columnSpanFull(),
             ])->columns(3),
-            Section::make('Company details')->schema([
+            Section::make('Company details')
+                ->description('Organisation details provided by the partner. Fayda personal identity above stays read-only.')
+                ->schema([
                 TextEntry::make('company_name'),
                 TextEntry::make('company_tin')->label('TIN'),
                 TextEntry::make('company_phone'),
@@ -104,6 +109,16 @@ class CustomerResource extends Resource
     }
 
     public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return false;
+    }
+
+    public static function canDelete(Model $record): bool
     {
         return false;
     }

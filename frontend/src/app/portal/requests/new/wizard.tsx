@@ -2,59 +2,306 @@
 
 import Link from "next/link";
 import { useForm } from "@tanstack/react-form";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { PortalPageHeader } from "@/components/PortalPageHeader";
 import {
   useCreateTicket,
   useDocumentRequirements,
   useServices,
-  useUploadTicketDocument,
+  useSubscriptions,
+  useTicket,
 } from "@/hooks/use-customer";
-import type { Service } from "@/lib/api";
+import type { Service, Subscription, Ticket } from "@/lib/api";
+import { documentsLockedStatus } from "@/lib/document-upload";
 import { ticketCreateSchema } from "@/lib/schemas/ticket";
+import { TicketDocumentsPanel } from "@/components/TicketDocumentsPanel";
 
 type Requisition = NonNullable<Service["requisitions"]>[number];
+type Intent = "subscribe" | "manage";
 
-function fieldError(errors: unknown): string | null {
-  if (!errors || !Array.isArray(errors) || errors.length === 0) return null;
-  const first = errors[0];
-  if (typeof first === "string") return first;
-  if (first && typeof first === "object" && "message" in first) {
-    return String((first as { message: unknown }).message);
+const ALIVE_STATUSES = new Set(["active", "pending_renewal", "grace"]);
+
+function isAliveSubscription(sub: Subscription): boolean {
+  return ALIVE_STATUSES.has(String(sub.status || "").toLowerCase());
+}
+
+function starterRequisitions(service: Service): Requisition[] {
+  // Subscribe journey is only for subscription-based products
+  if (service.is_subscription_based === false) return [];
+  return (service.requisitions ?? []).filter((r) => !!r.creates_subscription);
+}
+
+function manageRequisitions(service: Service): Requisition[] {
+  const reqs = service.requisitions ?? [];
+  // Non-subscription services are requested via Manage (no active sub required)
+  if (service.is_subscription_based === false) {
+    return reqs.filter(
+      (r) =>
+        !r.requires_active_subscription &&
+        !r.renews_subscription &&
+        !r.terminates_subscription
+    );
   }
-  return String(first);
+  return reqs.filter(
+    (r) =>
+      !!r.requires_active_subscription ||
+      !!r.renews_subscription ||
+      !!r.terminates_subscription
+  );
+}
+
+function stepLabels(intent: Intent): string[] {
+  return intent === "subscribe"
+    ? ["Service", "Confirm", "Documents"]
+    : ["Service", "Change type", "Confirm", "Documents"];
 }
 
 export default function NewRequestWizard() {
   const params = useSearchParams();
   const presetService = params.get("service") || "";
+  const presetIntentParam = params.get("intent");
+  const presetIntent: Intent | "" =
+    presetIntentParam === "subscribe" || presetIntentParam === "manage"
+      ? presetIntentParam
+      : "";
 
-  const { data: services = [] } = useServices();
+  const { data: services = [], isLoading: servicesLoading } = useServices();
+  const { data: subscriptionData, isLoading: subsLoading } = useSubscriptions();
   const createTicket = useCreateTicket();
+  const subscriptions = subscriptionData?.items ?? [];
+  const pendingNewServiceIds = useMemo(
+    () => new Set(subscriptionData?.pendingNewServiceIds ?? []),
+    [subscriptionData?.pendingNewServiceIds]
+  );
+
+  const aliveSubs = useMemo(
+    () => subscriptions.filter(isAliveSubscription),
+    [subscriptions]
+  );
+  const subscribedServiceIds = useMemo(
+    () =>
+      new Set(
+        aliveSubs.map((s) => Number(s.service?.id ?? s.service_id)).filter(Boolean)
+      ),
+    [aliveSubs]
+  );
+
+  const subscribeServices = useMemo(
+    () =>
+      services.filter((s) => {
+        if (s.is_subscription_based === false) return false;
+        if (!starterRequisitions(s).length) return false;
+        if (subscribedServiceIds.has(s.id)) return false;
+        if (pendingNewServiceIds.has(s.id)) return false;
+        return true;
+      }),
+    [services, subscribedServiceIds, pendingNewServiceIds]
+  );
+
+  /** One-off / non-subscription services — managed by flag, no active sub needed. */
+  const manageOneOffServices = useMemo(
+    () =>
+      services.filter(
+        (s) => s.is_subscription_based === false && manageRequisitions(s).length > 0
+      ),
+    [services]
+  );
+
+  const canManage =
+    aliveSubs.length > 0 || manageOneOffServices.length > 0;
 
   const form = useForm({
     defaultValues: {
+      intent: presetIntent as Intent | "",
       service_id: presetService,
       requisition_id: "",
+      subscription_id: "",
       description: "",
     },
-    validators: {
-      onSubmit: ticketCreateSchema,
-    },
     onSubmit: async ({ value }) => {
-      await createTicket.mutateAsync(ticketCreateSchema.parse(value));
+      const parsed = ticketCreateSchema.parse(value);
+      await createTicket.mutateAsync(parsed);
     },
   });
 
   const ticket = createTicket.data;
+  const intent = form.state.values.intent as Intent | "";
+  const serviceId = form.state.values.service_id;
+  const subscriptionId = form.state.values.subscription_id;
+  const requisitionId = form.state.values.requisition_id;
+
+  const selectedSubscribe = subscribeServices.find((s) => String(s.id) === String(serviceId));
+  const selectedSub = aliveSubs.find((s) => String(s.id) === String(subscriptionId));
+  const manageServiceId = selectedSub
+    ? Number(selectedSub.service?.id ?? selectedSub.service_id ?? 0)
+    : Number(serviceId || 0);
+  const selectedManage =
+    services.find((s) => s.id === manageServiceId) ||
+    manageOneOffServices.find((s) => String(s.id) === String(serviceId));
+  const managingOneOff = !!selectedManage && selectedManage.is_subscription_based === false;
+  const starterTypes = selectedSubscribe ? starterRequisitions(selectedSubscribe) : [];
+  const manageTypes = selectedManage ? manageRequisitions(selectedManage) : [];
+
+  // Wizard step within a journey (0-based after intent is chosen)
+  const [step, setStep] = useState(0);
+  const [deepLinkReady, setDeepLinkReady] = useState(!presetIntent);
+
+  // Keep form intent in sync with deep-link CTAs (?intent=subscribe|manage)
+  useEffect(() => {
+    if (ticket) return;
+    if (!presetIntent) {
+      setDeepLinkReady(true);
+      return;
+    }
+    form.setFieldValue("intent", presetIntent);
+    if (presetService) {
+      form.setFieldValue("service_id", presetService);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deep-link only
+  }, [presetIntent, presetService, ticket]);
+
+  // Auto-pick sole requisition for subscribe path
+  useEffect(() => {
+    if (intent !== "subscribe" || !serviceId) return;
+    if (starterTypes.length === 1 && requisitionId !== String(starterTypes[0].id)) {
+      form.setFieldValue("requisition_id", String(starterTypes[0].id));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selection only
+  }, [intent, serviceId, starterTypes.length, requisitionId]);
+
+  // Auto-pick sole requisition for one-off manage path
+  useEffect(() => {
+    if (intent !== "manage" || !managingOneOff || !serviceId) return;
+    if (manageTypes.length === 1 && requisitionId !== String(manageTypes[0].id)) {
+      form.setFieldValue("requisition_id", String(manageTypes[0].id));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selection only
+  }, [intent, managingOneOff, serviceId, manageTypes.length, requisitionId]);
+
+  // Deep-link shortcuts: skip chooser + jump ahead when context is clear
+  useEffect(() => {
+    if (ticket || !presetIntent) {
+      setDeepLinkReady(true);
+      return;
+    }
+    if (servicesLoading || subsLoading) return;
+
+    if (presetIntent === "subscribe") {
+      if (presetService) {
+        const svc = subscribeServices.find((s) => String(s.id) === presetService);
+        if (svc) {
+          const starters = starterRequisitions(svc);
+          if (starters.length === 1) {
+            form.setFieldValue("requisition_id", String(starters[0].id));
+          }
+          setStep(1);
+        }
+      } else if (subscribeServices.length === 1) {
+        const only = subscribeServices[0];
+        form.setFieldValue("service_id", String(only.id));
+        const starters = starterRequisitions(only);
+        if (starters.length === 1) {
+          form.setFieldValue("requisition_id", String(starters[0].id));
+        }
+      }
+    }
+
+    if (presetIntent === "manage") {
+      if (presetService) {
+        const oneOff = manageOneOffServices.find((s) => String(s.id) === presetService);
+        if (oneOff) {
+          form.setFieldValue("service_id", String(oneOff.id));
+          form.setFieldValue("subscription_id", "");
+          const types = manageRequisitions(oneOff);
+          if (types.length === 1) {
+            form.setFieldValue("requisition_id", String(types[0].id));
+          }
+          setStep(types.length === 1 ? 2 : 1);
+        } else {
+          const sub = aliveSubs.find(
+            (s) => String(s.service?.id ?? s.service_id) === presetService
+          );
+          if (sub) {
+            form.setFieldValue("subscription_id", String(sub.id));
+            form.setFieldValue("service_id", String(sub.service?.id ?? sub.service_id ?? ""));
+            setStep(1);
+          }
+        }
+      } else if (aliveSubs.length === 1 && manageOneOffServices.length === 0) {
+        const only = aliveSubs[0];
+        form.setFieldValue("subscription_id", String(only.id));
+        form.setFieldValue(
+          "service_id",
+          String(only.service?.id ?? only.service_id ?? "")
+        );
+      } else if (aliveSubs.length === 0 && manageOneOffServices.length === 1) {
+        const only = manageOneOffServices[0];
+        form.setFieldValue("service_id", String(only.id));
+        form.setFieldValue("subscription_id", "");
+        const types = manageRequisitions(only);
+        if (types.length === 1) {
+          form.setFieldValue("requisition_id", String(types[0].id));
+        }
+      }
+    }
+
+    setDeepLinkReady(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deep-link bootstrap
+  }, [
+    presetIntent,
+    presetService,
+    ticket,
+    servicesLoading,
+    subsLoading,
+    subscribeServices.length,
+    aliveSubs.length,
+    manageOneOffServices.length,
+  ]);
+
+  const labels = intent ? stepLabels(intent) : [];
+
+  function chooseIntent(next: Intent) {
+    form.setFieldValue("intent", next);
+    form.setFieldValue(
+      "service_id",
+      next === "subscribe" || next === "manage" ? presetService : ""
+    );
+    form.setFieldValue("requisition_id", "");
+    form.setFieldValue("subscription_id", "");
+    form.setFieldValue("description", "");
+    setStep(0);
+  }
+
+  function resetIntent() {
+    form.setFieldValue("intent", "");
+    form.setFieldValue("service_id", "");
+    form.setFieldValue("requisition_id", "");
+    form.setFieldValue("subscription_id", "");
+    form.setFieldValue("description", "");
+    setStep(0);
+  }
+
+  const headerTitle =
+    !intent
+      ? "Choose your journey"
+      : intent === "subscribe"
+        ? "Start a new subscription"
+        : "Manage a service";
+
+  const headerDescription =
+    !intent
+      ? "Subscription and management are separate paths so you only see the options that apply."
+      : intent === "subscribe"
+        ? "Activate a subscription-based VAS product you do not already have."
+        : "Change an active subscription, or request a non-subscription service.";
 
   return (
     <>
       <PortalPageHeader
         kicker="Service request"
-        title="Submit a service request"
-        description="Choose the VAS service and request type, then attach only the documents that apply."
+        title={headerTitle}
+        description={headerDescription}
         actions={
           <Link href="/portal" className="btn-ghost">
             Back to requests
@@ -76,181 +323,493 @@ export default function NewRequestWizard() {
             publicId={ticket.public_id}
             ttNumber={ticket.tt_number}
             serviceId={String(ticket.service?.id ?? form.state.values.service_id)}
-            requisitionId={String(ticket.requisition?.id ?? form.state.values.requisition_id)}
+            requisitionId={String(
+              ticket.requisition?.id ?? form.state.values.requisition_id
+            )}
+            journey={intent || "subscribe"}
           />
         ) : (
-          <form
-            className="panel form-panel"
-            onSubmit={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              void form.handleSubmit();
-            }}
-            noValidate
-          >
-            <div className="form-panel-head">
-              <h2>Request details</h2>
-              <p className="muted">
-                Required fields must be completed before creating the request.
-              </p>
-            </div>
-
-            <div className="form-grid">
-              <form.Subscribe selector={(s) => s.values.service_id}>
-                {(serviceId) => {
-                  const selected = services.find((s) => String(s.id) === String(serviceId));
-                  const requisitions: Requisition[] = selected?.requisitions ?? [];
-
-                  return (
-                    <>
-                      <form.Field name="service_id">
-                        {(field) => {
-                          const err =
-                            form.state.submissionAttempts > 0
-                              ? fieldError(field.state.meta.errors)
-                              : null;
-                          return (
-                            <div className={`field${err ? " has-error" : ""}`}>
-                              <label htmlFor={field.name}>
-                                Service <span className="req">*</span>
-                              </label>
-                              <select
-                                id={field.name}
-                                name={field.name}
-                                value={field.state.value}
-                                onBlur={field.handleBlur}
-                                onChange={(e) => {
-                                  field.handleChange(e.target.value);
-                                  form.setFieldValue("requisition_id", "");
-                                }}
-                              >
-                                <option value="">Select a service</option>
-                                {services.map((s) => (
-                                  <option key={s.id} value={s.id}>
-                                    {s.name}
-                                  </option>
-                                ))}
-                              </select>
-                              {err && <p className="field-error">{err}</p>}
-                            </div>
-                          );
-                        }}
-                      </form.Field>
-
-                      <form.Field name="requisition_id">
-                        {(field) => {
-                          const err =
-                            form.state.submissionAttempts > 0
-                              ? fieldError(field.state.meta.errors)
-                              : null;
-                          return (
-                            <div className={`field${err ? " has-error" : ""}`}>
-                              <label htmlFor={field.name}>
-                                Request type <span className="req">*</span>
-                              </label>
-                              <select
-                                id={field.name}
-                                name={field.name}
-                                value={field.state.value}
-                                onBlur={field.handleBlur}
-                                onChange={(e) => field.handleChange(e.target.value)}
-                                disabled={!requisitions.length}
-                              >
-                                <option value="">Select request type</option>
-                                {requisitions.map((r) => (
-                                  <option key={r.id} value={r.id}>
-                                    {r.name}
-                                  </option>
-                                ))}
-                              </select>
-                              {!serviceId && <small>Choose a service first</small>}
-                              {serviceId && !requisitions.length && (
-                                <small>No request types are enabled for this service yet.</small>
-                              )}
-                              {err && <p className="field-error">{err}</p>}
-                            </div>
-                          );
-                        }}
-                      </form.Field>
-
-                      <form.Subscribe selector={(s) => s.values.requisition_id}>
-                        {(requisitionId) => (
-                          <div className="field-span">
-                            <RequirementsPreview
-                              serviceId={serviceId}
-                              requisitionId={requisitionId}
-                            />
-                          </div>
-                        )}
-                      </form.Subscribe>
-                    </>
-                  );
-                }}
-              </form.Subscribe>
-
-              <form.Field name="description">
-                {(field) => {
-                  const err =
-                    form.state.submissionAttempts > 0
-                      ? fieldError(field.state.meta.errors)
-                      : null;
-                  return (
-                    <div className={`field field-span${err ? " has-error" : ""}`}>
-                      <label htmlFor={field.name}>
-                        Description <span className="req">*</span>
-                      </label>
-                      <textarea
-                        id={field.name}
-                        name={field.name}
-                        rows={4}
-                        value={field.state.value}
-                        onBlur={field.handleBlur}
-                        onChange={(e) => field.handleChange(e.target.value)}
-                        placeholder="Describe what you need and any relevant details"
-                        aria-invalid={!!err}
-                        aria-describedby={err ? `${field.name}-error` : undefined}
-                      />
-                      {err && (
-                        <p id={`${field.name}-error`} className="field-error" role="alert">
-                          {err}
-                        </p>
-                      )}
-                    </div>
-                  );
-                }}
-              </form.Field>
-            </div>
-
-            <form.Subscribe
-              selector={(s) => [
-                s.values.service_id,
-                s.values.requisition_id,
-                s.values.description,
-                s.isSubmitting,
-              ]}
-            >
-              {([serviceId, requisitionId, description, isSubmitting]) => (
-                <div className="form-actions">
-                  <button
-                    type="submit"
-                    className="btn-primary"
-                    disabled={
-                      !!isSubmitting ||
-                      createTicket.isPending ||
-                      !serviceId ||
-                      !requisitionId ||
-                      !String(description || "").trim()
-                    }
-                  >
-                    {isSubmitting || createTicket.isPending ? "Creating…" : "Create request"}
-                  </button>
-                  <Link href="/portal" className="btn-ghost">
-                    Cancel
-                  </Link>
+          <div className="panel form-panel journey-panel">
+            {!intent ? (
+              <div className="journey-chooser">
+                <div className="form-panel-head">
+                  <h2>What do you want to do?</h2>
+                  <p className="muted">
+                    Pick one path. You can switch later if you chose the wrong one.
+                  </p>
                 </div>
-              )}
-            </form.Subscribe>
-          </form>
+                <div className="intent-grid">
+                  <button
+                    type="button"
+                    className="intent-card intent-card-subscribe"
+                    onClick={() => chooseIntent("subscribe")}
+                  >
+                    <span className="intent-kicker">Journey A</span>
+                    <strong>New subscription</strong>
+                    <p>
+                      First-time activation. You will only see services you can still
+                      subscribe to.
+                    </p>
+                    <span className="intent-cta">Continue →</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="intent-card intent-card-manage"
+                    onClick={() => chooseIntent("manage")}
+                    disabled={!subsLoading && !servicesLoading && !canManage}
+                  >
+                    <span className="intent-kicker">Journey B</span>
+                    <strong>Manage service</strong>
+                    <p>
+                      Changes on an active subscription, or requests for services that
+                      do not require a subscription.
+                    </p>
+                    {!subsLoading && !servicesLoading && !canManage ? (
+                      <span className="intent-cta muted">Nothing available to manage yet</span>
+                    ) : (
+                      <span className="intent-cta">
+                        {[
+                          aliveSubs.length
+                            ? `${aliveSubs.length} subscription${aliveSubs.length === 1 ? "" : "s"}`
+                            : null,
+                          manageOneOffServices.length
+                            ? `${manageOneOffServices.length} non-subscription`
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ") || "Continue"}
+                        {" · Continue →"}
+                      </span>
+                    )}
+                  </button>
+                </div>
+                {!subsLoading && !servicesLoading && !canManage && (
+                  <p className="journey-hint muted">
+                    Tip: start with <strong>New subscription</strong> for subscription-based
+                    products. Non-subscription services appear here under Manage.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  void form.handleSubmit();
+                }}
+                noValidate
+              >
+                <div className="journey-top">
+                  <div>
+                    <span className="intent-kicker">
+                      {intent === "subscribe" ? "Journey A · Subscribe" : "Journey B · Manage"}
+                    </span>
+                    <h2 className="journey-step-title">
+                      {intent === "subscribe"
+                        ? ["Select service", "Review & submit"][step] || "Documents"
+                        : ["Select service", "Choose change", "Review & submit"][step] ||
+                          "Documents"}
+                    </h2>
+                  </div>
+                  <button type="button" className="linkish" onClick={resetIntent}>
+                    Switch journey
+                  </button>
+                </div>
+
+                <ol className="journey-steps" aria-label="Progress">
+                  {labels.slice(0, -1).map((label, i) => (
+                    <li
+                      key={label}
+                      className={
+                        i < step ? "is-done" : i === step ? "is-active" : undefined
+                      }
+                    >
+                      <i>{i + 1}</i>
+                      <span>{label}</span>
+                    </li>
+                  ))}
+                </ol>
+
+                {(servicesLoading || subsLoading || !deepLinkReady) && (
+                  <p className="muted">Loading your catalog…</p>
+                )}
+
+                {/* —— Subscribe steps —— */}
+                {intent === "subscribe" && step === 0 && deepLinkReady && (
+                  <div className="journey-body">
+                    <p className="muted journey-lead">
+                      Choose the VAS product to activate. Services you already
+                      subscribe to (or have pending) are hidden.
+                    </p>
+                    {!subscribeServices.length ? (
+                      <div className="empty">
+                        No services are available to activate right now.
+                      </div>
+                    ) : (
+                      <div className="journey-option-list" role="listbox">
+                        {subscribeServices.map((s) => {
+                          const selected = String(s.id) === String(serviceId);
+                          return (
+                            <button
+                              key={s.id}
+                              type="button"
+                              role="option"
+                              aria-selected={selected}
+                              className={`journey-option${selected ? " is-selected" : ""}`}
+                              onClick={() => {
+                                if (selected) {
+                                  setStep(1);
+                                  return;
+                                }
+                                form.setFieldValue("service_id", String(s.id));
+                                const starters = starterRequisitions(s);
+                                form.setFieldValue(
+                                  "requisition_id",
+                                  starters.length === 1 ? String(starters[0].id) : ""
+                                );
+                              }}
+                              onDoubleClick={() => {
+                                form.setFieldValue("service_id", String(s.id));
+                                const starters = starterRequisitions(s);
+                                form.setFieldValue(
+                                  "requisition_id",
+                                  starters.length === 1 ? String(starters[0].id) : ""
+                                );
+                                setStep(1);
+                              }}
+                            >
+                              <strong>{s.name}</strong>
+                              <span>
+                                {s.renewal_interval === "bi_yearly"
+                                  ? "Bi-yearly renewal"
+                                  : "Yearly renewal"}
+                                {s.category?.name ? ` · ${s.category.name}` : ""}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <div className="form-actions">
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        disabled={!serviceId}
+                        onClick={() => setStep(1)}
+                      >
+                        Continue
+                      </button>
+                      <button type="button" className="btn-ghost" onClick={resetIntent}>
+                        Back
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {intent === "subscribe" && step === 1 && (
+                  <div className="journey-body">
+                    <dl className="journey-summary">
+                      <div>
+                        <dt>Service</dt>
+                        <dd>{selectedSubscribe?.name || "—"}</dd>
+                      </div>
+                      <div>
+                        <dt>Request type</dt>
+                        <dd>
+                          {starterTypes.find((r) => String(r.id) === String(requisitionId))
+                            ?.name || "New subscription"}
+                        </dd>
+                      </div>
+                    </dl>
+                    <form.Field name="description">
+                      {(field) => (
+                        <div className="field field-span">
+                          <label htmlFor={field.name}>
+                            Description <span className="req">*</span>
+                          </label>
+                          <textarea
+                            id={field.name}
+                            rows={4}
+                            value={field.state.value}
+                            onBlur={field.handleBlur}
+                            onChange={(e) => field.handleChange(e.target.value)}
+                            placeholder="Briefly describe why you need this service"
+                          />
+                        </div>
+                      )}
+                    </form.Field>
+                    <RequirementsPreview
+                      serviceId={String(serviceId || "")}
+                      requisitionId={String(requisitionId || "")}
+                    />
+                    <div className="form-actions">
+                      <button
+                        type="submit"
+                        className="btn-primary"
+                        disabled={
+                          createTicket.isPending ||
+                          !serviceId ||
+                          !requisitionId ||
+                          !form.state.values.description.trim()
+                        }
+                      >
+                        {createTicket.isPending ? "Creating…" : "Submit subscription request"}
+                      </button>
+                      <button type="button" className="btn-ghost" onClick={() => setStep(0)}>
+                        Back
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* —— Manage steps —— */}
+                {intent === "manage" && step === 0 && deepLinkReady && (
+                  <div className="journey-body">
+                    <p className="muted journey-lead">
+                      Pick an active subscription to change, or a service that does not
+                      require a subscription.
+                    </p>
+                    {!canManage ? (
+                      <div className="empty">
+                        <p style={{ margin: "0 0 0.75rem" }}>
+                          Nothing is available to manage right now.
+                        </p>
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          onClick={() => chooseIntent("subscribe")}
+                        >
+                          Start a new subscription
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="journey-option-list">
+                        {aliveSubs.map((s) => {
+                          const selected = String(s.id) === String(subscriptionId);
+                          return (
+                            <button
+                              key={`sub-${s.id}`}
+                              type="button"
+                              className={`journey-option${selected ? " is-selected" : ""}`}
+                              onClick={() => {
+                                if (selected) {
+                                  setStep(1);
+                                  return;
+                                }
+                                form.setFieldValue("subscription_id", String(s.id));
+                                const sid = String(s.service?.id ?? s.service_id ?? "");
+                                form.setFieldValue("service_id", sid);
+                                form.setFieldValue("requisition_id", "");
+                              }}
+                              onDoubleClick={() => {
+                                form.setFieldValue("subscription_id", String(s.id));
+                                const sid = String(s.service?.id ?? s.service_id ?? "");
+                                form.setFieldValue("service_id", sid);
+                                form.setFieldValue("requisition_id", "");
+                                setStep(1);
+                              }}
+                            >
+                              <strong>
+                                {s.service?.name || `Service #${s.service_id}`}
+                              </strong>
+                              <span>
+                                Subscription · {s.status}
+                                {s.current_period_end
+                                  ? ` · Period ends ${new Date(s.current_period_end).toLocaleDateString()}`
+                                  : ""}
+                              </span>
+                            </button>
+                          );
+                        })}
+                        {manageOneOffServices.map((s) => {
+                          const selected =
+                            !subscriptionId && String(s.id) === String(serviceId);
+                          return (
+                            <button
+                              key={`svc-${s.id}`}
+                              type="button"
+                              className={`journey-option${selected ? " is-selected" : ""}`}
+                              onClick={() => {
+                                if (selected) {
+                                  setStep(1);
+                                  return;
+                                }
+                                form.setFieldValue("subscription_id", "");
+                                form.setFieldValue("service_id", String(s.id));
+                                const types = manageRequisitions(s);
+                                form.setFieldValue(
+                                  "requisition_id",
+                                  types.length === 1 ? String(types[0].id) : ""
+                                );
+                              }}
+                              onDoubleClick={() => {
+                                form.setFieldValue("subscription_id", "");
+                                form.setFieldValue("service_id", String(s.id));
+                                const types = manageRequisitions(s);
+                                form.setFieldValue(
+                                  "requisition_id",
+                                  types.length === 1 ? String(types[0].id) : ""
+                                );
+                                setStep(1);
+                              }}
+                            >
+                              <strong>{s.name}</strong>
+                              <span>
+                                No subscription required
+                                {s.category?.name ? ` · ${s.category.name}` : ""}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {canManage && (
+                      <div className="form-actions">
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          disabled={!(subscriptionId || serviceId)}
+                          onClick={() => setStep(1)}
+                        >
+                          Continue
+                        </button>
+                        <button type="button" className="btn-ghost" onClick={resetIntent}>
+                          Back
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {intent === "manage" && step === 1 && (
+                  <div className="journey-body">
+                    <p className="muted journey-lead">
+                      What do you need on{" "}
+                      <strong>{selectedManage?.name || "this service"}</strong>?
+                    </p>
+                    {!manageTypes.length ? (
+                      <div className="empty">
+                        No request types are enabled for this service.
+                      </div>
+                    ) : (
+                      <div className="journey-option-list">
+                        {manageTypes.map((r) => {
+                          const selected = String(r.id) === String(requisitionId);
+                          return (
+                            <button
+                              key={r.id}
+                              type="button"
+                              className={`journey-option${selected ? " is-selected" : ""}`}
+                              onClick={() => {
+                                if (selected) {
+                                  setStep(2);
+                                  return;
+                                }
+                                form.setFieldValue("requisition_id", String(r.id));
+                              }}
+                              onDoubleClick={() => {
+                                form.setFieldValue("requisition_id", String(r.id));
+                                setStep(2);
+                              }}
+                            >
+                              <strong>{r.name}</strong>
+                              <span>
+                                {managingOneOff
+                                  ? "Non-subscription request"
+                                  : r.terminates_subscription
+                                    ? "Ends the subscription"
+                                    : r.renews_subscription
+                                      ? "Extends the subscription period"
+                                      : "Requires an active subscription"}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <div className="form-actions">
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        disabled={!requisitionId}
+                        onClick={() => setStep(2)}
+                      >
+                        Continue
+                      </button>
+                      <button type="button" className="btn-ghost" onClick={() => setStep(0)}>
+                        Back
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {intent === "manage" && step === 2 && (
+                  <div className="journey-body">
+                    <dl className="journey-summary">
+                      <div>
+                        <dt>Service</dt>
+                        <dd>{selectedManage?.name || "—"}</dd>
+                      </div>
+                      <div>
+                        <dt>{managingOneOff ? "Request type" : "Change type"}</dt>
+                        <dd>
+                          {manageTypes.find((r) => String(r.id) === String(requisitionId))
+                            ?.name || "—"}
+                        </dd>
+                      </div>
+                    </dl>
+                    <form.Field name="description">
+                      {(field) => (
+                        <div className="field field-span">
+                          <label htmlFor={field.name}>
+                            Description <span className="req">*</span>
+                          </label>
+                          <textarea
+                            id={field.name}
+                            rows={4}
+                            value={field.state.value}
+                            onBlur={field.handleBlur}
+                            onChange={(e) => field.handleChange(e.target.value)}
+                            placeholder={
+                              managingOneOff
+                                ? "Describe what you need"
+                                : "Describe the change or issue"
+                            }
+                          />
+                        </div>
+                      )}
+                    </form.Field>
+                    <RequirementsPreview
+                      serviceId={manageServiceId ? String(manageServiceId) : ""}
+                      requisitionId={String(requisitionId || "")}
+                    />
+                    <div className="form-actions">
+                      <button
+                        type="submit"
+                        className="btn-primary"
+                        disabled={
+                          createTicket.isPending ||
+                          !serviceId ||
+                          !requisitionId ||
+                          (!managingOneOff && !subscriptionId) ||
+                          !form.state.values.description.trim()
+                        }
+                      >
+                        {createTicket.isPending
+                          ? "Creating…"
+                          : managingOneOff
+                            ? "Submit request"
+                            : "Submit management request"}
+                      </button>
+                      <button type="button" className="btn-ghost" onClick={() => setStep(1)}>
+                        Back
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </form>
+            )}
+          </div>
         )}
       </div>
     </>
@@ -269,7 +828,7 @@ function RequirementsPreview({
 
   return (
     <div className="field doc-preview">
-      <label>Documents you will need</label>
+      <label>Documents you will need next</label>
       <ul>
         {requirements.map((r) => (
           <li key={r.id}>
@@ -287,89 +846,66 @@ function UploadStep({
   ttNumber,
   serviceId,
   requisitionId,
+  journey,
 }: {
   publicId: string;
   ttNumber: string;
   serviceId: string;
   requisitionId: string;
+  journey: string;
 }) {
+  const { data: ticket } = useTicket(publicId);
   const { data: requirements = [] } = useDocumentRequirements(serviceId, requisitionId);
-  const upload = useUploadTicketDocument(publicId);
-  const [uploads, setUploads] = useState<Record<number, string>>({});
-
   const requiredIds = requirements.filter((r) => r.is_required).map((r) => r.document_type.id);
-  const allRequiredUploaded = requiredIds.every((id) => uploads[id]);
+  const uploadedTypes = new Set(
+    (ticket?.documents || [])
+      .map((d) => d.document_type_id ?? d.document_type?.id)
+      .filter(Boolean)
+  );
+  const allRequiredUploaded = requiredIds.every((id) => uploadedTypes.has(id));
+  const locked = documentsLockedStatus(ticket?.status, ticket?.documents_locked);
+
+  const panelTicket =
+    ticket ||
+    ({
+      public_id: publicId,
+      tt_number: ttNumber,
+      status: "open",
+      documents_locked: false,
+      documents: [],
+      service: { id: Number(serviceId), name: "" },
+      requisition: { id: Number(requisitionId), name: "" },
+      created_at: "",
+      id: 0,
+    } satisfies Ticket);
 
   return (
     <div className="panel form-panel">
       <div className="form-panel-head">
+        <span className="intent-kicker">
+          {journey === "manage" ? "Journey B" : "Journey A"} · Documents
+        </span>
         <h2>Upload documents</h2>
         <p className="muted">
-          Request <strong>{ttNumber}</strong> is open. Attach the files below
+          Request <strong>{ttNumber}</strong> is open. Attach files that match the admin rules
+          below
           {requiredIds.length ? " (required ones marked)" : ""}.
         </p>
       </div>
 
-      {upload.isError && (
-        <div className="alert">
-          {upload.error instanceof Error ? upload.error.message : "Upload failed"}
-        </div>
-      )}
-
-      {!requirements.length ? (
-        <div className="empty">No documents are required for this request type.</div>
-      ) : (
-        <div className="upload-grid">
-          {requirements.map((r) => (
-            <div key={r.id} className={`doc-slot${uploads[r.document_type.id] ? " is-done" : ""}`}>
-              <label>
-                {r.document_type.name}
-                {r.is_required ? " *" : ""}
-              </label>
-              {uploads[r.document_type.id] ? (
-                <small style={{ color: "var(--et-green)" }}>
-                  Uploaded: {uploads[r.document_type.id]}
-                </small>
-              ) : (
-                <input
-                  type="file"
-                  accept={r.document_type.accepted_mimes
-                    .split(",")
-                    .map((m) => `.${m.trim()}`)
-                    .join(",")}
-                  disabled={upload.isPending}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    upload.mutate(
-                      { documentTypeId: r.document_type.id, file },
-                      {
-                        onSuccess: (result) => {
-                          setUploads((prev) => ({
-                            ...prev,
-                            [result.documentTypeId]: result.fileName,
-                          }));
-                        },
-                      }
-                    );
-                  }}
-                />
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+      <TicketDocumentsPanel ticket={panelTicket} mode="wizard" />
 
       <div className="form-actions">
         <Link
           href={`/portal/requests/${publicId}`}
           className="btn-primary"
           style={{
-            pointerEvents: allRequiredUploaded || !requiredIds.length ? "auto" : "none",
-            opacity: allRequiredUploaded || !requiredIds.length ? 1 : 0.5,
+            pointerEvents:
+              locked || allRequiredUploaded || !requiredIds.length ? "auto" : "none",
+            opacity: locked || allRequiredUploaded || !requiredIds.length ? 1 : 0.5,
           }}
           onClick={(e) => {
-            if (!(allRequiredUploaded || !requiredIds.length)) e.preventDefault();
+            if (!(locked || allRequiredUploaded || !requiredIds.length)) e.preventDefault();
           }}
         >
           Finish

@@ -25,4 +25,10 @@ enum TicketStatus: string
     {
         return in_array($this, [self::Closed], true);
     }
+
+    /** Approved (completed) or closed — customer may not upload/remove documents. */
+    public function locksCustomerDocuments(): bool
+    {
+        return in_array($this, [self::Completed, self::Closed], true);
+    }
 }

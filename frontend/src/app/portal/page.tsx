@@ -1,6 +1,6 @@
 "use client";
 
-import { NewRequestButton, PortalPageHeader } from "@/components/PortalPageHeader";
+import { JourneyLaunchActions, PortalPageHeader } from "@/components/PortalPageHeader";
 import { RequestsTable } from "@/components/RequestsTable";
 
 export default function PortalHomePage() {
@@ -9,8 +9,8 @@ export default function PortalHomePage() {
       <PortalPageHeader
         kicker="Partner portal"
         title="My service requests"
-        description="Search and filter your VAS orders. Open any row for progress, documents, and comments."
-        actions={<NewRequestButton />}
+        description="Track orders below. Start a new subscription or manage a service you already have."
+        actions={<JourneyLaunchActions />}
       />
 
       <div className="section section-flush">

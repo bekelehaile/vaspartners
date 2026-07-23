@@ -158,22 +158,23 @@ class EsignetService
             $birthdate = date('Y-m-d', strtotime(str_replace('/', '-', $payload['birthdate'])));
         }
 
-        $customer = Customer::query()->firstOrNew(['sub' => $sub]);
-        $customer->fill([
+        $customer = Customer::query()->where('sub', $sub)->first() ?? new Customer;
+
+        $customer->syncFromFayda([
+            'sub' => $sub,
             'name' => $payload['name'] ?? $customer->name ?? 'Customer',
             'phone_number' => $phoneNumber,
             'email' => $payload['email'] ?? $customer->email,
             'gender' => $payload['gender'] ?? $customer->gender,
             'nationality' => $payload['nationality'] ?? $customer->nationality,
-            // National ID via Fayda — same convention as fixedservices
             'identification_type' => $customer->identification_type ?: '2',
             'identification_number' => $customer->identification_number ?: $sub,
             'birthdate' => $birthdate ?? $customer->birthdate,
             'picture' => $picture ?? $customer->picture,
             'address' => $payload['address'] ?? $customer->address,
-            'is_active' => true,
         ]);
-        $customer->save();
+
+        $customer->forceFill(['is_active' => true])->save();
 
         return ['status' => 'ok', 'customer' => $customer->fresh()];
     }

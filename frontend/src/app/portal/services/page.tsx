@@ -44,7 +44,9 @@ export default function ServicesPage() {
                     <p>{s.description || "Value added service"}</p>
                   </div>
                   <Link
-                    href={`/portal/requests/new?service=${s.id}`}
+                    href={`/portal/requests/new?intent=${
+                      s.is_subscription_based === false ? "manage" : "subscribe"
+                    }&service=${s.id}`}
                     className="btn-primary"
                     style={{ padding: "0.55rem 1rem", whiteSpace: "nowrap" }}
                   >

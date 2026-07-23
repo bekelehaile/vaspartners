@@ -38,6 +38,45 @@ export type Service = {
   }[];
 };
 
+export type Subscription = {
+  id: number;
+  public_id: string;
+  status: string;
+  service_id?: number;
+  service?: { id: number; name: string; slug: string; renewal_interval?: string | null };
+  current_period_end?: string | null;
+  next_renewal_due_at?: string | null;
+};
+
+export type FaqItem = {
+  id: number;
+  question: string;
+  answer: string;
+  sort_order?: number;
+};
+
+export type BlogPost = {
+  id: number;
+  title: string;
+  slug: string;
+  excerpt?: string | null;
+  body?: string;
+  cover_image?: string | null;
+  cover_image_url?: string | null;
+  is_featured?: boolean;
+  published_at?: string | null;
+};
+
+export type GalleryItem = {
+  id: number;
+  title: string;
+  caption?: string | null;
+  image?: string;
+  image_url?: string | null;
+  alt_text?: string | null;
+  album?: string | null;
+};
+
 export type Ticket = {
   id: number;
   public_id: string;
@@ -57,10 +96,12 @@ export type Ticket = {
     note?: string | null;
     created_at: string;
   }[];
+  documents_locked?: boolean;
   documents?: {
     id: number;
+    document_type_id?: number;
     original_name: string;
-    document_type?: { name: string };
+    document_type?: { id?: number; name: string; accepted_mimes?: string; max_size_kb?: number };
   }[];
 };
 
