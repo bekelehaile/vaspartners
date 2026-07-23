@@ -15,11 +15,11 @@ class Ticket extends Model
     use HasUlids, SoftDeletes;
 
     protected $fillable = [
-        'public_id', 'tt_number', 'client_id', 'service_id', 'requisition_id', 'category_id',
-        'priority_id', 'region_id', 'zone_id', 'woreda_id', 'assigned_to_user_id',
-        'current_approver_user_id', 'status', 'document_review_status', 'needs_reverification',
-        'building', 'location', 'description', 'assigned_at', 'escalated_at',
-        'completed_at', 'rejected_at', 'closed_at',
+        'public_id', 'tt_number', 'customer_id', 'service_id', 'requisition_id', 'subscription_id',
+        'parent_ticket_id', 'category_id', 'priority_id', 'region_id', 'zone_id', 'woreda_id',
+        'assigned_to_user_id', 'current_approver_user_id', 'status', 'document_review_status',
+        'needs_reverification', 'building', 'location', 'description', 'assigned_at',
+        'escalated_at', 'completed_at', 'rejected_at', 'closed_at',
     ];
 
     protected function casts(): array
@@ -46,9 +46,11 @@ class Ticket extends Model
         return 'public_id';
     }
 
-    public function client(): BelongsTo { return $this->belongsTo(Client::class); }
+    public function customer(): BelongsTo { return $this->belongsTo(Customer::class); }
     public function service(): BelongsTo { return $this->belongsTo(Service::class); }
     public function requisition(): BelongsTo { return $this->belongsTo(Requisition::class); }
+    public function subscription(): BelongsTo { return $this->belongsTo(Subscription::class); }
+    public function parentTicket(): BelongsTo { return $this->belongsTo(self::class, 'parent_ticket_id'); }
     public function category(): BelongsTo { return $this->belongsTo(Category::class); }
     public function priority(): BelongsTo { return $this->belongsTo(Priority::class); }
     public function region(): BelongsTo { return $this->belongsTo(Region::class); }

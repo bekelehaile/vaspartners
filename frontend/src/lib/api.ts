@@ -1,12 +1,20 @@
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
 
-export type Client = {
+export type Customer = {
   public_id: string;
   name: string;
-  company_name?: string | null;
+  phone_number?: string | null;
   email?: string | null;
-  phone?: string | null;
+  gender?: string | null;
+  nationality?: string | null;
+  birthdate?: string | null;
+  company_name?: string | null;
+  company_tin?: string | null;
+  company_phone?: string | null;
+  company_email?: string | null;
+  company_address?: string | null;
   profile_completed_at?: string | null;
+  profile_completed?: boolean;
 };
 
 export type Service = {
@@ -14,8 +22,19 @@ export type Service = {
   name: string;
   slug: string;
   description?: string | null;
+  is_subscription_based?: boolean;
+  renewal_interval?: string | null;
   category?: { id: number; name: string; slug: string };
-  requisitions?: { id: number; name: string; slug: string }[];
+  requisitions?: {
+    id: number;
+    name: string;
+    slug: string;
+    code?: string;
+    creates_subscription?: boolean;
+    requires_active_subscription?: boolean;
+    renews_subscription?: boolean;
+    terminates_subscription?: boolean;
+  }[];
 };
 
 export type Ticket = {
@@ -70,11 +89,8 @@ export function clearToken() {
   localStorage.removeItem("vas_token");
 }
 
-export function faydaLoginUrl(returnTo = "/auth/callback") {
-  const redirect = encodeURIComponent(
-    typeof window !== "undefined" ? `${window.location.origin}${returnTo}` : returnTo
-  );
-  return `${API}/auth/fayda/redirect?redirect=${redirect}`;
+export function faydaLoginUrl() {
+  return `${API}/auth/fayda/redirect`;
 }
 
 export async function api<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {

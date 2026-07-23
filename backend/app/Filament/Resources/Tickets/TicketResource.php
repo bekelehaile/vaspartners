@@ -40,7 +40,8 @@ class TicketResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('tt_number')->searchable()->sortable(),
-                TextColumn::make('client.company_name')->label('Partner')->toggleable(),
+                TextColumn::make('customer.name')->label('Customer')->toggleable(),
+                TextColumn::make('customer.phone_number')->label('Phone')->toggleable(),
                 TextColumn::make('service.name')->sortable(),
                 TextColumn::make('status')->badge(),
                 TextColumn::make('document_review_status')->label('Docs')->badge(),

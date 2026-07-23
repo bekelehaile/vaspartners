@@ -12,9 +12,10 @@ class TicketDocument extends Model
 
     protected $fillable = [
         'ticket_id', 'document_type_id', 'disk', 'path', 'original_name', 'mime_type',
-        'size_bytes', 'verification_status', 'remark', 'uploaded_by_client_id',
+        'size_bytes', 'verification_status', 'remark', 'uploaded_by_customer_id',
     ];
 
     public function ticket(): BelongsTo { return $this->belongsTo(Ticket::class); }
     public function documentType(): BelongsTo { return $this->belongsTo(DocumentType::class); }
+    public function uploadedByCustomer(): BelongsTo { return $this->belongsTo(Customer::class, 'uploaded_by_customer_id'); }
 }

@@ -5,11 +5,11 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SiteShell } from "@/components/SiteShell";
 import { StatusPill } from "@/components/StatusJourney";
-import { Client, Ticket, api, clearToken, getToken, statusCopy } from "@/lib/api";
+import { Customer, Ticket, api, clearToken, getToken, statusCopy } from "@/lib/api";
 
 export default function RequestsPage() {
   const router = useRouter();
-  const [me, setMe] = useState<Client | null>(null);
+  const [me, setMe] = useState<Customer | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,7 +18,7 @@ export default function RequestsPage() {
       router.replace("/");
       return;
     }
-    api<{ data: Client }>("/auth/me").then((r) => setMe(r.data)).catch(() => router.replace("/"));
+    api<{ data: Customer }>("/auth/me").then((r) => setMe(r.data)).catch(() => router.replace("/"));
     api<{ data: Ticket[] }>("/tickets")
       .then((r) => setTickets(Array.isArray(r.data) ? r.data : []))
       .catch((e) => setError(e.message));

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\RenewalInterval;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -12,16 +13,36 @@ class Service extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['category_id', 'name', 'slug', 'description', 'is_active', 'sort_order'];
+    protected $fillable = [
+        'category_id',
+        'name',
+        'slug',
+        'description',
+        'is_active',
+        'is_subscription_based',
+        'renewal_interval',
+        'renewal_lead_days',
+        'renewal_requisition_id',
+        'sort_order',
+    ];
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean'];
+        return [
+            'is_active' => 'boolean',
+            'is_subscription_based' => 'boolean',
+            'renewal_interval' => RenewalInterval::class,
+        ];
     }
 
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    public function renewalRequisition(): BelongsTo
+    {
+        return $this->belongsTo(Requisition::class, 'renewal_requisition_id');
     }
 
     public function requisitions(): BelongsToMany
@@ -37,5 +58,10 @@ class Service extends Model
     public function finalApprovers(): HasMany
     {
         return $this->hasMany(ServiceFinalApprover::class);
+    }
+
+    public function subscriptions(): HasMany
+    {
+        return $this->hasMany(Subscription::class);
     }
 }

@@ -4,15 +4,15 @@ Rebuild of Ethio Telecom **MVAS Partners Portal**.
 
 | Layer | Stack | Path |
 |-------|--------|------|
-| Client portal | Next.js 15 | `frontend/` |
+| Customer portal | Next.js 15 | `frontend/` |
 | API + admin | Laravel 12 + Filament 5 + Sanctum | `backend/` |
-| Partner auth | Fayda (eSignet) — same pattern as fixedservices | `backend/app/Services/EsignetService.php` |
+| Partner auth | Fayda (eSignet) — same pattern as fixedservices; creates `customers` on sign-in | `backend/app/Services/EsignetService.php` |
 | Staff auth | Filament login (`/admin`) | Filament Shield RBAC |
 
 ## Workflow (unchanged)
 
 ```
-Client creates ticket (open)
+Customer creates ticket (open)
   → Supervisor assigns Account Manager (in_progress)
   → AM verifies documents
   → Approver chain via manager_id until final approver
@@ -25,10 +25,19 @@ Client creates ticket (open)
 **New scalable design** (not a copy of legacy schema). See [`docs/SCHEMA.md`](docs/SCHEMA.md).
 
 Highlights:
-- Normalized requirement matrix & final approvers (no JSON blobs)
+- Configurable **request types** (`new`, `move`, `upgrade`, `downgrade`, `terminate`, `relocate`, `maintenance`, `renew`, `other`, …)
+- Per service × request type **document** and **final approver** matrix
+- **Subscriptions** with yearly / bi-yearly renewal until terminate
 - Append-only history: assignments, document reviews, approval steps, status transitions
-- Dedicated `ticket_documents`
 - String enums + ULID public IDs + queue indexes
+
+Seed catalog locally:
+
+```bash
+cd backend
+php artisan migrate
+php artisan db:seed
+```
 
 ## Quick start
 
@@ -56,7 +65,14 @@ npm run dev
 
 Portal: `http://localhost:3000`
 
-Fayda login hits `GET /api/v1/auth/fayda/redirect` then returns to `/auth/callback` with a Sanctum token.
+### Fayda local login
+
+1. Backend `.env` must include `FAYDA_*` (see `.env.example`). Private key stays on the API only.
+2. Registered redirect for the local client is `http://localhost:3000/callback` — the Next.js `/callback` page forwards `code`/`state` to the API.
+3. Start API + portal, then open the site and use **Continue with Fayda**.
+4. Test FIN/FAN (sandbox): `3126894653473958` or `6230247319356120` — OTP: `111111`
+
+Fayda login hits `GET /api/v1/auth/fayda/redirect` then returns to `/auth/callback` with a Sanctum token. There is **no signup** — Fayda userinfo is stored in `customers` on first sign-in; the partner then completes **company details** before submitting requests.
 
 ## Env (names)
 

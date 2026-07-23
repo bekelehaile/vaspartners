@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { SiteShell } from "@/components/SiteShell";
-import { Client, api, clearToken, faydaLoginUrl, getToken } from "@/lib/api";
+import { Customer, api, clearToken, faydaLoginUrl, getToken } from "@/lib/api";
 
 export default function LandingPage() {
-  const [me, setMe] = useState<Client | null>(null);
+  const [me, setMe] = useState<Customer | null>(null);
 
   useEffect(() => {
     if (!getToken()) return;
-    api<{ data: Client }>("/auth/me")
+    api<{ data: Customer }>("/auth/me")
       .then((r) => setMe(r.data))
       .catch(() => clearToken());
   }, []);
@@ -59,8 +59,8 @@ export default function LandingPage() {
         </p>
         <div className="quiet-steps">
           <article className="quiet-step">
-            <h3>Sign in once</h3>
-            <p>Use Fayda for a secure, password-free start. We recognise you instantly next time.</p>
+            <h3>Sign in with Fayda</h3>
+            <p>No signup form — Fayda gives us your verified identity and we open your portal.</p>
           </article>
           <article className="quiet-step">
             <h3>Tell us what you need</h3>

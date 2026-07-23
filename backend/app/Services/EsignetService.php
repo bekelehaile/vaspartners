@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\Client;
+use App\Models\Customer;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use phpseclib3\Crypt\RSA;
@@ -10,7 +10,8 @@ use RuntimeException;
 use Throwable;
 
 /**
- * Fayda (eSignet) OIDC — patterned after fixedservices EsignetService.
+ * Fayda (eSignet) OIDC — same pattern as fixedservices.
+ * Customer profile is created/refreshed from userinfo on sign-in (no signup form).
  */
 class EsignetService
 {
@@ -117,25 +118,34 @@ class EsignetService
             return ['status' => 'error', 'message' => 'Invalid user info payload'];
         }
 
-        $result = $this->createOrUpdateClientBySub($payload);
+        $result = $this->createOrUpdateCustomerBySub($payload);
         if ($result['status'] !== 'ok') {
             return $result;
         }
 
-        return ['status' => 'ok', 'client' => $result['client']];
+        return ['status' => 'ok', 'customer' => $result['customer']];
     }
 
-    public function createOrUpdateClientBySub(array $payload): array
+    /**
+     * Persist Fayda userinfo into customers (fixedservices-compatible mapping).
+     * First sign-in creates the row; later sign-ins refresh identity fields from Fayda.
+     */
+    public function createOrUpdateCustomerBySub(array $payload): array
     {
         $sub = $payload['sub'] ?? null;
         if (! $sub) {
             return ['status' => 'error', 'message' => 'Missing Fayda sub.'];
         }
 
-        $phone = null;
-        if (! empty($payload['phone_number'])) {
-            $digits = preg_replace('/\D/', '', $payload['phone_number']);
-            $phone = substr($digits, -9) ?: null;
+        $rawPhone = $payload['phone_number'] ?? null;
+        if (! $rawPhone) {
+            return ['status' => 'error', 'message' => 'Missing phone number from Fayda.'];
+        }
+
+        $digits = preg_replace('/\D/', '', (string) $rawPhone);
+        $phoneNumber = substr($digits, -9);
+        if (strlen($phoneNumber) < 9) {
+            return ['status' => 'error', 'message' => 'Invalid phone number from Fayda.'];
         }
 
         $picture = $payload['picture'] ?? null;
@@ -148,21 +158,24 @@ class EsignetService
             $birthdate = date('Y-m-d', strtotime(str_replace('/', '-', $payload['birthdate'])));
         }
 
-        $client = Client::query()->firstOrNew(['fayda_sub' => $sub]);
-        $client->fill([
-            'name' => $payload['name'] ?? $client->name ?? 'Partner',
-            'email' => $payload['email'] ?? $client->email,
-            'phone' => $phone ?? $client->phone,
-            'gender' => $payload['gender'] ?? $client->gender,
-            'nationality' => $payload['nationality'] ?? $client->nationality,
-            'birthdate' => $birthdate ?? $client->birthdate,
-            'picture' => $picture ?? $client->picture,
-            'address' => $payload['address'] ?? $client->address,
+        $customer = Customer::query()->firstOrNew(['sub' => $sub]);
+        $customer->fill([
+            'name' => $payload['name'] ?? $customer->name ?? 'Customer',
+            'phone_number' => $phoneNumber,
+            'email' => $payload['email'] ?? $customer->email,
+            'gender' => $payload['gender'] ?? $customer->gender,
+            'nationality' => $payload['nationality'] ?? $customer->nationality,
+            // National ID via Fayda — same convention as fixedservices
+            'identification_type' => $customer->identification_type ?: '2',
+            'identification_number' => $customer->identification_number ?: $sub,
+            'birthdate' => $birthdate ?? $customer->birthdate,
+            'picture' => $picture ?? $customer->picture,
+            'address' => $payload['address'] ?? $customer->address,
             'is_active' => true,
         ]);
-        $client->save();
+        $customer->save();
 
-        return ['status' => 'ok', 'client' => $client->fresh()];
+        return ['status' => 'ok', 'customer' => $customer->fresh()];
     }
 
     protected function generateClientAssertion(): string

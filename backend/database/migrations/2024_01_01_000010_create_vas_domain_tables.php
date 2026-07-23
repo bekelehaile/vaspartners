@@ -16,22 +16,23 @@ return new class extends Migration
             $table->softDeletes();
         });
 
-        Schema::create('clients', function (Blueprint $table) {
+        Schema::create('customers', function (Blueprint $table) {
             $table->id();
             $table->ulid('public_id')->unique();
-            $table->string('fayda_sub')->nullable()->unique();
-            $table->string('company_name')->nullable();
+            // Fayda (eSignet) subject — account is created on first successful sign-in (no signup)
+            $table->string('sub')->unique();
             $table->string('name');
+            $table->string('phone_number', 20)->nullable()->unique();
             $table->string('email')->nullable()->unique();
-            $table->string('phone', 20)->nullable()->unique();
             $table->string('gender', 20)->nullable();
             $table->string('nationality', 50)->nullable();
+            $table->string('identification_type', 32)->nullable(); // e.g. 2 = national ID (Fayda)
+            $table->string('identification_number')->nullable();
             $table->date('birthdate')->nullable();
-            $table->json('address')->nullable();
             $table->longText('picture')->nullable();
+            $table->json('address')->nullable();
             $table->boolean('is_active')->default(true);
             $table->boolean('is_banned')->default(false);
-            $table->timestamp('profile_completed_at')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
@@ -170,7 +171,7 @@ return new class extends Migration
             $table->id();
             $table->ulid('public_id')->unique();
             $table->string('tt_number')->unique();
-            $table->foreignId('client_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('customer_id')->constrained()->cascadeOnDelete();
             $table->foreignId('service_id')->constrained()->restrictOnDelete();
             $table->foreignId('requisition_id')->constrained()->restrictOnDelete();
             $table->foreignId('category_id')->constrained()->restrictOnDelete();
@@ -197,7 +198,7 @@ return new class extends Migration
             $table->index(['status', 'assigned_to_user_id'], 'tickets_recent_idx');
             $table->index(['assigned_to_user_id', 'status', 'current_approver_user_id'], 'tickets_my_idx');
             $table->index(['current_approver_user_id', 'status'], 'tickets_approval_idx');
-            $table->index(['client_id', 'status', 'created_at'], 'tickets_client_idx');
+            $table->index(['customer_id', 'status', 'created_at'], 'tickets_customer_idx');
             $table->index(['category_id', 'status'], 'tickets_category_idx');
         });
 
@@ -212,7 +213,7 @@ return new class extends Migration
             $table->unsignedBigInteger('size_bytes')->default(0);
             $table->string('verification_status', 32)->default('pending'); // pending|accepted|rejected
             $table->text('remark')->nullable();
-            $table->foreignId('uploaded_by_client_id')->nullable()->constrained('clients')->nullOnDelete();
+            $table->foreignId('uploaded_by_customer_id')->nullable()->constrained('customers')->nullOnDelete();
             $table->timestamps();
             $table->softDeletes();
             $table->index(['ticket_id', 'document_type_id']);
@@ -297,7 +298,7 @@ return new class extends Migration
         Schema::dropIfExists('requisitions');
         Schema::dropIfExists('services');
         Schema::dropIfExists('categories');
-        Schema::dropIfExists('clients');
+        Schema::dropIfExists('customers');
 
         Schema::table('users', function (Blueprint $table) {
             $table->dropConstrainedForeignId('manager_id');

@@ -4,11 +4,11 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SiteShell } from "@/components/SiteShell";
-import { Client, Service, api, clearToken, getToken } from "@/lib/api";
+import { Customer, Service, api, clearToken, getToken } from "@/lib/api";
 
 export default function ServicesPage() {
   const router = useRouter();
-  const [me, setMe] = useState<Client | null>(null);
+  const [me, setMe] = useState<Customer | null>(null);
   const [services, setServices] = useState<Service[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -17,7 +17,7 @@ export default function ServicesPage() {
       router.replace("/");
       return;
     }
-    api<{ data: Client }>("/auth/me").then((r) => setMe(r.data)).catch(() => router.replace("/"));
+    api<{ data: Customer }>("/auth/me").then((r) => setMe(r.data)).catch(() => router.replace("/"));
     api<{ data: Service[] }>("/services")
       .then((r) => setServices(r.data ?? []))
       .catch((e) => setError(e.message));

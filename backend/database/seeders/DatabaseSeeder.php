@@ -29,5 +29,7 @@ class DatabaseSeeder extends Seeder
         ] as $row) {
             Priority::query()->updateOrCreate(['code' => $row['code']], $row);
         }
+
+        $this->call(CatalogSeeder::class);
     }
 }

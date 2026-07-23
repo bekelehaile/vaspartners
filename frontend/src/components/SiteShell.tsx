@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ReactNode } from "react";
-import { Client, clearToken, faydaLoginUrl } from "@/lib/api";
+import { Customer, clearToken, faydaLoginUrl } from "@/lib/api";
 
 export function SiteShell({
   children,
@@ -11,7 +11,7 @@ export function SiteShell({
   compact = false,
 }: {
   children: ReactNode;
-  me?: Client | null;
+  me?: Customer | null;
   onLogout?: () => void;
   compact?: boolean;
 }) {

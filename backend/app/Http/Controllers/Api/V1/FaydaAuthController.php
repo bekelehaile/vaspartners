@@ -16,9 +16,11 @@ class FaydaAuthController extends Controller
             return response()->json(['message' => $built['message'] ?? 'Unable to start Fayda login'], 500);
         }
 
+        // After Fayda returns to FRONTEND /callback (registered redirect), it forwards here.
+        // Final SPA landing stays /auth/callback with the Sanctum token.
         Cache::put('fayda_pkce:'.$built['state'], [
             'code_verifier' => $built['code_verifier'],
-            'frontend_redirect' => $request->query('redirect', config('vas.frontend_url').'/auth/callback'),
+            'frontend_redirect' => config('vas.frontend_url').'/auth/callback',
         ], now()->addMinutes(15));
 
         return redirect()->away($built['auth_url']);
@@ -45,19 +47,18 @@ class FaydaAuthController extends Controller
             return redirect()->away($frontend.'?error=userinfo');
         }
 
-        $client = $info['client'];
-        if ($client->is_banned || ! $client->is_active) {
+        $customer = $info['customer'];
+        if ($customer->is_banned || ! $customer->is_active) {
             return redirect()->away($frontend.'?error=banned');
         }
 
-        $accessToken = $client->createToken('fayda')->plainTextToken;
+        $accessToken = $customer->createToken('fayda')->plainTextToken;
         $target = $pkce['frontend_redirect'] ?? $frontend;
-
         $sep = str_contains($target, '?') ? '&' : '?';
 
         return redirect()->away($target.$sep.http_build_query([
             'token' => $accessToken,
-            'client_id' => $client->public_id,
+            'customer_id' => $customer->public_id,
         ]));
     }
 

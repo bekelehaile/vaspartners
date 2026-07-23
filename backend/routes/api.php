@@ -15,12 +15,13 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('auth/me', [FaydaAuthController::class, 'me']);
         Route::post('auth/logout', [FaydaAuthController::class, 'logout']);
-        Route::post('profile', [ClientPortalController::class, 'completeProfile']);
+        Route::post('profile/company', [ClientPortalController::class, 'completeCompanyProfile']);
 
         Route::get('tickets', [ClientPortalController::class, 'tickets']);
         Route::post('tickets', [ClientPortalController::class, 'storeTicket']);
         Route::get('tickets/{ticket}', [ClientPortalController::class, 'showTicket']);
         Route::post('tickets/{ticket}/documents', [ClientPortalController::class, 'uploadDocument']);
         Route::post('tickets/{ticket}/comments', [ClientPortalController::class, 'comment']);
+        Route::get('subscriptions', [ClientPortalController::class, 'subscriptions']);
     });
 });

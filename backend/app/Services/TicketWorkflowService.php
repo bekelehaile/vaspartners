@@ -5,7 +5,9 @@ namespace App\Services;
 use App\Enums\ApprovalAction;
 use App\Enums\DocumentReviewStatus;
 use App\Enums\TicketStatus;
-use App\Models\Client;
+use App\Models\Customer;
+use App\Models\Requisition;
+use App\Models\Service;
 use App\Models\ServiceFinalApprover;
 use App\Models\ServiceRequisitionDocument;
 use App\Models\Ticket;
@@ -26,6 +28,10 @@ use InvalidArgumentException;
  */
 class TicketWorkflowService
 {
+    public function __construct(
+        protected SubscriptionLifecycleService $subscriptions,
+    ) {}
+
     public function transition(Ticket $ticket, TicketStatus $to, mixed $actor = null, ?string $note = null, array $meta = []): void
     {
         $from = $ticket->status;
@@ -53,6 +59,11 @@ class TicketWorkflowService
             'meta' => $meta ?: null,
             'created_at' => now(),
         ]);
+
+        if ($to === TicketStatus::Completed
+            || ($to === TicketStatus::Closed && $from !== TicketStatus::Completed)) {
+            $this->subscriptions->applyFromTicket($ticket->fresh(['requisition', 'service', 'subscription']));
+        }
     }
 
     public function requiredDocumentTypeIds(int $serviceId, int $requisitionId): array
@@ -87,26 +98,57 @@ class TicketWorkflowService
         }
     }
 
-    public function createTicket(Client $client, array $data): Ticket
+    public function createTicket(Customer $customer, array $data): Ticket
     {
-        return DB::transaction(function () use ($client, $data) {
+        return DB::transaction(function () use ($customer, $data) {
             $maxOpen = (int) config('vas.max_open_tickets', 1);
-            $openCount = Ticket::query()
-                ->where('client_id', $client->id)
-                ->where('status', TicketStatus::Open)
-                ->count();
-            if ($openCount >= $maxOpen) {
+            if (empty($data['skip_open_limit'])) {
+                $openCount = Ticket::query()
+                    ->where('customer_id', $customer->id)
+                    ->where('status', TicketStatus::Open)
+                    ->count();
+                if ($openCount >= $maxOpen) {
+                    throw ValidationException::withMessages([
+                        'ticket' => "You already have the maximum of {$maxOpen} open ticket(s).",
+                    ]);
+                }
+            }
+
+            $service = Service::query()->findOrFail($data['service_id']);
+            $requisition = Requisition::query()->findOrFail($data['requisition_id']);
+
+            if (! $service->requisitions()->where('requisitions.id', $requisition->id)->exists()) {
                 throw ValidationException::withMessages([
-                    'ticket' => "You already have the maximum of {$maxOpen} open ticket(s).",
+                    'requisition_id' => 'This request type is not enabled for the selected service.',
                 ]);
+            }
+
+            $this->subscriptions->assertTicketAllowed($customer->id, $data, $requisition, $service);
+
+            if (empty($data['skip_open_limit']) && ! $customer->profile_completed) {
+                throw ValidationException::withMessages([
+                    'profile' => 'Please complete your company details before submitting a service request.',
+                ]);
+            }
+
+            $subscriptionId = $data['subscription_id'] ?? null;
+            if (! $subscriptionId && ($requisition->requires_active_subscription || $requisition->renews_subscription || $requisition->terminates_subscription)) {
+                $subscriptionId = \App\Models\Subscription::query()
+                    ->where('customer_id', $customer->id)
+                    ->where('service_id', $service->id)
+                    ->whereIn('status', ['active', 'pending_renewal', 'grace'])
+                    ->latest('id')
+                    ->value('id');
             }
 
             $ticket = Ticket::query()->create([
                 'tt_number' => $this->generateTtNumber(),
-                'client_id' => $client->id,
+                'customer_id' => $customer->id,
                 'service_id' => $data['service_id'],
                 'requisition_id' => $data['requisition_id'],
-                'category_id' => $data['category_id'],
+                'subscription_id' => $subscriptionId,
+                'parent_ticket_id' => $data['parent_ticket_id'] ?? null,
+                'category_id' => $data['category_id'] ?? $service->category_id,
                 'region_id' => $data['region_id'] ?? null,
                 'zone_id' => $data['zone_id'] ?? null,
                 'woreda_id' => $data['woreda_id'] ?? null,
@@ -121,8 +163,8 @@ class TicketWorkflowService
                 'ticket_id' => $ticket->id,
                 'from_status' => null,
                 'to_status' => TicketStatus::Open->value,
-                'actor_type' => Client::class,
-                'actor_id' => $client->id,
+                'actor_type' => Customer::class,
+                'actor_id' => $customer->id,
                 'note' => 'Ticket created',
                 'created_at' => now(),
             ]);

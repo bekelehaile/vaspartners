@@ -6,23 +6,25 @@ use App\Http\Controllers\Controller;
 use App\Models\Faq;
 use App\Models\Service;
 use App\Models\ServiceRequisitionDocument;
+use App\Models\Subscription;
 use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Models\TicketDocument;
 use App\Services\TicketWorkflowService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
 class ClientPortalController extends Controller
 {
     public function services()
     {
         $services = Service::query()
-            ->with(['category:id,name,slug', 'requisitions:id,name,slug'])
+            ->with([
+                'category:id,name,slug',
+                'requisitions:id,name,slug,code,creates_subscription,requires_active_subscription,renews_subscription,terminates_subscription,sort_order',
+            ])
             ->where('is_active', true)
             ->orderBy('sort_order')
-            ->get();
+            ->get(['id', 'category_id', 'name', 'slug', 'description', 'is_subscription_based', 'renewal_interval', 'renewal_lead_days', 'sort_order']);
 
         return response()->json(['data' => $services]);
     }
@@ -54,7 +56,7 @@ class ClientPortalController extends Controller
     {
         $tickets = Ticket::query()
             ->with(['service:id,name', 'requisition:id,name', 'statusHistories' => fn ($q) => $q->latest('created_at')->limit(5)])
-            ->where('client_id', $request->user()->id)
+            ->where('customer_id', $request->user()->id)
             ->latest()
             ->paginate(20);
 
@@ -63,9 +65,9 @@ class ClientPortalController extends Controller
 
     public function showTicket(Request $request, Ticket $ticket)
     {
-        abort_unless($ticket->client_id === $request->user()->id, 404);
+        abort_unless($ticket->customer_id === $request->user()->id, 404);
 
-        $ticket->load(['service', 'requisition', 'documents.documentType', 'comments', 'statusHistories']);
+        $ticket->load(['service', 'requisition', 'subscription', 'documents.documentType', 'comments', 'statusHistories']);
 
         return response()->json(['data' => $ticket]);
     }
@@ -75,6 +77,7 @@ class ClientPortalController extends Controller
         $data = $request->validate([
             'service_id' => ['required', 'exists:services,id'],
             'requisition_id' => ['required', 'exists:requisitions,id'],
+            'subscription_id' => ['nullable', 'exists:subscriptions,id'],
             'region_id' => ['nullable', 'exists:regions,id'],
             'zone_id' => ['nullable', 'exists:zones,id'],
             'woreda_id' => ['nullable', 'exists:woredas,id'],
@@ -91,9 +94,20 @@ class ClientPortalController extends Controller
         return response()->json(['data' => $ticket], 201);
     }
 
-    public function uploadDocument(Request $request, Ticket $ticket, TicketWorkflowService $workflow)
+    public function subscriptions(Request $request)
     {
-        abort_unless($ticket->client_id === $request->user()->id, 404);
+        $rows = Subscription::query()
+            ->with(['service:id,name,slug,renewal_interval'])
+            ->where('customer_id', $request->user()->id)
+            ->latest('id')
+            ->paginate(20);
+
+        return response()->json($rows);
+    }
+
+    public function uploadDocument(Request $request, Ticket $ticket)
+    {
+        abort_unless($ticket->customer_id === $request->user()->id, 404);
 
         $data = $request->validate([
             'document_type_id' => ['required', 'exists:document_types,id'],
@@ -111,7 +125,7 @@ class ClientPortalController extends Controller
             'original_name' => $file->getClientOriginalName(),
             'mime_type' => $file->getClientMimeType(),
             'size_bytes' => $file->getSize(),
-            'uploaded_by_client_id' => $request->user()->id,
+            'uploaded_by_customer_id' => $request->user()->id,
         ]);
 
         return response()->json(['data' => $doc], 201);
@@ -119,7 +133,7 @@ class ClientPortalController extends Controller
 
     public function comment(Request $request, Ticket $ticket)
     {
-        abort_unless($ticket->client_id === $request->user()->id, 404);
+        abort_unless($ticket->customer_id === $request->user()->id, 404);
 
         $data = $request->validate(['body' => ['required', 'string', 'max:5000']]);
 
@@ -134,18 +148,22 @@ class ClientPortalController extends Controller
         return response()->json(['data' => $comment], 201);
     }
 
-    public function completeProfile(Request $request)
+    public function completeCompanyProfile(Request $request)
     {
         $data = $request->validate([
             'company_name' => ['required', 'string', 'max:255'],
-            'email' => ['nullable', 'email', 'max:255'],
+            'company_tin' => ['nullable', 'string', 'max:64'],
+            'company_phone' => ['nullable', 'string', 'max:32'],
+            'company_email' => ['nullable', 'email', 'max:255'],
+            'company_address' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $client = $request->user();
-        $client->fill($data);
-        $client->profile_completed_at = now();
-        $client->save();
+        /** @var \App\Models\Customer $customer */
+        $customer = $request->user();
+        $customer->fill($data);
+        $customer->profile_completed_at = now();
+        $customer->save();
 
-        return response()->json(['data' => $client]);
+        return response()->json(['data' => $customer->fresh()]);
     }
 }
