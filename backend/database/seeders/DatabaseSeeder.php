@@ -6,12 +6,13 @@ use App\Models\Priority;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Spatie\Permission\Models\Role;
 
 class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        User::query()->updateOrCreate(
+        $admin = User::query()->updateOrCreate(
             ['email' => 'admin@vaspartners.local'],
             [
                 'name' => 'VAS Admin',
@@ -20,6 +21,11 @@ class DatabaseSeeder extends Seeder
                 'is_active' => true,
             ]
         );
+
+        $superAdmin = Role::findOrCreate('super_admin', 'web');
+        if (! $admin->hasRole($superAdmin)) {
+            $admin->assignRole($superAdmin);
+        }
 
         foreach ([
             ['name' => 'Low', 'code' => 'low', 'weight' => 1, 'color' => 'gray'],

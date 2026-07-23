@@ -7,8 +7,12 @@ import { Customer, api, clearToken, faydaLoginUrl, getToken } from "@/lib/api";
 
 export default function LandingPage() {
   const [me, setMe] = useState<Customer | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
+    const err = new URLSearchParams(window.location.search).get("error");
+    if (err) setAuthError(err);
+
     if (!getToken()) return;
     api<{ data: Customer }>("/auth/me")
       .then((r) => setMe(r.data))
@@ -34,6 +38,11 @@ export default function LandingPage() {
           <p className="hero-lead">
             Request Value Added Services in minutes — upload once, track every step, stay informed.
           </p>
+          {authError && (
+            <p className="alert" style={{ marginBottom: "1rem", maxWidth: "28rem" }}>
+              Fayda sign-in failed ({authError}). Try again, or check API logs if it keeps failing.
+            </p>
+          )}
           <div className="hero-actions">
             {me ? (
               <Link className="btn-on-dark" href="/portal">

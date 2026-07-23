@@ -13,7 +13,7 @@ Rebuild of Ethio Telecom **MVAS Partners Portal**.
 
 ```
 Customer creates ticket (open)
-  → Supervisor assigns Account Manager (in_progress)
+  → Supervisor assigns AM (in_progress)
   → AM verifies documents
   → Approver chain via manager_id until final approver
   → completed → closed
@@ -22,62 +22,54 @@ Customer creates ticket (open)
 
 ## Database
 
-**New scalable design** (not a copy of legacy schema). See [`docs/SCHEMA.md`](docs/SCHEMA.md).
+See [`docs/SCHEMA.md`](docs/SCHEMA.md). Highlights: configurable request types, per-type document matrix, subscriptions with yearly/bi-yearly renewal, append-only ticket history.
 
-Highlights:
-- Configurable **request types** (`new`, `move`, `upgrade`, `downgrade`, `terminate`, `relocate`, `maintenance`, `renew`, `other`, …)
-- Per service × request type **document** and **final approver** matrix
-- **Subscriptions** with yearly / bi-yearly renewal until terminate
-- Append-only history: assignments, document reviews, approval steps, status transitions
-- String enums + ULID public IDs + queue indexes
+## Quick start (Docker — recommended)
 
-Seed catalog locally:
+Brings up **Postgres 18**, **PgBouncer**, **Redis**, **Laravel (PHP 8.4)**, and **Next.js**.
 
 ```bash
-cd backend
-php artisan migrate
-php artisan db:seed
+# 1) Fayda secrets in backend/.env (never commit the private key)
+cp backend/.env.example backend/.env
+# edit FAYDA_* + ensure APP_KEY is set (or let container generate it)
+
+cp frontend/.env.example frontend/.env.local
+
+# 2) Start / stop
+./up.sh
+./down.sh          # keep DB volumes
+./down.sh -v       # wipe Postgres/Redis volumes
 ```
 
-## Quick start
+| Service | URL / port |
+|---------|------------|
+| Portal | http://localhost:3000 |
+| API / Filament | http://localhost:8000 — admin `/admin` |
+| Postgres (direct) | localhost:5433 |
+| PgBouncer | localhost:6432 |
+| Redis | localhost:6380 |
 
-### Backend
+Seeded admin: `admin@vaspartners.local` / `password`  
+Fayda sandbox FIN/FAN: `3126894653473958` or `6230247319356120` — OTP: `111111`
+
+Useful commands:
 
 ```bash
-cd backend
-cp .env.example .env   # set DB + FAYDA_* + FRONTEND_URL
-composer install
-php artisan migrate
-php artisan make:filament-user
-php artisan serve
+docker compose exec backend php artisan migrate:fresh --seed
+docker compose exec backend php artisan queue:work
+docker compose logs -f backend frontend
 ```
 
-Admin: `http://localhost:8000/admin`
+Compose overrides DB/Redis hosts inside containers (`pgbouncer`, `redis`). Your `backend/.env` Fayda values are still loaded.
 
-### Frontend
+## Fayda local login
 
-```bash
-cd frontend
-cp .env.example .env.local
-npm install
-npm run dev
-```
-
-Portal: `http://localhost:3000`
-
-### Fayda local login
-
-1. Backend `.env` must include `FAYDA_*` (see `.env.example`). Private key stays on the API only.
-2. Registered redirect for the local client is `http://localhost:3000/callback` — the Next.js `/callback` page forwards `code`/`state` to the API.
-3. Start API + portal, then open the site and use **Continue with Fayda**.
-4. Test FIN/FAN (sandbox): `3126894653473958` or `6230247319356120` — OTP: `111111`
-
-Fayda login hits `GET /api/v1/auth/fayda/redirect` then returns to `/auth/callback` with a Sanctum token. There is **no signup** — Fayda userinfo is stored in `customers` on first sign-in; the partner then completes **company details** before submitting requests.
+1. `FAYDA_REDIRECT_URI=http://localhost:3000/callback` (registered client redirect)
+2. Next.js `/callback` forwards `code`/`state` to the API for PKCE + token exchange
+3. After login, complete **company details**, then submit a service request
 
 ## Env (names)
 
 **Fayda:** `FAYDA_CLIENT_ID`, `FAYDA_REDIRECT_URI`, `FAYDA_AUTH_URL`, `FAYDA_TOKEN_URL`, `FAYDA_USERINFO_URL`, `FAYDA_PRIVATE_KEY`, `FAYDA_ALG`, `FAYDA_ASSERTION_TYPE`, `FAYDA_EXPIRATION_TIME`
 
-**App:** `FRONTEND_URL`, `MAX_OPEN_TICKETS`, `NEXT_PUBLIC_API_URL`
-
-Set `FAYDA_REDIRECT_URI` to `{API_URL}/api/v1/auth/fayda/callback`.
+**App:** `FRONTEND_URL`, `MAX_OPEN_TICKETS`, `NEXT_PUBLIC_API_URL`, `DB_EMULATE_PREPARES` (for PgBouncer)

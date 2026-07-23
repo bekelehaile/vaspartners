@@ -1,0 +1,11 @@
+# Build context is repo root for the PHP image
+.git
+frontend/node_modules
+backend/node_modules
+backend/vendor
+backend/storage/logs/*
+backend/storage/framework/cache/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+**/.env
+**/.env.local

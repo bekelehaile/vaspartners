@@ -44,7 +44,9 @@ class FaydaAuthController extends Controller
 
         $info = $esignet->getUserInfo($token['token']['access_token']);
         if (($info['status'] ?? '') !== 'ok') {
-            return redirect()->away($frontend.'?error=userinfo');
+            $reason = urlencode((string) ($info['message'] ?? 'userinfo'));
+
+            return redirect()->away($frontend.'?error='.$reason);
         }
 
         $customer = $info['customer'];
