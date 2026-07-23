@@ -56,10 +56,11 @@ class CustomerResource extends Resource
                 )->columnSpanFull(),
             ])->columns(3),
             Section::make('Company details')
-                ->description('Organisation details provided by the partner. Fayda personal identity above stays read-only.')
+                ->description('Organisation linked to this Fayda partner (create or attach flow).')
                 ->schema([
-                TextEntry::make('company_name'),
-                TextEntry::make('company_tin')->label('TIN'),
+                TextEntry::make('company.name')->label('Company'),
+                TextEntry::make('company.tin')->label('TIN'),
+                TextEntry::make('company_role')->label('Role'),
                 TextEntry::make('company_phone'),
                 TextEntry::make('company_email'),
                 TextEntry::make('company_address')->columnSpanFull(),

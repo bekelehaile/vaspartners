@@ -172,11 +172,40 @@ export default function CompanyProfilePage() {
           <div className="portal-grid">
             <div className="panel">
               <h2>Organisation details</h2>
-              <CompanyProfileForm
-                key={`${me?.public_id ?? "company"}-edit`}
-                me={me}
-                redirectTo="/portal/company"
-              />
+              {me?.company_role === "owner" ? (
+                <CompanyProfileForm
+                  key={`${me?.public_id ?? "company"}-edit`}
+                  me={me}
+                  redirectTo="/portal/company"
+                />
+              ) : (
+                <dl className="journey-summary">
+                  <div>
+                    <dt>Name</dt>
+                    <dd>{me?.company_name || me?.company?.name || "—"}</dd>
+                  </div>
+                  <div>
+                    <dt>TIN</dt>
+                    <dd>{me?.company_tin || me?.company?.tin || "—"}</dd>
+                  </div>
+                  <div>
+                    <dt>Phone</dt>
+                    <dd>{me?.company_phone || me?.company?.phone || "—"}</dd>
+                  </div>
+                  <div>
+                    <dt>Email</dt>
+                    <dd>{me?.company_email || me?.company?.email || "—"}</dd>
+                  </div>
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <dt>Address</dt>
+                    <dd>{me?.company_address || me?.company?.address || "—"}</dd>
+                  </div>
+                  <div>
+                    <dt>Your role</dt>
+                    <dd>{me?.company_role || "member"}</dd>
+                  </div>
+                </dl>
+              )}
             </div>
             <div className="panel">
               <h2>Request detach / move</h2>
