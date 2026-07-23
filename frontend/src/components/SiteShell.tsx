@@ -34,7 +34,7 @@ const publicNav = [
 
 const portalNav = [
   { href: "/portal", label: "My requests" },
-  { href: "/portal/services", label: "My services" },
+  { href: "/portal/services", label: "Services" },
 ] as const;
 
 export function SiteShell({

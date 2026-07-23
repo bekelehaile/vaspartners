@@ -6,7 +6,7 @@ import { ServicesCatalog } from "@/components/ServicesCatalog";
 export default function ServicesPage() {
   return (
     <>
-      <PortalPageHeader title="My services" />
+      <PortalPageHeader title="Services" />
       <ServicesCatalog compact className="section section-flush" />
     </>
   );
