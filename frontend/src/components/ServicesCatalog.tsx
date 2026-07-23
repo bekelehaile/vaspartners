@@ -2,9 +2,11 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useCustomer, useDocumentRequirements, useServices } from "@/hooks/use-customer";
-import { faydaLoginUrl } from "@/lib/api";
-import type { Service } from "@/lib/api";
+import { useQueries } from "@tanstack/react-query";
+import { useCustomer, useServices } from "@/hooks/use-customer";
+import { api, faydaLoginUrl } from "@/lib/api";
+import type { DocumentRequirement, Service } from "@/lib/api";
+import { queryKeys } from "@/lib/query-keys";
 
 type ServicesCatalogProps = {
   /** Extra class on the outer section */
@@ -189,72 +191,32 @@ function ServiceRequirements({
   serviceId: number;
   requisitionIds: number[];
 }) {
-  if (requisitionIds.length === 0) {
-    return (
-      <p className="muted" style={{ marginTop: "0.35rem" }}>
-        No requirements configured for this service yet.
-      </p>
-    );
-  }
+  const results = useQueries({
+    queries: requisitionIds.map((requisitionId) => ({
+      queryKey: queryKeys.catalog.documentRequirements(
+        String(serviceId),
+        String(requisitionId),
+      ),
+      queryFn: async () => {
+        const res = await api<{ data: DocumentRequirement[] }>(
+          `/document-requirements?service_id=${serviceId}&requisition_id=${requisitionId}`,
+        );
+        return res.data ?? [];
+      },
+      enabled: !!serviceId && !!requisitionId,
+    })),
+  });
 
-  return (
-    <MergedRequirementsList serviceId={serviceId} requisitionIds={requisitionIds} />
-  );
-}
-
-function MergedRequirementsList({
-  serviceId,
-  requisitionIds,
-}: {
-  serviceId: number;
-  requisitionIds: number[];
-}) {
-  const primaryId = requisitionIds[0]!;
-  const { data: primary = [], isLoading, isError } = useDocumentRequirements(
-    String(serviceId),
-    String(primaryId),
-  );
-  const second = useDocumentRequirements(
-    String(serviceId),
-    String(requisitionIds[1] ?? ""),
-  );
-  const third = useDocumentRequirements(
-    String(serviceId),
-    String(requisitionIds[2] ?? ""),
-  );
-  const fourth = useDocumentRequirements(
-    String(serviceId),
-    String(requisitionIds[3] ?? ""),
-  );
-  const fifth = useDocumentRequirements(
-    String(serviceId),
-    String(requisitionIds[4] ?? ""),
-  );
-
-  const loading =
-    isLoading ||
-    (requisitionIds[1] && second.isLoading) ||
-    (requisitionIds[2] && third.isLoading) ||
-    (requisitionIds[3] && fourth.isLoading) ||
-    (requisitionIds[4] && fifth.isLoading);
-
-  const errored =
-    isError ||
-    (requisitionIds[1] && second.isError) ||
-    (requisitionIds[2] && third.isError) ||
-    (requisitionIds[3] && fourth.isError) ||
-    (requisitionIds[4] && fifth.isError);
+  const loading = results.some((r) => r.isLoading);
+  const errored = results.some((r) => r.isError);
 
   const merged = useMemo(() => {
-    const bags = [primary, second.data, third.data, fourth.data, fifth.data].filter(
-      Boolean,
-    ) as NonNullable<typeof primary>[];
     const byType = new Map<
       number,
       { id: number; name: string; required: boolean; description?: string | null }
     >();
-    for (const bag of bags) {
-      for (const req of bag ?? []) {
+    for (const result of results) {
+      for (const req of result.data ?? []) {
         const typeId = req.document_type.id;
         const existing = byType.get(typeId);
         if (!existing) {
@@ -270,11 +232,24 @@ function MergedRequirementsList({
       }
     }
     return Array.from(byType.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [primary, second.data, third.data, fourth.data, fifth.data]);
+  }, [results]);
+
+  if (requisitionIds.length === 0) {
+    return (
+      <p className="muted" style={{ marginTop: "0.35rem" }}>
+        No requirements configured for this service yet.
+      </p>
+    );
+  }
 
   if (loading) {
-    return <p className="muted" style={{ marginTop: "0.35rem" }}>Loading requirements…</p>;
+    return (
+      <p className="muted" style={{ marginTop: "0.35rem" }}>
+        Loading requirements…
+      </p>
+    );
   }
+
   if (errored && merged.length === 0) {
     return (
       <p className="muted" style={{ marginTop: "0.35rem" }}>
@@ -282,6 +257,7 @@ function MergedRequirementsList({
       </p>
     );
   }
+
   if (merged.length === 0) {
     return (
       <p className="muted" style={{ marginTop: "0.35rem" }}>
