@@ -9,6 +9,8 @@ return [
     'default_renewal_interval' => env('DEFAULT_RENEWAL_INTERVAL', 'yearly'), // yearly|bi_yearly
     // Max size for chat PDF attachments (KB)
     'chat_attachment_max_kb' => (int) env('CHAT_ATTACHMENT_MAX_KB', 2048),
+    // Don't re-notify on consecutive messages from the same party within this window
+    'chat_notify_quiet_minutes' => (int) env('CHAT_NOTIFY_QUIET_MINUTES', 10),
     // Max size for company attach/detach PDF docs (KB)
     'company_change_doc_max_kb' => (int) env('COMPANY_CHANGE_DOC_MAX_KB', 5120),
 ];

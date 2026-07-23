@@ -32,6 +32,7 @@ Route::prefix('v1')->group(function () {
         Route::get('tickets', [ClientPortalController::class, 'tickets']);
         Route::post('tickets', [ClientPortalController::class, 'storeTicket']);
         Route::get('tickets/{ticket}', [ClientPortalController::class, 'showTicket']);
+        Route::get('tickets/{ticket}/messages', [ClientPortalController::class, 'ticketMessages']);
         Route::post('tickets/{ticket}/documents', [ClientPortalController::class, 'uploadDocument']);
         Route::delete('tickets/{ticket}/documents/{document}', [ClientPortalController::class, 'deleteDocument']);
         Route::post('tickets/{ticket}/comments', [ClientPortalController::class, 'comment']);

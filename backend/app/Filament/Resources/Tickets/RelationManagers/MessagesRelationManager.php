@@ -125,7 +125,8 @@ class MessagesRelationManager extends RelationManager
             ->bulkActions([])
             ->emptyStateHeading('No messages yet')
             ->emptyStateDescription('Start a conversation when documents are missing or you need more detail from the partner.')
-            ->paginated(false);
+            ->defaultPaginationPageOption(25)
+            ->paginated([25, 50, 100]);
     }
 
     protected function resolveUploadedFile(mixed $value): ?UploadedFile

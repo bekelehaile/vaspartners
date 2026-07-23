@@ -83,9 +83,13 @@ class PartnerNotificationService
         );
     }
 
-    /** Notify the other party when a public chat message is posted. */
+    /** Notify the other party when a public chat message is posted (debounced for rapid back-and-forth). */
     public function ticketMessagePosted(Ticket $ticket, Customer|User $author, TicketComment $comment): void
     {
+        if (! $this->shouldNotifyForChatMessage($ticket, $author, $comment)) {
+            return;
+        }
+
         $ticket->loadMissing(['customer', 'service', 'assignee']);
         $preview = Str::limit(trim((string) $comment->body), 120);
         if ($comment->hasAttachment()) {
@@ -134,6 +138,36 @@ class PartnerNotificationService
             ticketPublicId: $ticket->public_id,
             ttNumber: $ticket->tt_number,
         ));
+    }
+
+    /**
+     * Skip alerts when the same party keeps sending in a short window —
+     * long threads would otherwise flood SMS/in-app notifications.
+     */
+    protected function shouldNotifyForChatMessage(Ticket $ticket, Customer|User $author, TicketComment $comment): bool
+    {
+        $quietMinutes = max(1, (int) config('vas.chat_notify_quiet_minutes', 10));
+
+        $previous = TicketComment::query()
+            ->where('ticket_id', $ticket->id)
+            ->where('is_public', true)
+            ->where('id', '<', $comment->id)
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $previous) {
+            return true;
+        }
+
+        $sameParty = $previous->author_type === $author::class
+            && (int) $previous->author_id === (int) $author->id;
+
+        if (! $sameParty) {
+            return true;
+        }
+
+        return $previous->created_at === null
+            || $previous->created_at->lt(now()->subMinutes($quietMinutes));
     }
 
     public function companyChangeRequested(CompanyChangeRequest $request): void

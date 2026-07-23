@@ -130,12 +130,35 @@ class ClientPortalController extends Controller
         $ticket->load(['service', 'requisition', 'subscription', 'documents.documentType', 'statusHistories']);
 
         $payload = $ticket->toArray();
-        $payload['messages'] = $comments->serializeThread($ticket, $request->user());
+        $thread = $comments->paginateThread($ticket, $request->user(), null, null, 40);
+        $payload['messages'] = $thread['data'];
+        $payload['messages_meta'] = $thread['meta'];
         $payload['chat_locked'] = $ticket->status->locksCustomerDocuments();
         $payload['chat_attachment_max_kb'] = $comments->maxAttachmentKb();
         $payload['documents_locked'] = $ticket->status->locksCustomerDocuments();
 
         return response()->json(['data' => $payload]);
+    }
+
+    public function ticketMessages(Request $request, Ticket $ticket, TicketCommentService $comments)
+    {
+        abort_unless($ticket->customer_id === $request->user()->id, 404);
+
+        $data = $request->validate([
+            'before_id' => ['nullable', 'integer', 'min:1'],
+            'after_id' => ['nullable', 'integer', 'min:1'],
+            'limit' => ['nullable', 'integer', 'min:5', 'max:100'],
+        ]);
+
+        $page = $comments->paginateThread(
+            $ticket,
+            $request->user(),
+            isset($data['before_id']) ? (int) $data['before_id'] : null,
+            isset($data['after_id']) ? (int) $data['after_id'] : null,
+            (int) ($data['limit'] ?? 30),
+        );
+
+        return response()->json($page);
     }
 
     public function storeTicket(Request $request, TicketWorkflowService $workflow)
@@ -243,7 +266,7 @@ class ClientPortalController extends Controller
         $notifications->ticketMessagePosted($ticket, $request->user(), $comment);
 
         return response()->json([
-            'data' => $comments->serializeThread($ticket->fresh(), $request->user()),
+            'data' => $comments->serializeComment($ticket, $comment->load('author'), $request->user()),
         ], 201);
     }
 

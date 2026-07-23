@@ -118,33 +118,105 @@ class TicketCommentService
         return Storage::disk($comment->attachment_disk ?: 'local')->exists($comment->attachment_path);
     }
 
+    /**
+     * @return array{
+     *   data: list<array<string, mixed>>,
+     *   meta: array{total: int, has_more_older: bool, has_more_newer: bool, oldest_id: int|null, newest_id: int|null}
+     * }
+     */
+    public function paginateThread(
+        Ticket $ticket,
+        ?Customer $viewer = null,
+        ?int $beforeId = null,
+        ?int $afterId = null,
+        int $limit = 30,
+    ): array {
+        $limit = max(5, min(100, $limit));
+
+        $base = TicketComment::query()
+            ->where('ticket_id', $ticket->id)
+            ->where('is_public', true);
+
+        $total = (clone $base)->count();
+
+        $query = (clone $base)->with('author');
+
+        if ($beforeId) {
+            // Older page (scroll up): ids strictly less than beforeId, newest-first then reverse
+            $rows = $query->where('id', '<', $beforeId)
+                ->orderByDesc('id')
+                ->limit($limit)
+                ->get()
+                ->sortBy('id')
+                ->values();
+        } elseif ($afterId) {
+            // Newer page (poll): ids strictly greater than afterId, oldest-first
+            $rows = $query->where('id', '>', $afterId)
+                ->orderBy('id')
+                ->limit($limit)
+                ->get()
+                ->values();
+        } else {
+            // Initial: latest N, oldest-first for display
+            $rows = $query->orderByDesc('id')
+                ->limit($limit)
+                ->get()
+                ->sortBy('id')
+                ->values();
+        }
+
+        $data = $rows->map(fn (TicketComment $comment) => $this->serializeComment($ticket, $comment, $viewer))->all();
+        $oldestId = $rows->first()?->id;
+        $newestId = $rows->last()?->id;
+
+        $hasMoreOlder = $oldestId
+            ? (clone $base)->where('id', '<', $oldestId)->exists()
+            : false;
+        $hasMoreNewer = $newestId
+            ? (clone $base)->where('id', '>', $newestId)->exists()
+            : false;
+
+        return [
+            'data' => $data,
+            'meta' => [
+                'total' => $total,
+                'has_more_older' => $hasMoreOlder,
+                'has_more_newer' => $hasMoreNewer,
+                'oldest_id' => $oldestId,
+                'newest_id' => $newestId,
+            ],
+        ];
+    }
+
     /** @return list<array<string, mixed>> */
     public function serializeThread(Ticket $ticket, ?Customer $viewer = null): array
     {
-        $ticket->loadMissing(['comments' => fn ($q) => $q->where('is_public', true)->orderBy('created_at')->with('author')]);
+        return $this->paginateThread($ticket, $viewer, null, null, 40)['data'];
+    }
 
-        return $ticket->comments->map(function (TicketComment $comment) use ($viewer, $ticket) {
-            $author = $comment->author;
-            $isStaff = $author instanceof User;
-            $isSelf = $viewer && $author instanceof Customer && (int) $author->id === (int) $viewer->id;
+    /** @return array<string, mixed> */
+    public function serializeComment(Ticket $ticket, TicketComment $comment, ?Customer $viewer = null): array
+    {
+        $author = $comment->author;
+        $isStaff = $author instanceof User;
+        $isSelf = $viewer && $author instanceof Customer && (int) $author->id === (int) $viewer->id;
 
-            return [
-                'id' => $comment->id,
-                'body' => ($comment->body === '(PDF attachment)' && filled($comment->attachment_path))
-                    ? null
-                    : $comment->body,
-                'author_role' => $isStaff ? 'staff' : 'customer',
-                'author_label' => $isStaff
-                    ? ($author->name ?: 'Account manager')
-                    : ($isSelf ? 'You' : ($author->name ?? 'Partner')),
-                'has_attachment' => filled($comment->attachment_path),
-                'attachment_name' => $comment->attachment_original_name,
-                'attachment_size_bytes' => $comment->attachment_size_bytes,
-                'attachment_url' => filled($comment->attachment_path)
-                    ? url("/api/v1/tickets/{$ticket->public_id}/comments/{$comment->id}/attachment")
-                    : null,
-                'created_at' => optional($comment->created_at)?->toIso8601String(),
-            ];
-        })->values()->all();
+        return [
+            'id' => $comment->id,
+            'body' => ($comment->body === '(PDF attachment)' && filled($comment->attachment_path))
+                ? null
+                : $comment->body,
+            'author_role' => $isStaff ? 'staff' : 'customer',
+            'author_label' => $isStaff
+                ? ($author->name ?: 'Account manager')
+                : ($isSelf ? 'You' : ($author->name ?? 'Partner')),
+            'has_attachment' => filled($comment->attachment_path),
+            'attachment_name' => $comment->attachment_original_name,
+            'attachment_size_bytes' => $comment->attachment_size_bytes,
+            'attachment_url' => filled($comment->attachment_path)
+                ? url("/api/v1/tickets/{$ticket->public_id}/comments/{$comment->id}/attachment")
+                : null,
+            'created_at' => optional($comment->created_at)?->toIso8601String(),
+        ];
     }
 }
