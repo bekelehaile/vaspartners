@@ -27,7 +27,12 @@ export default function BlogIndexPage() {
             <article key={post.id} className="blog-card">
               {post.cover_image_url && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={post.cover_image_url} alt="" className="blog-card-image" />
+                <img
+                  src={post.cover_image_url}
+                  alt={post.title}
+                  className="blog-card-image"
+                  loading="lazy"
+                />
               )}
               <div className="blog-card-body">
                 <h3>

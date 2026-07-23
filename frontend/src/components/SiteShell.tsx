@@ -47,6 +47,9 @@ export function SiteShell({
 
   return (
     <div className="site">
+      <a href="#main-content" className="skip-link">
+        Skip to content
+      </a>
       <header className="topbar">
         <div className="topbar-inner">
           <Link href={me ? "/portal" : "/"} className="brand-lockup">
@@ -154,7 +157,7 @@ export function SiteShell({
         )}
       </header>
 
-      {children}
+      <main id="main-content">{children}</main>
 
       <footer className="site-footer">
         <div className="site-footer-inner">
@@ -165,44 +168,59 @@ export function SiteShell({
             <Link href="/faq">FAQ</Link>
           </nav>
           <div className="footer-social">
-            <a href="https://www.ethiotelecom.et/" target="_blank" rel="noreferrer" aria-label="Website">
+            <a
+              href="https://www.ethiotelecom.et/"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Ethio telecom website"
+            >
               Web
             </a>
             <a
               href="https://www.facebook.com/ethiotelecom/"
               target="_blank"
-              rel="noreferrer"
-              aria-label="Facebook"
+              rel="noopener noreferrer"
+              aria-label="Ethio telecom on Facebook"
             >
               Facebook
             </a>
             <a
               href="https://www.instagram.com/ethiotelecom/"
               target="_blank"
-              rel="noreferrer"
-              aria-label="Instagram"
+              rel="noopener noreferrer"
+              aria-label="Ethio telecom on Instagram"
             >
               Instagram
             </a>
-            <a href="https://t.me/ethio_telecom" target="_blank" rel="noreferrer" aria-label="Telegram">
+            <a
+              href="https://t.me/ethio_telecom"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Ethio telecom on Telegram"
+            >
               Telegram
             </a>
             <a
               href="https://www.linkedin.com/company/ethio-telecom"
               target="_blank"
-              rel="noreferrer"
-              aria-label="LinkedIn"
+              rel="noopener noreferrer"
+              aria-label="Ethio telecom on LinkedIn"
             >
               LinkedIn
             </a>
-            <a href="https://twitter.com/ethiotelecom" target="_blank" rel="noreferrer" aria-label="X">
+            <a
+              href="https://twitter.com/ethiotelecom"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Ethio telecom on X"
+            >
               X
             </a>
             <a
               href="https://www.youtube.com/channel/UCW4ZjqFCCFukY94tZO0O5FA"
               target="_blank"
-              rel="noreferrer"
-              aria-label="YouTube"
+              rel="noopener noreferrer"
+              aria-label="Ethio telecom on YouTube"
             >
               YouTube
             </a>

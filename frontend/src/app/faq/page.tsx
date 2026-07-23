@@ -1,26 +1,32 @@
-"use client";
+import { JsonLd } from "@/components/JsonLd";
+import { FaqPageView } from "@/components/FaqPageView";
+import { fetchPublishedFaqs } from "@/lib/public-content";
+import { absoluteUrl } from "@/lib/site";
 
-import { SiteShell } from "@/components/SiteShell";
-import { FaqList } from "@/components/FaqList";
-import { useCustomer, useLogout } from "@/hooks/use-customer";
+export default async function FaqPage() {
+  const faqs = await fetchPublishedFaqs();
 
-export default function FaqPage() {
-  const { data: me = null } = useCustomer();
-  const logout = useLogout();
+  const faqLd =
+    faqs.length > 0
+      ? {
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          mainEntity: faqs.map((f) => ({
+            "@type": "Question",
+            name: f.question,
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: f.answer,
+            },
+          })),
+          url: absoluteUrl("/faq"),
+        }
+      : null;
 
   return (
-    <SiteShell me={me} onLogout={() => void logout()}>
-      <div className="portal-hero">
-        <p className="brand-kicker">FAQ</p>
-        <h1>Frequently asked questions</h1>
-        <p className="muted">
-          Answers for VAS partners, managed from the Ethio telecom admin website tools.
-        </p>
-      </div>
-
-      <div className="section">
-        <FaqList />
-      </div>
-    </SiteShell>
+    <>
+      {faqLd && <JsonLd data={faqLd} />}
+      <FaqPageView />
+    </>
   );
 }

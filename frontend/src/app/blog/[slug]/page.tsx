@@ -1,57 +1,68 @@
-"use client";
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { BlogPostView } from "@/components/BlogPostView";
+import { JsonLd } from "@/components/JsonLd";
+import { fetchPublishedBlogPost } from "@/lib/public-content";
+import { buildPageMetadata } from "@/lib/seo";
+import { absoluteUrl, siteConfig } from "@/lib/site";
 
-import Link from "next/link";
-import { use } from "react";
-import { SiteShell } from "@/components/SiteShell";
-import { useBlogPost, useCustomer, useLogout } from "@/hooks/use-customer";
-
-export default function BlogPostPage({
-  params,
-}: {
+type PageProps = {
   params: Promise<{ slug: string }>;
-}) {
-  const { slug } = use(params);
-  const { data: me = null } = useCustomer();
-  const logout = useLogout();
-  const { data: post, isLoading, isError } = useBlogPost(slug);
+};
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const post = await fetchPublishedBlogPost(slug);
+  if (!post) {
+    return buildPageMetadata({
+      title: "Post not found",
+      description: "This blog post is unavailable.",
+      path: `/blog/${slug}`,
+      noIndex: true,
+    });
+  }
+
+  return buildPageMetadata({
+    title: post.title,
+    description: post.excerpt || post.title,
+    path: `/blog/${post.slug}`,
+    image: post.cover_image_url,
+    type: "article",
+    publishedTime: post.published_at,
+  });
+}
+
+export default async function BlogPostPage({ params }: PageProps) {
+  const { slug } = await params;
+  const post = await fetchPublishedBlogPost(slug);
+  if (!post) notFound();
+
+  const articleLd = {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    headline: post.title,
+    description: post.excerpt || post.title,
+    datePublished: post.published_at || undefined,
+    image: post.cover_image_url || undefined,
+    author: {
+      "@type": "Organization",
+      name: siteConfig.orgName,
+    },
+    publisher: {
+      "@type": "Organization",
+      name: siteConfig.orgName,
+      logo: {
+        "@type": "ImageObject",
+        url: absoluteUrl("/brand/ethio_logo_full.png"),
+      },
+    },
+    mainEntityOfPage: absoluteUrl(`/blog/${post.slug}`),
+  };
 
   return (
-    <SiteShell me={me} onLogout={() => void logout()}>
-      <div className="section blog-article">
-        <Link href="/blog" className="linkish">
-          ← All posts
-        </Link>
-
-        {isLoading && <p className="muted">Loading…</p>}
-        {isError && <p className="alert">Post not found.</p>}
-
-        {post && (
-          <article>
-            <p className="brand-kicker">Blog</p>
-            <h1>{post.title}</h1>
-            {post.published_at && (
-              <p className="muted">
-                {new Date(post.published_at).toLocaleDateString(undefined, {
-                  day: "numeric",
-                  month: "long",
-                  year: "numeric",
-                })}
-              </p>
-            )}
-            {post.cover_image_url && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={post.cover_image_url} alt="" className="blog-article-cover" />
-            )}
-            <div className="blog-article-body">
-              {(post.body || "")
-                .split(/\n{2,}/)
-                .map((para, i) => (
-                  <p key={i}>{para}</p>
-                ))}
-            </div>
-          </article>
-        )}
-      </div>
-    </SiteShell>
+    <>
+      <JsonLd data={articleLd} />
+      <BlogPostView slug={slug} />
+    </>
   );
 }
