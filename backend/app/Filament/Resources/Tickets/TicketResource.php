@@ -47,6 +47,26 @@ class TicketResource extends Resource
         return $schema->components([
             TextEntry::make('tt_number')->label('Request ID'),
             TextEntry::make('status')->badge(),
+            TextEntry::make('attachments_badge')
+                ->label('Attachments')
+                ->badge()
+                ->state(function (Ticket $record): string {
+                    return $record->attachmentStatus()['label'];
+                })
+                ->color(fn (Ticket $record): string => match ($record->attachmentStatus()['state']) {
+                    'complete' => 'success',
+                    'incomplete' => 'danger',
+                    default => 'gray',
+                }),
+            TextEntry::make('missing_attachments')
+                ->label('Missing required docs')
+                ->state(function (Ticket $record): string {
+                    $names = $record->attachmentStatus()['missing_names'] ?? [];
+
+                    return $names === [] ? 'None — all required docs on file' : implode(', ', $names);
+                })
+                ->color(fn (Ticket $record): string => ($record->attachmentStatus()['missing_count'] ?? 0) > 0 ? 'danger' : 'success')
+                ->columnSpanFull(),
             TextEntry::make('document_review_status')->label('Document review')->badge(),
             TextEntry::make('customer.name')->label('Customer'),
             TextEntry::make('customer.phone_number')->label('Phone'),
@@ -75,7 +95,24 @@ class TicketResource extends Resource
                 TextColumn::make('service.name')->sortable(),
                 TextColumn::make('requisition.name')->label('Type')->toggleable(),
                 TextColumn::make('status')->badge(),
-                TextColumn::make('document_review_status')->label('Docs')->badge(),
+                TextColumn::make('attachments')
+                    ->label('Attachments')
+                    ->badge()
+                    ->state(fn (Ticket $record): string => $record->attachmentStatus()['label'])
+                    ->color(fn (Ticket $record): string => match ($record->attachmentStatus()['state']) {
+                        'complete' => 'success',
+                        'incomplete' => 'danger',
+                        default => 'gray',
+                    })
+                    ->tooltip(function (Ticket $record): ?string {
+                        $status = $record->attachmentStatus();
+                        if ($status['state'] !== 'incomplete') {
+                            return null;
+                        }
+
+                        return 'Missing: '.implode(', ', $status['missing_names']);
+                    }),
+                TextColumn::make('document_review_status')->label('Review')->badge()->toggleable(),
                 TextColumn::make('assignee.name')->label('AM'),
                 TextColumn::make('currentApprover.name')->label('Approver'),
                 TextColumn::make('created_at')->dateTime()->sortable(),
@@ -85,6 +122,59 @@ class TicketResource extends Resource
                 SelectFilter::make('status')->options(collect(TicketStatus::cases())->mapWithKeys(
                     fn (TicketStatus $s) => [$s->value => $s->label()]
                 )),
+                SelectFilter::make('attachments')
+                    ->label('Attachments')
+                    ->options([
+                        'incomplete' => 'Missing required docs',
+                        'complete' => 'All required docs',
+                        'none' => 'No required docs',
+                    ])
+                    ->query(function (Builder $query, array $data) {
+                        $value = $data['value'] ?? null;
+                        if (! $value) {
+                            return $query;
+                        }
+
+                        $missingRequired = function ($q) {
+                            $q->selectRaw('1')
+                                ->from('service_requisition_documents as srd')
+                                ->join('document_types as dt', 'dt.id', '=', 'srd.document_type_id')
+                                ->whereColumn('srd.service_id', 'tickets.service_id')
+                                ->whereColumn('srd.requisition_id', 'tickets.requisition_id')
+                                ->where('srd.is_required', true)
+                                ->where('dt.is_active', true)
+                                ->whereNull('dt.deleted_at')
+                                ->where('dt.code', '!=', 'document-if-any')
+                                ->where('dt.name', 'not like', '%if any%')
+                                ->whereNotExists(function ($q2) {
+                                    $q2->selectRaw('1')
+                                        ->from('ticket_documents as td')
+                                        ->whereColumn('td.ticket_id', 'tickets.id')
+                                        ->whereColumn('td.document_type_id', 'srd.document_type_id')
+                                        ->whereNull('td.deleted_at');
+                                });
+                        };
+
+                        $hasRequired = function ($q) {
+                            $q->selectRaw('1')
+                                ->from('service_requisition_documents as srd')
+                                ->join('document_types as dt', 'dt.id', '=', 'srd.document_type_id')
+                                ->whereColumn('srd.service_id', 'tickets.service_id')
+                                ->whereColumn('srd.requisition_id', 'tickets.requisition_id')
+                                ->where('srd.is_required', true)
+                                ->where('dt.is_active', true)
+                                ->whereNull('dt.deleted_at')
+                                ->where('dt.code', '!=', 'document-if-any')
+                                ->where('dt.name', 'not like', '%if any%');
+                        };
+
+                        return match ($value) {
+                            'incomplete' => $query->whereExists($missingRequired),
+                            'complete' => $query->whereExists($hasRequired)->whereNotExists($missingRequired),
+                            'none' => $query->whereNotExists($hasRequired),
+                            default => $query,
+                        };
+                    }),
                 SelectFilter::make('queue')
                     ->label('Queue')
                     ->options([

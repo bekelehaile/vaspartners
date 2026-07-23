@@ -78,10 +78,7 @@ class TicketWorkflowService
 
     public function requiredDocumentTypeIds(int $serviceId, int $requisitionId): array
     {
-        return ServiceRequisitionDocument::query()
-            ->where('service_id', $serviceId)
-            ->where('requisition_id', $requisitionId)
-            ->where('is_required', true)
+        return $this->hardRequiredDocumentRows($serviceId, $requisitionId)
             ->pluck('document_type_id')
             ->all();
     }
@@ -91,39 +88,138 @@ class TicketWorkflowService
         return count($this->requiredDocumentTypeIds($serviceId, $requisitionId)) > 0;
     }
 
+    /**
+     * Attachment completeness for admin: complete | incomplete | none_required.
+     *
+     * @return array{
+     *   state: string,
+     *   label: string,
+     *   required_count: int,
+     *   uploaded_count: int,
+     *   missing_count: int,
+     *   missing_ids: list<int>,
+     *   missing_names: list<string>,
+     *   received_names: list<string>,
+     *   checklist: list<array{document_type_id: int, name: string, is_required: bool, received: bool}>
+     * }
+     */
+    public function attachmentStatus(Ticket $ticket): array
+    {
+        $matrix = ServiceRequisitionDocument::query()
+            ->with('documentType')
+            ->where('service_id', $ticket->service_id)
+            ->where('requisition_id', $ticket->requisition_id)
+            ->whereHas('documentType', fn ($q) => $q->where('is_active', true))
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+
+        $uploadedIds = $ticket->documents()
+            ->pluck('document_type_id')
+            ->unique()
+            ->map(fn ($id) => (int) $id)
+            ->all();
+        $uploadedSet = array_fill_keys($uploadedIds, true);
+
+        $checklist = [];
+        $missingIds = [];
+        $missingNames = [];
+        $receivedNames = [];
+        $requiredCount = 0;
+        $uploadedRequired = 0;
+
+        foreach ($matrix as $row) {
+            $type = $row->documentType;
+            if (! $type) {
+                continue;
+            }
+            $hardRequired = (bool) $row->is_required && ! $this->isSoftOptionalDocumentType($type);
+            $received = isset($uploadedSet[(int) $type->id]);
+            $checklist[] = [
+                'document_type_id' => (int) $type->id,
+                'name' => $type->name,
+                'is_required' => $hardRequired,
+                'received' => $received,
+            ];
+            if ($hardRequired) {
+                $requiredCount++;
+                if ($received) {
+                    $uploadedRequired++;
+                    $receivedNames[] = $type->name;
+                } else {
+                    $missingIds[] = (int) $type->id;
+                    $missingNames[] = $type->name;
+                }
+            } elseif ($received) {
+                $receivedNames[] = $type->name;
+            }
+        }
+
+        if ($requiredCount === 0) {
+            $state = 'none_required';
+            $label = 'No required docs';
+        } elseif ($missingIds === []) {
+            $state = 'complete';
+            $label = 'All required docs';
+        } else {
+            $state = 'incomplete';
+            $label = 'Missing '.count($missingIds).' required';
+        }
+
+        return [
+            'state' => $state,
+            'label' => $label,
+            'required_count' => $requiredCount,
+            'uploaded_count' => $uploadedRequired,
+            'missing_count' => count($missingIds),
+            'missing_ids' => $missingIds,
+            'missing_names' => $missingNames,
+            'received_names' => $receivedNames,
+            'checklist' => $checklist,
+        ];
+    }
+
     public function assertRequiredDocumentsUploaded(Ticket $ticket): void
     {
-        $required = $this->requiredDocumentTypeIds($ticket->service_id, $ticket->requisition_id);
-        if ($required === []) {
+        $status = $this->attachmentStatus($ticket);
+        if ($status['state'] !== 'incomplete') {
             return;
         }
 
-        $uploaded = $ticket->documents()->whereIn('document_type_id', $required)->pluck('document_type_id')->unique()->all();
-        $missing = array_values(array_diff($required, $uploaded));
-        if ($missing !== []) {
-            throw ValidationException::withMessages([
-                'documents' => 'Required documents are missing for this service request.',
-                'missing_document_type_ids' => $missing,
-            ]);
+        throw ValidationException::withMessages([
+            'documents' => 'Required documents are missing for this service request: '.implode(', ', $status['missing_names']),
+            'missing_document_type_ids' => $status['missing_ids'],
+        ]);
+    }
+
+    /** @return \Illuminate\Support\Collection<int, ServiceRequisitionDocument> */
+    protected function hardRequiredDocumentRows(int $serviceId, int $requisitionId)
+    {
+        return ServiceRequisitionDocument::query()
+            ->with('documentType')
+            ->where('service_id', $serviceId)
+            ->where('requisition_id', $requisitionId)
+            ->where('is_required', true)
+            ->whereHas('documentType', fn ($q) => $q->where('is_active', true))
+            ->get()
+            ->filter(function (ServiceRequisitionDocument $row) {
+                return $row->documentType && ! $this->isSoftOptionalDocumentType($row->documentType);
+            })
+            ->values();
+    }
+
+    protected function isSoftOptionalDocumentType(\App\Models\DocumentType $type): bool
+    {
+        if ($type->code === 'document-if-any') {
+            return true;
         }
+
+        return (bool) preg_match('/if any/i', (string) $type->name);
     }
 
     public function createTicket(Customer $customer, array $data): Ticket
     {
         return DB::transaction(function () use ($customer, $data) {
-            $maxOpen = (int) config('vas.max_open_tickets', 1);
-            if (empty($data['skip_open_limit'])) {
-                $openCount = Ticket::query()
-                    ->where('customer_id', $customer->id)
-                    ->where('status', TicketStatus::Open)
-                    ->count();
-                if ($openCount >= $maxOpen) {
-                    throw ValidationException::withMessages([
-                        'ticket' => "You already have the maximum of {$maxOpen} open ticket(s).",
-                    ]);
-                }
-            }
-
             $service = Service::query()->findOrFail($data['service_id']);
             $requisition = Requisition::query()->findOrFail($data['requisition_id']);
 
@@ -132,6 +228,8 @@ class TicketWorkflowService
                     'requisition_id' => 'This request type is not enabled for the selected service.',
                 ]);
             }
+
+            $this->assertOpenTicketLimit($customer, $requisition, $data);
 
             $this->subscriptions->assertTicketAllowed($customer->id, $data, $requisition, $service);
 
@@ -187,6 +285,37 @@ class TicketWorkflowService
 
             return $fresh;
         });
+    }
+
+    /**
+     * One open new-subscription ticket max. Manage / renew / terminate can coexist
+     * (and multiple manage tickets for different services are allowed).
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected function assertOpenTicketLimit(Customer $customer, Requisition $requisition, array $data): void
+    {
+        if (! empty($data['skip_open_limit'])) {
+            return;
+        }
+
+        // Manage journeys are not capped by max_open_tickets.
+        if (! $requisition->creates_subscription) {
+            return;
+        }
+
+        $maxOpen = (int) config('vas.max_open_tickets', 1);
+        $openCount = Ticket::query()
+            ->where('customer_id', $customer->id)
+            ->where('status', TicketStatus::Open)
+            ->whereHas('requisition', fn ($q) => $q->where('creates_subscription', true))
+            ->count();
+
+        if ($openCount >= $maxOpen) {
+            throw ValidationException::withMessages([
+                'ticket' => "You already have the maximum of {$maxOpen} open subscription request(s). You can still submit manage requests for other services.",
+            ]);
+        }
     }
 
     public function assign(Ticket $ticket, User $assigner, User $assignee, ?int $priorityId = null, ?string $note = null): Ticket

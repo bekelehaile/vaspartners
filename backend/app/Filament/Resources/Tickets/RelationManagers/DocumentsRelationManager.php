@@ -2,9 +2,12 @@
 
 namespace App\Filament\Resources\Tickets\RelationManagers;
 
+use App\Models\Ticket;
 use App\Models\TicketDocument;
+use App\Services\TicketWorkflowService;
 use Filament\Actions\Action;
 use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Storage;
@@ -22,14 +25,52 @@ class DocumentsRelationManager extends RelationManager
         return true;
     }
 
+    public static function getBadge(\Illuminate\Database\Eloquent\Model $ownerRecord, string $pageClass): ?string
+    {
+        /** @var Ticket $ownerRecord */
+        $status = app(TicketWorkflowService::class)->attachmentStatus($ownerRecord);
+
+        return match ($status['state']) {
+            'complete' => 'Complete',
+            'incomplete' => (string) $status['missing_count'].' missing',
+            default => null,
+        };
+    }
+
+    public static function getBadgeColor(\Illuminate\Database\Eloquent\Model $ownerRecord, string $pageClass): ?string
+    {
+        /** @var Ticket $ownerRecord */
+        $status = app(TicketWorkflowService::class)->attachmentStatus($ownerRecord);
+
+        return match ($status['state']) {
+            'complete' => 'success',
+            'incomplete' => 'danger',
+            default => 'gray',
+        };
+    }
+
     public function table(Table $table): Table
     {
+        /** @var Ticket $ticket */
+        $ticket = $this->getOwnerRecord();
+        $status = app(TicketWorkflowService::class)->attachmentStatus($ticket);
+        $description = match ($status['state']) {
+            'complete' => '✓ All required documents received ('.$status['uploaded_count'].'/'.$status['required_count'].'). Open or download below — deletion is not allowed.',
+            'incomplete' => '⚠ Missing required ('.$status['uploaded_count'].'/'.$status['required_count'].'): '.implode(', ', $status['missing_names']),
+            default => 'No hard-required documents for this request type. Optional uploads may still appear below.',
+        };
+
         return $table
+            ->description($description)
             ->columns([
                 TextColumn::make('documentType.name')
                     ->label('Document type')
                     ->searchable()
                     ->sortable(),
+                IconColumn::make('file_ok')
+                    ->label('On file')
+                    ->boolean()
+                    ->getStateUsing(fn (TicketDocument $record): bool => $this->fileExists($record)),
                 TextColumn::make('original_name')
                     ->label('File')
                     ->searchable()
@@ -78,8 +119,12 @@ class DocumentsRelationManager extends RelationManager
             ])
             ->toolbarActions([])
             ->bulkActions([])
-            ->emptyStateHeading('No attachments yet')
-            ->emptyStateDescription('Files the customer uploads for this request will appear here. Staff can open or download them, but cannot delete them.')
+            ->emptyStateHeading($status['state'] === 'incomplete' ? 'Required attachments missing' : 'No attachments uploaded yet')
+            ->emptyStateDescription(
+                $status['state'] === 'incomplete'
+                    ? 'Missing: '.implode(', ', $status['missing_names'])
+                    : 'When the customer uploads files, they will appear here for open/download only.'
+            )
             ->paginated(false);
     }
 

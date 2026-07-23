@@ -60,6 +60,15 @@ class Ticket extends Model
         return $this->customerDocumentsAreLocked();
     }
 
+    /** @var array<string, mixed>|null */
+    protected ?array $attachmentStatusCache = null;
+
+    /** @return array<string, mixed> */
+    public function attachmentStatus(): array
+    {
+        return $this->attachmentStatusCache ??= app(\App\Services\TicketWorkflowService::class)->attachmentStatus($this);
+    }
+
     public function customer(): BelongsTo { return $this->belongsTo(Customer::class); }
     public function service(): BelongsTo { return $this->belongsTo(Service::class); }
     public function requisition(): BelongsTo { return $this->belongsTo(Requisition::class); }
