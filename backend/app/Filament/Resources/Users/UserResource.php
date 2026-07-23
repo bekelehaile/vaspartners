@@ -16,6 +16,7 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Spatie\Permission\Models\Role;
 use STS\FilamentImpersonate\Actions\Impersonate;
 use UnitEnum;
 
@@ -63,6 +64,10 @@ class UserResource extends Resource
                 ->multiple()
                 ->preload()
                 ->searchable()
+                ->default(fn (): array => array_filter([
+                    Role::findOrCreate('account_manager', 'web')->getKey(),
+                ]))
+                ->helperText('Default is account_manager (My Tickets).')
                 ->columnSpanFull(),
             Select::make('manager_id')
                 ->label('Manager')

@@ -66,7 +66,8 @@ class MvasStaffUsersSeeder extends Seeder
                 if (! $user->hasRole($superAdmin)) {
                     $user->assignRole($superAdmin);
                 }
-            } elseif (! $row['is_management']) {
+            } else {
+                // Default staff role
                 $accountManager = Role::findOrCreate('account_manager', 'web');
                 if (! $user->hasRole($accountManager)) {
                     $user->assignRole($accountManager);

@@ -29,6 +29,12 @@ class CreateUser extends CreateRecord
 
     protected function afterCreate(): void
     {
+        if ($this->record->roles()->count() === 0) {
+            $this->record->assignRole(
+                \Spatie\Permission\Models\Role::findOrCreate('account_manager', 'web')
+            );
+        }
+
         $phone = $this->record->phone;
         if (! filled($phone) || ! filled($this->plainPassword)) {
             return;
