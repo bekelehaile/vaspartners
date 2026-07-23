@@ -1,0 +1,2198 @@
+{
+  "categories": [
+    {
+      "legacy_id": 18,
+      "name": "VAS sales Group",
+      "slug": "vas-sales-group",
+      "is_active": true,
+      "sort_order": 1
+    },
+    {
+      "legacy_id": 19,
+      "name": "Advanced VAS sales Group",
+      "slug": "advanced-vas-sales-group",
+      "is_active": true,
+      "sort_order": 2
+    },
+    {
+      "legacy_id": 20,
+      "name": "Startup Partner",
+      "slug": "startup-partner",
+      "is_active": true,
+      "sort_order": 3
+    },
+    {
+      "legacy_id": 21,
+      "name": "Other Service",
+      "slug": "other-service",
+      "is_active": true,
+      "sort_order": 4
+    },
+    {
+      "legacy_id": 22,
+      "name": "Enterprise Solution",
+      "slug": "enterprise-solution",
+      "is_active": true,
+      "sort_order": 5
+    },
+    {
+      "legacy_id": 23,
+      "name": "FinTech",
+      "slug": "fintech",
+      "is_active": true,
+      "sort_order": 6
+    },
+    {
+      "legacy_id": 24,
+      "name": "Marketing",
+      "slug": "marketing",
+      "is_active": true,
+      "sort_order": 7
+    }
+  ],
+  "services": [
+    {
+      "legacy_id": 1,
+      "legacy_category_id": 18,
+      "name": "MT/ Mobile terminated Premium",
+      "slug": "mt-mobile-terminated-premium",
+      "description": "MTrnMT (Mobile terminated): means a message that goes out from a system and is received by the subscriber's mobile device and the receiver will be charged. rnIn this business model the partner should be subscribe two short codes; one for auto replay and one for subscription. rn Legal requirement to get MT rn1) Request letter rn2) Renewed or new trade license and commercial registration. rn3) Renewed or new VAS (Value Added Service) license given by ECA(Ethiopia communication autority) located on bole medahniyalem, robel plaza. rn4) TIN number rn5) VAT certificate rn6) House rent or proof of ownership rn7) Availing Article and memorandum of association for a share company rn8) Letter of agreement from certified professionals or patent right (if needed) rn9) Minimum capital amount required for VAS business partnership is ETB 100,000",
+      "is_active": true,
+      "type": "Digital and VAS Service",
+      "sort_order": 1
+    },
+    {
+      "legacy_id": 2,
+      "legacy_category_id": 18,
+      "name": "SMS Premium",
+      "slug": "sms-premium",
+      "description": "SMS Premium rnSMS Premium service: - means a revenue sharing model where VASP(Value added ervice provider) in collaboration with ethio telecom provides/receives various information’s and messages with its customers. rn Legal requirement to get SMS Premium rn1) Trade registration rn2) Trade license rn3) TIN and VAT certificate rn4) House rent agreement rn5) Renewed or new VAS (Value Added Service) license given by ECA(Ethiopia communication autority) located on bole medahniyalem, robel plaza rn6) Request letter rn7) Well-developed business proposal rn8) Layer 3 VPN minimum 1mbps rn9) Agreement document will be signed rn10) Software and database are required from customer side rn11) You can set usage fee from 1 birr up-to 15 birr per SMS.",
+      "is_active": true,
+      "type": "Digital and VAS Service",
+      "sort_order": 2
+    },
+    {
+      "legacy_id": 3,
+      "legacy_category_id": 18,
+      "name": "SMS Non-Premium",
+      "slug": "sms-non-premium",
+      "description": "SMS Non-Premium rnNon-premium value added service: - means a non- revenue sharing mode VAS with default/normal tariff, where VASP(Value added ervice provider) in collaboration with ethio telecom provides/receives various information’s and messages with its customers in order to enhance the efficiency of its service. rn Legal requirement to get SMS Non-Premium rn1) Trade registration rn2) Trade license rn3) TIN and VAT certificate rn4) House rent agreement rn5) Request letter rn6) Well-developed business proposal",
+      "is_active": true,
+      "type": "Digital and VAS Service",
+      "sort_order": 3
+    },
+    {
+      "legacy_id": 4,
+      "legacy_category_id": 18,
+      "name": "Voice Premium",
+      "slug": "voice-premium",
+      "description": "Voice premium rnVoice premium: is a premium service in which the partner will gain revenue from the call. rn Legal requirement to get Voice Premium rn1) Trade registration rn2) Trade license rn3) TIN and VAT certificate rn4) House rent agreement rn5) Renewed or new VAS (Value Added Service) license given by ECA(Ethiopia communication autority) located on bole medahniyalem, robel plaza rn6) Request letter rn7) Well-developed business proposal",
+      "is_active": true,
+      "type": "Digital and VAS Service",
+      "sort_order": 4
+    },
+    {
+      "legacy_id": 5,
+      "legacy_category_id": 18,
+      "name": "Collocation",
+      "slug": "collocation",
+      "description": "Collocation rnColocation service: is a kind of hosting service that enables the partner to host its infrastructure in a well secured datacenters equipped with commercial power, generator backup power, and full UPS protected & filtered power with enterprise grade networking, cooling and fire suppression system facilities.rnrnLegal Requirements to get Collocation rnrn1) Request letter rnrnrnrn2) Renewed or new trade license and commercial registration.rnrnrnrn3) TIN number- rnrnrnrn4) VAT certificaternrnrnrnrn5) House rent or proof of ownershiprnrnrnrnrn6) Agreementrnrnrnrn7) To fill Power distribution unit form (from Ethio)rnrnrnrn8) Bring Router and/or Rack specification",
+      "is_active": true,
+      "type": "Digital and VAS Service",
+      "sort_order": 5
+    },
+    {
+      "legacy_id": 6,
+      "legacy_category_id": 18,
+      "name": "M2M (Machine to Machine)",
+      "slug": "m2m-machine-to-machine",
+      "description": "M2M SIM (MACHIN TO MACHIN SIM) rnM2M SIM: mainly used as a communication media between Machines to exchange data via SMS or Data & internet connectivity. M2M business solutions is a postpaid form so that your business will not experience service inter interruption whenever you run out of business Flexible to upgrade or downgrade your preferred M2M bundle(s) rnLegal Requirements to get M2M rn1) Request letter rn2) Renewed or new trade license and commercial registration. rn3) TIN number rn4) VAT certificate rn5) House rent or proof of ownership rn6) Agreement & E-CAF form rn7) License from Ministry of Transport (for speed limit service) rn8) License from Addis Traffic Management (for Motorbike service) rn9) Renewed or new VAS (Value Added Service) license given by ECA(Ethiopia communication autority) located on bole medahniyalem, robel plaza, if the solution is available for third party",
+      "is_active": true,
+      "type": "Digital and VAS Service",
+      "sort_order": 6
+    },
+    {
+      "legacy_id": 7,
+      "legacy_category_id": 18,
+      "name": "VISP (Virtual internet service provider)",
+      "slug": "visp-virtual-internet-service-provider",
+      "description": "VISPrnvirtual internet service provider(VISP) is a company that offers internet services under its own company or brand name, while actually using the equipment and facilities of another ISP to provide those servicesrnrnEthio telecom will sell internet service to visps at a whole sale level and they will retail for final users with or without additional values. rnLegal Requirements to get VISP rn1) Request letter rn2) Renewed or new trade license and commercial registration. rn3) TIN number rn4) VAT certificate rn5) House rent or proof of ownership rn6)Renewed or new VAS (Value Added Service) license given by ECA(Ethiopia communication autority) located on bole medahniyalem, robel plaza. rn7) Well-developed Proposal",
+      "is_active": true,
+      "type": "Digital and VAS Service",
+      "sort_order": 7
+    },
+    {
+      "legacy_id": 8,
+      "legacy_category_id": 18,
+      "name": "Voice non-premium",
+      "slug": "voice-non-premium",
+      "description": "Voice Non premium rnVoice Non premium: it is a call based service and the partners are mainly using to facilitate their business. There is no revenue sharing modality for non-premium voice service. rn Legal requirement to get Voice Non Premium rn1) Trade registration rn2) Trade license rn3) TIN and VAT certificate rn4) House rent agreement rn5) Agreement & E-CAF form rn6) Request letter rn7) Well-developed business proposal",
+      "is_active": true,
+      "type": "Digital and VAS Service",
+      "sort_order": 8
+    },
+    {
+      "legacy_id": 9,
+      "legacy_category_id": 18,
+      "name": "CRBT",
+      "slug": "crbt",
+      "description": "CRBT rnCRBT (Caller Ring Back Tone service (CRBT) content service means the service of providing CRBT content through the technology and CRBT platform of ethio telecom for the latter to provide the CRBT service to its subscriber. rn Legal requirement to get CRBT rn1) Trade registration rn2) Trade license rn3) TIN and VAT certificate rn4) Renewed or new VAS (Value Added Service) license given by ECA(Ethiopia communication autority) located on bole medahniyalem, robel plaza rn5) House rent agreement rn6) Request letter rn7) Well-developed Business proposal rn8) Agreement document will be signed between ethio & partner",
+      "is_active": true,
+      "type": "Digital and VAS Service",
+      "sort_order": 9
+    },
+    {
+      "legacy_id": 10,
+      "legacy_category_id": 18,
+      "name": "Corporate CRBT",
+      "slug": "corporate-crbt",
+      "description": "Corporate CRBT rnCorporate Ring Back Tone: - designed to enable company’s paly corporate messages or advertisements (Jungles) on staff phone for callers while the callers wait for the calls to be pickedrn Legal requirement to get Corporate CRBT rn1) Trade registration rn2) Trade license rn3) TIN and VAT certificate rn4) Renewed or new VAS (Value Added Service) license given by ECA(Ethiopia communication autority) located on bole medahniyalem, robel plaza rn5) House rent agreement rn6) Request letter rn7) Well-developed Business proposal rn8) Agreement document with the employees to upload the tone on their service number",
+      "is_active": true,
+      "type": "Digital and VAS Service",
+      "sort_order": 10
+    },
+    {
+      "legacy_id": 11,
+      "legacy_category_id": 18,
+      "name": "USSD Premium",
+      "slug": "ussd-premium",
+      "description": "USSD Premium rnrnUnstructured Supplementary Service Data (USSD): means a protocol used by GSM cellular telephones to communicate with the service provider's computers which is sometimes referred to as \"Quick Codes\" or \"Feature codes\". rnrnrnLegal requirement to get USSD Premium rn1) Request letter rn2) Renewed or new trade license and commercial registration. rn3) TIN number rn4) VAT certificate rn5) House rent or proof of ownership rn6) Availing Article and memorandum of association for a share company rn7) Well-developed Proposal",
+      "is_active": true,
+      "type": "Digital and VAS Service",
+      "sort_order": 11
+    },
+    {
+      "legacy_id": 12,
+      "legacy_category_id": 18,
+      "name": "USSD Non- Premium",
+      "slug": "ussd-non-premium",
+      "description": "USSD Non- Premium rnUnstructured Supplementary Service Data (USSD): means a protocol used by GSM cellular telephones to communicate with the service provider's computers which is sometimes referred to as \"Quick Codes\" or \"Feature codes\". In this service there is no revenue sharing between service provider and ethio-telecomrnrnLegal requirement to get USSD Non-Premium rn`1)Request letter rn2) Renewed or new trade license and commercial registration. rn3) TIN number rn4) VAT certificate rn5) House rent or proof of ownership rn6) Availing Article and memorandum of association for a share company rn7) Well-developed Proposal",
+      "is_active": true,
+      "type": "Digital and VAS Service",
+      "sort_order": 12
+    },
+    {
+      "legacy_id": 13,
+      "legacy_category_id": 18,
+      "name": "A2P (Application To Person)",
+      "slug": "a2p-application-to-person",
+      "description": "A2P rnA2P messaging (application-to-person messaging) is the process of sending mobile messages from a business application to a mobile user. These messages are also known as professional or enterprise messages. rn Legal requirement to get A2P rn1) Request letter rn2) Renewed or new trade license and commercial registration. rn3) Renewed or new VAS (Value Added Service) license given by ECA(Ethiopia communication autority) located on bole medahniyalem, robel plaza. rn4) TIN number rn5) VAT certificate rn6) House rent or proof of ownership rn7) Availing Article and memorandum of association for a share company rn8) Well-developed Proposal",
+      "is_active": true,
+      "type": "Digital and VAS Service",
+      "sort_order": 13
+    },
+    {
+      "legacy_id": 14,
+      "legacy_category_id": 18,
+      "name": "OBD",
+      "slug": "obd",
+      "description": "OBD rnOutbound Dialer (OBD) is an automated phone call that essentially relays a pre-recorded voice message to the customer. It can be sent to an end number of users at any given point of time in the language of choice. rn Legal requirement to get OBD rn1) Request letter rn2) Renewed or new trade license and commercial registration. rn3) Renewed or new VAS (Value Added Service) license given by ECA(Ethiopia communication autority) located on bole medahniyalem, robel plaza. rn4) TIN number rn5) VAT certificatern6) House rent or proof of ownership rn7) Availing Article and memorandum of association for a share company; rn8) Well-developed Proposal",
+      "is_active": true,
+      "type": "Digital and VAS Service",
+      "sort_order": 14
+    },
+    {
+      "legacy_id": 15,
+      "legacy_category_id": 18,
+      "name": "API",
+      "slug": "api",
+      "description": "API rnAPI (Application programing interface) which enables the integration of the partners application with Ethio telecom for digital content sales. rn Digital content rnrefers to Album, Movie series, music, games, audio, video, image, books, text, picture or mobile applications provided for sales over the partners technology platform. rn Legal requirement to get API rn1) Request letter rn2) Renewed or new trade license and commercial registration. rn3) Renewed or new VAS (Value Added Service) license given by ECA(Ethiopia communication autority) located on bole medahniyalem, robel plaza. rn4) TIN number rn5) VAT certificate rn6) House rent or proof of ownership rn7) Availing Article and memorandum of association for a share company rn8) Letter of agreement from certified professionals or patent right (if needed) rn9) Minimum capital amount required for VAS business partnership is ETB 200,000",
+      "is_active": true,
+      "type": "Digital and VAS Service",
+      "sort_order": 15
+    },
+    {
+      "legacy_id": 16,
+      "legacy_category_id": 18,
+      "name": "Ethio Avaya Spaces",
+      "slug": "ethio-avaya-spaces",
+      "description": "Ethio Avaya Spaces rnA cloud-based video conferencing and employee collaboration solution; best fitted for your virtual meeting and remote project coordination needs. rn Legal requirement to get VISP rn1) Request letter",
+      "is_active": true,
+      "type": "Digital and VAS Service",
+      "sort_order": 16
+    },
+    {
+      "legacy_id": 17,
+      "legacy_category_id": 18,
+      "name": "Device Insurance",
+      "slug": "device-insurance",
+      "description": "Mobile Handset Insurance rnMobile Handset Insurance: An insurance scheme for ethio telecom customers that will be given in partnership with insurance companies and /or their partners to protect devices lost, damaged, or stolen, whereby the premium is deducted from customer mobile account. rn Legal requirement to get Device Insurance rn1) Request letter rn2) Renewed or new trade license and commercial registration. rn3) Renewed or new VAS (Value Added Service) license given by ECA(Ethiopia communication autority) located on bole medahniyalem, robel plaza. rn4) TIN number rn5) VAT certificate rn6) House rent or proof of ownership rn7) Availing Article and memorandum of association for a share company rn8) Well-developed Proposal",
+      "is_active": true,
+      "type": "Digital and VAS Service",
+      "sort_order": 17
+    },
+    {
+      "legacy_id": 18,
+      "legacy_category_id": 18,
+      "name": "MO(Mobile Originating)",
+      "slug": "mo-mobile-originating",
+      "description": "MO rnMobile Originating means a mobile message routed from an end user's mobile device and delivered to a mobile phone or an application. The end user is billed by the network when they send in their initial message. The sender will be charged. Shortly it is SMS premium service.rn Legal requirement to get MO rn1) Request letter rn2) Renewed or new trade license and commercial registration. rn3) Renewed or new VAS (Value Added Service) license given by ECA(Ethiopia communication autority) located on bole medahniyalem, robel plaza. rn4) TIN number rn5) VAT certificate rn6) House rent or proof of ownership rn7) Availing Article and memorandum of association for a share company rn8) Letter of agreement from certified professionals or patent right (if needed) rn9) Minimum capital amount required for VAS business partnership is ETB 100,000",
+      "is_active": true,
+      "type": "Digital and VAS Service",
+      "sort_order": 18
+    },
+    {
+      "legacy_id": 21,
+      "legacy_category_id": 18,
+      "name": "Public Ip",
+      "slug": "public-ip",
+      "description": "Public Iprn is an IP address that is used to access the Internet. Public IP addresses can be routed on the Internet, unlike private addresses. rn Legal requirement to get Public Ip rn1) Request letter",
+      "is_active": true,
+      "type": "Digital and VAS Service",
+      "sort_order": 19
+    },
+    {
+      "legacy_id": 22,
+      "legacy_category_id": 18,
+      "name": "White List",
+      "slug": "white-list",
+      "description": "White Listrnis the list of partners MSISDN that have successfully registered on ethio telecom network for the given servicernLegal Requirementrn1) Request letter",
+      "is_active": true,
+      "type": "Digital and VAS Service",
+      "sort_order": 20
+    },
+    {
+      "legacy_id": 23,
+      "legacy_category_id": 18,
+      "name": "Get-Pass request",
+      "slug": "get-pass-request",
+      "description": "Get-Pass request",
+      "is_active": true,
+      "type": "Digital and VAS Service",
+      "sort_order": 21
+    },
+    {
+      "legacy_id": 27,
+      "legacy_category_id": 23,
+      "name": "startup",
+      "slug": "startup",
+      "description": "test",
+      "is_active": true,
+      "type": "Digital and VAS Service",
+      "sort_order": 22
+    },
+    {
+      "legacy_id": 28,
+      "legacy_category_id": 18,
+      "name": "Merchant Acoount",
+      "slug": "merchant-acoount",
+      "description": "tele birr",
+      "is_active": true,
+      "type": "Digital and VAS Service",
+      "sort_order": 23
+    }
+  ],
+  "requisitions": [
+    {
+      "legacy_id": 1,
+      "name": "New request",
+      "code": "new-request",
+      "slug": "new-request",
+      "is_active": true,
+      "sort_order": 1,
+      "is_system": true,
+      "creates_subscription": true,
+      "requires_active_subscription": false
+    },
+    {
+      "legacy_id": 2,
+      "name": "Maintenance",
+      "code": "maintenance",
+      "slug": "maintenance",
+      "is_active": true,
+      "sort_order": 2,
+      "is_system": true,
+      "requires_active_subscription": true
+    },
+    {
+      "legacy_id": 3,
+      "name": "Additional Services",
+      "code": "additional-services",
+      "slug": "additional-services",
+      "is_active": true,
+      "sort_order": 3,
+      "is_system": true,
+      "requires_active_subscription": true
+    },
+    {
+      "legacy_id": 4,
+      "name": "Revenue Request",
+      "code": "revenue-request",
+      "slug": "revenue-request",
+      "is_active": true,
+      "sort_order": 4,
+      "is_system": true,
+      "requires_active_subscription": true
+    },
+    {
+      "legacy_id": 5,
+      "name": "Profile Change/Name change",
+      "code": "profile-change-name-change",
+      "slug": "profile-change-name-change",
+      "is_active": true,
+      "sort_order": 5,
+      "is_system": true,
+      "requires_active_subscription": true
+    },
+    {
+      "legacy_id": 6,
+      "name": "Termination",
+      "code": "termination",
+      "slug": "termination",
+      "is_active": true,
+      "sort_order": 6,
+      "is_system": true,
+      "terminates_subscription": true,
+      "requires_active_subscription": true
+    },
+    {
+      "legacy_id": 7,
+      "name": "Move",
+      "code": "move",
+      "slug": "move",
+      "is_active": true,
+      "sort_order": 7,
+      "is_system": true,
+      "requires_active_subscription": true
+    },
+    {
+      "legacy_id": 8,
+      "name": "Whitelist Request",
+      "code": "whitelist-request",
+      "slug": "whitelist-request",
+      "is_active": true,
+      "sort_order": 8,
+      "is_system": true,
+      "requires_active_subscription": true
+    },
+    {
+      "legacy_id": 9,
+      "name": "Public IP",
+      "code": "public-ip",
+      "slug": "public-ip",
+      "is_active": true,
+      "sort_order": 9,
+      "is_system": true,
+      "requires_active_subscription": true
+    },
+    {
+      "legacy_id": 10,
+      "name": "Tariff change",
+      "code": "tariff-change",
+      "slug": "tariff-change",
+      "is_active": true,
+      "sort_order": 10,
+      "is_system": true,
+      "requires_active_subscription": true
+    },
+    {
+      "legacy_id": 11,
+      "name": "Get-Pass request",
+      "code": "get-pass-request",
+      "slug": "get-pass-request",
+      "is_active": true,
+      "sort_order": 11,
+      "is_system": true,
+      "requires_active_subscription": true
+    },
+    {
+      "legacy_id": 13,
+      "name": "Merchant Acoount",
+      "code": "merchant-acoount",
+      "slug": "merchant-acoount",
+      "is_active": true,
+      "sort_order": 12,
+      "is_system": true,
+      "requires_active_subscription": true
+    }
+  ],
+  "document_types": [
+    {
+      "legacy_id": 1,
+      "name": "Request letter",
+      "code": "request-letter",
+      "max_size_kb": 2048,
+      "accepted_mimes": "pdf,doc,docx,png,jpg,jpeg",
+      "description": null,
+      "is_active": true
+    },
+    {
+      "legacy_id": 2,
+      "name": "Well Developed Proposal",
+      "code": "well-developed-proposal",
+      "max_size_kb": 2048,
+      "accepted_mimes": "pdf,doc,docx,png,jpg,jpeg",
+      "description": null,
+      "is_active": true
+    },
+    {
+      "legacy_id": 3,
+      "name": "VAT certificate",
+      "code": "vat-certificate",
+      "max_size_kb": 2048,
+      "accepted_mimes": "pdf,doc,docx,png,jpg,jpeg",
+      "description": null,
+      "is_active": true
+    },
+    {
+      "legacy_id": 4,
+      "name": "Renewed or new trade license",
+      "code": "renewed-or-new-trade-license",
+      "max_size_kb": 2048,
+      "accepted_mimes": "pdf,doc,docx,png,jpg,jpeg",
+      "description": null,
+      "is_active": true
+    },
+    {
+      "legacy_id": 5,
+      "name": "Commercial registration",
+      "code": "commercial-registration",
+      "max_size_kb": 2048,
+      "accepted_mimes": "pdf,doc,docx,png,jpg,jpeg",
+      "description": null,
+      "is_active": true
+    },
+    {
+      "legacy_id": 6,
+      "name": "TIN number",
+      "code": "tin-number",
+      "max_size_kb": 2048,
+      "accepted_mimes": "pdf,doc,docx,png,jpg,jpeg",
+      "description": null,
+      "is_active": true
+    },
+    {
+      "legacy_id": 7,
+      "name": "House rent or proof of ownership",
+      "code": "house-rent-or-proof-of-ownership",
+      "max_size_kb": 2048,
+      "accepted_mimes": "pdf,doc,docx,png,jpg,jpeg",
+      "description": null,
+      "is_active": true
+    },
+    {
+      "legacy_id": 8,
+      "name": "Router and/or Rack specification",
+      "code": "router-and-or-rack-specification",
+      "max_size_kb": 2048,
+      "accepted_mimes": "pdf,doc,docx,png,jpg,jpeg",
+      "description": null,
+      "is_active": true
+    },
+    {
+      "legacy_id": 9,
+      "name": "License from Ministry of Transport (for speed limit service)",
+      "code": "license-from-ministry-of-transport-for-speed-limit-service",
+      "max_size_kb": 2048,
+      "accepted_mimes": "pdf,doc,docx,png,jpg,jpeg",
+      "description": null,
+      "is_active": true
+    },
+    {
+      "legacy_id": 10,
+      "name": "Renewed or new VAS (Value Added Service) license given by ECA(Ethiopia communication autority)",
+      "code": "renewed-or-new-vas-value-added-service-license-given-by-eca-ethiopia-communicati",
+      "max_size_kb": 2048,
+      "accepted_mimes": "pdf,doc,docx,png,jpg,jpeg",
+      "description": null,
+      "is_active": true
+    },
+    {
+      "legacy_id": 11,
+      "name": "List of musician which is entered agreement with company",
+      "code": "list-of-musician-which-is-entered-agreement-with-company",
+      "max_size_kb": 2048,
+      "accepted_mimes": "pdf,doc,docx,png,jpg,jpeg",
+      "description": null,
+      "is_active": true
+    },
+    {
+      "legacy_id": 12,
+      "name": "License from Addis Traffic Management (for Motorbike service)",
+      "code": "license-from-addis-traffic-management-for-motorbike-service",
+      "max_size_kb": 2048,
+      "accepted_mimes": "pdf,doc,docx,png,jpg,jpeg",
+      "description": null,
+      "is_active": true
+    },
+    {
+      "legacy_id": 13,
+      "name": "Patent Right if required",
+      "code": "patent-right-if-required",
+      "max_size_kb": 2048,
+      "accepted_mimes": "pdf,doc,docx,png,jpg,jpeg",
+      "description": null,
+      "is_active": true
+    },
+    {
+      "legacy_id": 14,
+      "name": "Professional license/Agreement with professionals",
+      "code": "professional-license-agreement-with-professionals",
+      "max_size_kb": 2048,
+      "accepted_mimes": "pdf,doc,docx,png,jpg,jpeg",
+      "description": null,
+      "is_active": true
+    },
+    {
+      "legacy_id": 15,
+      "name": "Availing Article and memorandum of association for a share company/PLC",
+      "code": "availing-article-and-memorandum-of-association-for-a-share-company-plc",
+      "max_size_kb": 2048,
+      "accepted_mimes": "pdf,doc,docx,png,jpg,jpeg",
+      "description": null,
+      "is_active": true
+    },
+    {
+      "legacy_id": 16,
+      "name": "License From National Bank of Ethiopia",
+      "code": "license-from-national-bank-of-ethiopia",
+      "max_size_kb": 2048,
+      "accepted_mimes": "pdf,doc,docx,png,jpg,jpeg",
+      "description": null,
+      "is_active": true
+    },
+    {
+      "legacy_id": 17,
+      "name": "List of employee the tone will be upload on",
+      "code": "list-of-employee-the-tone-will-be-upload-on",
+      "max_size_kb": 2048,
+      "accepted_mimes": "pdf,doc,docx,png,jpg,jpeg",
+      "description": null,
+      "is_active": true
+    },
+    {
+      "legacy_id": 18,
+      "name": "Document if any",
+      "code": "document-if-any",
+      "max_size_kb": 2048,
+      "accepted_mimes": "pdf,doc,docx,png,jpg,jpeg",
+      "description": null,
+      "is_active": true
+    },
+    {
+      "legacy_id": 19,
+      "name": "Last Bill",
+      "code": "last-bill",
+      "max_size_kb": 2048,
+      "accepted_mimes": "pdf,doc,docx,png,jpg,jpeg",
+      "description": "Last bill of the service",
+      "is_active": true
+    },
+    {
+      "legacy_id": 20,
+      "name": "Commitment Letter",
+      "code": "commitment-letter",
+      "max_size_kb": 2048,
+      "accepted_mimes": "pdf,doc,docx,png,jpg,jpeg",
+      "description": null,
+      "is_active": true
+    },
+    {
+      "legacy_id": 21,
+      "name": "Snap Shoot (if multipe use pdf, max size 2MB)",
+      "code": "snap-shoot-if-multipe-use-pdf-max-size-2mb",
+      "max_size_kb": 2048,
+      "accepted_mimes": "pdf,doc,docx,png,jpg,jpeg",
+      "description": null,
+      "is_active": true
+    },
+    {
+      "legacy_id": 22,
+      "name": "Power & PDU information",
+      "code": "power-pdu-information",
+      "max_size_kb": 2048,
+      "accepted_mimes": "pdf,doc,docx,png,jpg,jpeg",
+      "description": "Power & PDU information",
+      "is_active": true
+    },
+    {
+      "legacy_id": 23,
+      "name": "Partner current whitelist",
+      "code": "partner-current-whitelist",
+      "max_size_kb": 2048,
+      "accepted_mimes": "pdf,doc,docx,png,jpg,jpeg",
+      "description": null,
+      "is_active": true
+    },
+    {
+      "legacy_id": 24,
+      "name": "Get_Pass Templet",
+      "code": "get-pass-templet",
+      "max_size_kb": 2048,
+      "accepted_mimes": "pdf,doc,docx,png,jpg,jpeg",
+      "description": null,
+      "is_active": true
+    }
+  ],
+  "requisition_services": [
+    {
+      "legacy_requisition_id": 1,
+      "legacy_service_id": 2
+    },
+    {
+      "legacy_requisition_id": 1,
+      "legacy_service_id": 3
+    },
+    {
+      "legacy_requisition_id": 1,
+      "legacy_service_id": 4
+    },
+    {
+      "legacy_requisition_id": 1,
+      "legacy_service_id": 5
+    },
+    {
+      "legacy_requisition_id": 1,
+      "legacy_service_id": 6
+    },
+    {
+      "legacy_requisition_id": 1,
+      "legacy_service_id": 7
+    },
+    {
+      "legacy_requisition_id": 1,
+      "legacy_service_id": 8
+    },
+    {
+      "legacy_requisition_id": 1,
+      "legacy_service_id": 12
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 1
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 3
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 2
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 4
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 5
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 6
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 7
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 8
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 9
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 10
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 11
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 12
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 13
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 14
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 15
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 16
+    },
+    {
+      "legacy_requisition_id": 3,
+      "legacy_service_id": 10
+    },
+    {
+      "legacy_requisition_id": 3,
+      "legacy_service_id": 5
+    },
+    {
+      "legacy_requisition_id": 3,
+      "legacy_service_id": 7
+    },
+    {
+      "legacy_requisition_id": 4,
+      "legacy_service_id": 1
+    },
+    {
+      "legacy_requisition_id": 4,
+      "legacy_service_id": 2
+    },
+    {
+      "legacy_requisition_id": 4,
+      "legacy_service_id": 9
+    },
+    {
+      "legacy_requisition_id": 4,
+      "legacy_service_id": 11
+    },
+    {
+      "legacy_requisition_id": 4,
+      "legacy_service_id": 15
+    },
+    {
+      "legacy_requisition_id": 4,
+      "legacy_service_id": 17
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 1
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 2
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 3
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 4
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 5
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 6
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 7
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 8
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 9
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 10
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 11
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 12
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 13
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 14
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 15
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 17
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 16
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 1
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 2
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 3
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 4
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 6
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 7
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 8
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 9
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 10
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 11
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 12
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 13
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 14
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 15
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 16
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 17
+    },
+    {
+      "legacy_requisition_id": 7,
+      "legacy_service_id": 5
+    },
+    {
+      "legacy_requisition_id": 4,
+      "legacy_service_id": 4
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 17
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 5
+    },
+    {
+      "legacy_requisition_id": 8,
+      "legacy_service_id": 1
+    },
+    {
+      "legacy_requisition_id": 8,
+      "legacy_service_id": 15
+    },
+    {
+      "legacy_requisition_id": 9,
+      "legacy_service_id": 15
+    },
+    {
+      "legacy_requisition_id": 9,
+      "legacy_service_id": 7
+    },
+    {
+      "legacy_requisition_id": 3,
+      "legacy_service_id": 16
+    },
+    {
+      "legacy_requisition_id": 10,
+      "legacy_service_id": 1
+    },
+    {
+      "legacy_requisition_id": 10,
+      "legacy_service_id": 2
+    },
+    {
+      "legacy_requisition_id": 10,
+      "legacy_service_id": 4
+    },
+    {
+      "legacy_requisition_id": 10,
+      "legacy_service_id": 11
+    },
+    {
+      "legacy_requisition_id": 10,
+      "legacy_service_id": 15
+    },
+    {
+      "legacy_requisition_id": 8,
+      "legacy_service_id": 4
+    },
+    {
+      "legacy_requisition_id": 11,
+      "legacy_service_id": 5
+    },
+    {
+      "legacy_requisition_id": 1,
+      "legacy_service_id": 13
+    },
+    {
+      "legacy_requisition_id": 12,
+      "legacy_service_id": 27
+    },
+    {
+      "legacy_requisition_id": 13,
+      "legacy_service_id": 28
+    }
+  ],
+  "document_matrix": [
+    {
+      "legacy_requisition_id": 1,
+      "legacy_service_id": 1,
+      "legacy_document_type_ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ]
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 1,
+      "legacy_document_type_ids": [
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 1,
+      "legacy_service_id": 5,
+      "legacy_document_type_ids": [
+        1,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        21,
+        22
+      ]
+    },
+    {
+      "legacy_requisition_id": 1,
+      "legacy_service_id": 17,
+      "legacy_document_type_ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        10,
+        16,
+        15
+      ]
+    },
+    {
+      "legacy_requisition_id": 1,
+      "legacy_service_id": 16,
+      "legacy_document_type_ids": [
+        1
+      ]
+    },
+    {
+      "legacy_requisition_id": 1,
+      "legacy_service_id": 15,
+      "legacy_document_type_ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        10,
+        14,
+        15,
+        13
+      ]
+    },
+    {
+      "legacy_requisition_id": 1,
+      "legacy_service_id": 14,
+      "legacy_document_type_ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        10
+      ]
+    },
+    {
+      "legacy_requisition_id": 1,
+      "legacy_service_id": 13,
+      "legacy_document_type_ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        10,
+        15
+      ]
+    },
+    {
+      "legacy_requisition_id": 1,
+      "legacy_service_id": 11,
+      "legacy_document_type_ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        10,
+        15
+      ]
+    },
+    {
+      "legacy_requisition_id": 1,
+      "legacy_service_id": 12,
+      "legacy_document_type_ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        15
+      ]
+    },
+    {
+      "legacy_requisition_id": 1,
+      "legacy_service_id": 10,
+      "legacy_document_type_ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        15,
+        17
+      ]
+    },
+    {
+      "legacy_requisition_id": 1,
+      "legacy_service_id": 8,
+      "legacy_document_type_ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        15
+      ]
+    },
+    {
+      "legacy_requisition_id": 1,
+      "legacy_service_id": 7,
+      "legacy_document_type_ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        10,
+        15
+      ]
+    },
+    {
+      "legacy_requisition_id": 1,
+      "legacy_service_id": 6,
+      "legacy_document_type_ids": [
+        1,
+        3,
+        4,
+        5,
+        6,
+        7,
+        10,
+        12,
+        9
+      ]
+    },
+    {
+      "legacy_requisition_id": 1,
+      "legacy_service_id": 4,
+      "legacy_document_type_ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        10,
+        15
+      ]
+    },
+    {
+      "legacy_requisition_id": 1,
+      "legacy_service_id": 2,
+      "legacy_document_type_ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        10,
+        15
+      ]
+    },
+    {
+      "legacy_requisition_id": 1,
+      "legacy_service_id": 3,
+      "legacy_document_type_ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        15
+      ]
+    },
+    {
+      "legacy_requisition_id": 1,
+      "legacy_service_id": 9,
+      "legacy_document_type_ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        10,
+        11,
+        15
+      ]
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 15,
+      "legacy_document_type_ids": [
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 2,
+      "legacy_document_type_ids": [
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 3,
+      "legacy_document_type_ids": [
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 4,
+      "legacy_document_type_ids": [
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 8,
+      "legacy_document_type_ids": [
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 5,
+      "legacy_document_type_ids": [
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 6,
+      "legacy_document_type_ids": [
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 7,
+      "legacy_document_type_ids": [
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 9,
+      "legacy_document_type_ids": [
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 11,
+      "legacy_document_type_ids": [
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 12,
+      "legacy_document_type_ids": [
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 14,
+      "legacy_document_type_ids": [
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 3,
+      "legacy_service_id": 5,
+      "legacy_document_type_ids": [
+        1,
+        22
+      ]
+    },
+    {
+      "legacy_requisition_id": 3,
+      "legacy_service_id": 7,
+      "legacy_document_type_ids": [
+        1,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 3,
+      "legacy_service_id": 10,
+      "legacy_document_type_ids": [
+        1,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 3,
+      "legacy_service_id": 16,
+      "legacy_document_type_ids": [
+        1,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 4,
+      "legacy_service_id": 1,
+      "legacy_document_type_ids": [
+        1,
+        18,
+        19
+      ]
+    },
+    {
+      "legacy_requisition_id": 4,
+      "legacy_service_id": 2,
+      "legacy_document_type_ids": [
+        1,
+        19,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 4,
+      "legacy_service_id": 9,
+      "legacy_document_type_ids": [
+        1,
+        18,
+        19
+      ]
+    },
+    {
+      "legacy_requisition_id": 4,
+      "legacy_service_id": 11,
+      "legacy_document_type_ids": [
+        1,
+        18,
+        19
+      ]
+    },
+    {
+      "legacy_requisition_id": 4,
+      "legacy_service_id": 15,
+      "legacy_document_type_ids": [
+        1,
+        18,
+        19
+      ]
+    },
+    {
+      "legacy_requisition_id": 4,
+      "legacy_service_id": 16,
+      "legacy_document_type_ids": [
+        1,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 1,
+      "legacy_document_type_ids": [
+        1,
+        3,
+        4,
+        5,
+        6,
+        7,
+        10,
+        15,
+        18,
+        19
+      ]
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 2,
+      "legacy_document_type_ids": [
+        1,
+        3,
+        4,
+        5,
+        6,
+        7,
+        10,
+        18,
+        15
+      ]
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 3,
+      "legacy_document_type_ids": [
+        1,
+        3,
+        4,
+        5,
+        6,
+        7,
+        15,
+        18,
+        19
+      ]
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 4,
+      "legacy_document_type_ids": [
+        1,
+        4,
+        5,
+        6,
+        7,
+        10,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 5,
+      "legacy_document_type_ids": [
+        1,
+        3,
+        4,
+        5,
+        6,
+        7,
+        10,
+        15,
+        18,
+        19
+      ]
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 6,
+      "legacy_document_type_ids": [
+        1,
+        3,
+        4,
+        5,
+        6,
+        7,
+        9,
+        10,
+        12,
+        15,
+        18,
+        19
+      ]
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 7,
+      "legacy_document_type_ids": [
+        1,
+        3,
+        4,
+        5,
+        6,
+        7,
+        10,
+        15
+      ]
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 7,
+      "legacy_document_type_ids": [
+        1,
+        3,
+        4,
+        5,
+        6,
+        7,
+        10,
+        15,
+        18,
+        19
+      ]
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 8,
+      "legacy_document_type_ids": [
+        1,
+        3,
+        4,
+        5,
+        6,
+        7,
+        15,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 9,
+      "legacy_document_type_ids": [
+        1,
+        3,
+        4,
+        5,
+        6,
+        7,
+        11,
+        13,
+        18,
+        19
+      ]
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 10,
+      "legacy_document_type_ids": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        10,
+        15,
+        18,
+        19
+      ]
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 11,
+      "legacy_document_type_ids": [
+        1,
+        3,
+        4,
+        5,
+        6,
+        7,
+        10,
+        15,
+        18,
+        19
+      ]
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 12,
+      "legacy_document_type_ids": [
+        1,
+        3,
+        4,
+        5,
+        6,
+        7,
+        15,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 13,
+      "legacy_document_type_ids": [
+        1,
+        3,
+        4,
+        5,
+        6,
+        7,
+        10,
+        15,
+        18,
+        19
+      ]
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 14,
+      "legacy_document_type_ids": [
+        1,
+        3,
+        4,
+        5,
+        6,
+        7,
+        10,
+        15,
+        18,
+        19
+      ]
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 15,
+      "legacy_document_type_ids": [
+        1,
+        3,
+        4,
+        5,
+        6,
+        7,
+        10,
+        13,
+        14,
+        15,
+        18,
+        19
+      ]
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 16,
+      "legacy_document_type_ids": [
+        1,
+        18,
+        19
+      ]
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 17,
+      "legacy_document_type_ids": [
+        1,
+        3,
+        4,
+        5,
+        6,
+        7,
+        10,
+        16,
+        18,
+        19
+      ]
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 1,
+      "legacy_document_type_ids": [
+        1,
+        19,
+        20
+      ]
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 2,
+      "legacy_document_type_ids": [
+        1,
+        19,
+        20
+      ]
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 3,
+      "legacy_document_type_ids": [
+        1,
+        19,
+        20,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 3,
+      "legacy_document_type_ids": [
+        1,
+        19,
+        20,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 4,
+      "legacy_document_type_ids": [
+        1,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 5,
+      "legacy_document_type_ids": [
+        1,
+        19,
+        20,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 6,
+      "legacy_document_type_ids": [
+        1,
+        19,
+        20,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 7,
+      "legacy_document_type_ids": [
+        1,
+        19,
+        20
+      ]
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 8,
+      "legacy_document_type_ids": [
+        1,
+        19,
+        20,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 9,
+      "legacy_document_type_ids": [
+        1,
+        19,
+        20,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 11,
+      "legacy_document_type_ids": [
+        1,
+        19,
+        20,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 12,
+      "legacy_document_type_ids": [
+        1,
+        19,
+        20,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 13,
+      "legacy_document_type_ids": [
+        1,
+        19,
+        20,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 14,
+      "legacy_document_type_ids": [
+        1,
+        19,
+        20,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 15,
+      "legacy_document_type_ids": [
+        1,
+        19,
+        20,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 16,
+      "legacy_document_type_ids": [
+        1,
+        19,
+        20,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 17,
+      "legacy_document_type_ids": [
+        1,
+        19,
+        20,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 7,
+      "legacy_service_id": 5,
+      "legacy_document_type_ids": [
+        1,
+        18,
+        19
+      ]
+    },
+    {
+      "legacy_requisition_id": 1,
+      "legacy_service_id": 18,
+      "legacy_document_type_ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        10,
+        15
+      ]
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 18,
+      "legacy_document_type_ids": [
+        1,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "legacy_requisition_id": 4,
+      "legacy_service_id": 18,
+      "legacy_document_type_ids": [
+        1,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 5,
+      "legacy_service_id": 18,
+      "legacy_document_type_ids": [
+        1,
+        3,
+        4,
+        5,
+        6,
+        7,
+        10,
+        14,
+        15,
+        18,
+        19
+      ]
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 18,
+      "legacy_document_type_ids": [
+        1,
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "legacy_requisition_id": 8,
+      "legacy_service_id": 1,
+      "legacy_document_type_ids": [
+        1,
+        23
+      ]
+    },
+    {
+      "legacy_requisition_id": 8,
+      "legacy_service_id": 15,
+      "legacy_document_type_ids": [
+        1,
+        23
+      ]
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 10,
+      "legacy_document_type_ids": [
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 4,
+      "legacy_service_id": 17,
+      "legacy_document_type_ids": [
+        1,
+        18,
+        19
+      ]
+    },
+    {
+      "legacy_requisition_id": 8,
+      "legacy_service_id": 4,
+      "legacy_document_type_ids": [
+        1,
+        23
+      ]
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 13,
+      "legacy_document_type_ids": [
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 2,
+      "legacy_service_id": 17,
+      "legacy_document_type_ids": [
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 6,
+      "legacy_service_id": 10,
+      "legacy_document_type_ids": [
+        1,
+        20,
+        19,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 9,
+      "legacy_service_id": 7,
+      "legacy_document_type_ids": [
+        1
+      ]
+    },
+    {
+      "legacy_requisition_id": 9,
+      "legacy_service_id": 15,
+      "legacy_document_type_ids": [
+        1
+      ]
+    },
+    {
+      "legacy_requisition_id": 4,
+      "legacy_service_id": 4,
+      "legacy_document_type_ids": [
+        1,
+        18,
+        19
+      ]
+    },
+    {
+      "legacy_requisition_id": 10,
+      "legacy_service_id": 2,
+      "legacy_document_type_ids": [
+        1,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 10,
+      "legacy_service_id": 4,
+      "legacy_document_type_ids": [
+        1,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 10,
+      "legacy_service_id": 15,
+      "legacy_document_type_ids": [
+        1,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 10,
+      "legacy_service_id": 1,
+      "legacy_document_type_ids": [
+        1,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 10,
+      "legacy_service_id": 11,
+      "legacy_document_type_ids": [
+        1,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 11,
+      "legacy_service_id": 5,
+      "legacy_document_type_ids": [
+        1,
+        19,
+        24,
+        18
+      ]
+    },
+    {
+      "legacy_requisition_id": 12,
+      "legacy_service_id": 27,
+      "legacy_document_type_ids": [
+        1
+      ]
+    },
+    {
+      "legacy_requisition_id": 1,
+      "legacy_service_id": 28,
+      "legacy_document_type_ids": [
+        1
+      ]
+    }
+  ],
+  "faqs": [
+    {
+      "question": "What is VAS",
+      "answer": "Vale added service (VAS) is a term used in telecommunications to describe non-core features. They are generally marketed as premium features and add-ons to basic core functions.!",
+      "is_active": true,
+      "sort_order": 1
+    },
+    {
+      "question": "What is Short Code",
+      "answer": "Short Codes are numbers shorter than full numbers which can be used to address mobile SMS, USSD, APP, WEB and MMS messages and Voice Services from mobile phones or fixed lines.",
+      "is_active": true,
+      "sort_order": 2
+    },
+    {
+      "question": "What is USSD",
+      "answer": "Unstructured Supplementary Service Data (USSD) sometimes referred to as \"Quick Codes\" or \"Feature codes\", is a protocol used by GSM cellular telephones to communicate with the service provider's computers.",
+      "is_active": true,
+      "sort_order": 3
+    },
+    {
+      "question": "What is CRBT",
+      "answer": "A Color Ring-back Tone (CRBT) is the audible ringing that is heard on the telephone line by the calling party after dialing and prior to the call being answered at the receiving end.",
+      "is_active": true,
+      "sort_order": 4
+    },
+    {
+      "question": "MO (Mobile Originated)",
+      "answer": "MO (Mobile Originated): A mobile message routed from an end user's mobile device and delivered to a mobile phone or an application. The end user is billed by the network when they send in their initial message. The sender will be charged.",
+      "is_active": true,
+      "sort_order": 5
+    },
+    {
+      "question": "MT (Mobile terminated)",
+      "answer": "MT (Mobile terminated): refers to a message that goes out from a system and is received by the subscriber's mobile device and the receiver will be charged.",
+      "is_active": true,
+      "sort_order": 6
+    },
+    {
+      "question": "Partner",
+      "answer": "Partner is Business Company which has a VAS license and got an agreement with ethio telecom.",
+      "is_active": true,
+      "sort_order": 7
+    },
+    {
+      "question": "What is Bulk SMS",
+      "answer": "Bulk SMS refers specifically to the sending of large number of SMS messages to the mobile phones of a predetermined group of recipients.",
+      "is_active": true,
+      "sort_order": 8
+    },
+    {
+      "question": "Content Provider",
+      "answer": "Content Provider: A person or a business that provides content. Content means any sound, text, picture, moving picture or other audio-visual representation, tactile representation or any combination of the preceding which is capable of being created, manipulated, stored, retrieved or communicated electronically.",
+      "is_active": true,
+      "sort_order": 9
+    },
+    {
+      "question": "How many short code is required for MT service",
+      "answer": "Two short code is required for MT service",
+      "is_active": true,
+      "sort_order": 10
+    },
+    {
+      "question": "How many short code is required for MO service",
+      "answer": "One short code is required for MO service",
+      "is_active": true,
+      "sort_order": 11
+    },
+    {
+      "question": "White list",
+      "answer": "White list: customers who do want to get any commercial advertising message by sending consent to a short code from ethio telecom and/or partners.",
+      "is_active": true,
+      "sort_order": 12
+    },
+    {
+      "question": "Black list",
+      "answer": "Black list: customers who do not want to get any commercial advertising message from ethio telecom and/or any third party.",
+      "is_active": true,
+      "sort_order": 13
+    },
+    {
+      "question": "What is API",
+      "answer": "API Means application programing interface which enables the integration of the partners application with Ethio telecom for digital content sales.",
+      "is_active": true,
+      "sort_order": 14
+    },
+    {
+      "question": "What is Digital Content",
+      "answer": "Digital content “refers to Album, Movie series, music, games, audio, video, image, books, text, picture or mobile applications provided for sales over the partners technology platform.",
+      "is_active": true,
+      "sort_order": 15
+    },
+    {
+      "question": "What is collocation",
+      "answer": "Colocation service”: is a kind of hosting service that enables the partner to host its infrastructure in a well secured datacenters equipped with commercial power, generator backup power, and full UPS protected & filtered power with enterprise grade networking, cooling and fire suppression system facilities.",
+      "is_active": true,
+      "sort_order": 16
+    },
+    {
+      "question": "Facility” or “Data Centre",
+      "answer": "Facility” or “Data Centre shall mean the ethio’s physical location or data centre in which Equipment storage space will be made available to Customer for installation and use of Equipment.",
+      "is_active": true,
+      "sort_order": 17
+    },
+    {
+      "question": "SDP",
+      "answer": "SDP refers to the platform that allows both parties to access data and enables ethio telecom to control and provide services.",
+      "is_active": true,
+      "sort_order": 18
+    },
+    {
+      "question": "What is Space",
+      "answer": "Space shall mean the Equipment storage space (“Space”) in which storage devices such as racks, cabinets, and cages shall reside, and which will be made available to Customer.",
+      "is_active": true,
+      "sort_order": 19
+    },
+    {
+      "question": "What is VISP",
+      "answer": "Virtual Internet Service Provider (vISP): means a service provider of Virtual Internet Service that offers Internet services under its own company or brand name, while actually using the equipment and facilities of another internet service provider to provide those services.",
+      "is_active": true,
+      "sort_order": 20
+    }
+  ],
+  "priorities": [
+    {
+      "name": "Low",
+      "code": "low",
+      "color": "#23a308",
+      "weight": 1,
+      "is_active": true
+    },
+    {
+      "name": "Medium",
+      "code": "medium",
+      "color": "#216edc",
+      "weight": 2,
+      "is_active": true
+    },
+    {
+      "name": "High",
+      "code": "high",
+      "color": "#cd91aa",
+      "weight": 3,
+      "is_active": true
+    }
+  ]
+}

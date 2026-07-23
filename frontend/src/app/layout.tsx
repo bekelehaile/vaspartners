@@ -1,20 +1,16 @@
 import type { Metadata } from "next";
-import { Fraunces, Source_Sans_3 } from "next/font/google";
+import { Poppins } from "next/font/google";
 import "./globals.css";
 
-const display = Fraunces({
-  variable: "--font-display",
-  subsets: ["latin"],
-});
-
-const sans = Source_Sans_3({
+const sans = Poppins({
   variable: "--font-sans",
   subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
   title: "VAS Partners | Ethio Telecom",
-  description: "Value Added Services partner portal",
+  description: "Value Added Services partner portal — Ethio telecom",
 };
 
 export default function RootLayout({
@@ -24,9 +20,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${display.variable} ${sans.variable} font-sans antialiased`}>
-        {children}
-      </body>
+      <body className={`${sans.variable} font-sans antialiased`}>{children}</body>
     </html>
   );
 }

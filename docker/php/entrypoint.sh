@@ -36,6 +36,31 @@ until php -r '
   sleep 1
 done
 
+# Wait for Redis (cache/session/queue)
+echo "Waiting for redis..."
+i=0
+until php -r '
+  $host = getenv("REDIS_HOST") ?: "redis";
+  $port = (int) (getenv("REDIS_PORT") ?: 6379);
+  $r = new Redis();
+  try {
+    if (!$r->connect($host, $port, 1.5)) {
+      exit(1);
+    }
+    $r->ping();
+    exit(0);
+  } catch (Throwable $e) {
+    exit(1);
+  }
+'; do
+  i=$((i + 1))
+  if [ "$i" -gt 60 ]; then
+    echo "Redis not ready after 60s (REDIS_HOST=${REDIS_HOST:-redis} REDIS_PORT=${REDIS_PORT:-6379})"
+    exit 1
+  fi
+  sleep 1
+done
+
 if [ -z "$APP_KEY" ] || [ "$APP_KEY" = "" ]; then
   php artisan key:generate --force
 fi

@@ -22,6 +22,7 @@ export type Service = {
   name: string;
   slug: string;
   description?: string | null;
+  type?: string | null;
   is_subscription_based?: boolean;
   renewal_interval?: string | null;
   category?: { id: number; name: string; slug: string };

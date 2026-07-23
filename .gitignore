@@ -1,0 +1,6 @@
+# Database dumps
+*.dump
+*.sql
+*.sql.gz
+*.sql.bz2
+mvas_*.dump

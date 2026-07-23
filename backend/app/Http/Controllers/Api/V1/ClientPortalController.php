@@ -24,7 +24,7 @@ class ClientPortalController extends Controller
             ])
             ->where('is_active', true)
             ->orderBy('sort_order')
-            ->get(['id', 'category_id', 'name', 'slug', 'description', 'is_subscription_based', 'renewal_interval', 'renewal_lead_days', 'sort_order']);
+            ->get(['id', 'category_id', 'name', 'slug', 'description', 'type', 'is_subscription_based', 'renewal_interval', 'renewal_lead_days', 'sort_order']);
 
         return response()->json(['data' => $services]);
     }

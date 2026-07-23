@@ -39,7 +39,7 @@ class Requisition extends Model
 
     public function services(): BelongsToMany
     {
-        return $this->belongsToMany(Service::class);
+        return $this->belongsToMany(Service::class, 'service_requisition');
     }
 
     public function documentRequirements(): HasMany

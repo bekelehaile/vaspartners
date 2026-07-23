@@ -18,6 +18,7 @@ class Service extends Model
         'name',
         'slug',
         'description',
+        'type',
         'is_active',
         'is_subscription_based',
         'renewal_interval',
@@ -47,7 +48,7 @@ class Service extends Model
 
     public function requisitions(): BelongsToMany
     {
-        return $this->belongsToMany(Requisition::class);
+        return $this->belongsToMany(Requisition::class, 'service_requisition');
     }
 
     public function documentMatrix(): HasMany
