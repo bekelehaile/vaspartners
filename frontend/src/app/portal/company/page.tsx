@@ -209,63 +209,72 @@ export default function CompanyProfilePage() {
             </div>
             <div className="panel">
               <h2>Request detach / move</h2>
-              <p className="muted">
-                To leave this company (and later join another), submit a proposal PDF and a
-                request letter PDF. Admin will approve or reject; you will get SMS and portal
-                notification.
-              </p>
-              <div className="field">
-                <label htmlFor="detach-note">Reason (optional)</label>
-                <textarea
-                  id="detach-note"
-                  rows={3}
-                  value={detachNote}
-                  onChange={(e) => setDetachNote(e.target.value)}
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="detach-proposal">Proposal PDF *</label>
-                <input
-                  id="detach-proposal"
-                  type="file"
-                  accept="application/pdf,.pdf"
-                  onChange={(e) => setProposal(e.target.files?.[0] || null)}
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="detach-letter">Request letter PDF *</label>
-                <input
-                  id="detach-letter"
-                  type="file"
-                  accept="application/pdf,.pdf"
-                  onChange={(e) => setLetter(e.target.files?.[0] || null)}
-                />
-              </div>
-              {detach.isError && (
-                <div className="alert">
-                  {detach.error instanceof Error
-                    ? detach.error.message
-                    : "Could not submit detach request"}
+              {me?.company_needs_ownership_transfer ? (
+                <div className="alert" role="status">
+                  You are the company owner and other members are still linked. Ownership must be
+                  transferred in the admin portal before you can detach.
                 </div>
+              ) : (
+                <>
+                  <p className="muted">
+                    To leave this company (and later join another), submit a proposal PDF and a
+                    request letter PDF. Admin will approve or reject; you will get SMS and portal
+                    notification.
+                  </p>
+                  <div className="field">
+                    <label htmlFor="detach-note">Reason (optional)</label>
+                    <textarea
+                      id="detach-note"
+                      rows={3}
+                      value={detachNote}
+                      onChange={(e) => setDetachNote(e.target.value)}
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="detach-proposal">Proposal PDF *</label>
+                    <input
+                      id="detach-proposal"
+                      type="file"
+                      accept="application/pdf,.pdf"
+                      onChange={(e) => setProposal(e.target.files?.[0] || null)}
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="detach-letter">Request letter PDF *</label>
+                    <input
+                      id="detach-letter"
+                      type="file"
+                      accept="application/pdf,.pdf"
+                      onChange={(e) => setLetter(e.target.files?.[0] || null)}
+                    />
+                  </div>
+                  {detach.isError && (
+                    <div className="alert">
+                      {detach.error instanceof Error
+                        ? detach.error.message
+                        : "Could not submit detach request"}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={detach.isPending || !proposal || !letter || me?.company_can_detach === false}
+                    onClick={() => {
+                      if (!proposal || !letter) return;
+                      void detach
+                        .mutateAsync({ note: detachNote, proposal, letter })
+                        .then(() => {
+                          setProposal(null);
+                          setLetter(null);
+                          setDetachNote("");
+                          void queryClient.invalidateQueries({ queryKey: queryKeys.customer.me });
+                        });
+                    }}
+                  >
+                    {detach.isPending ? "Submitting…" : "Submit detach request"}
+                  </button>
+                </>
               )}
-              <button
-                type="button"
-                className="btn-primary"
-                disabled={detach.isPending || !proposal || !letter}
-                onClick={() => {
-                  if (!proposal || !letter) return;
-                  void detach
-                    .mutateAsync({ note: detachNote, proposal, letter })
-                    .then(() => {
-                      setProposal(null);
-                      setLetter(null);
-                      setDetachNote("");
-                      void queryClient.invalidateQueries({ queryKey: queryKeys.customer.me });
-                    });
-                }}
-              >
-                {detach.isPending ? "Submitting…" : "Submit detach request"}
-              </button>
             </div>
           </div>
         )}

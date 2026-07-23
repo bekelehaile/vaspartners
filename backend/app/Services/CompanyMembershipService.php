@@ -181,6 +181,8 @@ class CompanyMembershipService
             ]);
         }
 
+        $this->assertOwnerMayLeave($customer);
+
         $proposalMeta = $this->storePdf($customer, $proposal, 'proposal');
         $letterMeta = $this->storePdf($customer, $letter, 'letter');
 
@@ -222,6 +224,11 @@ class CompanyMembershipService
                         'status' => 'Customer is already linked to a company.',
                     ]);
                 }
+                if (! $company->hasOwner()) {
+                    throw ValidationException::withMessages([
+                        'status' => 'This company has no owner. Attach cannot be approved until an owner exists.',
+                    ]);
+                }
                 $this->linkCustomer($customer, $company, CompanyRole::Member);
             } else {
                 if ((int) $customer->company_id !== (int) $company->id) {
@@ -229,6 +236,7 @@ class CompanyMembershipService
                         'status' => 'Customer is no longer linked to this company.',
                     ]);
                 }
+                $this->assertOwnerMayLeave($customer);
                 $this->unlinkCustomer($customer);
             }
 
@@ -275,6 +283,21 @@ class CompanyMembershipService
 
     public function linkCustomer(Customer $customer, Company $company, CompanyRole $role): void
     {
+        if ($role === CompanyRole::Owner) {
+            $existingOwnerId = $company->owner()->value('id');
+            if ($existingOwnerId && (int) $existingOwnerId !== (int) $customer->id) {
+                throw ValidationException::withMessages([
+                    'company' => 'This company already has an owner. Transfer ownership first.',
+                ]);
+            }
+        } else {
+            if (! $company->hasOwner()) {
+                throw ValidationException::withMessages([
+                    'company' => 'A company must have an owner before members can join.',
+                ]);
+            }
+        }
+
         $customer->forceFill([
             'company_id' => $company->id,
             'company_role' => $role->value,
@@ -283,8 +306,38 @@ class CompanyMembershipService
         $this->syncCustomerCompanyFields($customer, $company);
     }
 
+    /**
+     * Transfer ownership to another member of the same company.
+     * Company always keeps exactly one owner.
+     */
+    public function transferOwnership(Company $company, Customer $newOwner, User $actor): Company
+    {
+        return DB::transaction(function () use ($company, $newOwner) {
+            if ((int) $newOwner->company_id !== (int) $company->id) {
+                throw ValidationException::withMessages([
+                    'owner' => 'The new owner must already be a member of this company.',
+                ]);
+            }
+
+            $currentOwner = $company->owner()->first();
+            if ($currentOwner && (int) $currentOwner->id === (int) $newOwner->id) {
+                return $company->fresh(['owner', 'members']);
+            }
+
+            if ($currentOwner) {
+                $currentOwner->forceFill(['company_role' => CompanyRole::Member->value])->save();
+            }
+
+            $newOwner->forceFill(['company_role' => CompanyRole::Owner->value])->save();
+
+            return $company->fresh(['owner', 'members']);
+        });
+    }
+
     public function unlinkCustomer(Customer $customer): void
     {
+        $this->assertOwnerMayLeave($customer);
+
         $customer->forceFill([
             'company_id' => null,
             'company_role' => null,
@@ -312,6 +365,11 @@ class CompanyMembershipService
     {
         $customer->loadMissing('company');
         $pending = $this->pendingRequestFor($customer);
+        $memberCount = $customer->company_id
+            ? Customer::query()->where('company_id', $customer->company_id)->count()
+            : 0;
+        $isOwner = $this->roleOf($customer) === CompanyRole::Owner;
+        $canDetach = (bool) $customer->company_id && (! $isOwner || $memberCount <= 1);
 
         $data = $customer->toArray();
         $data['company'] = $customer->company ? [
@@ -321,8 +379,11 @@ class CompanyMembershipService
             'phone' => $customer->company->phone,
             'email' => $customer->company->email,
             'address' => $customer->company->address,
+            'member_count' => $memberCount,
         ] : null;
         $data['company_role'] = $customer->company_role;
+        $data['company_can_detach'] = $canDetach;
+        $data['company_needs_ownership_transfer'] = $isOwner && $memberCount > 1;
         $data['pending_company_request'] = $pending ? [
             'public_id' => $pending->public_id,
             'type' => $pending->type->value,
@@ -339,6 +400,34 @@ class CompanyMembershipService
         ] : null;
 
         return $data;
+    }
+
+    protected function roleOf(Customer $customer): ?CompanyRole
+    {
+        if ($customer->company_role instanceof CompanyRole) {
+            return $customer->company_role;
+        }
+
+        return CompanyRole::tryFrom((string) $customer->company_role);
+    }
+
+    /** Owner may leave only when they are the sole person on the company. */
+    protected function assertOwnerMayLeave(Customer $customer): void
+    {
+        if ($this->roleOf($customer) !== CompanyRole::Owner || ! $customer->company_id) {
+            return;
+        }
+
+        $others = Customer::query()
+            ->where('company_id', $customer->company_id)
+            ->where('id', '!=', $customer->id)
+            ->count();
+
+        if ($others > 0) {
+            throw ValidationException::withMessages([
+                'company' => 'Company owner cannot leave while other members remain. Ask an admin to transfer ownership first.',
+            ]);
+        }
     }
 
     protected function normalizeTin(string $tin): string

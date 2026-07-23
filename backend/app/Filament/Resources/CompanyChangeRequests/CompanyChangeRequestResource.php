@@ -4,8 +4,10 @@ namespace App\Filament\Resources\CompanyChangeRequests;
 
 use App\Enums\CompanyChangeStatus;
 use App\Enums\CompanyChangeType;
+use App\Filament\Resources\Companies\CompanyResource;
 use App\Filament\Resources\CompanyChangeRequests\Pages\ListCompanyChangeRequests;
 use App\Filament\Resources\CompanyChangeRequests\Pages\ViewCompanyChangeRequest;
+use App\Filament\Resources\Customers\CustomerResource;
 use App\Models\CompanyChangeRequest;
 use App\Services\CompanyMembershipService;
 use Filament\Actions\Action;
@@ -34,7 +36,7 @@ class CompanyChangeRequestResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'public_id';
 
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 3;
 
     public static function getNavigationBadge(): ?string
     {
@@ -66,13 +68,19 @@ class CompanyChangeRequestResource extends Resource
                 TextEntry::make('customer_note')->label('Partner note')->columnSpanFull()->placeholder('—'),
             ])->columns(2),
             Section::make('Partner')->schema([
-                TextEntry::make('customer.name'),
+                TextEntry::make('customer.name')
+                    ->url(fn (CompanyChangeRequest $record): ?string => $record->customer
+                        ? CustomerResource::getUrl('view', ['record' => $record->customer])
+                        : null),
                 TextEntry::make('customer.phone_number'),
                 TextEntry::make('customer.email'),
                 TextEntry::make('customer.identification_number')->label('ID number'),
             ])->columns(2),
             Section::make('Company')->schema([
-                TextEntry::make('company.name'),
+                TextEntry::make('company.name')
+                    ->url(fn (CompanyChangeRequest $record): ?string => $record->company
+                        ? CompanyResource::getUrl('view', ['record' => $record->company])
+                        : null),
                 TextEntry::make('company.tin')->label('TIN'),
                 TextEntry::make('company.phone'),
                 TextEntry::make('company.email'),
@@ -104,8 +112,18 @@ class CompanyChangeRequestResource extends Resource
                     'rejected' => 'danger',
                     default => 'gray',
                 }),
-                TextColumn::make('customer.name')->label('Partner')->searchable(),
-                TextColumn::make('company.name')->label('Company')->searchable(),
+                TextColumn::make('customer.name')
+                    ->label('Partner')
+                    ->searchable()
+                    ->url(fn (CompanyChangeRequest $record): ?string => $record->customer
+                        ? CustomerResource::getUrl('view', ['record' => $record->customer])
+                        : null),
+                TextColumn::make('company.name')
+                    ->label('Company')
+                    ->searchable()
+                    ->url(fn (CompanyChangeRequest $record): ?string => $record->company
+                        ? CompanyResource::getUrl('view', ['record' => $record->company])
+                        : null),
                 TextColumn::make('company.tin')->label('TIN'),
                 TextColumn::make('reviewer.name')->label('Decided by')->placeholder('—')->toggleable(),
                 TextColumn::make('reviewed_at')->label('Decided at')->dateTime()->placeholder('—')->toggleable(),

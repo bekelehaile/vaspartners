@@ -22,7 +22,10 @@ export type Customer = {
     phone?: string | null;
     email?: string | null;
     address?: string | null;
+    member_count?: number;
   } | null;
+  company_can_detach?: boolean;
+  company_needs_ownership_transfer?: boolean;
   pending_company_request?: {
     public_id: string;
     type: "attach" | "detach";

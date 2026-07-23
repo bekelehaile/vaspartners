@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Customers;
 
+use App\Filament\Resources\Companies\CompanyResource;
 use App\Filament\Resources\Customers\Pages\ListCustomers;
 use App\Filament\Resources\Customers\Pages\ViewCustomer;
 use App\Filament\Resources\Customers\RelationManagers\ServicesRelationManager;
@@ -58,13 +59,18 @@ class CustomerResource extends Resource
             Section::make('Company details')
                 ->description('Organisation linked to this Fayda partner (create or attach flow).')
                 ->schema([
-                TextEntry::make('company.name')->label('Company'),
-                TextEntry::make('company.tin')->label('TIN'),
-                TextEntry::make('company_role')->label('Role'),
-                TextEntry::make('company_phone'),
-                TextEntry::make('company_email'),
-                TextEntry::make('company_address')->columnSpanFull(),
-                TextEntry::make('profile_completed_at')->dateTime()->label('Completed at'),
+                TextEntry::make('company.name')
+                    ->label('Company')
+                    ->placeholder('—')
+                    ->url(fn (Customer $record): ?string => $record->company
+                        ? CompanyResource::getUrl('view', ['record' => $record->company])
+                        : null),
+                TextEntry::make('company.tin')->label('TIN')->placeholder('—'),
+                TextEntry::make('company_role')->label('Role')->placeholder('—'),
+                TextEntry::make('company_phone')->placeholder('—'),
+                TextEntry::make('company_email')->placeholder('—'),
+                TextEntry::make('company_address')->columnSpanFull()->placeholder('—'),
+                TextEntry::make('profile_completed_at')->dateTime()->label('Completed at')->placeholder('—'),
             ])->columns(2),
             Section::make('Status')->schema([
                 TextEntry::make('is_active')->badge(),
@@ -79,7 +85,10 @@ class CustomerResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('name')->searchable()->sortable(),
-                TextColumn::make('company_name')->label('Company')->searchable()->placeholder('—'),
+                TextColumn::make('company.name')->label('Company')->searchable()->placeholder('—')
+                    ->url(fn (Customer $record): ?string => $record->company
+                        ? CompanyResource::getUrl('view', ['record' => $record->company])
+                        : null),
                 TextColumn::make('phone_number')->searchable(),
                 TextColumn::make('email')->toggleable(),
                 IconColumn::make('profile_completed')->boolean()->label('Company OK'),
