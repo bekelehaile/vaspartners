@@ -12,7 +12,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->statefulApi();
+        // Partner portal uses Bearer Sanctum tokens (not cookie SPA auth).
+        // Do not enable statefulApi() — it enforces CSRF for SANCTUM_STATEFUL_DOMAINS
+        // and breaks Next.js → Laravel API POSTs (e.g. company profile).
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

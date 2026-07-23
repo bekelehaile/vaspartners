@@ -49,7 +49,10 @@ class AdminPanelProvider extends PanelProvider
                 Authenticate::class,
             ])
             ->plugins([
-                \BezhanSalleh\FilamentShield\FilamentShieldPlugin::make(),
+                \BezhanSalleh\FilamentShield\FilamentShieldPlugin::make()
+                    ->navigationGroup('User Management')
+                    ->navigationLabel('Roles')
+                    ->navigationSort(2),
             ])
             ->databaseNotifications()
             ->spa((bool) env('FILAMENT_SPA', false))
@@ -58,7 +61,7 @@ class AdminPanelProvider extends PanelProvider
                 NavigationGroup::make()->label('Tickets')->icon(Heroicon::Ticket),
                 NavigationGroup::make()->label('Catalog')->icon(Heroicon::Cog6Tooth),
                 NavigationGroup::make()->label('Partners')->icon(Heroicon::BuildingOffice),
-                NavigationGroup::make()->label('People')->icon(Heroicon::UserGroup),
+                NavigationGroup::make()->label('User Management')->icon(Heroicon::UserGroup),
                 NavigationGroup::make()->label('Geo')->icon(Heroicon::Map),
             ]);
     }
