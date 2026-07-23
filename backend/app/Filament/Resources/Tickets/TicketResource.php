@@ -252,7 +252,11 @@ class TicketResource extends Resource
                         );
                     }),
                 Action::make('verify_docs')
-                    ->visible(fn (Ticket $record) => $record->assigned_to_user_id === auth()->id() && blank($record->current_approver_user_id) && $record->status === TicketStatus::InProgress)
+                    ->label('Verify docs')
+                    ->visible(fn (Ticket $record) => $record->assigned_to_user_id === auth()->id()
+                        && blank($record->current_approver_user_id)
+                        && $record->status === TicketStatus::InProgress
+                        && $record->document_review_status !== DocumentReviewStatus::Passed)
                     ->form([
                         Select::make('result')->options([
                             DocumentReviewStatus::Passed->value => 'All documents OK',
@@ -286,7 +290,8 @@ class TicketResource extends Resource
                         );
                     }),
                 Action::make('close')
-                    ->visible(fn (Ticket $record) => in_array($record->status, [TicketStatus::Completed, TicketStatus::InProgress], true)
+                    ->label('Close')
+                    ->visible(fn (Ticket $record) => $record->status === TicketStatus::Completed
                         && ($record->assigned_to_user_id === auth()->id() || auth()->user()?->is_management))
                     ->requiresConfirmation()
                     ->action(fn (Ticket $record, TicketWorkflowService $workflow) => $workflow->close($record, auth()->user())),
