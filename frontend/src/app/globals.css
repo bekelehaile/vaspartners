@@ -1232,7 +1232,36 @@ textarea {
   padding-left: 1.1rem;
   color: #374151;
   display: grid;
-  gap: 0.25rem;
+  gap: 0.35rem;
+}
+
+.landing-service-req-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-top: 0.5rem;
+}
+
+.landing-service-req-block {
+  padding: 0.75rem 0.9rem;
+  border: 1px solid color-mix(in oklab, var(--et-ink) 10%, white);
+  border-radius: 0.55rem;
+  background: color-mix(in oklab, var(--et-ink) 2%, white);
+}
+
+.landing-service-req-title {
+  margin: 0 0 0.4rem;
+  font-weight: 700;
+  color: var(--et-ink);
+  font-size: 0.95rem;
+}
+
+.landing-service-req-block ul {
+  margin: 0;
+}
+
+.landing-service-req-block .muted {
+  font-weight: 400;
 }
 
 .landing-service-actions {
