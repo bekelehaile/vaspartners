@@ -12,17 +12,32 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        $admin = User::query()->updateOrCreate(
-            ['email' => 'admin@vaspartners.local'],
-            [
+        $admin = User::query()->where('username', 'admin')
+            ->orWhere('email', 'admin@demo.com')
+            ->orWhere('email', 'admin')
+            ->first();
+
+        if ($admin) {
+            $admin->fill([
                 'name' => 'VAS Admin',
                 'username' => 'admin',
+                'email' => 'admin@demo.com',
                 'phone' => '911000000',
                 'password' => Hash::make('password'),
                 'is_management' => true,
                 'is_active' => true,
-            ]
-        );
+            ])->save();
+        } else {
+            $admin = User::query()->create([
+                'name' => 'VAS Admin',
+                'username' => 'admin',
+                'email' => 'admin@demo.com',
+                'phone' => '911000000',
+                'password' => Hash::make('password'),
+                'is_management' => true,
+                'is_active' => true,
+            ]);
+        }
 
         $superAdmin = Role::findOrCreate('super_admin', 'web');
         if (! $admin->hasRole($superAdmin)) {

@@ -49,7 +49,7 @@ cp frontend/.env.example frontend/.env.local
 | PgBouncer | localhost:6432 |
 | Redis | localhost:6380 |
 
-Seeded admin: `admin@vaspartners.local` / `password`  
+Seeded admin: `admin@demo.com` / `password`  
 Fayda sandbox FIN/FAN: `3126894653473958` or `6230247319356120` — OTP: `111111`
 
 Useful commands:
