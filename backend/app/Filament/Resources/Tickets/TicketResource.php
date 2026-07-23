@@ -190,27 +190,6 @@ class TicketResource extends Resource
                             default => $query,
                         };
                     }),
-                SelectFilter::make('queue')
-                    ->label('Queue')
-                    ->options([
-                        'recent' => 'Unassigned (open)',
-                        'my' => 'Assigned to me',
-                        'approval' => 'My approval queue',
-                        'closed' => 'Closed',
-                    ])
-                    ->query(function (Builder $query, array $data) {
-                        $value = $data['value'] ?? null;
-                        $userId = auth()->id();
-
-                        return match ($value) {
-                            'recent' => $query->where('status', TicketStatus::Open)->whereNull('assigned_to_user_id'),
-                            'my' => $query->where('assigned_to_user_id', $userId),
-                            'approval' => $query->where('current_approver_user_id', $userId)
-                                ->whereNotIn('status', [TicketStatus::Completed, TicketStatus::Closed]),
-                            'closed' => $query->where('status', TicketStatus::Closed),
-                            default => $query,
-                        };
-                    }),
             ])
             ->recordActions([
                 ViewAction::make(),

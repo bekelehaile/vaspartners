@@ -50,18 +50,15 @@ function LandingInner() {
             </div>
           </div>
 
-          <aside className="hero-panel" aria-label="Partner portal highlights">
-            <h2>Partner portal</h2>
-            <p>
-              Sign in with Fayda (National ID), complete your company profile once, then submit and
-              track VAS requests across categories and service types.
-            </p>
-            <div className="hero-panel-stat">
-              <span>100% Online</span>
-              <span>Document guided</span>
-              <span>Official platform</span>
-            </div>
-          </aside>
+          <div className="hero-visual">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/services.svg"
+              alt="Value Added Services for Ethio telecom partners"
+              width={560}
+              height={420}
+            />
+          </div>
         </section>
       </div>
 

@@ -39,6 +39,12 @@ class UserResource extends Resource
     {
         return $schema->components([
             TextInput::make('name')->required()->maxLength(255),
+            TextInput::make('username')
+                ->label('Username')
+                ->required()
+                ->unique(ignoreRecord: true)
+                ->maxLength(64)
+                ->helperText('Used to sign in to admin (with phone).'),
             TextInput::make('email')
                 ->label('Email address')
                 ->email()
@@ -47,8 +53,11 @@ class UserResource extends Resource
                 ->maxLength(255),
             TextInput::make('phone')
                 ->tel()
+                ->required()
+                ->unique(ignoreRecord: true)
                 ->maxLength(32)
-                ->placeholder('e.g. 0912345678'),
+                ->placeholder('e.g. 0912345678')
+                ->helperText('Also used to sign in to admin.'),
             Select::make('roles')
                 ->relationship('roles', 'name')
                 ->multiple()
@@ -87,8 +96,9 @@ class UserResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('name')->searchable()->sortable(),
-                TextColumn::make('email')->searchable(),
-                TextColumn::make('phone')->toggleable(),
+                TextColumn::make('username')->searchable()->sortable(),
+                TextColumn::make('phone')->searchable()->toggleable(),
+                TextColumn::make('email')->searchable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('roles.name')
                     ->label('Roles')
                     ->badge()

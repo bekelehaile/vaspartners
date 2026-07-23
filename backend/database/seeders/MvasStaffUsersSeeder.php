@@ -49,6 +49,7 @@ class MvasStaffUsersSeeder extends Seeder
                 ['email' => $row['email']],
                 [
                     'name' => $row['name'],
+                    'username' => $row['phone'],
                     'phone' => $row['phone'],
                     'password' => $password,
                     'is_management' => $row['is_management'],

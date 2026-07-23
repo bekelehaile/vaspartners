@@ -16,6 +16,8 @@ class DatabaseSeeder extends Seeder
             ['email' => 'admin@vaspartners.local'],
             [
                 'name' => 'VAS Admin',
+                'username' => 'admin',
+                'phone' => '911000000',
                 'password' => Hash::make('password'),
                 'is_management' => true,
                 'is_active' => true,
