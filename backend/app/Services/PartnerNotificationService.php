@@ -86,15 +86,16 @@ class PartnerNotificationService
             'customer_name' => $customer->name ?: 'Partner',
             'company_name' => $customer->company_name ?: 'your organisation',
         ];
-        $body = $this->render('profile_completed', $placeholders);
+        $smsBody = $this->render('templates', 'profile_completed', $placeholders);
+        $portalBody = $this->render('portal', 'profile_completed', $placeholders);
 
         if (filled($customer->phone_number)) {
-            $this->sms->send($customer->phone_number, $body);
+            $this->sms->send($customer->phone_number, $smsBody);
         }
 
         $customer->notify(new PartnerPortalNotification(
             title: $this->titleFor('profile_completed'),
-            body: Str::limit(preg_replace('/\s+/', ' ', $body) ?? $body, 280),
+            body: Str::limit(preg_replace('/\s+/', ' ', $portalBody) ?? $portalBody, 280),
             template: 'profile_completed',
         ));
     }
@@ -115,13 +116,18 @@ class PartnerNotificationService
             'service' => $ticket->service?->name ?: 'VAS service',
             'requisition' => $ticket->requisition?->name ?: 'request',
             'status' => $ticket->status?->label() ?: (string) $ticket->status?->value,
-            'note' => filled($note) ? $note : 'Please check the portal for details.',
+            'note' => filled($note) ? trim((string) $note) : '',
         ];
 
-        $body = $this->render($template, $placeholders);
+        $smsBody = $this->render('templates', $template, $placeholders);
+        $portalBody = $this->render('portal', $template, $placeholders);
+
+        if (filled($note) && in_array($template, ['documents_need_attention', 'ticket_rejected'], true)) {
+            $portalBody = rtrim($portalBody, '.').'. '.trim((string) $note);
+        }
 
         if (filled($customer->phone_number)) {
-            $this->sms->send($customer->phone_number, $body);
+            $this->sms->send($customer->phone_number, $smsBody);
         } else {
             Log::info('SMS skipped — customer has no phone', [
                 'ticket' => $ticket->tt_number,
@@ -131,7 +137,7 @@ class PartnerNotificationService
 
         $customer->notify(new PartnerPortalNotification(
             title: $this->titleFor($template),
-            body: Str::limit(preg_replace('/\s+/', ' ', $body) ?? $body, 280),
+            body: Str::limit($portalBody, 280),
             template: $template,
             ticketPublicId: $ticket->public_id,
             ttNumber: $ticket->tt_number,
@@ -174,29 +180,29 @@ class PartnerNotificationService
     protected function titleFor(string $template): string
     {
         return match ($template) {
-            'ticket_submitted' => 'Request submitted',
-            'ticket_in_progress' => 'Request in progress',
-            'documents_need_attention' => 'Documents need attention',
+            'ticket_submitted' => 'Request received',
+            'ticket_in_progress' => 'Under review',
+            'documents_need_attention' => 'Documents required',
             'ticket_completed' => 'Request completed',
-            'ticket_rejected' => 'Request needs attention',
+            'ticket_rejected' => 'Request not approved',
             'ticket_closed' => 'Request closed',
-            'profile_completed' => 'Company profile saved',
-            default => 'VAS Partners update',
+            'profile_completed' => 'Profile updated',
+            default => 'Portal update',
         };
     }
 
-    protected function render(string $template, array $placeholders): string
+    protected function render(string $group, string $template, array $placeholders): string
     {
-        $message = config("notifications.templates.{$template}");
+        $message = config("notifications.{$group}.{$template}");
 
         if (! is_string($message) || $message === '') {
-            throw new \InvalidArgumentException("Notification template '{$template}' not found.");
+            throw new \InvalidArgumentException("Notification template '{$group}.{$template}' not found.");
         }
 
         foreach ($placeholders as $key => $value) {
             $message = str_replace('{'.$key.'}', (string) $value, $message);
         }
 
-        return trim($message);
+        return trim(preg_replace('/\s+/', ' ', $message) ?? $message);
     }
 }

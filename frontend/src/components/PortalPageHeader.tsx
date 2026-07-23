@@ -33,7 +33,7 @@ export function NewRequestButton({
 }) {
   return (
     <Link href="/portal/requests/new" className={className}>
-      New request
+      New service request
     </Link>
   );
 }

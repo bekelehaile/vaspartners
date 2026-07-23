@@ -17,8 +17,16 @@ class FinalApproversRelationManager extends RelationManager
     public function form(Schema $schema): Schema
     {
         return $schema->components([
-            Select::make('requisition_id')->relationship('requisition', 'name')->required()->searchable(),
-            Select::make('user_id')->relationship('user', 'name')->required()->searchable(),
+            Select::make('requisition_id')
+                ->relationship('requisition', 'name')
+                ->required()
+                ->searchable()
+                ->preload(),
+            Select::make('user_id')
+                ->relationship('user', 'name')
+                ->required()
+                ->searchable()
+                ->preload(),
         ]);
     }
 

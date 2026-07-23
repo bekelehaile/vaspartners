@@ -27,6 +27,14 @@ class Service extends Model
         'sort_order',
     ];
 
+    protected $attributes = [
+        'is_active' => true,
+        'is_subscription_based' => true,
+        'renewal_interval' => 'yearly',
+        'renewal_lead_days' => 30,
+        'sort_order' => 0,
+    ];
+
     protected function casts(): array
     {
         return [

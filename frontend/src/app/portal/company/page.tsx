@@ -1,6 +1,7 @@
 "use client";
 
 import { CompanyProfileForm } from "@/components/CompanyProfileForm";
+import { PortalPageHeader } from "@/components/PortalPageHeader";
 import { useCustomer } from "@/hooks/use-customer";
 
 export default function CompanyProfilePage() {
@@ -9,21 +10,21 @@ export default function CompanyProfilePage() {
 
   return (
     <>
-      <div className="portal-hero">
-        <p className="brand-kicker">{isUpdate ? "Organisation" : "Welcome"}</p>
-        <h1>
-          {isUpdate
-            ? "Company / organisation profile"
-            : "Complete your organisation profile"}
-        </h1>
-        <p className="muted">
-          {isUpdate
+      <PortalPageHeader
+        kicker={isUpdate ? "Settings" : "Welcome"}
+        title={
+          isUpdate
+            ? "Company & contact info"
+            : "Complete your organisation profile"
+        }
+        description={
+          isUpdate
             ? `Update details for ${me?.company_name || "your organisation"}.`
-            : `Hello${me?.name ? `, ${me.name.split(" ")[0]}` : ""}. Your national ID is verified — we still need your company details to process partner requests.`}
-        </p>
-      </div>
+            : `Hello${me?.name ? `, ${me.name.split(" ")[0]}` : ""}. Your national ID is verified — we still need your company and contact details to process partner requests.`
+        }
+      />
 
-      <div className="section company-section">
+      <div className="section company-section section-flush">
         <CompanyProfileForm
           key={me?.public_id ?? "company-form"}
           me={me}

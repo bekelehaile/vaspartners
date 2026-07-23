@@ -175,6 +175,10 @@ class SubscriptionLifecycleService
             ->orderBy('id')
             ->chunkById(50, function ($subscriptions) use ($workflow, &$created) {
                 foreach ($subscriptions as $subscription) {
+                    if (! $subscription->service?->is_subscription_based) {
+                        continue;
+                    }
+
                     $requisition = $subscription->service->renewalRequisition
                         ?? Requisition::query()->where('code', 'renew')->where('is_active', true)->first();
 

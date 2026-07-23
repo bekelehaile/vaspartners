@@ -58,6 +58,7 @@ class DocumentTypeResource extends Resource
                 ->label('Accepted mimes')
                 ->multiple()
                 ->searchable()
+                ->preload()
                 ->options(static::mimeOptions())
                 ->default(['pdf', 'doc', 'docx', 'png', 'jpg', 'jpeg'])
                 ->required()

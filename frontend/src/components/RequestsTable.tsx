@@ -224,7 +224,7 @@ export function RequestsTable({
                 <td colSpan={columns.length} className="data-table-empty">
                   {hasFilters
                     ? "No requests match your filters."
-                    : "No requests yet. Start a new request when you are ready."}
+                    : "No requests yet. Submit a service request when you are ready."}
                 </td>
               </tr>
             ) : (
@@ -273,7 +273,7 @@ export function RequestsTable({
 
       {compact && total > items.length && (
         <div className="data-table-footer">
-          <Link href="/portal/requests" className="linkish">
+          <Link href="/portal" className="linkish">
             View all {total} requests →
           </Link>
         </div>

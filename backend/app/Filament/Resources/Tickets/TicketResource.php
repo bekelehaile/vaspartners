@@ -79,8 +79,12 @@ class TicketResource extends Resource
                             ->label('Account manager')
                             ->options(fn () => User::query()->where('is_active', true)->where('is_management', false)->pluck('name', 'id'))
                             ->required()
-                            ->searchable(),
-                        Select::make('priority_id')->relationship('priority', 'name'),
+                            ->searchable()
+                            ->preload(),
+                        Select::make('priority_id')
+                            ->relationship('priority', 'name')
+                            ->searchable()
+                            ->preload(),
                         Textarea::make('note'),
                     ])
                     ->action(function (Ticket $record, array $data, TicketWorkflowService $workflow) {

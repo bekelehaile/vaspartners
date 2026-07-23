@@ -21,7 +21,20 @@ class ClientPortalController extends Controller
         $services = Service::query()
             ->with([
                 'category:id,name,slug',
-                'requisitions:id,name,slug,code,creates_subscription,requires_active_subscription,renews_subscription,terminates_subscription,sort_order',
+                'requisitions' => fn ($q) => $q
+                    ->where('requisitions.is_active', true)
+                    ->orderBy('requisitions.sort_order')
+                    ->select([
+                        'requisitions.id',
+                        'requisitions.name',
+                        'requisitions.slug',
+                        'requisitions.code',
+                        'requisitions.creates_subscription',
+                        'requisitions.requires_active_subscription',
+                        'requisitions.renews_subscription',
+                        'requisitions.terminates_subscription',
+                        'requisitions.sort_order',
+                    ]),
             ])
             ->where('is_active', true)
             ->orderBy('sort_order')
@@ -117,7 +130,7 @@ class ClientPortalController extends Controller
             'woreda_id' => ['nullable', 'exists:woredas,id'],
             'building' => ['nullable', 'string', 'max:255'],
             'location' => ['nullable', 'string', 'max:255'],
-            'description' => ['nullable', 'string'],
+            'description' => ['required', 'string', 'min:1'],
         ]);
 
         $service = Service::query()->findOrFail($data['service_id']);

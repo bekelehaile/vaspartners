@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ReactNode, useState } from "react";
 import { NotificationBell } from "@/components/NotificationBell";
+import { PortalSettingsMenu } from "@/components/PortalSettingsMenu";
 import { Customer, clearToken, faydaLoginUrl } from "@/lib/api";
 
 function LogInIcon() {
@@ -52,29 +53,10 @@ export function SiteShell({
 
           <nav className="topnav" aria-label="Primary">
             {me ? (
-              <>
-                {me.profile_completed ? (
-                  <>
-                    <Link href="/portal">Home</Link>
-                    <Link href="/portal/services">Services</Link>
-                    <Link href="/portal/requests">My requests</Link>
-                    <Link href="/portal/requests/new" className="nav-cta">
-                      New request
-                    </Link>
-                  </>
-                ) : (
-                  <span className="muted" style={{ fontSize: "0.9rem" }}>
-                    Complete company profile
-                  </span>
-                )}
-                <div className="user-chip">
-                  <NotificationBell />
-                  <span>{me.company_name || me.name}</span>
-                  <button type="button" onClick={onLogout} className="linkish">
-                    Sign out
-                  </button>
-                </div>
-              </>
+              <div className="portal-header-actions">
+                <PortalSettingsMenu onLogout={onLogout} />
+                {me.profile_completed && <NotificationBell />}
+              </div>
             ) : (
               <>
                 <a href="/#services">Services</a>
@@ -102,34 +84,13 @@ export function SiteShell({
           <div className="mobile-sheet">
             <div className="mobile-sheet-card">
               {me ? (
-                <>
-                  {me.profile_completed && (
-                    <>
-                      <Link href="/portal" onClick={() => setOpen(false)}>
-                        Home
-                      </Link>
-                      <Link href="/portal/services" onClick={() => setOpen(false)}>
-                        Services
-                      </Link>
-                      <Link href="/portal/requests" onClick={() => setOpen(false)}>
-                        My requests
-                      </Link>
-                      <Link
-                        href="/portal/requests/new"
-                        className="nav-cta"
-                        onClick={() => setOpen(false)}
-                      >
-                        New request
-                      </Link>
-                    </>
-                  )}
-                  <div style={{ padding: "0.25rem 0 0.75rem" }}>
-                    <NotificationBell />
-                  </div>
-                  <button type="button" className="sheet-link" onClick={onLogout}>
-                    Sign out
-                  </button>
-                </>
+                <div className="portal-header-actions portal-header-actions-mobile">
+                  <PortalSettingsMenu
+                    onLogout={onLogout}
+                    onNavigate={() => setOpen(false)}
+                  />
+                  {me.profile_completed && <NotificationBell />}
+                </div>
               ) : (
                 <>
                   <a href="/#services" onClick={() => setOpen(false)}>

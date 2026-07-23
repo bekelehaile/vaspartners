@@ -37,8 +37,6 @@ export default function NewRequestWizard() {
     defaultValues: {
       service_id: presetService,
       requisition_id: "",
-      building: "",
-      location: "",
       description: "",
     },
     validators: {
@@ -54,11 +52,11 @@ export default function NewRequestWizard() {
   return (
     <>
       <PortalPageHeader
-        kicker="New request"
+        kicker="Service request"
         title="Submit a service request"
         description="Choose the VAS service and request type, then attach only the documents that apply."
         actions={
-          <Link href="/portal/requests" className="btn-ghost">
+          <Link href="/portal" className="btn-ghost">
             Back to requests
           </Link>
         }
@@ -190,57 +188,48 @@ export default function NewRequestWizard() {
                 }}
               </form.Subscribe>
 
-              <form.Field name="building">
-                {(field) => (
-                  <div className="field">
-                    <label htmlFor={field.name}>Building / site (optional)</label>
-                    <input
-                      id={field.name}
-                      name={field.name}
-                      value={field.state.value}
-                      onBlur={field.handleBlur}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                    />
-                  </div>
-                )}
-              </form.Field>
-
-              <form.Field name="location">
-                {(field) => (
-                  <div className="field">
-                    <label htmlFor={field.name}>Location notes (optional)</label>
-                    <input
-                      id={field.name}
-                      name={field.name}
-                      value={field.state.value}
-                      onBlur={field.handleBlur}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                    />
-                  </div>
-                )}
-              </form.Field>
-
               <form.Field name="description">
-                {(field) => (
-                  <div className="field field-span">
-                    <label htmlFor={field.name}>Description (optional)</label>
-                    <textarea
-                      id={field.name}
-                      name={field.name}
-                      rows={4}
-                      value={field.state.value}
-                      onBlur={field.handleBlur}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                    />
-                  </div>
-                )}
+                {(field) => {
+                  const err =
+                    form.state.submissionAttempts > 0
+                      ? fieldError(field.state.meta.errors)
+                      : null;
+                  return (
+                    <div className={`field field-span${err ? " has-error" : ""}`}>
+                      <label htmlFor={field.name}>
+                        Description <span className="req">*</span>
+                      </label>
+                      <textarea
+                        id={field.name}
+                        name={field.name}
+                        rows={4}
+                        value={field.state.value}
+                        onBlur={field.handleBlur}
+                        onChange={(e) => field.handleChange(e.target.value)}
+                        placeholder="Describe what you need and any relevant details"
+                        aria-invalid={!!err}
+                        aria-describedby={err ? `${field.name}-error` : undefined}
+                      />
+                      {err && (
+                        <p id={`${field.name}-error`} className="field-error" role="alert">
+                          {err}
+                        </p>
+                      )}
+                    </div>
+                  );
+                }}
               </form.Field>
             </div>
 
             <form.Subscribe
-              selector={(s) => [s.values.service_id, s.values.requisition_id, s.isSubmitting]}
+              selector={(s) => [
+                s.values.service_id,
+                s.values.requisition_id,
+                s.values.description,
+                s.isSubmitting,
+              ]}
             >
-              {([serviceId, requisitionId, isSubmitting]) => (
+              {([serviceId, requisitionId, description, isSubmitting]) => (
                 <div className="form-actions">
                   <button
                     type="submit"
@@ -249,12 +238,13 @@ export default function NewRequestWizard() {
                       !!isSubmitting ||
                       createTicket.isPending ||
                       !serviceId ||
-                      !requisitionId
+                      !requisitionId ||
+                      !String(description || "").trim()
                     }
                   >
                     {isSubmitting || createTicket.isPending ? "Creating…" : "Create request"}
                   </button>
-                  <Link href="/portal/requests" className="btn-ghost">
+                  <Link href="/portal" className="btn-ghost">
                     Cancel
                   </Link>
                 </div>

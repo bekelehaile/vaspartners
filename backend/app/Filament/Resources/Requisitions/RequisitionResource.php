@@ -36,17 +36,31 @@ class RequisitionResource extends Resource
         return $schema->components([
             Section::make('Identity')->schema([
                 TextInput::make('name')->required()->live(onBlur: true)
-                    ->afterStateUpdated(fn ($state, callable $set, ?Requisition $record) => $record || $set('slug', Str::slug((string) $state))),
-                TextInput::make('slug')->required()->unique(ignoreRecord: true),
-                TextInput::make('code')->required()->unique(ignoreRecord: true)
-                    ->helperText('Stable key used by APIs and seeders (new, renew, terminate, …)'),
+                    ->afterStateUpdated(function ($state, callable $set, ?Requisition $record): void {
+                        if ($record) {
+                            return;
+                        }
+                        $slug = Str::slug((string) $state);
+                        $set('slug', $slug);
+                        $set('code', $slug);
+                    }),
+                TextInput::make('slug')
+                    ->hidden()
+                    ->dehydrated()
+                    ->required()
+                    ->unique(ignoreRecord: true),
+                TextInput::make('code')
+                    ->hidden()
+                    ->dehydrated()
+                    ->required()
+                    ->unique(ignoreRecord: true),
                 Textarea::make('description')->columnSpanFull(),
                 TextInput::make('sort_order')->numeric()->default(0),
                 Toggle::make('is_active')->default(true),
             ])->columns(2),
             Section::make('Subscription behavior')->description('Controls how this request type affects subscriptions. Configure per type — do not hard-code in code.')
                 ->schema([
-                    Toggle::make('creates_subscription')->label('Creates subscription (e.g. New)'),
+                    Toggle::make('creates_subscription')->label('Creates subscription (e.g. New subscription)'),
                     Toggle::make('requires_active_subscription')->label('Requires active subscription'),
                     Toggle::make('renews_subscription')->label('Renews / extends subscription'),
                     Toggle::make('terminates_subscription')->label('Terminates subscription'),
@@ -63,7 +77,7 @@ class RequisitionResource extends Resource
                 TextColumn::make('sort_order')->label('#')->sortable(),
                 TextColumn::make('name')->searchable()->sortable(),
                 TextColumn::make('code')->badge()->searchable(),
-                IconColumn::make('creates_subscription')->boolean()->label('New'),
+                IconColumn::make('creates_subscription')->boolean()->label('Subscribes'),
                 IconColumn::make('renews_subscription')->boolean()->label('Renew'),
                 IconColumn::make('terminates_subscription')->boolean()->label('Terminate'),
                 IconColumn::make('requires_active_subscription')->boolean()->label('Needs sub'),

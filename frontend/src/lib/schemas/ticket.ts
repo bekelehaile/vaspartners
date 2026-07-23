@@ -3,9 +3,11 @@ import { z } from "zod";
 export const ticketCreateSchema = z.object({
   service_id: z.string().min(1, "Select a service"),
   requisition_id: z.string().min(1, "Select a request type"),
-  building: z.string().max(255),
-  location: z.string().max(255),
-  description: z.string().max(5000),
+  description: z
+    .string()
+    .trim()
+    .min(1, "Enter a description")
+    .max(5000, "Description is too long"),
 });
 
 export type TicketCreateValues = z.infer<typeof ticketCreateSchema>;

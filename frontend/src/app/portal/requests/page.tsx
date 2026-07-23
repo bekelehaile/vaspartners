@@ -1,21 +1,15 @@
 "use client";
 
-import { NewRequestButton, PortalPageHeader } from "@/components/PortalPageHeader";
-import { RequestsTable } from "@/components/RequestsTable";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
-export default function RequestsPage() {
-  return (
-    <>
-      <PortalPageHeader
-        kicker="Partner portal"
-        title="My service requests"
-        description="Search and filter your VAS orders. Open any row for progress, documents, and comments."
-        actions={<NewRequestButton />}
-      />
+/** Legacy path — My service requests lives on /portal. */
+export default function RequestsRedirectPage() {
+  const router = useRouter();
 
-      <div className="section section-flush">
-        <RequestsTable />
-      </div>
-    </>
-  );
+  useEffect(() => {
+    router.replace("/portal");
+  }, [router]);
+
+  return null;
 }

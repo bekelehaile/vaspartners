@@ -142,11 +142,11 @@ export function CompanyProfileForm({
       noValidate
     >
       <div className="company-form-head">
-        <p className="brand-kicker">{isUpdate ? "Organisation" : "Required once"}</p>
-        <h2>{isUpdate ? "Update company profile" : "Company / organisation profile"}</h2>
+        <p className="brand-kicker">{isUpdate ? "Settings" : "Required once"}</p>
+        <h2>{isUpdate ? "Organisation settings" : "Company / organisation profile"}</h2>
         <p className="muted">
           {isUpdate
-            ? "Keep your organisation details current so our team can process VAS requests."
+            ? "Keep company and contact details current so our team can process VAS requests."
             : "Fayda verified your national ID. Complete your organisation details before you can submit VAS service requests."}
         </p>
       </div>
@@ -161,69 +161,85 @@ export function CompanyProfileForm({
 
       <form.Subscribe selector={(s) => s.submissionAttempts}>
         {(submissionAttempts) => (
-          <div className="form-grid">
-            <form.Field name="company_name">
-              {(field) => (
-                <CompanyField
-                  field={field}
-                  label="Company / organisation name"
-                  submissionAttempts={submissionAttempts}
-                  placeholder="e.g. Sunrise Media PLC"
-                  autoComplete="organization"
-                />
-              )}
-            </form.Field>
+          <>
+            <section id="company-info" className="settings-block">
+              <div className="settings-block-head">
+                <h3>Company info</h3>
+                <p className="muted">Organisation identity and address.</p>
+              </div>
+              <div className="form-grid">
+                <form.Field name="company_name">
+                  {(field) => (
+                    <CompanyField
+                      field={field}
+                      label="Company / organisation name"
+                      submissionAttempts={submissionAttempts}
+                      placeholder="e.g. Sunrise Media PLC"
+                      autoComplete="organization"
+                    />
+                  )}
+                </form.Field>
 
-            <form.Field name="company_tin">
-              {(field) => (
-                <CompanyField
-                  field={field}
-                  label="TIN"
-                  submissionAttempts={submissionAttempts}
-                  placeholder="Tax identification number"
-                />
-              )}
-            </form.Field>
+                <form.Field name="company_tin">
+                  {(field) => (
+                    <CompanyField
+                      field={field}
+                      label="TIN"
+                      submissionAttempts={submissionAttempts}
+                      placeholder="Tax identification number"
+                    />
+                  )}
+                </form.Field>
 
-            <form.Field name="company_phone">
-              {(field) => (
-                <CompanyField
-                  field={field}
-                  label="Company phone"
-                  submissionAttempts={submissionAttempts}
-                  type="tel"
-                  placeholder="e.g. +251 11 xxx xxxx"
-                  autoComplete="tel"
-                />
-              )}
-            </form.Field>
+                <form.Field name="company_address">
+                  {(field) => (
+                    <CompanyField
+                      field={field}
+                      label="Company address"
+                      submissionAttempts={submissionAttempts}
+                      as="textarea"
+                      placeholder="City, sub-city, woreda / street"
+                      autoComplete="street-address"
+                    />
+                  )}
+                </form.Field>
+              </div>
+            </section>
 
-            <form.Field name="company_email">
-              {(field) => (
-                <CompanyField
-                  field={field}
-                  label="Company email"
-                  submissionAttempts={submissionAttempts}
-                  type="email"
-                  placeholder="ops@company.et"
-                  autoComplete="email"
-                />
-              )}
-            </form.Field>
+            <section id="contact-info" className="settings-block">
+              <div className="settings-block-head">
+                <h3>Contact info</h3>
+                <p className="muted">How we reach your organisation.</p>
+              </div>
+              <div className="form-grid">
+                <form.Field name="company_phone">
+                  {(field) => (
+                    <CompanyField
+                      field={field}
+                      label="Company phone"
+                      submissionAttempts={submissionAttempts}
+                      type="tel"
+                      placeholder="e.g. +251 11 xxx xxxx"
+                      autoComplete="tel"
+                    />
+                  )}
+                </form.Field>
 
-            <form.Field name="company_address">
-              {(field) => (
-                <CompanyField
-                  field={field}
-                  label="Company address"
-                  submissionAttempts={submissionAttempts}
-                  as="textarea"
-                  placeholder="City, sub-city, woreda / street"
-                  autoComplete="street-address"
-                />
-              )}
-            </form.Field>
-          </div>
+                <form.Field name="company_email">
+                  {(field) => (
+                    <CompanyField
+                      field={field}
+                      label="Company email"
+                      submissionAttempts={submissionAttempts}
+                      type="email"
+                      placeholder="ops@company.et"
+                      autoComplete="email"
+                    />
+                  )}
+                </form.Field>
+              </div>
+            </section>
+          </>
         )}
       </form.Subscribe>
 

@@ -123,13 +123,19 @@ class CatalogSeeder extends Seeder
             Service::query()->find($serviceId)?->requisitions()->sync(array_values(array_unique($requisitionIds)));
         }
 
-        // Fallback: any service without pivots gets "New request" when present.
-        $newRequestId = Requisition::query()->where('code', 'new-request')->value('id');
-        if ($newRequestId) {
+        // Fallback: any service without pivots gets "New subscription" when present.
+        $newSubscriptionId = Requisition::query()
+            ->where('creates_subscription', true)
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->value('id')
+            ?? Requisition::query()->whereIn('code', ['new', 'new-request'])->value('id');
+
+        if ($newSubscriptionId) {
             foreach ($serviceMap as $serviceId) {
                 $service = Service::query()->find($serviceId);
                 if ($service && $service->requisitions()->count() === 0) {
-                    $service->requisitions()->sync([$newRequestId]);
+                    $service->requisitions()->sync([$newSubscriptionId]);
                 }
             }
         }

@@ -40,7 +40,7 @@ export default function RequestDetailPage() {
     <>
       <PortalPageHeader
         kicker={
-          <Link href="/portal/requests" className="linkish">
+          <Link href="/portal" className="linkish">
             ← My requests
           </Link>
         }

@@ -162,9 +162,7 @@ export function useCreateTicket() {
         body: JSON.stringify({
           service_id: Number(values.service_id),
           requisition_id: Number(values.requisition_id),
-          description: values.description || null,
-          building: values.building || null,
-          location: values.location || null,
+          description: values.description.trim(),
         }),
       });
       return res.data;

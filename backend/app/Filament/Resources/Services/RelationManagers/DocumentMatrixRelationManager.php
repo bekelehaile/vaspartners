@@ -20,8 +20,16 @@ class DocumentMatrixRelationManager extends RelationManager
     public function form(Schema $schema): Schema
     {
         return $schema->components([
-            Select::make('requisition_id')->relationship('requisition', 'name')->required()->searchable(),
-            Select::make('document_type_id')->relationship('documentType', 'name')->required()->searchable(),
+            Select::make('requisition_id')
+                ->relationship('requisition', 'name')
+                ->required()
+                ->searchable()
+                ->preload(),
+            Select::make('document_type_id')
+                ->relationship('documentType', 'name')
+                ->required()
+                ->searchable()
+                ->preload(),
             Toggle::make('is_required')->default(true),
             TextInput::make('sort_order')->numeric()->default(0),
         ]);
