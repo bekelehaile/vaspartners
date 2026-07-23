@@ -205,6 +205,60 @@ export function useCompleteCompanyProfile() {
   });
 }
 
+export function useLookupCompany(tin: string) {
+  return useQuery({
+    queryKey: ["company-lookup", tin],
+    enabled: tin.trim().length >= 5,
+    queryFn: async () => {
+      const res = await api<{ data: { public_id: string; name: string; tin: string } }>(
+        `/profile/company/lookup?tin=${encodeURIComponent(tin.trim())}`,
+      );
+      return res.data;
+    },
+    retry: false,
+  });
+}
+
+export function useAttachCompany() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: { company_tin: string; note?: string }) => {
+      const res = await api<{ data: Customer }>("/profile/company/attach", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      return res.data;
+    },
+    onSuccess: (customer) => {
+      queryClient.setQueryData(queryKeys.customer.me, customer);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.customer.me });
+    },
+  });
+}
+
+export function useDetachCompany() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: { note?: string; proposal: File; letter: File }) => {
+      const form = new FormData();
+      if (payload.note?.trim()) form.append("note", payload.note.trim());
+      form.append("proposal", payload.proposal);
+      form.append("letter", payload.letter);
+      const res = await api<{ data: Customer }>("/profile/company/detach", {
+        method: "POST",
+        body: form,
+      });
+      return res.data;
+    },
+    onSuccess: (customer) => {
+      queryClient.setQueryData(queryKeys.customer.me, customer);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.customer.me });
+    },
+  });
+}
+
 export function useCreateTicket() {
   const queryClient = useQueryClient();
 
@@ -288,14 +342,20 @@ export function usePostTicketComment(publicId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (body: string) => {
+    mutationFn: async (payload: { body?: string; attachment?: File | null }) => {
+      const form = new FormData();
+      const body = (payload.body || "").trim();
+      if (body) form.append("body", body);
+      if (payload.attachment) form.append("attachment", payload.attachment);
+
       await api(`/tickets/${publicId}/comments`, {
         method: "POST",
-        body: JSON.stringify({ body }),
+        body: form,
       });
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.ticket(publicId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.notifications });
     },
   });
 }

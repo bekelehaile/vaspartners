@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Services\CompanyMembershipService;
 use App\Services\EsignetService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -64,10 +65,10 @@ class FaydaAuthController extends Controller
         ]));
     }
 
-    public function me(Request $request)
+    public function me(Request $request, CompanyMembershipService $membership)
     {
         return response()->json([
-            'data' => $request->user(),
+            'data' => $membership->serializeCustomer($request->user()),
         ]);
     }
 

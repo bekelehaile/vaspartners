@@ -7,4 +7,8 @@ return [
     'max_open_tickets' => (int) env('MAX_OPEN_TICKETS', 1),
     // Default when a subscription-based service has no interval set yet
     'default_renewal_interval' => env('DEFAULT_RENEWAL_INTERVAL', 'yearly'), // yearly|bi_yearly
+    // Max size for chat PDF attachments (KB)
+    'chat_attachment_max_kb' => (int) env('CHAT_ATTACHMENT_MAX_KB', 2048),
+    // Max size for company attach/detach PDF docs (KB)
+    'company_change_doc_max_kb' => (int) env('COMPANY_CHANGE_DOC_MAX_KB', 5120),
 ];

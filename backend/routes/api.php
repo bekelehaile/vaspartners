@@ -21,6 +21,9 @@ Route::prefix('v1')->group(function () {
         Route::get('auth/me', [FaydaAuthController::class, 'me']);
         Route::post('auth/logout', [FaydaAuthController::class, 'logout']);
         Route::post('profile/company', [ClientPortalController::class, 'completeCompanyProfile']);
+        Route::get('profile/company/lookup', [ClientPortalController::class, 'lookupCompany']);
+        Route::post('profile/company/attach', [ClientPortalController::class, 'requestAttachCompany']);
+        Route::post('profile/company/detach', [ClientPortalController::class, 'requestDetachCompany']);
 
         Route::get('notifications', [NotificationController::class, 'index']);
         Route::post('notifications/read-all', [NotificationController::class, 'markAllRead']);
@@ -32,6 +35,7 @@ Route::prefix('v1')->group(function () {
         Route::post('tickets/{ticket}/documents', [ClientPortalController::class, 'uploadDocument']);
         Route::delete('tickets/{ticket}/documents/{document}', [ClientPortalController::class, 'deleteDocument']);
         Route::post('tickets/{ticket}/comments', [ClientPortalController::class, 'comment']);
+        Route::get('tickets/{ticket}/comments/{comment}/attachment', [ClientPortalController::class, 'downloadCommentAttachment']);
         Route::get('subscriptions', [ClientPortalController::class, 'subscriptions']);
     });
 });

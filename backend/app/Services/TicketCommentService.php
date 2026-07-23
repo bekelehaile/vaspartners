@@ -1,0 +1,150 @@
+<?php
+
+namespace App\Services;
+
+use App\Enums\TicketStatus;
+use App\Models\Customer;
+use App\Models\Ticket;
+use App\Models\TicketComment;
+use App\Models\User;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+
+class TicketCommentService
+{
+    public function maxAttachmentKb(): int
+    {
+        return max(1, (int) config('vas.chat_attachment_max_kb', 2048));
+    }
+
+    /**
+     * @param  Customer|User  $author
+     */
+    public function post(Ticket $ticket, Customer|User $author, ?string $body, ?UploadedFile $file = null): TicketComment
+    {
+        if ($ticket->status instanceof TicketStatus && $ticket->status->locksCustomerDocuments()) {
+            throw ValidationException::withMessages([
+                'body' => 'This request is closed for new messages.',
+            ]);
+        }
+
+        $body = filled($body) ? trim((string) $body) : '';
+        if ($body === '' && ! $file) {
+            throw ValidationException::withMessages([
+                'body' => 'Enter a message or attach a small PDF.',
+            ]);
+        }
+
+        if ($body !== '' && mb_strlen($body) > 5000) {
+            throw ValidationException::withMessages([
+                'body' => 'Message may not be longer than 5000 characters.',
+            ]);
+        }
+
+        $attachment = $file ? $this->storePdf($ticket, $file) : null;
+
+        return DB::transaction(function () use ($ticket, $author, $body, $attachment) {
+            return TicketComment::query()->create([
+                'ticket_id' => $ticket->id,
+                'author_type' => $author::class,
+                'author_id' => $author->id,
+                'body' => $body !== '' ? $body : '(PDF attachment)',
+                'is_public' => true,
+                'attachment_disk' => $attachment['disk'] ?? null,
+                'attachment_path' => $attachment['path'] ?? null,
+                'attachment_original_name' => $attachment['original_name'] ?? null,
+                'attachment_mime' => $attachment['mime'] ?? null,
+                'attachment_size_bytes' => $attachment['size'] ?? null,
+            ]);
+        });
+    }
+
+    /** @return array{disk: string, path: string, original_name: string, mime: string, size: int} */
+    protected function storePdf(Ticket $ticket, UploadedFile $file): array
+    {
+        $maxKb = $this->maxAttachmentKb();
+
+        if ($file->getSize() === false || $file->getSize() < 1) {
+            throw ValidationException::withMessages([
+                'attachment' => 'The attached file is empty.',
+            ]);
+        }
+
+        if ($file->getSize() > $maxKb * 1024) {
+            throw ValidationException::withMessages([
+                'attachment' => "PDF must be {$maxKb} KB or smaller.",
+            ]);
+        }
+
+        $ext = strtolower($file->getClientOriginalExtension() ?: '');
+        $mime = strtolower((string) ($file->getMimeType() ?: ''));
+        if ($ext !== 'pdf' || ! in_array($mime, ['application/pdf', 'application/x-pdf'], true)) {
+            throw ValidationException::withMessages([
+                'attachment' => 'Only PDF files are allowed in chat.',
+            ]);
+        }
+
+        // Light spoofing check
+        $head = file_get_contents($file->getRealPath(), false, null, 0, 5);
+        if ($head !== '%PDF-') {
+            throw ValidationException::withMessages([
+                'attachment' => 'The file does not look like a valid PDF.',
+            ]);
+        }
+
+        $disk = 'local';
+        $dir = 'ticket-chat/'.$ticket->id;
+        $name = Str::uuid()->toString().'.pdf';
+        $path = $file->storeAs($dir, $name, $disk);
+
+        return [
+            'disk' => $disk,
+            'path' => $path,
+            'original_name' => $file->getClientOriginalName() ?: 'attachment.pdf',
+            'mime' => 'application/pdf',
+            'size' => (int) $file->getSize(),
+        ];
+    }
+
+    public function attachmentExists(TicketComment $comment): bool
+    {
+        if (blank($comment->attachment_path)) {
+            return false;
+        }
+
+        return Storage::disk($comment->attachment_disk ?: 'local')->exists($comment->attachment_path);
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function serializeThread(Ticket $ticket, ?Customer $viewer = null): array
+    {
+        $ticket->loadMissing(['comments' => fn ($q) => $q->where('is_public', true)->orderBy('created_at')->with('author')]);
+
+        return $ticket->comments->map(function (TicketComment $comment) use ($viewer, $ticket) {
+            $author = $comment->author;
+            $isStaff = $author instanceof User;
+            $isSelf = $viewer && $author instanceof Customer && (int) $author->id === (int) $viewer->id;
+
+            return [
+                'id' => $comment->id,
+                'body' => ($comment->body === '(PDF attachment)' && filled($comment->attachment_path))
+                    ? null
+                    : $comment->body,
+                'author_role' => $isStaff ? 'staff' : 'customer',
+                'author_label' => $isStaff
+                    ? ($author->name ?: 'Account manager')
+                    : ($isSelf ? 'You' : ($author->name ?? 'Partner')),
+                'has_attachment' => filled($comment->attachment_path),
+                'attachment_name' => $comment->attachment_original_name,
+                'attachment_size_bytes' => $comment->attachment_size_bytes,
+                'attachment_url' => filled($comment->attachment_path)
+                    ? url("/api/v1/tickets/{$ticket->public_id}/comments/{$comment->id}/attachment")
+                    : null,
+                'created_at' => optional($comment->created_at)?->toIso8601String(),
+            ];
+        })->values()->all();
+    }
+}

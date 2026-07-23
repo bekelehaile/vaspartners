@@ -8,6 +8,7 @@ use App\Enums\TicketStatus;
 use App\Filament\Resources\Tickets\Pages\ListTickets;
 use App\Filament\Resources\Tickets\Pages\ViewTicket;
 use App\Filament\Resources\Tickets\RelationManagers\DocumentsRelationManager;
+use App\Filament\Resources\Tickets\RelationManagers\MessagesRelationManager;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Services\TicketWorkflowService;
@@ -81,6 +82,7 @@ class TicketResource extends Resource
     public static function getRelations(): array
     {
         return [
+            MessagesRelationManager::class,
             DocumentsRelationManager::class,
         ];
     }
@@ -297,5 +299,21 @@ class TicketResource extends Resource
             'index' => ListTickets::route('/'),
             'view' => ViewTicket::route('/{record}'),
         ];
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+        $user = auth()->user();
+
+        if (! $user || $user->hasRole('super_admin') || $user->can('ViewAny:Ticket')) {
+            return $query;
+        }
+
+        // Account managers: only tickets assigned to them or awaiting their approval
+        return $query->where(function (Builder $q) use ($user) {
+            $q->where('assigned_to_user_id', $user->id)
+                ->orWhere('current_approver_user_id', $user->id);
+        });
     }
 }

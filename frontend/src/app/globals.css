@@ -2398,3 +2398,88 @@ textarea {
 .journey-body .field {
   margin-bottom: 1rem;
 }
+
+.chat-panel .chat-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 28rem;
+  overflow-y: auto;
+  padding: 0.75rem;
+  margin-top: 0.75rem;
+  border: 1px solid var(--et-line);
+  border-radius: 0.65rem;
+  background: var(--et-foam);
+}
+
+.chat-bubble {
+  max-width: 92%;
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--et-line);
+  background: #fff;
+}
+
+.chat-bubble p {
+  margin: 0.35rem 0 0;
+  white-space: pre-wrap;
+  color: var(--et-ink);
+}
+
+.chat-bubble-mine {
+  align-self: flex-end;
+  background: #eef8f0;
+  border-color: #cfe8d4;
+}
+
+.chat-bubble-staff {
+  align-self: flex-start;
+  background: #fff;
+}
+
+.chat-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.78rem;
+  color: var(--et-muted);
+}
+
+.chat-attach {
+  display: inline-flex;
+  margin-top: 0.55rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--et-blue);
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.88rem;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline;
+}
+
+.journey-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.journey-tabs button {
+  border: 1px solid var(--et-line);
+  background: #fff;
+  border-radius: 0.55rem;
+  padding: 0.55rem 0.9rem;
+  font: inherit;
+  font-weight: 600;
+  color: var(--et-muted);
+  cursor: pointer;
+}
+
+.journey-tabs button.is-active {
+  border-color: var(--et-green);
+  color: var(--et-ink);
+  background: var(--et-foam);
+}

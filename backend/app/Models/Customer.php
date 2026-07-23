@@ -41,6 +41,8 @@ class Customer extends Authenticatable
         'company_phone',
         'company_email',
         'company_address',
+        'company_id',
+        'company_role',
         'is_active',
         'is_banned',
         'profile_completed_at',
@@ -126,12 +128,28 @@ class Customer extends Authenticatable
 
     public function getProfileCompletedAttribute(): bool
     {
+        if ($this->company_id) {
+            return $this->profile_completed_at !== null
+                && filled($this->company_name)
+                && filled($this->company_tin);
+        }
+
         return $this->profile_completed_at !== null
             && filled($this->company_name)
             && filled($this->company_tin)
             && filled($this->company_phone)
             && filled($this->company_email)
             && filled($this->company_address);
+    }
+
+    public function company(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    public function companyChangeRequests(): HasMany
+    {
+        return $this->hasMany(CompanyChangeRequest::class);
     }
 
     public function tickets(): HasMany

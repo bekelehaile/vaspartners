@@ -6,7 +6,6 @@ use App\Models\Priority;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
-use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
 class DatabaseSeeder extends Seeder
@@ -28,15 +27,6 @@ class DatabaseSeeder extends Seeder
             $admin->assignRole($superAdmin);
         }
 
-        // My Tickets page (Filament Shield) — assign to anyone who can view tickets
-        $myTickets = Permission::findOrCreate('View:MyTickets', 'web');
-        $superAdmin->givePermissionTo($myTickets);
-        foreach (Role::query()->where('guard_name', 'web')->get() as $role) {
-            if ($role->hasPermissionTo('ViewAny:Ticket')) {
-                $role->givePermissionTo($myTickets);
-            }
-        }
-
         foreach ([
             ['name' => 'Low', 'code' => 'low', 'weight' => 1, 'color' => 'gray'],
             ['name' => 'Medium', 'code' => 'medium', 'weight' => 2, 'color' => 'blue'],
@@ -46,6 +36,7 @@ class DatabaseSeeder extends Seeder
             Priority::query()->updateOrCreate(['code' => $row['code']], $row);
         }
 
+        $this->call(AccountManagerRoleSeeder::class);
         $this->call(CatalogSeeder::class);
         $this->call(OptionalDocumentIfAnySeeder::class);
         $this->call(MvasStaffUsersSeeder::class);

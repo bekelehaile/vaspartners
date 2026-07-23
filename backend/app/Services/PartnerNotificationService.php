@@ -3,9 +3,12 @@
 namespace App\Services;
 
 use App\Enums\TicketStatus;
+use App\Filament\Resources\CompanyChangeRequests\CompanyChangeRequestResource;
 use App\Filament\Resources\Tickets\TicketResource;
 use App\Models\Customer;
+use App\Models\CompanyChangeRequest;
 use App\Models\Ticket;
+use App\Models\TicketComment;
 use App\Models\User;
 use App\Notifications\PartnerPortalNotification;
 use Filament\Actions\Action;
@@ -80,6 +83,122 @@ class PartnerNotificationService
         );
     }
 
+    /** Notify the other party when a public chat message is posted. */
+    public function ticketMessagePosted(Ticket $ticket, Customer|User $author, TicketComment $comment): void
+    {
+        $ticket->loadMissing(['customer', 'service', 'assignee']);
+        $preview = Str::limit(trim((string) $comment->body), 120);
+        if ($comment->hasAttachment()) {
+            $preview = trim($preview.' [PDF: '.($comment->attachment_original_name ?: 'attachment').']');
+        }
+
+        if ($author instanceof Customer) {
+            $recipients = collect();
+            if ($ticket->assignee) {
+                $recipients->push($ticket->assignee);
+            } else {
+                $recipients = $this->managementUsers();
+            }
+
+            $this->notifyStaffDatabase(
+                $recipients,
+                'Partner message',
+                sprintf('%s on %s: %s', $author->name ?: 'Partner', $ticket->tt_number, $preview),
+                $ticket,
+            );
+
+            return;
+        }
+
+        // Staff → partner (portal notification only — avoid SMS spam on every reply)
+        $ticket->loadMissing(['customer', 'service', 'requisition']);
+        $customer = $ticket->customer;
+        if (! $customer) {
+            return;
+        }
+
+        $placeholders = [
+            'customer_name' => $customer->name ?: 'Partner',
+            'company_name' => $customer->company_name ?: 'your organisation',
+            'tt_number' => $ticket->tt_number,
+            'service' => $ticket->service?->name ?: 'VAS service',
+            'requisition' => $ticket->requisition?->name ?: 'request',
+            'status' => $ticket->status?->label() ?: (string) $ticket->status?->value,
+            'note' => $preview,
+        ];
+        $portalBody = $this->render('portal', 'ticket_message', $placeholders);
+        $customer->notify(new PartnerPortalNotification(
+            title: $this->titleFor('ticket_message'),
+            body: Str::limit($portalBody, 280),
+            template: 'ticket_message',
+            ticketPublicId: $ticket->public_id,
+            ttNumber: $ticket->tt_number,
+        ));
+    }
+
+    public function companyChangeRequested(CompanyChangeRequest $request): void
+    {
+        $request->loadMissing(['customer', 'company']);
+        $this->notifyStaffDatabase(
+            $this->managementUsers(),
+            $request->type->label().' pending',
+            sprintf(
+                '%s requested to %s %s (%s).',
+                $request->customer?->name ?: 'A partner',
+                $request->type === \App\Enums\CompanyChangeType::Attach ? 'join' : 'leave',
+                $request->company?->name ?: 'a company',
+                $request->company?->tin ?: 'TIN n/a',
+            ),
+            null,
+            CompanyChangeRequestResource::getUrl('view', ['record' => $request]),
+        );
+    }
+
+    public function companyChangeDecided(CompanyChangeRequest $request): void
+    {
+        $request->loadMissing(['customer', 'company']);
+        $customer = $request->customer;
+        if (! $customer) {
+            return;
+        }
+
+        $approved = $request->status === \App\Enums\CompanyChangeStatus::Approved;
+        $template = match (true) {
+            $request->type === \App\Enums\CompanyChangeType::Attach && $approved => 'company_attach_approved',
+            $request->type === \App\Enums\CompanyChangeType::Attach && ! $approved => 'company_attach_rejected',
+            $request->type === \App\Enums\CompanyChangeType::Detach && $approved => 'company_detach_approved',
+            default => 'company_detach_rejected',
+        };
+
+        $placeholders = [
+            'customer_name' => $customer->name ?: 'Partner',
+            'company_name' => $request->company?->name ?: 'the company',
+            'company_tin' => $request->company?->tin ?: '',
+            'note' => filled($request->admin_note) ? trim((string) $request->admin_note) : '',
+            'tt_number' => '',
+            'service' => '',
+            'requisition' => '',
+            'status' => $request->status->label(),
+        ];
+
+        $smsBody = $this->render('templates', $template, $placeholders);
+        $portalBody = $this->render('portal', $template, $placeholders);
+        if (filled($request->admin_note)) {
+            $portalBody = rtrim($portalBody, '.').'. '.trim((string) $request->admin_note);
+        }
+
+        if (filled($customer->phone_number)) {
+            $this->sms->send($customer->phone_number, $smsBody);
+        }
+
+        $customer->notify(new PartnerPortalNotification(
+            title: $this->titleFor($template),
+            body: Str::limit($portalBody, 280),
+            template: $template,
+            url: '/portal/company',
+        ));
+    }
+
     public function profileCompleted(Customer $customer): void
     {
         $placeholders = [
@@ -145,23 +264,37 @@ class PartnerNotificationService
     }
 
     /** @param  \Illuminate\Support\Collection<int, User>|iterable<User>  $users */
-    protected function notifyStaffDatabase(iterable $users, string $title, string $body, Ticket $ticket): void
-    {
+    protected function notifyStaffDatabase(
+        iterable $users,
+        string $title,
+        string $body,
+        ?Ticket $ticket = null,
+        ?string $url = null,
+    ): void {
+        $actionUrl = $url;
+        if (! $actionUrl && $ticket) {
+            $actionUrl = TicketResource::getUrl('view', ['record' => $ticket]);
+        }
+
         foreach ($users as $user) {
             if (! $user instanceof User) {
                 continue;
             }
 
-            FilamentNotification::make()
+            $notification = FilamentNotification::make()
                 ->title($title)
                 ->body($body)
-                ->icon('heroicon-o-ticket')
-                ->actions([
+                ->icon('heroicon-o-building-office-2');
+
+            if ($actionUrl) {
+                $notification->actions([
                     Action::make('view')
-                        ->label('Open ticket')
-                        ->url(TicketResource::getUrl('view', ['record' => $ticket])),
-                ])
-                ->sendToDatabase($user);
+                        ->label('Open')
+                        ->url($actionUrl),
+                ]);
+            }
+
+            $notification->sendToDatabase($user);
         }
     }
 
@@ -187,6 +320,11 @@ class PartnerNotificationService
             'ticket_rejected' => 'Request not approved',
             'ticket_closed' => 'Request closed',
             'profile_completed' => 'Profile updated',
+            'ticket_message' => 'New message on your request',
+            'company_attach_approved' => 'Company attach approved',
+            'company_attach_rejected' => 'Company attach rejected',
+            'company_detach_approved' => 'Company detach approved',
+            'company_detach_rejected' => 'Company detach rejected',
             default => 'Portal update',
         };
     }

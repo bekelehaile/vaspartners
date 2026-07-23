@@ -23,12 +23,31 @@ export const ticketCreateSchema = z.object({
 
 export type TicketCreateValues = z.infer<typeof ticketCreateSchema>;
 
-export const commentSchema = z.object({
-  body: z
-    .string()
-    .trim()
-    .min(1, "Enter a comment")
-    .max(5000, "Comment is too long"),
-});
+export const commentSchema = z
+  .object({
+    body: z.string().max(5000, "Message is too long").optional().default(""),
+    attachment: z.any().optional().nullable(),
+  })
+  .superRefine((value, ctx) => {
+    const body = (value.body || "").trim();
+    const file = value.attachment as File | null | undefined;
+    if (!body && !file) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter a message or attach a small PDF",
+        path: ["body"],
+      });
+    }
+    if (file && file instanceof File) {
+      const name = file.name.toLowerCase();
+      if (!name.endsWith(".pdf") && file.type !== "application/pdf") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Only PDF files are allowed",
+          path: ["attachment"],
+        });
+      }
+    }
+  });
 
 export type CommentValues = z.infer<typeof commentSchema>;

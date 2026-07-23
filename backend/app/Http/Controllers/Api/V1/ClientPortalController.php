@@ -9,10 +9,14 @@ use App\Models\Subscription;
 use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Models\TicketDocument;
+use App\Services\CompanyMembershipService;
 use App\Services\PartnerNotificationService;
+use App\Services\TicketCommentService;
 use App\Services\TicketDocumentService;
 use App\Services\TicketWorkflowService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ClientPortalController extends Controller
 {
@@ -119,13 +123,19 @@ class ClientPortalController extends Controller
         return response()->json($tickets);
     }
 
-    public function showTicket(Request $request, Ticket $ticket)
+    public function showTicket(Request $request, Ticket $ticket, TicketCommentService $comments)
     {
         abort_unless($ticket->customer_id === $request->user()->id, 404);
 
-        $ticket->load(['service', 'requisition', 'subscription', 'documents.documentType', 'comments', 'statusHistories']);
+        $ticket->load(['service', 'requisition', 'subscription', 'documents.documentType', 'statusHistories']);
 
-        return response()->json(['data' => $ticket]);
+        $payload = $ticket->toArray();
+        $payload['messages'] = $comments->serializeThread($ticket, $request->user());
+        $payload['chat_locked'] = $ticket->status->locksCustomerDocuments();
+        $payload['chat_attachment_max_kb'] = $comments->maxAttachmentKb();
+        $payload['documents_locked'] = $ticket->status->locksCustomerDocuments();
+
+        return response()->json(['data' => $payload]);
     }
 
     public function storeTicket(Request $request, TicketWorkflowService $workflow)
@@ -214,24 +224,49 @@ class ClientPortalController extends Controller
         return response()->json(['message' => 'Document removed.']);
     }
 
-    public function comment(Request $request, Ticket $ticket)
+    public function comment(Request $request, Ticket $ticket, TicketCommentService $comments, PartnerNotificationService $notifications)
     {
         abort_unless($ticket->customer_id === $request->user()->id, 404);
 
-        $data = $request->validate(['body' => ['required', 'string', 'max:5000']]);
-
-        $comment = TicketComment::query()->create([
-            'ticket_id' => $ticket->id,
-            'author_type' => $request->user()::class,
-            'author_id' => $request->user()->id,
-            'body' => $data['body'],
-            'is_public' => true,
+        $data = $request->validate([
+            'body' => ['nullable', 'string', 'max:5000'],
+            'attachment' => ['nullable', 'file'],
         ]);
 
-        return response()->json(['data' => $comment], 201);
+        $comment = $comments->post(
+            $ticket,
+            $request->user(),
+            $data['body'] ?? null,
+            $request->file('attachment'),
+        );
+
+        $notifications->ticketMessagePosted($ticket, $request->user(), $comment);
+
+        return response()->json([
+            'data' => $comments->serializeThread($ticket->fresh(), $request->user()),
+        ], 201);
     }
 
-    public function completeCompanyProfile(Request $request, PartnerNotificationService $notifications)
+    public function downloadCommentAttachment(
+        Request $request,
+        Ticket $ticket,
+        TicketComment $comment,
+        TicketCommentService $comments,
+    ): StreamedResponse {
+        abort_unless($ticket->customer_id === $request->user()->id, 404);
+        abort_unless((int) $comment->ticket_id === (int) $ticket->id, 404);
+        abort_unless($comment->is_public, 404);
+        abort_unless($comments->attachmentExists($comment), 404);
+
+        $disk = $comment->attachment_disk ?: 'local';
+
+        return Storage::disk($disk)->download(
+            $comment->attachment_path,
+            $comment->attachment_original_name ?: 'attachment.pdf',
+        );
+    }
+
+    public function completeCompanyProfile(Request $request, CompanyMembershipService $membership)
     {
         $data = $request->validate([
             'company_name' => ['required', 'string', 'min:2', 'max:255'],
@@ -243,16 +278,74 @@ class ClientPortalController extends Controller
 
         /** @var \App\Models\Customer $customer */
         $customer = $request->user();
-        $wasIncomplete = ! $customer->profile_completed;
-        $customer->fill($data);
-        $customer->profile_completed_at = now();
-        $customer->save();
+        $fresh = $customer->company_id
+            ? $membership->updateOwnCompany($customer, $data)
+            : $membership->createCompanyForCustomer($customer, $data);
 
-        $fresh = $customer->fresh();
-        if ($wasIncomplete) {
-            $notifications->profileCompleted($fresh);
+        return response()->json(['data' => $membership->serializeCustomer($fresh)]);
+    }
+
+    public function lookupCompany(Request $request, CompanyMembershipService $membership)
+    {
+        $data = $request->validate([
+            'tin' => ['required', 'string', 'min:5', 'max:64'],
+        ]);
+
+        $company = $membership->lookupByTin($data['tin']);
+        if (! $company) {
+            return response()->json(['message' => 'No company found for this TIN.', 'data' => null], 404);
         }
 
-        return response()->json(['data' => $fresh]);
+        return response()->json([
+            'data' => [
+                'public_id' => $company->public_id,
+                'name' => $company->name,
+                'tin' => $company->tin,
+            ],
+        ]);
+    }
+
+    public function requestAttachCompany(Request $request, CompanyMembershipService $membership)
+    {
+        $data = $request->validate([
+            'company_tin' => ['required', 'string', 'min:5', 'max:64'],
+            'note' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $change = $membership->requestAttach($request->user(), $data['company_tin'], $data['note'] ?? null);
+
+        return response()->json([
+            'data' => $membership->serializeCustomer($request->user()->fresh()),
+            'request' => [
+                'public_id' => $change->public_id,
+                'type' => $change->type->value,
+                'status' => $change->status->value,
+            ],
+        ], 201);
+    }
+
+    public function requestDetachCompany(Request $request, CompanyMembershipService $membership)
+    {
+        $data = $request->validate([
+            'note' => ['nullable', 'string', 'max:2000'],
+            'proposal' => ['required', 'file'],
+            'letter' => ['required', 'file'],
+        ]);
+
+        $change = $membership->requestDetach(
+            $request->user(),
+            $data['note'] ?? null,
+            $request->file('proposal'),
+            $request->file('letter'),
+        );
+
+        return response()->json([
+            'data' => $membership->serializeCustomer($request->user()->fresh()),
+            'request' => [
+                'public_id' => $change->public_id,
+                'type' => $change->type->value,
+                'status' => $change->status->value,
+            ],
+        ], 201);
     }
 }

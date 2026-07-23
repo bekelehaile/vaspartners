@@ -8,11 +8,31 @@ export type Customer = {
   gender?: string | null;
   nationality?: string | null;
   birthdate?: string | null;
+  company_id?: number | null;
+  company_role?: string | null;
   company_name?: string | null;
   company_tin?: string | null;
   company_phone?: string | null;
   company_email?: string | null;
   company_address?: string | null;
+  company?: {
+    public_id: string;
+    name: string;
+    tin: string;
+    phone?: string | null;
+    email?: string | null;
+    address?: string | null;
+  } | null;
+  pending_company_request?: {
+    public_id: string;
+    type: "attach" | "detach";
+    status: string;
+    customer_note?: string | null;
+    company?: { public_id: string; name: string; tin: string } | null;
+    created_at?: string | null;
+    has_proposal?: boolean;
+    has_letter?: boolean;
+  } | null;
   profile_completed_at?: string | null;
   profile_completed?: boolean;
 };
@@ -96,6 +116,9 @@ export type Ticket = {
     note?: string | null;
     created_at: string;
   }[];
+  messages?: TicketMessage[];
+  chat_locked?: boolean;
+  chat_attachment_max_kb?: number;
   documents_locked?: boolean;
   documents?: {
     id: number;
@@ -103,6 +126,18 @@ export type Ticket = {
     original_name: string;
     document_type?: { id?: number; name: string; accepted_mimes?: string; max_size_kb?: number };
   }[];
+};
+
+export type TicketMessage = {
+  id: number;
+  body?: string | null;
+  author_role: "staff" | "customer";
+  author_label: string;
+  has_attachment: boolean;
+  attachment_name?: string | null;
+  attachment_size_bytes?: number | null;
+  attachment_url?: string | null;
+  created_at?: string | null;
 };
 
 export type DocumentRequirement = {

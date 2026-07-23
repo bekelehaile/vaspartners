@@ -12,7 +12,7 @@ class TicketDocumentController extends Controller
     /** Inline open (view in browser) — authenticated Filament staff only. */
     public function open(TicketDocument $document): BinaryFileResponse
     {
-        $this->authorizeStaff();
+        $this->authorizeDocument($document);
 
         $disk = $document->disk ?: 'local';
         abort_unless($document->path && Storage::disk($disk)->exists($document->path), 404);
@@ -31,7 +31,7 @@ class TicketDocumentController extends Controller
     /** Force download — authenticated Filament staff only. */
     public function download(TicketDocument $document): BinaryFileResponse|\Symfony\Component\HttpFoundation\StreamedResponse
     {
-        $this->authorizeStaff();
+        $this->authorizeDocument($document);
 
         $disk = $document->disk ?: 'local';
         abort_unless($document->path && Storage::disk($disk)->exists($document->path), 404);
@@ -42,9 +42,13 @@ class TicketDocumentController extends Controller
         );
     }
 
-    protected function authorizeStaff(): void
+    protected function authorizeDocument(TicketDocument $document): void
     {
         abort_unless(auth()->check(), 403);
+
+        $ticket = $document->ticket()->first();
+        abort_unless($ticket, 404);
+        $this->authorize('view', $ticket);
     }
 
     protected function safeFilename(string $name): string

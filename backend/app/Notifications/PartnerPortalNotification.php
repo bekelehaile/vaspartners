@@ -19,6 +19,7 @@ class PartnerPortalNotification extends Notification implements ShouldQueue
         public string $template,
         public ?string $ticketPublicId = null,
         public ?string $ttNumber = null,
+        public ?string $url = null,
     ) {
         $this->onQueue('default');
     }
@@ -32,9 +33,10 @@ class PartnerPortalNotification extends Notification implements ShouldQueue
     /** @return array<string, mixed> */
     public function toDatabase(object $notifiable): array
     {
-        $url = $this->ticketPublicId
-            ? '/portal/requests/'.$this->ticketPublicId
-            : '/portal';
+        $url = $this->url
+            ?: ($this->ticketPublicId
+                ? '/portal/requests/'.$this->ticketPublicId
+                : '/portal');
 
         return [
             'title' => $this->title,

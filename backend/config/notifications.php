@@ -47,6 +47,26 @@ SMS,
 Dear {customer_name}, your company profile for {company_name} is complete. You can now submit VAS service requests. — Ethio telecom
 SMS,
 
+        'ticket_message' => <<<'SMS'
+Dear {customer_name}, there is a new message on VAS request {tt_number}. Open the portal to reply. {note} — Ethio telecom
+SMS,
+
+        'company_attach_approved' => <<<'SMS'
+Dear {customer_name}, your request to join {company_name} was approved. You can use the VAS Partners portal. — Ethio telecom
+SMS,
+
+        'company_attach_rejected' => <<<'SMS'
+Dear {customer_name}, your request to join {company_name} was not approved. {note} — Ethio telecom
+SMS,
+
+        'company_detach_approved' => <<<'SMS'
+Dear {customer_name}, your request to leave {company_name} was approved. You may create or join another company in the portal. — Ethio telecom
+SMS,
+
+        'company_detach_rejected' => <<<'SMS'
+Dear {customer_name}, your request to leave {company_name} was not approved. {note} — Ethio telecom
+SMS,
+
     ],
 
     'portal' => [
@@ -64,6 +84,16 @@ SMS,
         'ticket_closed' => '{tt_number} for {service} is closed. Thank you for partnering with Ethio telecom.',
 
         'profile_completed' => 'Your organisation profile for {company_name} is saved. You can submit service requests.',
+
+        'ticket_message' => 'New message on {tt_number}: {note}',
+
+        'company_attach_approved' => 'You were approved to join {company_name}.',
+
+        'company_attach_rejected' => 'Your request to join {company_name} was not approved.',
+
+        'company_detach_approved' => 'You were detached from {company_name}. You can create or attach to another company.',
+
+        'company_detach_rejected' => 'Your request to leave {company_name} was not approved.',
 
     ],
 
