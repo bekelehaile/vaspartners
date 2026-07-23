@@ -6,6 +6,7 @@ use App\Filament\Resources\DocumentTypes\Pages\CreateDocumentType;
 use App\Filament\Resources\DocumentTypes\Pages\EditDocumentType;
 use App\Filament\Resources\DocumentTypes\Pages\ListDocumentTypes;
 use App\Models\DocumentType;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -25,13 +26,53 @@ class DocumentTypeResource extends Resource
 
     protected static ?int $navigationSort = 3;
 
+    /** @return array<string, string> */
+    public static function mimeOptions(): array
+    {
+        return [
+            'pdf' => 'PDF (.pdf)',
+            'doc' => 'Word (.doc)',
+            'docx' => 'Word (.docx)',
+            'xls' => 'Excel (.xls)',
+            'xlsx' => 'Excel (.xlsx)',
+            'png' => 'PNG (.png)',
+            'jpg' => 'JPEG (.jpg)',
+            'jpeg' => 'JPEG (.jpeg)',
+            'gif' => 'GIF (.gif)',
+            'webp' => 'WebP (.webp)',
+            'txt' => 'Text (.txt)',
+            'csv' => 'CSV (.csv)',
+            'zip' => 'ZIP (.zip)',
+        ];
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('name')->required(),
-            TextInput::make('code')->required()->unique(ignoreRecord: true),
-            TextInput::make('accepted_mimes')->default('pdf,doc,docx,png,jpg,jpeg'),
-            TextInput::make('max_size_kb')->numeric()->default(5120),
+            TextInput::make('name')->required()->maxLength(255),
+            TextInput::make('code')
+                ->hidden()
+                ->dehydrated()
+                ->unique(ignoreRecord: true),
+            Select::make('accepted_mimes')
+                ->label('Accepted mimes')
+                ->multiple()
+                ->searchable()
+                ->options(static::mimeOptions())
+                ->default(['pdf', 'doc', 'docx', 'png', 'jpg', 'jpeg'])
+                ->required()
+                ->helperText('Select one or more file extensions allowed for this document type.')
+                ->afterStateHydrated(function (Select $component, mixed $state): void {
+                    if (is_string($state)) {
+                        $component->state(
+                            array_values(array_filter(array_map('trim', explode(',', $state))))
+                        );
+                    }
+                })
+                ->dehydrateStateUsing(fn (mixed $state): string => is_array($state)
+                    ? implode(',', array_values(array_filter($state)))
+                    : (string) $state),
+            TextInput::make('max_size_kb')->numeric()->default(5120)->required(),
             Textarea::make('description')->columnSpanFull(),
             Toggle::make('is_active')->default(true),
         ])->columns(2);
@@ -41,7 +82,11 @@ class DocumentTypeResource extends Resource
     {
         return $table->columns([
             TextColumn::make('name')->searchable()->sortable(),
-            TextColumn::make('code')->badge()->searchable(),
+            TextColumn::make('accepted_mimes')
+                ->label('Mimes')
+                ->badge()
+                ->separator(',')
+                ->wrap(),
             TextColumn::make('max_size_kb')->label('Max KB'),
             IconColumn::make('is_active')->boolean(),
         ])->recordActions([
