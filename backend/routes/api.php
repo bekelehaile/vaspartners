@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\ClientPortalController;
 use App\Http\Controllers\Api\V1\FaydaAuthController;
+use App\Http\Controllers\Api\V1\NotificationController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -16,6 +17,10 @@ Route::prefix('v1')->group(function () {
         Route::get('auth/me', [FaydaAuthController::class, 'me']);
         Route::post('auth/logout', [FaydaAuthController::class, 'logout']);
         Route::post('profile/company', [ClientPortalController::class, 'completeCompanyProfile']);
+
+        Route::get('notifications', [NotificationController::class, 'index']);
+        Route::post('notifications/read-all', [NotificationController::class, 'markAllRead']);
+        Route::post('notifications/{id}/read', [NotificationController::class, 'markRead']);
 
         Route::get('tickets', [ClientPortalController::class, 'tickets']);
         Route::post('tickets', [ClientPortalController::class, 'storeTicket']);

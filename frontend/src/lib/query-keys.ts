@@ -17,6 +17,7 @@ export const queryKeys = {
       ["catalog", "document-requirements", serviceId, requisitionId] as const,
   },
   ticket: (publicId: string) => ["ticket", publicId] as const,
+  notifications: ["customer", "notifications"] as const,
 };
 
 export type { Customer, DocumentRequirement, Service, Ticket };

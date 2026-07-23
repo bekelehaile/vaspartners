@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ReactNode, useState } from "react";
+import { NotificationBell } from "@/components/NotificationBell";
 import { Customer, clearToken, faydaLoginUrl } from "@/lib/api";
 
 function LogInIcon() {
@@ -67,6 +68,7 @@ export function SiteShell({
                   </span>
                 )}
                 <div className="user-chip">
+                  <NotificationBell />
                   <span>{me.company_name || me.name}</span>
                   <button type="button" onClick={onLogout} className="linkish">
                     Sign out
@@ -121,6 +123,9 @@ export function SiteShell({
                       </Link>
                     </>
                   )}
+                  <div style={{ padding: "0.25rem 0 0.75rem" }}>
+                    <NotificationBell />
+                  </div>
                   <button type="button" className="sheet-link" onClick={onLogout}>
                     Sign out
                   </button>

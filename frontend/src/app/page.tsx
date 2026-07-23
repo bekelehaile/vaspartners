@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { SiteShell } from "@/components/SiteShell";
+import { LandingServicesSection } from "@/components/LandingServicesSection";
 import { faydaLoginUrl } from "@/lib/api";
 import { useCustomer, useFaqs, useLogout } from "@/hooks/use-customer";
 
@@ -62,46 +63,7 @@ function LandingInner() {
         </section>
       </div>
 
-      <section className="section" id="services">
-        <span className="section-label">Our services</span>
-        <h2>Comprehensive VAS solutions</h2>
-        <p className="section-lead">
-          Categories and service types from the Ethio telecom VAS partners catalog — request online
-          and follow progress in real time.
-        </p>
-        <div className="service-grid">
-          <article className="service-tile">
-            <div className="service-tile-icon" aria-hidden>
-              C
-            </div>
-            <h3>Service categories</h3>
-            <p>
-              VAS sales, FinTech, Enterprise Solution, Marketing, Startup Partner, and more partner
-              groups.
-            </p>
-          </article>
-          <article className="service-tile">
-            <div className="service-tile-icon" aria-hidden>
-              T
-            </div>
-            <h3>Service types</h3>
-            <p>
-              Digital and VAS offerings such as MT, A2P, USSD, CRBT, Collocation, VISP, and merchant
-              services.
-            </p>
-          </article>
-          <article className="service-tile">
-            <div className="service-tile-icon" aria-hidden>
-              R
-            </div>
-            <h3>Request types</h3>
-            <p>
-              New request, maintenance, move, termination, whitelist, tariff change, and other
-              requisitions.
-            </p>
-          </article>
-        </div>
-      </section>
+      <LandingServicesSection />
 
       <div className="feature-band">
         <section className="section" id="how-it-works">

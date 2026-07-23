@@ -51,6 +51,7 @@ class AdminPanelProvider extends PanelProvider
             ->plugins([
                 \BezhanSalleh\FilamentShield\FilamentShieldPlugin::make(),
             ])
+            ->databaseNotifications()
             ->spa((bool) env('FILAMENT_SPA', false))
             ->sidebarCollapsibleOnDesktop()
             ->navigationGroups([

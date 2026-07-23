@@ -263,7 +263,16 @@ class TicketWorkflowService
             $ticket->current_approver_user_id = $reviewer->manager_id;
             $ticket->save();
 
-            return $ticket->fresh();
+            $fresh = $ticket->fresh(['customer', 'service', 'requisition']);
+            $approverId = $reviewer->manager_id;
+            DB::afterCommit(function () use ($fresh, $approverId) {
+                $approver = User::query()->find($approverId);
+                if ($approver) {
+                    $this->notifications->approvalNeeded($fresh, $approver);
+                }
+            });
+
+            return $fresh;
         });
     }
 
@@ -332,7 +341,17 @@ class TicketWorkflowService
                 $this->transition($ticket, $nextStatus, $approver, $note);
             }
 
-            return $ticket->fresh();
+            $fresh = $ticket->fresh(['customer', 'service', 'requisition']);
+            if ($escalatedTo) {
+                DB::afterCommit(function () use ($fresh, $escalatedTo) {
+                    $next = User::query()->find($escalatedTo);
+                    if ($next) {
+                        $this->notifications->approvalNeeded($fresh, $next);
+                    }
+                });
+            }
+
+            return $fresh;
         });
     }
 

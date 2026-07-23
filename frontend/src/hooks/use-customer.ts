@@ -169,6 +169,58 @@ export function usePostTicketComment(publicId: string) {
   });
 }
 
+export type AppNotification = {
+  id: string;
+  title: string;
+  body: string;
+  template?: string | null;
+  ticket_public_id?: string | null;
+  tt_number?: string | null;
+  url: string;
+  read_at?: string | null;
+  created_at?: string | null;
+};
+
+export function useNotifications(options?: { enabled?: boolean; refetchInterval?: number }) {
+  const enabled = options?.enabled ?? true;
+  return useQuery({
+    queryKey: queryKeys.notifications,
+    enabled: enabled && !!getToken(),
+    refetchInterval: options?.refetchInterval ?? 30_000,
+    queryFn: async () => {
+      const res = await api<{ data: AppNotification[]; unread_count: number }>("/notifications");
+      return {
+        items: Array.isArray(res.data) ? res.data : [],
+        unreadCount: res.unread_count ?? 0,
+      };
+    },
+  });
+}
+
+export function useMarkNotificationRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await api(`/notifications/${id}/read`, { method: "POST" });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.notifications });
+    },
+  });
+}
+
+export function useMarkAllNotificationsRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      await api("/notifications/read-all", { method: "POST" });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.notifications });
+    },
+  });
+}
+
 export function useLogout() {
   const router = useRouter();
   const queryClient = useQueryClient();
