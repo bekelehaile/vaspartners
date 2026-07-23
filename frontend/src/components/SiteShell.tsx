@@ -5,7 +5,6 @@ import { ReactNode, useState } from "react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { PortalSettingsMenu } from "@/components/PortalSettingsMenu";
 import { Customer, clearToken, faydaLoginUrl } from "@/lib/api";
-import { getSiteUrl } from "@/lib/site";
 
 function LogInIcon() {
   return (
@@ -58,14 +57,14 @@ export function SiteShell({
       </a>
       <header className="topbar">
         <div className="topbar-inner">
-          <a href={getSiteUrl()} className="brand-lockup">
+          <Link href="/" className="brand-lockup" prefetch={false}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/brand/ethio_logo_full.png"
               alt="Ethio Telecom Logo"
               className="brand-logo"
             />
-          </a>
+          </Link>
 
           <nav className="topnav" aria-label="Primary">
             {me ? (
