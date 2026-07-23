@@ -205,11 +205,33 @@ export function useDocumentRequirements(serviceId: string, requisitionId: string
   });
 }
 
+export function useSwitchCompany() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (company_public_id: string) => {
+      const res = await api<{ data: Customer }>("/profile/company/switch", {
+        method: "POST",
+        body: JSON.stringify({ company_public_id }),
+      });
+      return res.data;
+    },
+    onSuccess: (customer) => {
+      queryClient.setQueryData(queryKeys.customer.me, customer);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.customer.me });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.customer.tickets });
+    },
+  });
+}
+
 export function useCompleteCompanyProfile() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (values: CompanyProfileValues) => {
+    mutationFn: async (
+      values: CompanyProfileValues & { create_new?: boolean },
+    ) => {
       const res = await api<{ data: Customer }>("/profile/company", {
         method: "POST",
         body: JSON.stringify(values),
@@ -223,14 +245,18 @@ export function useCompleteCompanyProfile() {
   });
 }
 
-export function useLookupCompany(tin: string) {
+export function useLookupCompany(tin: string, licenseNumber: string) {
   return useQuery({
-    queryKey: ["company-lookup", tin],
-    enabled: tin.trim().length >= 5,
+    queryKey: ["company-lookup", tin, licenseNumber],
+    enabled: tin.trim().length >= 5 && licenseNumber.trim().length >= 3,
     queryFn: async () => {
-      const res = await api<{ data: { public_id: string; name: string; tin: string } }>(
-        `/profile/company/lookup?tin=${encodeURIComponent(tin.trim())}`,
-      );
+      const params = new URLSearchParams({
+        tin: tin.trim(),
+        license_number: licenseNumber.trim(),
+      });
+      const res = await api<{
+        data: { public_id: string; name: string; tin: string; license_number: string };
+      }>(`/profile/company/lookup?${params.toString()}`);
       return res.data;
     },
     retry: false,
@@ -241,7 +267,11 @@ export function useAttachCompany() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (payload: { company_tin: string; note?: string }) => {
+    mutationFn: async (payload: {
+      company_tin: string;
+      company_license_number: string;
+      note?: string;
+    }) => {
       const res = await api<{ data: Customer }>("/profile/company/attach", {
         method: "POST",
         body: JSON.stringify(payload),
@@ -251,6 +281,59 @@ export function useAttachCompany() {
     onSuccess: (customer) => {
       queryClient.setQueryData(queryKeys.customer.me, customer);
       void queryClient.invalidateQueries({ queryKey: queryKeys.customer.me });
+    },
+  });
+}
+
+export type MembershipRequest = {
+  public_id: string;
+  type: string;
+  status: string;
+  customer_note?: string | null;
+  created_at?: string | null;
+  applicant?: {
+    public_id?: string | null;
+    name?: string | null;
+    phone_number?: string | null;
+    email?: string | null;
+  };
+};
+
+export function useMembershipRequests(enabled: boolean) {
+  return useQuery({
+    queryKey: ["company-membership-requests"],
+    enabled,
+    queryFn: async () => {
+      const res = await api<{ data: MembershipRequest[] }>(
+        "/profile/company/membership-requests",
+      );
+      return res.data;
+    },
+  });
+}
+
+export function useDecideMembershipRequest() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: {
+      public_id: string;
+      decision: "approve" | "reject";
+      note?: string;
+    }) => {
+      const res = await api<{ data: Customer }>(
+        `/profile/company/membership-requests/${payload.public_id}/${payload.decision}`,
+        {
+          method: "POST",
+          body: JSON.stringify({ note: payload.note || undefined }),
+        },
+      );
+      return res.data;
+    },
+    onSuccess: (customer) => {
+      queryClient.setQueryData(queryKeys.customer.me, customer);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.customer.me });
+      void queryClient.invalidateQueries({ queryKey: ["company-membership-requests"] });
     },
   });
 }

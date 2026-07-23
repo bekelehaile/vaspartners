@@ -59,6 +59,18 @@ SMS,
 Dear {customer_name}, your request to join {company_name} was not approved. {note} — Ethio telecom
 SMS,
 
+        'company_membership_requested' => <<<'SMS'
+Dear {customer_name}, {applicant_name} requested to join {company_name}. Open the VAS Partners portal to approve or reject. — Ethio telecom
+SMS,
+
+        'company_profile_approved' => <<<'SMS'
+Dear {customer_name}, your company {company_name} was approved. You can now use the VAS Partners portal. — Ethio telecom
+SMS,
+
+        'company_profile_rejected' => <<<'SMS'
+Dear {customer_name}, your company profile for {company_name} needs updates. {note} Open the portal to correct and resubmit. — Ethio telecom
+SMS,
+
         'company_detach_approved' => <<<'SMS'
 Dear {customer_name}, your request to leave {company_name} was approved. You may create or join another company in the portal. — Ethio telecom
 SMS,
@@ -90,6 +102,12 @@ SMS,
         'company_attach_approved' => 'You were approved to join {company_name}.',
 
         'company_attach_rejected' => 'Your request to join {company_name} was not approved.',
+
+        'company_membership_requested' => '{applicant_name} requested to join {company_name}. Open Company to approve or reject.',
+
+        'company_profile_approved' => 'Your company {company_name} was approved. You can submit service requests.',
+
+        'company_profile_rejected' => 'Your company profile needs updates before approval.',
 
         'company_detach_approved' => 'You were detached from {company_name}. You can create or attach to another company.',
 

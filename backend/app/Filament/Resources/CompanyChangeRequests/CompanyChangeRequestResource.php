@@ -82,6 +82,7 @@ class CompanyChangeRequestResource extends Resource
                         ? CompanyResource::getUrl('view', ['record' => $record->company])
                         : null),
                 TextEntry::make('company.tin')->label('TIN'),
+                TextEntry::make('company.license_number')->label('License number'),
                 TextEntry::make('company.phone'),
                 TextEntry::make('company.email'),
                 TextEntry::make('company.address')->columnSpanFull(),
@@ -93,10 +94,22 @@ class CompanyChangeRequestResource extends Resource
                     TextEntry::make('letter_original_name')->label('Letter PDF')->placeholder('—'),
                 ])->columns(2),
             Section::make('Decision audit')->schema([
-                TextEntry::make('reviewer.name')->label('Decided by')->placeholder('Pending'),
+                TextEntry::make('decided_by')
+                    ->label('Decided by')
+                    ->state(fn (CompanyChangeRequest $record): string => $record->loadMissing(['reviewer', 'customerReviewer'])->decidedByLabel())
+                    ->placeholder('Pending'),
                 TextEntry::make('reviewed_at')->label('Decided at')->dateTime()->placeholder('Pending'),
                 TextEntry::make('admin_note')->label('Decision note')->columnSpanFull()->placeholder('—'),
             ])->columns(2),
+            Section::make('Owner approval')
+                ->description('Membership (attach) requests are decided by the company owner in the partner portal.')
+                ->visible(fn (CompanyChangeRequest $record): bool => $record->type === CompanyChangeType::Attach
+                    && $record->status === CompanyChangeStatus::Pending)
+                ->schema([
+                    TextEntry::make('owner_hint')
+                        ->label('')
+                        ->state('Waiting for the company owner to approve or reject this membership request.'),
+                ]),
         ]);
     }
 
@@ -125,7 +138,12 @@ class CompanyChangeRequestResource extends Resource
                         ? CompanyResource::getUrl('view', ['record' => $record->company])
                         : null),
                 TextColumn::make('company.tin')->label('TIN'),
-                TextColumn::make('reviewer.name')->label('Decided by')->placeholder('—')->toggleable(),
+                TextColumn::make('company.license_number')->label('License')->toggleable(),
+                TextColumn::make('decided_by')
+                    ->label('Decided by')
+                    ->state(fn (CompanyChangeRequest $record): string => $record->loadMissing(['reviewer', 'customerReviewer'])->decidedByLabel())
+                    ->placeholder('—')
+                    ->toggleable(),
                 TextColumn::make('reviewed_at')->label('Decided at')->dateTime()->placeholder('—')->toggleable(),
                 TextColumn::make('created_at')->dateTime()->sortable(),
             ])
@@ -144,7 +162,8 @@ class CompanyChangeRequestResource extends Resource
                     ->label('Approve')
                     ->color('success')
                     ->icon('heroicon-o-check-circle')
-                    ->visible(fn (CompanyChangeRequest $record) => $record->status === CompanyChangeStatus::Pending)
+                    ->visible(fn (CompanyChangeRequest $record) => $record->status === CompanyChangeStatus::Pending
+                        && $record->type === CompanyChangeType::Detach)
                     ->form([
                         Textarea::make('admin_note')->label('Note to partner (optional)'),
                     ])
@@ -156,7 +175,8 @@ class CompanyChangeRequestResource extends Resource
                     ->label('Reject')
                     ->color('danger')
                     ->icon('heroicon-o-x-circle')
-                    ->visible(fn (CompanyChangeRequest $record) => $record->status === CompanyChangeStatus::Pending)
+                    ->visible(fn (CompanyChangeRequest $record) => $record->status === CompanyChangeStatus::Pending
+                        && $record->type === CompanyChangeType::Detach)
                     ->form([
                         Textarea::make('admin_note')->label('Reason for partner')->required(),
                     ])

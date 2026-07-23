@@ -11,6 +11,11 @@ export const companyProfileSchema = z.object({
     .trim()
     .min(5, "Enter a valid TIN")
     .max(64, "TIN is too long"),
+  company_license_number: z
+    .string()
+    .trim()
+    .min(3, "Enter a valid license number")
+    .max(64, "License number is too long"),
   company_phone: z
     .string()
     .trim()
@@ -34,6 +39,7 @@ export type CompanyProfileValues = z.infer<typeof companyProfileSchema>;
 export const emptyCompanyProfile: CompanyProfileValues = {
   company_name: "",
   company_tin: "",
+  company_license_number: "",
   company_phone: "",
   company_email: "",
   company_address: "",

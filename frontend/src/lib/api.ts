@@ -9,9 +9,11 @@ export type Customer = {
   nationality?: string | null;
   birthdate?: string | null;
   company_id?: number | null;
+  current_company_id?: number | null;
   company_role?: string | null;
   company_name?: string | null;
   company_tin?: string | null;
+  company_license_number?: string | null;
   company_phone?: string | null;
   company_email?: string | null;
   company_address?: string | null;
@@ -19,20 +21,42 @@ export type Customer = {
     public_id: string;
     name: string;
     tin: string;
+    license_number?: string | null;
     phone?: string | null;
     email?: string | null;
     address?: string | null;
     member_count?: number;
+    approval_status?: string | null;
+    approval_note?: string | null;
+    is_approved?: boolean;
   } | null;
+  memberships?: Array<{
+    company_public_id?: string | null;
+    company_name?: string | null;
+    company_tin?: string | null;
+    company_license_number?: string | null;
+    role?: string | null;
+    is_active?: boolean;
+    is_current?: boolean;
+    is_approved?: boolean;
+    approval_status?: string | null;
+  }>;
   company_can_detach?: boolean;
   company_needs_ownership_transfer?: boolean;
   company_membership_active?: boolean | null;
+  company_can_edit?: boolean;
+  pending_membership_requests_count?: number;
   pending_company_request?: {
     public_id: string;
     type: "attach" | "detach";
     status: string;
     customer_note?: string | null;
-    company?: { public_id: string; name: string; tin: string } | null;
+    company?: {
+      public_id: string;
+      name: string;
+      tin: string;
+      license_number?: string | null;
+    } | null;
     created_at?: string | null;
     has_proposal?: boolean;
     has_letter?: boolean;

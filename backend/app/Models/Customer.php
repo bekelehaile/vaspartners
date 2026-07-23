@@ -2,8 +2,11 @@
 
 namespace App\Models;
 
+use App\Enums\CompanyRole;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -14,7 +17,8 @@ use LogicException;
 
 /**
  * Partner identity from Fayda on sign-in; company details completed afterwards.
- * Fayda identity fields are immutable outside Fayda sync.
+ * A customer may own and/or join many companies via company_memberships.
+ * current_company_id is the active portal/tenant context.
  */
 class Customer extends Authenticatable
 {
@@ -38,12 +42,11 @@ class Customer extends Authenticatable
     protected $fillable = [
         'company_name',
         'company_tin',
+        'company_license_number',
         'company_phone',
         'company_email',
         'company_address',
-        'company_id',
-        'company_role',
-        'company_membership_active',
+        'current_company_id',
         'is_active',
         'is_banned',
         'profile_completed_at',
@@ -55,9 +58,11 @@ class Customer extends Authenticatable
 
     protected $appends = [
         'profile_completed',
+        'company_id',
+        'company_role',
+        'company_membership_active',
     ];
 
-    /** Allow Fayda sync to write identity fields once per save. */
     protected bool $allowFaydaSync = false;
 
     protected function casts(): array
@@ -67,15 +72,8 @@ class Customer extends Authenticatable
             'birthdate' => 'date',
             'is_active' => 'boolean',
             'is_banned' => 'boolean',
-            'company_membership_active' => 'boolean',
             'profile_completed_at' => 'datetime',
         ];
-    }
-
-    /** Active membership on a company (disabled members keep the link but lose access). */
-    public function hasActiveCompanyMembership(): bool
-    {
-        return (bool) $this->company_id && $this->company_membership_active !== false;
     }
 
     protected static function booted(): void
@@ -94,7 +92,6 @@ class Customer extends Authenticatable
                 return;
             }
 
-            // Strip accidental mutations instead of hard-failing mass updates from tools.
             foreach ($dirtyFayda as $attribute) {
                 $customer->setAttribute($attribute, $customer->getOriginal($attribute));
             }
@@ -102,8 +99,6 @@ class Customer extends Authenticatable
     }
 
     /**
-     * Apply identity fields from Fayda / eSignet userinfo only.
-     *
      * @param  array<string, mixed>  $attributes
      */
     public function syncFromFayda(array $attributes): void
@@ -134,29 +129,101 @@ class Customer extends Authenticatable
         return 'public_id';
     }
 
-    public function getProfileCompletedAttribute(): bool
+    /** Active portal context company id (compat for older company_id usage). */
+    public function getCompanyIdAttribute(): ?int
     {
-        if ($this->company_id && $this->company_membership_active === false) {
+        $id = $this->attributes['current_company_id'] ?? null;
+
+        return $id !== null ? (int) $id : null;
+    }
+
+    public function getCompanyRoleAttribute(): ?string
+    {
+        $membership = $this->membershipForCurrentCompany();
+        if (! $membership) {
+            return null;
+        }
+
+        $role = $membership->role;
+
+        return $role instanceof CompanyRole ? $role->value : (string) $role;
+    }
+
+    public function getCompanyMembershipActiveAttribute(): ?bool
+    {
+        if (! $this->current_company_id) {
+            return null;
+        }
+
+        $membership = $this->membershipForCurrentCompany();
+
+        return $membership ? (bool) $membership->is_active : false;
+    }
+
+    public function hasActiveCompanyMembership(): bool
+    {
+        if (! $this->current_company_id) {
             return false;
         }
 
-        if ($this->company_id) {
-            return $this->profile_completed_at !== null
-                && filled($this->company_name)
-                && filled($this->company_tin);
+        $membership = $this->membershipForCurrentCompany();
+
+        return $membership?->is_active === true;
+    }
+
+    public function getProfileCompletedAttribute(): bool
+    {
+        if (! $this->hasActiveCompanyMembership()) {
+            return false;
+        }
+
+        $this->loadMissing('company');
+        if (! $this->company?->isApproved()) {
+            return false;
         }
 
         return $this->profile_completed_at !== null
             && filled($this->company_name)
             && filled($this->company_tin)
-            && filled($this->company_phone)
-            && filled($this->company_email)
-            && filled($this->company_address);
+            && filled($this->company_license_number);
     }
 
-    public function company(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    /** Current company (portal tenant context). */
+    public function company(): BelongsTo
     {
-        return $this->belongsTo(Company::class);
+        return $this->belongsTo(Company::class, 'current_company_id');
+    }
+
+    public function currentCompany(): BelongsTo
+    {
+        return $this->belongsTo(Company::class, 'current_company_id');
+    }
+
+    public function membershipForCurrentCompany(): ?CompanyMembership
+    {
+        if (! $this->current_company_id) {
+            return null;
+        }
+
+        if ($this->relationLoaded('memberships')) {
+            return $this->memberships->firstWhere('company_id', (int) $this->current_company_id);
+        }
+
+        return $this->memberships()
+            ->where('company_id', $this->current_company_id)
+            ->first();
+    }
+
+    public function memberships(): HasMany
+    {
+        return $this->hasMany(CompanyMembership::class);
+    }
+
+    public function companies(): BelongsToMany
+    {
+        return $this->belongsToMany(Company::class, 'company_memberships')
+            ->withPivot(['id', 'role', 'is_active'])
+            ->withTimestamps();
     }
 
     public function companyChangeRequests(): HasMany
@@ -174,7 +241,6 @@ class Customer extends Authenticatable
         return $this->hasMany(Subscription::class);
     }
 
-    /** Services reached via subscriptions (active catalog history for this partner). */
     public function subscribedServices(): HasManyThrough
     {
         return $this->hasManyThrough(

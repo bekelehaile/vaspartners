@@ -24,6 +24,10 @@ Route::prefix('v1')->group(function () {
         Route::get('profile/company/lookup', [ClientPortalController::class, 'lookupCompany']);
         Route::post('profile/company/attach', [ClientPortalController::class, 'requestAttachCompany']);
         Route::post('profile/company/detach', [ClientPortalController::class, 'requestDetachCompany']);
+        Route::post('profile/company/switch', [ClientPortalController::class, 'switchCompany']);
+        Route::get('profile/company/membership-requests', [ClientPortalController::class, 'membershipRequests']);
+        Route::post('profile/company/membership-requests/{changeRequest}/approve', [ClientPortalController::class, 'approveMembershipRequest']);
+        Route::post('profile/company/membership-requests/{changeRequest}/reject', [ClientPortalController::class, 'rejectMembershipRequest']);
 
         Route::get('notifications', [NotificationController::class, 'index']);
         Route::post('notifications/read-all', [NotificationController::class, 'markAllRead']);

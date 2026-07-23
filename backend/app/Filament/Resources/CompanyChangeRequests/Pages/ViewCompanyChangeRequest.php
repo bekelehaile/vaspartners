@@ -46,26 +46,28 @@ class ViewCompanyChangeRequest extends ViewRecord
             Action::make('approve')
                 ->label('Approve')
                 ->color('success')
-                ->visible(fn () => $record->status === CompanyChangeStatus::Pending)
+                ->visible(fn () => $record->status === CompanyChangeStatus::Pending
+                    && $record->type === CompanyChangeType::Detach)
                 ->form([
                     Textarea::make('admin_note')->label('Note to partner (optional)'),
                 ])
                 ->requiresConfirmation()
                 ->action(function (array $data) use ($record, $membership) {
                     $membership->approve($record, auth()->user(), $data['admin_note'] ?? null);
-                    $this->refreshFormData(['status', 'admin_note', 'reviewed_at', 'reviewed_by_user_id']);
+                    $this->refreshFormData(['status', 'admin_note', 'reviewed_at', 'reviewed_by_user_id', 'reviewed_by_customer_id']);
                 }),
             Action::make('reject')
                 ->label('Reject')
                 ->color('danger')
-                ->visible(fn () => $record->status === CompanyChangeStatus::Pending)
+                ->visible(fn () => $record->status === CompanyChangeStatus::Pending
+                    && $record->type === CompanyChangeType::Detach)
                 ->form([
                     Textarea::make('admin_note')->label('Reason for partner')->required(),
                 ])
                 ->requiresConfirmation()
                 ->action(function (array $data) use ($record, $membership) {
                     $membership->reject($record, auth()->user(), $data['admin_note'] ?? null);
-                    $this->refreshFormData(['status', 'admin_note', 'reviewed_at', 'reviewed_by_user_id']);
+                    $this->refreshFormData(['status', 'admin_note', 'reviewed_at', 'reviewed_by_user_id', 'reviewed_by_customer_id']);
                 }),
         ];
     }

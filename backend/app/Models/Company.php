@@ -2,10 +2,12 @@
 
 namespace App\Models;
 
+use App\Enums\CompanyApprovalStatus;
 use App\Enums\CompanyRole;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -18,10 +20,15 @@ class Company extends Model
         'public_id',
         'name',
         'tin',
+        'license_number',
         'phone',
         'email',
         'address',
         'is_active',
+        'approval_status',
+        'approved_by_user_id',
+        'approved_at',
+        'approval_note',
         'created_by_customer_id',
     ];
 
@@ -29,13 +36,14 @@ class Company extends Model
     {
         return [
             'is_active' => 'boolean',
+            'approval_status' => CompanyApprovalStatus::class,
+            'approved_at' => 'datetime',
         ];
     }
 
     protected static function booted(): void
     {
         static::deleting(function (): bool {
-            // Company records are permanent — soft or hard delete is not allowed.
             return false;
         });
     }
@@ -55,20 +63,52 @@ class Company extends Model
         return $this->belongsTo(Customer::class, 'created_by_customer_id');
     }
 
+    public function approvedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by_user_id');
+    }
+
+    public function memberships(): HasMany
+    {
+        return $this->hasMany(CompanyMembership::class);
+    }
+
     /** All linked partners (owner + members). */
-    public function members(): HasMany
+    public function members(): BelongsToMany
     {
-        return $this->hasMany(Customer::class);
+        return $this->belongsToMany(Customer::class, 'company_memberships')
+            ->withPivot(['id', 'role', 'is_active'])
+            ->withTimestamps();
     }
 
-    public function owner(): HasOne
+    public function ownerMembership(): HasOne
     {
-        return $this->hasOne(Customer::class)->where('company_role', CompanyRole::Owner->value);
+        return $this->hasOne(CompanyMembership::class)
+            ->where('role', CompanyRole::Owner->value);
     }
 
-    public function nonOwnerMembers(): HasMany
+    public function owner(): BelongsToMany
     {
-        return $this->hasMany(Customer::class)->where('company_role', CompanyRole::Member->value);
+        return $this->belongsToMany(Customer::class, 'company_memberships')
+            ->withPivot(['id', 'role', 'is_active'])
+            ->wherePivot('role', CompanyRole::Owner->value)
+            ->withTimestamps();
+    }
+
+    public function nonOwnerMembers(): BelongsToMany
+    {
+        return $this->belongsToMany(Customer::class, 'company_memberships')
+            ->withPivot(['id', 'role', 'is_active'])
+            ->wherePivot('role', CompanyRole::Member->value)
+            ->withTimestamps();
+    }
+
+    public function activeMembers(): BelongsToMany
+    {
+        return $this->belongsToMany(Customer::class, 'company_memberships')
+            ->withPivot(['id', 'role', 'is_active'])
+            ->wherePivot('is_active', true)
+            ->withTimestamps();
     }
 
     public function changeRequests(): HasMany
@@ -83,16 +123,25 @@ class Company extends Model
 
     public function hasOwner(): bool
     {
-        return $this->owner()->exists();
+        return $this->memberships()->where('role', CompanyRole::Owner->value)->exists();
+    }
+
+    public function ownerCustomer(): ?Customer
+    {
+        return $this->owner()->first();
     }
 
     public function memberCount(): int
     {
-        return $this->members()->count();
+        return $this->memberships()->count();
     }
 
-    public function activeMembers(): HasMany
+    public function isApproved(): bool
     {
-        return $this->hasMany(Customer::class)->where('company_membership_active', true);
+        $status = $this->approval_status instanceof CompanyApprovalStatus
+            ? $this->approval_status
+            : CompanyApprovalStatus::tryFrom((string) $this->approval_status);
+
+        return $status?->isApproved() === true && $this->is_active;
     }
 }

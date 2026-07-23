@@ -6,6 +6,7 @@ use App\Enums\TicketStatus;
 use App\Filament\Resources\CompanyChangeRequests\CompanyChangeRequestResource;
 use App\Filament\Resources\Tickets\TicketResource;
 use App\Models\Customer;
+use App\Models\Company;
 use App\Models\CompanyChangeRequest;
 use App\Models\Ticket;
 use App\Models\TicketComment;
@@ -172,14 +173,41 @@ class PartnerNotificationService
 
     public function companyChangeRequested(CompanyChangeRequest $request): void
     {
-        $request->loadMissing(['customer', 'company']);
+        $request->loadMissing(['customer', 'company.owner']);
+
+        if ($request->type === \App\Enums\CompanyChangeType::Attach) {
+            $owner = $request->company?->ownerCustomer();
+            if ($owner) {
+                $placeholders = [
+                    'customer_name' => $owner->name ?: 'Partner',
+                    'applicant_name' => $request->customer?->name ?: 'A partner',
+                    'company_name' => $request->company?->name ?: 'your company',
+                    'company_tin' => $request->company?->tin ?: '',
+                ];
+                $smsBody = $this->render('templates', 'company_membership_requested', $placeholders);
+                $portalBody = $this->render('portal', 'company_membership_requested', $placeholders);
+
+                if (filled($owner->phone_number)) {
+                    $this->sms->send($owner->phone_number, $smsBody);
+                }
+
+                $owner->notify(new PartnerPortalNotification(
+                    title: $this->titleFor('company_membership_requested'),
+                    body: Str::limit($portalBody, 280),
+                    template: 'company_membership_requested',
+                    url: '/portal/company',
+                ));
+            }
+
+            return;
+        }
+
         $this->notifyStaffDatabase(
             $this->managementUsers(),
             $request->type->label().' pending',
             sprintf(
-                '%s requested to %s %s (%s).',
+                '%s requested to leave %s (%s).',
                 $request->customer?->name ?: 'A partner',
-                $request->type === \App\Enums\CompanyChangeType::Attach ? 'join' : 'leave',
                 $request->company?->name ?: 'a company',
                 $request->company?->tin ?: 'TIN n/a',
             ),
@@ -231,6 +259,59 @@ class PartnerNotificationService
             template: $template,
             url: '/portal/company',
         ));
+    }
+
+    public function companyProfileSubmitted(Customer $customer): void
+    {
+        $customer->loadMissing('company');
+        $this->notifyStaffDatabase(
+            $this->managementUsers(),
+            'Company profile pending',
+            sprintf(
+                '%s submitted company %s (TIN %s) for approval.',
+                $customer->name ?: 'A partner',
+                $customer->company?->name ?: 'profile',
+                $customer->company?->tin ?: 'n/a',
+            ),
+            null,
+            \App\Filament\Resources\Companies\CompanyResource::getUrl('view', ['record' => $customer->company]),
+        );
+    }
+
+    public function companyProfileDecided(Company $company, Customer $owner, bool $approved): void
+    {
+        $template = $approved ? 'company_profile_approved' : 'company_profile_rejected';
+        $placeholders = [
+            'customer_name' => $owner->name ?: 'Partner',
+            'company_name' => $company->name ?: 'your organisation',
+            'company_tin' => $company->tin ?: '',
+            'note' => filled($company->approval_note) ? trim((string) $company->approval_note) : '',
+            'tt_number' => '',
+            'service' => '',
+            'requisition' => '',
+            'status' => $approved ? 'approved' : 'rejected',
+        ];
+
+        $smsBody = $this->render('templates', $template, $placeholders);
+        $portalBody = $this->render('portal', $template, $placeholders);
+        if (! $approved && filled($company->approval_note)) {
+            $portalBody = rtrim($portalBody, '.').'. '.trim((string) $company->approval_note);
+        }
+
+        if (filled($owner->phone_number)) {
+            $this->sms->send($owner->phone_number, $smsBody);
+        }
+
+        $owner->notify(new PartnerPortalNotification(
+            title: $this->titleFor($template),
+            body: Str::limit($portalBody, 280),
+            template: $template,
+            url: '/portal/company',
+        ));
+
+        if ($approved) {
+            $this->profileCompleted($owner->fresh(['company']));
+        }
     }
 
     public function profileCompleted(Customer $customer): void
@@ -359,6 +440,9 @@ class PartnerNotificationService
             'company_attach_rejected' => 'Company attach rejected',
             'company_detach_approved' => 'Company detach approved',
             'company_detach_rejected' => 'Company detach rejected',
+            'company_membership_requested' => 'Membership request',
+            'company_profile_approved' => 'Company approved',
+            'company_profile_rejected' => 'Company needs updates',
             default => 'Portal update',
         };
     }

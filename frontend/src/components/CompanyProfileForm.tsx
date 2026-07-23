@@ -25,11 +25,12 @@ function fieldError(errors: unknown): string | null {
   return String(first);
 }
 
-function fromCustomer(me?: Customer | null): CompanyProfileValues {
-  if (!me) return emptyCompanyProfile;
+function fromCustomer(me?: Customer | null, createNew = false): CompanyProfileValues {
+  if (!me || createNew) return emptyCompanyProfile;
   return {
     company_name: me.company_name ?? "",
     company_tin: me.company_tin ?? "",
+    company_license_number: me.company_license_number ?? me.company?.license_number ?? "",
     company_phone: me.company_phone ?? "",
     company_email: me.company_email ?? "",
     company_address: me.company_address ?? "",
@@ -110,23 +111,25 @@ function CompanyField({
 export function CompanyProfileForm({
   me,
   redirectTo = "/portal",
+  createNew = false,
 }: {
   me?: Customer | null;
   redirectTo?: string;
+  createNew?: boolean;
 }) {
   const router = useRouter();
   const mutation = useCompleteCompanyProfile();
-  const isUpdate = !!me?.profile_completed;
+  const isUpdate = !!me?.company_id && !createNew;
 
   const form = useForm({
-    defaultValues: fromCustomer(me),
+    defaultValues: fromCustomer(me, createNew),
     validators: {
       onChange: companyProfileSchema,
       onSubmit: companyProfileSchema,
     },
     onSubmit: async ({ value }) => {
       const parsed = companyProfileSchema.parse(value);
-      await mutation.mutateAsync(parsed);
+      await mutation.mutateAsync({ ...parsed, create_new: createNew || undefined });
       router.replace(redirectTo);
     },
   });
@@ -146,8 +149,8 @@ export function CompanyProfileForm({
         <h2>{isUpdate ? "Organisation settings" : "Company / organisation profile"}</h2>
         <p className="muted">
           {isUpdate
-            ? "Keep company details current. Your Fayda national ID identity below cannot be changed here."
-            : "Fayda verified your national ID. Complete your organisation details before you can submit VAS service requests."}
+            ? "Update your company details and resubmit for admin approval. After approval, only administrators can change company records."
+            : "Fayda verified your national ID. Submit organisation details for admin approval. You become the company owner once approved."}
         </p>
       </div>
 
@@ -222,6 +225,17 @@ export function CompanyProfileForm({
                       label="TIN"
                       submissionAttempts={submissionAttempts}
                       placeholder="Tax identification number"
+                    />
+                  )}
+                </form.Field>
+
+                <form.Field name="company_license_number">
+                  {(field) => (
+                    <CompanyField
+                      field={field}
+                      label="License number"
+                      submissionAttempts={submissionAttempts}
+                      placeholder="Business / trade license number"
                     />
                   )}
                 </form.Field>

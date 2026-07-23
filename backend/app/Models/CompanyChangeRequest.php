@@ -30,6 +30,7 @@ class CompanyChangeRequest extends Model
         'letter_original_name',
         'letter_size_bytes',
         'reviewed_by_user_id',
+        'reviewed_by_customer_id',
         'reviewed_at',
     ];
 
@@ -67,6 +68,24 @@ class CompanyChangeRequest extends Model
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by_user_id');
+    }
+
+    public function customerReviewer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class, 'reviewed_by_customer_id');
+    }
+
+    public function decidedByLabel(): string
+    {
+        if ($this->customerReviewer) {
+            return $this->customerReviewer->name.' (owner)';
+        }
+
+        if ($this->reviewer) {
+            return $this->reviewer->name.' (admin)';
+        }
+
+        return '—';
     }
 
     public function hasProposal(): bool

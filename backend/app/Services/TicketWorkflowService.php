@@ -313,7 +313,7 @@ class TicketWorkflowService
             ->whereHas('requisition', fn ($q) => $q->where('creates_subscription', true))
             ->when(
                 $companyId > 0,
-                fn ($q) => $q->whereHas('customer', fn ($cq) => $cq->where('company_id', $companyId)),
+                fn ($q) => $q->whereHas('customer.memberships', fn ($cq) => $cq->where('company_id', $companyId)),
                 fn ($q) => $q->where('customer_id', $customer->id),
             )
             ->count();

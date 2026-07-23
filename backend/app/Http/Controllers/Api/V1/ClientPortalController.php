@@ -196,13 +196,13 @@ class ClientPortalController extends Controller
                 'total' => 0,
                 'pending_new_service_ids' => [],
                 'pending_requests' => [],
-                'message' => $customer->company_id && $customer->company_membership_active === false
+                'message' => $customer->current_company_id && ! $customer->hasActiveCompanyMembership()
                     ? 'Your company membership is disabled.'
                     : 'Complete your company profile to view subscriptions.',
             ]);
         }
 
-        $companyId = (int) $customer->company_id;
+        $companyId = (int) $customer->current_company_id;
 
         $rows = Subscription::query()
             ->with(['service:id,name,slug,renewal_interval'])
@@ -210,9 +210,9 @@ class ClientPortalController extends Controller
             ->latest('id')
             ->paginate(100);
 
-        $companyCustomerIds = \App\Models\Customer::query()
+        $companyCustomerIds = \App\Models\CompanyMembership::query()
             ->where('company_id', $companyId)
-            ->pluck('id');
+            ->pluck('customer_id');
 
         $pendingNewServiceIds = Ticket::query()
             ->whereIn('customer_id', $companyCustomerIds)
@@ -328,7 +328,7 @@ class ClientPortalController extends Controller
     {
         /** @var \App\Models\Customer $customer */
         $customer = $request->user();
-        if ($customer->company_id && $customer->company_membership_active === false) {
+        if ($customer->current_company_id && ! $customer->hasActiveCompanyMembership()) {
             return response()->json([
                 'message' => 'Your membership for this company is disabled. Contact an administrator.',
             ], 403);
@@ -337,14 +337,19 @@ class ClientPortalController extends Controller
         $data = $request->validate([
             'company_name' => ['required', 'string', 'min:2', 'max:255'],
             'company_tin' => ['required', 'string', 'min:5', 'max:64'],
+            'company_license_number' => ['required', 'string', 'min:3', 'max:64'],
             'company_phone' => ['required', 'string', 'min:9', 'max:32'],
             'company_email' => ['required', 'email', 'max:255'],
             'company_address' => ['required', 'string', 'min:5', 'max:2000'],
+            'create_new' => ['sometimes', 'boolean'],
         ]);
 
-        $fresh = $customer->company_id
-            ? $membership->updateOwnCompany($customer, $data)
-            : $membership->createCompanyForCustomer($customer, $data);
+        $createNew = (bool) ($data['create_new'] ?? false);
+        unset($data['create_new']);
+
+        $fresh = ($createNew || ! $customer->current_company_id)
+            ? $membership->createCompanyForCustomer($customer, $data)
+            : $membership->updateOwnCompany($customer, $data);
 
         return response()->json(['data' => $membership->serializeCustomer($fresh)]);
     }
@@ -353,11 +358,12 @@ class ClientPortalController extends Controller
     {
         $data = $request->validate([
             'tin' => ['required', 'string', 'min:5', 'max:64'],
+            'license_number' => ['required', 'string', 'min:3', 'max:64'],
         ]);
 
-        $company = $membership->lookupByTin($data['tin']);
+        $company = $membership->lookupByIdentity($data['tin'], $data['license_number']);
         if (! $company) {
-            return response()->json(['message' => 'No company found for this TIN.', 'data' => null], 404);
+            return response()->json(['message' => 'No company found for this TIN and license number.', 'data' => null], 404);
         }
 
         return response()->json([
@@ -365,6 +371,7 @@ class ClientPortalController extends Controller
                 'public_id' => $company->public_id,
                 'name' => $company->name,
                 'tin' => $company->tin,
+                'license_number' => $company->license_number,
             ],
         ]);
     }
@@ -373,10 +380,16 @@ class ClientPortalController extends Controller
     {
         $data = $request->validate([
             'company_tin' => ['required', 'string', 'min:5', 'max:64'],
+            'company_license_number' => ['required', 'string', 'min:3', 'max:64'],
             'note' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $change = $membership->requestAttach($request->user(), $data['company_tin'], $data['note'] ?? null);
+        $change = $membership->requestAttach(
+            $request->user(),
+            $data['company_tin'],
+            $data['company_license_number'],
+            $data['note'] ?? null,
+        );
 
         return response()->json([
             'data' => $membership->serializeCustomer($request->user()->fresh()),
@@ -388,11 +401,95 @@ class ClientPortalController extends Controller
         ], 201);
     }
 
+    public function membershipRequests(Request $request, CompanyMembershipService $membership)
+    {
+        $rows = $membership->pendingMembershipRequestsForOwner($request->user())
+            ->map(fn ($change) => [
+                'public_id' => $change->public_id,
+                'type' => $change->type->value,
+                'status' => $change->status->value,
+                'customer_note' => $change->customer_note,
+                'created_at' => optional($change->created_at)?->toIso8601String(),
+                'applicant' => [
+                    'public_id' => $change->customer?->public_id,
+                    'name' => $change->customer?->name,
+                    'phone_number' => $change->customer?->phone_number,
+                    'email' => $change->customer?->email,
+                ],
+            ])
+            ->values();
+
+        return response()->json(['data' => $rows]);
+    }
+
+    public function approveMembershipRequest(
+        Request $request,
+        string $changeRequest,
+        CompanyMembershipService $membership,
+    ) {
+        $record = \App\Models\CompanyChangeRequest::query()
+            ->where('public_id', $changeRequest)
+            ->firstOrFail();
+
+        $data = $request->validate([
+            'note' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $fresh = $membership->approve($record, $request->user(), $data['note'] ?? null);
+
+        return response()->json([
+            'data' => $membership->serializeCustomer($request->user()->fresh()),
+            'request' => [
+                'public_id' => $fresh->public_id,
+                'status' => $fresh->status->value,
+            ],
+        ]);
+    }
+
+    public function rejectMembershipRequest(
+        Request $request,
+        string $changeRequest,
+        CompanyMembershipService $membership,
+    ) {
+        $record = \App\Models\CompanyChangeRequest::query()
+            ->where('public_id', $changeRequest)
+            ->firstOrFail();
+
+        $data = $request->validate([
+            'note' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $fresh = $membership->reject($record, $request->user(), $data['note'] ?? null);
+
+        return response()->json([
+            'data' => $membership->serializeCustomer($request->user()->fresh()),
+            'request' => [
+                'public_id' => $fresh->public_id,
+                'status' => $fresh->status->value,
+            ],
+        ]);
+    }
+
+    public function switchCompany(Request $request, CompanyMembershipService $membership)
+    {
+        $data = $request->validate([
+            'company_public_id' => ['required', 'string', 'max:26'],
+        ]);
+
+        $company = \App\Models\Company::query()
+            ->where('public_id', $data['company_public_id'])
+            ->firstOrFail();
+
+        $fresh = $membership->switchCompany($request->user(), $company);
+
+        return response()->json(['data' => $membership->serializeCustomer($fresh)]);
+    }
+
     public function requestDetachCompany(Request $request, CompanyMembershipService $membership)
     {
         /** @var \App\Models\Customer $customer */
         $customer = $request->user();
-        if ($customer->company_membership_active === false) {
+        if (! $customer->hasActiveCompanyMembership()) {
             return response()->json([
                 'message' => 'Your membership for this company is disabled. Contact an administrator.',
             ], 403);

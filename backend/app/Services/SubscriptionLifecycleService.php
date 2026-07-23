@@ -53,7 +53,7 @@ class SubscriptionLifecycleService
                 TicketStatus::Open->value,
                 TicketStatus::InProgress->value,
             ])
-            ->whereHas('customer', fn ($q) => $q->where('company_id', $companyId))
+            ->whereHas('customer.memberships', fn ($q) => $q->where('company_id', $companyId))
             ->latest('id')
             ->first(['id', 'tt_number', 'public_id', 'status']);
 
@@ -217,7 +217,7 @@ class SubscriptionLifecycleService
         $created = 0;
 
         Subscription::query()
-            ->with(['service.renewalRequisition', 'customer', 'company.owner'])
+            ->with(['service.renewalRequisition', 'customer', 'company'])
             ->whereIn('status', [SubscriptionStatus::Active->value, SubscriptionStatus::PendingRenewal->value])
             ->whereNotNull('next_renewal_due_at')
             ->where('next_renewal_due_at', '<=', now())
@@ -246,7 +246,7 @@ class SubscriptionLifecycleService
                         continue;
                     }
 
-                    $actor = $subscription->company?->owner
+                    $actor = $subscription->company?->ownerCustomer()
                         ?? $subscription->customer;
                     if (! $actor) {
                         continue;

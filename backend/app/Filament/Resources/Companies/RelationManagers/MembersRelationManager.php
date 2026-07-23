@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Companies\RelationManagers;
 
 use App\Enums\CompanyRole;
 use App\Filament\Resources\Customers\CustomerResource;
+use App\Models\CompanyMembership;
 use App\Models\Customer;
 use App\Services\CompanyMembershipService;
 use Filament\Actions\Action;
@@ -17,7 +18,7 @@ use Throwable;
 
 class MembersRelationManager extends RelationManager
 {
-    protected static string $relationship = 'members';
+    protected static string $relationship = 'memberships';
 
     protected static ?string $title = 'Members';
 
@@ -29,13 +30,13 @@ class MembersRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->description('Each company must have exactly one owner and may have many members. Disable a member to revoke company access without unlinking.')
-            ->modifyQueryUsing(fn ($query) => $query->orderByRaw("CASE WHEN company_role = 'owner' THEN 0 ELSE 1 END")->orderBy('name'))
+            ->description('A partner may belong to many companies. Each company still has exactly one owner.')
+            ->modifyQueryUsing(fn ($query) => $query->with('customer')->orderByRaw("CASE WHEN role = 'owner' THEN 0 ELSE 1 END")->orderBy('id'))
             ->columns([
-                TextColumn::make('name')->searchable()->sortable(),
-                TextColumn::make('phone_number')->label('Phone')->searchable(),
-                TextColumn::make('email')->toggleable(),
-                TextColumn::make('company_role')
+                TextColumn::make('customer.name')->searchable()->sortable(),
+                TextColumn::make('customer.phone_number')->label('Phone')->searchable(),
+                TextColumn::make('customer.email')->toggleable(),
+                TextColumn::make('role')
                     ->label('Role')
                     ->badge()
                     ->formatStateUsing(fn ($state): string => $state instanceof CompanyRole
@@ -44,34 +45,36 @@ class MembersRelationManager extends RelationManager
                     ->color(fn ($state): string => ($state instanceof CompanyRole ? $state->value : (string) $state) === 'owner'
                         ? 'success'
                         : 'gray'),
-                IconColumn::make('company_membership_active')
+                IconColumn::make('is_active')
                     ->label('Access')
                     ->boolean()
                     ->trueIcon('heroicon-o-check-circle')
                     ->falseIcon('heroicon-o-x-circle')
                     ->trueColor('success')
                     ->falseColor('danger'),
-                TextColumn::make('profile_completed_at')->label('Joined')->dateTime()->placeholder('—'),
+                TextColumn::make('created_at')->label('Joined')->dateTime()->placeholder('—'),
             ])
             ->recordActions([
                 ViewAction::make()
-                    ->url(fn (Customer $record): string => CustomerResource::getUrl('view', ['record' => $record])),
+                    ->url(fn (CompanyMembership $record): string => $record->customer
+                        ? CustomerResource::getUrl('view', ['record' => $record->customer])
+                        : '#'),
                 Action::make('make_owner')
                     ->label('Make owner')
                     ->icon('heroicon-o-star')
                     ->color('warning')
-                    ->visible(fn (Customer $record): bool => ($record->company_role instanceof CompanyRole
-                        ? $record->company_role
-                        : CompanyRole::tryFrom((string) $record->company_role)) !== CompanyRole::Owner
-                        && $record->company_membership_active !== false)
+                    ->visible(fn (CompanyMembership $record): bool => ! $record->isOwner() && $record->is_active)
                     ->requiresConfirmation()
                     ->modalHeading('Transfer company ownership')
-                    ->modalDescription(fn (Customer $record): string => "Make {$record->name} the sole owner. The current owner becomes a member.")
-                    ->action(function (Customer $record, CompanyMembershipService $membership): void {
+                    ->modalDescription(fn (CompanyMembership $record): string => 'Make '.($record->customer?->name ?: 'this partner').' the sole owner. The current owner becomes a member.')
+                    ->action(function (CompanyMembership $record, CompanyMembershipService $membership): void {
                         try {
+                            if (! $record->customer) {
+                                return;
+                            }
                             $membership->transferOwnership(
                                 $this->getOwnerRecord(),
-                                $record,
+                                $record->customer,
                                 auth()->user(),
                             );
 
@@ -91,15 +94,16 @@ class MembersRelationManager extends RelationManager
                     ->label('Disable access')
                     ->icon('heroicon-o-no-symbol')
                     ->color('danger')
-                    ->visible(fn (Customer $record): bool => $record->company_membership_active !== false)
+                    ->visible(fn (CompanyMembership $record): bool => $record->is_active)
                     ->requiresConfirmation()
-                    ->modalHeading('Disable company access')
-                    ->modalDescription(fn (Customer $record): string => "{$record->name} will stay linked but can no longer see company details or manage company services.")
-                    ->action(function (Customer $record, CompanyMembershipService $membership): void {
+                    ->action(function (CompanyMembership $record, CompanyMembershipService $membership): void {
                         try {
+                            if (! $record->customer) {
+                                return;
+                            }
                             $membership->setMembershipActive(
                                 $this->getOwnerRecord(),
-                                $record,
+                                $record->customer,
                                 false,
                                 auth()->user(),
                             );
@@ -120,14 +124,15 @@ class MembersRelationManager extends RelationManager
                     ->label('Enable access')
                     ->icon('heroicon-o-check')
                     ->color('success')
-                    ->visible(fn (Customer $record): bool => $record->company_membership_active === false)
+                    ->visible(fn (CompanyMembership $record): bool => ! $record->is_active)
                     ->requiresConfirmation()
-                    ->modalHeading('Enable company access')
-                    ->modalDescription(fn (Customer $record): string => "Restore {$record->name}'s access to company info and subscriptions.")
-                    ->action(function (Customer $record, CompanyMembershipService $membership): void {
+                    ->action(function (CompanyMembership $record, CompanyMembershipService $membership): void {
+                        if (! $record->customer) {
+                            return;
+                        }
                         $membership->setMembershipActive(
                             $this->getOwnerRecord(),
-                            $record,
+                            $record->customer,
                             true,
                             auth()->user(),
                         );
