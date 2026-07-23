@@ -73,7 +73,13 @@ class DocumentTypeResource extends Resource
                 ->dehydrateStateUsing(fn (mixed $state): string => is_array($state)
                     ? implode(',', array_values(array_filter($state)))
                     : (string) $state),
-            TextInput::make('max_size_kb')->numeric()->default(5120)->required(),
+            TextInput::make('max_size_kb')
+                ->numeric()
+                ->default(5120)
+                ->required()
+                ->minValue(1)
+                ->maxValue(51200)
+                ->helperText('Hard limit enforced on portal uploads (kilobytes).'),
             Textarea::make('description')->columnSpanFull(),
             Toggle::make('is_active')->default(true),
         ])->columns(2);

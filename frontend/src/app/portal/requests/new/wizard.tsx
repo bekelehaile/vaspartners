@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useForm } from "@tanstack/react-form";
+import { useForm, useStore } from "@tanstack/react-form";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { PortalPageHeader } from "@/components/PortalPageHeader";
@@ -11,11 +11,17 @@ import {
   useServices,
   useSubscriptions,
   useTicket,
+  uploadTicketDocumentFile,
 } from "@/hooks/use-customer";
 import type { Service, Subscription, Ticket } from "@/lib/api";
 import { documentsLockedStatus } from "@/lib/document-upload";
 import { ticketCreateSchema } from "@/lib/schemas/ticket";
 import { TicketDocumentsPanel } from "@/components/TicketDocumentsPanel";
+import {
+  RequirementsPreview,
+  requiredAttachmentsReady,
+  type StagedAttachments,
+} from "@/components/RequirementsPreview";
 
 type Requisition = NonNullable<Service["requisitions"]>[number];
 type Intent = "subscribe" | "manage";
@@ -36,12 +42,7 @@ function manageRequisitions(service: Service): Requisition[] {
   const reqs = service.requisitions ?? [];
   // Non-subscription services are requested via Manage (no active sub required)
   if (service.is_subscription_based === false) {
-    return reqs.filter(
-      (r) =>
-        !r.requires_active_subscription &&
-        !r.renews_subscription &&
-        !r.terminates_subscription
-    );
+    return reqs.filter((r) => !r.creates_subscription);
   }
   return reqs.filter(
     (r) =>
@@ -111,6 +112,10 @@ export default function NewRequestWizard() {
   const canManage =
     aliveSubs.length > 0 || manageOneOffServices.length > 0;
 
+  const [stagedFiles, setStagedFiles] = useState<StagedAttachments>({});
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const [uploadingDocs, setUploadingDocs] = useState(false);
+
   const form = useForm({
     defaultValues: {
       intent: presetIntent as Intent | "",
@@ -120,16 +125,39 @@ export default function NewRequestWizard() {
       description: "",
     },
     onSubmit: async ({ value }) => {
+      setAttachError(null);
       const parsed = ticketCreateSchema.parse(value);
-      await createTicket.mutateAsync(parsed);
+      const created = await createTicket.mutateAsync(parsed);
+
+      const entries = Object.entries(stagedFiles);
+      if (entries.length) {
+        setUploadingDocs(true);
+        try {
+          for (const [documentTypeId, file] of entries) {
+            await uploadTicketDocumentFile(created.public_id, Number(documentTypeId), file);
+          }
+          setStagedFiles({});
+        } catch (err) {
+          setAttachError(
+            err instanceof Error
+              ? err.message
+              : "Request created, but some documents failed to upload. You can retry on the next step."
+          );
+        } finally {
+          setUploadingDocs(false);
+        }
+      }
     },
   });
 
+  // useForm does not re-render the parent on field changes — subscribe explicitly.
+  const values = useStore(form.store, (s) => s.values);
   const ticket = createTicket.data;
-  const intent = form.state.values.intent as Intent | "";
-  const serviceId = form.state.values.service_id;
-  const subscriptionId = form.state.values.subscription_id;
-  const requisitionId = form.state.values.requisition_id;
+  const intent = values.intent as Intent | "";
+  const serviceId = values.service_id;
+  const subscriptionId = values.subscription_id;
+  const requisitionId = values.requisition_id;
+  const description = values.description;
 
   const selectedSubscribe = subscribeServices.find((s) => String(s.id) === String(serviceId));
   const selectedSub = aliveSubs.find((s) => String(s.id) === String(subscriptionId));
@@ -142,6 +170,24 @@ export default function NewRequestWizard() {
   const managingOneOff = !!selectedManage && selectedManage.is_subscription_based === false;
   const starterTypes = selectedSubscribe ? starterRequisitions(selectedSubscribe) : [];
   const manageTypes = selectedManage ? manageRequisitions(selectedManage) : [];
+
+  const confirmServiceId =
+    intent === "manage" ? (manageServiceId ? String(manageServiceId) : "") : String(serviceId || "");
+  const {
+    data: confirmRequirements = [],
+    isLoading: confirmDocsLoading,
+    isFetched: confirmDocsFetched,
+  } = useDocumentRequirements(confirmServiceId, String(requisitionId || ""));
+  const attachmentsReady =
+    (!!confirmServiceId && !!requisitionId
+      ? confirmDocsFetched && !confirmDocsLoading
+      : true) && requiredAttachmentsReady(confirmRequirements, stagedFiles);
+
+  // Clear staged files when the request type / service changes
+  useEffect(() => {
+    setStagedFiles({});
+    setAttachError(null);
+  }, [serviceId, requisitionId, subscriptionId, intent]);
 
   // Wizard step within a journey (0-based after intent is chosen)
   const [step, setStep] = useState(0);
@@ -270,6 +316,8 @@ export default function NewRequestWizard() {
     form.setFieldValue("requisition_id", "");
     form.setFieldValue("subscription_id", "");
     form.setFieldValue("description", "");
+    setStagedFiles({});
+    setAttachError(null);
     setStep(0);
   }
 
@@ -279,6 +327,8 @@ export default function NewRequestWizard() {
     form.setFieldValue("requisition_id", "");
     form.setFieldValue("subscription_id", "");
     form.setFieldValue("description", "");
+    setStagedFiles({});
+    setAttachError(null);
     setStep(0);
   }
 
@@ -317,6 +367,7 @@ export default function NewRequestWizard() {
               : "Could not create request"}
           </div>
         )}
+        {attachError && <div className="alert">{attachError}</div>}
 
         {ticket ? (
           <UploadStep
@@ -541,6 +592,8 @@ export default function NewRequestWizard() {
                     <RequirementsPreview
                       serviceId={String(serviceId || "")}
                       requisitionId={String(requisitionId || "")}
+                      files={stagedFiles}
+                      onFilesChange={setStagedFiles}
                     />
                     <div className="form-actions">
                       <button
@@ -548,12 +601,18 @@ export default function NewRequestWizard() {
                         className="btn-primary"
                         disabled={
                           createTicket.isPending ||
+                          uploadingDocs ||
                           !serviceId ||
                           !requisitionId ||
-                          !form.state.values.description.trim()
+                          !description.trim() ||
+                          !attachmentsReady
                         }
                       >
-                        {createTicket.isPending ? "Creating…" : "Submit subscription request"}
+                        {createTicket.isPending || uploadingDocs
+                          ? uploadingDocs
+                            ? "Uploading documents…"
+                            : "Creating…"
+                          : "Submit subscription request"}
                       </button>
                       <button type="button" className="btn-ghost" onClick={() => setStep(0)}>
                         Back
@@ -782,6 +841,8 @@ export default function NewRequestWizard() {
                     <RequirementsPreview
                       serviceId={manageServiceId ? String(manageServiceId) : ""}
                       requisitionId={String(requisitionId || "")}
+                      files={stagedFiles}
+                      onFilesChange={setStagedFiles}
                     />
                     <div className="form-actions">
                       <button
@@ -789,14 +850,18 @@ export default function NewRequestWizard() {
                         className="btn-primary"
                         disabled={
                           createTicket.isPending ||
+                          uploadingDocs ||
                           !serviceId ||
                           !requisitionId ||
                           (!managingOneOff && !subscriptionId) ||
-                          !form.state.values.description.trim()
+                          !description.trim() ||
+                          !attachmentsReady
                         }
                       >
-                        {createTicket.isPending
-                          ? "Creating…"
+                        {createTicket.isPending || uploadingDocs
+                          ? uploadingDocs
+                            ? "Uploading documents…"
+                            : "Creating…"
                           : managingOneOff
                             ? "Submit request"
                             : "Submit management request"}
@@ -816,31 +881,6 @@ export default function NewRequestWizard() {
   );
 }
 
-function RequirementsPreview({
-  serviceId,
-  requisitionId,
-}: {
-  serviceId: string;
-  requisitionId: string;
-}) {
-  const { data: requirements = [] } = useDocumentRequirements(serviceId, requisitionId);
-  if (!requirements.length) return null;
-
-  return (
-    <div className="field doc-preview">
-      <label>Documents you will need next</label>
-      <ul>
-        {requirements.map((r) => (
-          <li key={r.id}>
-            {r.document_type.name}
-            {r.is_required ? " (required)" : " (optional)"}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 function UploadStep({
   publicId,
   ttNumber,
@@ -856,7 +896,15 @@ function UploadStep({
 }) {
   const { data: ticket } = useTicket(publicId);
   const { data: requirements = [] } = useDocumentRequirements(serviceId, requisitionId);
-  const requiredIds = requirements.filter((r) => r.is_required).map((r) => r.document_type.id);
+  const requiredIds = requirements
+    .filter((r) => {
+      if (!r.is_required) return false;
+      // "Document if any" is attachable but must not block Finish.
+      if (r.document_type.code === "document-if-any") return false;
+      if (/if any/i.test(r.document_type.name)) return false;
+      return true;
+    })
+    .map((r) => r.document_type.id);
   const uploadedTypes = new Set(
     (ticket?.documents || [])
       .map((d) => d.document_type_id ?? d.document_type?.id)
@@ -865,19 +913,17 @@ function UploadStep({
   const allRequiredUploaded = requiredIds.every((id) => uploadedTypes.has(id));
   const locked = documentsLockedStatus(ticket?.status, ticket?.documents_locked);
 
-  const panelTicket =
-    ticket ||
-    ({
-      public_id: publicId,
-      tt_number: ttNumber,
-      status: "open",
-      documents_locked: false,
-      documents: [],
-      service: { id: Number(serviceId), name: "" },
-      requisition: { id: Number(requisitionId), name: "" },
-      created_at: "",
-      id: 0,
-    } satisfies Ticket);
+  const panelTicket: Ticket = {
+    public_id: publicId,
+    tt_number: ttNumber,
+    status: ticket?.status ?? "open",
+    documents_locked: ticket?.documents_locked ?? false,
+    documents: ticket?.documents ?? [],
+    service: ticket?.service ?? { id: Number(serviceId) || 0, name: "" },
+    requisition: ticket?.requisition ?? { id: Number(requisitionId) || 0, name: "" },
+    created_at: ticket?.created_at ?? "",
+    id: ticket?.id ?? 0,
+  };
 
   return (
     <div className="panel form-panel">
@@ -887,13 +933,18 @@ function UploadStep({
         </span>
         <h2>Upload documents</h2>
         <p className="muted">
-          Request <strong>{ttNumber}</strong> is open. Attach files that match the admin rules
-          below
-          {requiredIds.length ? " (required ones marked)" : ""}.
+          Request <strong>{ttNumber}</strong> is open. Attach the files listed for this request
+          type
+          {requiredIds.length ? " (required ones marked with *)" : ""}.
         </p>
       </div>
 
-      <TicketDocumentsPanel ticket={panelTicket} mode="wizard" />
+      <TicketDocumentsPanel
+        ticket={panelTicket}
+        mode="wizard"
+        serviceId={serviceId}
+        requisitionId={requisitionId}
+      />
 
       <div className="form-actions">
         <Link

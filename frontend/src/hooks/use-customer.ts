@@ -233,6 +233,24 @@ export function useCreateTicket() {
   });
 }
 
+export async function uploadTicketDocumentFile(
+  publicId: string,
+  documentTypeId: number,
+  file: File
+): Promise<{ documentId: number; documentTypeId: number; fileName: string }> {
+  const body = new FormData();
+  body.append("document_type_id", String(documentTypeId));
+  body.append("file", file);
+  const res = await api<{
+    data: { id: number; original_name: string; document_type_id: number };
+  }>(`/tickets/${publicId}/documents`, { method: "POST", body });
+  return {
+    documentId: res.data.id,
+    documentTypeId: res.data.document_type_id ?? documentTypeId,
+    fileName: res.data.original_name || file.name,
+  };
+}
+
 export function useUploadTicketDocument(publicId: string) {
   const queryClient = useQueryClient();
 
@@ -243,19 +261,7 @@ export function useUploadTicketDocument(publicId: string) {
     }: {
       documentTypeId: number;
       file: File;
-    }) => {
-      const body = new FormData();
-      body.append("document_type_id", String(documentTypeId));
-      body.append("file", file);
-      const res = await api<{
-        data: { id: number; original_name: string; document_type_id: number };
-      }>(`/tickets/${publicId}/documents`, { method: "POST", body });
-      return {
-        documentId: res.data.id,
-        documentTypeId: res.data.document_type_id ?? documentTypeId,
-        fileName: res.data.original_name || file.name,
-      };
-    },
+    }) => uploadTicketDocumentFile(publicId, documentTypeId, file),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.ticket(publicId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.customer.tickets });

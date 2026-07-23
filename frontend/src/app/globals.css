@@ -1264,6 +1264,19 @@ textarea {
   opacity: 0.8;
 }
 
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem 1.25rem;
+}
+
+.footer-links a {
+  font-weight: 600;
+  text-decoration: none;
+}
+
 .footer-social {
   display: flex;
   align-items: center;
@@ -1603,11 +1616,19 @@ textarea {
 }
 
 .doc-preview ul {
-  margin: 0;
-  padding-left: 1.1rem;
-  color: var(--et-muted);
+  margin: 0.35rem 0 0;
+  padding-left: 1.15rem;
   display: grid;
-  gap: 0.25rem;
+  gap: 0.35rem;
+}
+
+.doc-preview-hint {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+}
+
+.doc-preview li span {
+  color: var(--et-muted);
 }
 
 .upload-grid {

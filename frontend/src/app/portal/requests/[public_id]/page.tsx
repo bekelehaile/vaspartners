@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useForm } from "@tanstack/react-form";
 import { useParams } from "next/navigation";
 import { JourneyLaunchActions, PortalPageHeader } from "@/components/PortalPageHeader";
-import { StatusJourney, StatusPill } from "@/components/StatusJourney";
+import { StatusJourney } from "@/components/StatusJourney";
 import { TicketDocumentsPanel } from "@/components/TicketDocumentsPanel";
 import { usePostTicketComment, useTicket } from "@/hooks/use-customer";
 import { statusCopy } from "@/lib/api";
@@ -49,12 +49,7 @@ export default function RequestDetailPage() {
         description={`${ticket?.service?.name || "Service"}${
           ticket?.requisition?.name ? ` · ${ticket.requisition.name}` : ""
         }`}
-        actions={
-          <>
-            {ticket && <StatusPill status={ticket.status} />}
-            <JourneyLaunchActions />
-          </>
-        }
+        actions={<JourneyLaunchActions />}
       />
 
       <div className="section section-flush">
@@ -90,7 +85,14 @@ export default function RequestDetailPage() {
               )}
 
               <h2 style={{ marginTop: "1.5rem" }}>Documents</h2>
-              <TicketDocumentsPanel ticket={ticket} mode="manage" />
+              <TicketDocumentsPanel
+                ticket={ticket}
+                mode="manage"
+                serviceId={ticket.service?.id ? String(ticket.service.id) : undefined}
+                requisitionId={
+                  ticket.requisition?.id ? String(ticket.requisition.id) : undefined
+                }
+              />
             </section>
 
             <aside className="panel">

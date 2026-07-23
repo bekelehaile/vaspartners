@@ -5,16 +5,16 @@ import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { SiteShell } from "@/components/SiteShell";
 import { LandingBlogSection } from "@/components/LandingBlogSection";
+import { LandingFaqSection } from "@/components/FaqList";
 import { LandingGallerySection } from "@/components/LandingGallerySection";
 import { LandingServicesSection } from "@/components/LandingServicesSection";
 import { faydaLoginUrl } from "@/lib/api";
-import { useCustomer, useFaqs, useLogout } from "@/hooks/use-customer";
+import { useCustomer, useLogout } from "@/hooks/use-customer";
 
 function LandingInner() {
   const params = useSearchParams();
   const authError = params.get("error");
   const { data: me = null } = useCustomer();
-  const { data: faqs = [] } = useFaqs();
   const logout = useLogout();
 
   return (
@@ -96,22 +96,7 @@ function LandingInner() {
         </section>
       </div>
 
-      <section className="section" id="faq">
-        <span className="section-label">FAQ</span>
-        <h2>Frequently asked questions</h2>
-        <p className="section-lead">Common VAS partner questions from the Ethio telecom catalog.</p>
-        <div className="faq-list">
-          {faqs.map((f) => (
-            <details key={f.id} className="faq-item">
-              <summary>{f.question}</summary>
-              <p>{f.answer}</p>
-            </details>
-          ))}
-          {!faqs.length && (
-            <p className="muted">FAQ content will appear here after the catalog is seeded.</p>
-          )}
-        </div>
-      </section>
+      <LandingFaqSection />
     </SiteShell>
   );
 }

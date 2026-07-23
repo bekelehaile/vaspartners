@@ -55,7 +55,22 @@ class ClientPortalController extends Controller
             ->where($data)
             ->whereHas('documentType', fn ($q) => $q->where('is_active', true))
             ->orderBy('sort_order')
-            ->get();
+            ->orderBy('id')
+            ->get()
+            ->map(fn (ServiceRequisitionDocument $row) => [
+                'id' => $row->id,
+                'is_required' => (bool) $row->is_required,
+                'sort_order' => (int) $row->sort_order,
+                'document_type' => [
+                    'id' => $row->documentType->id,
+                    'name' => $row->documentType->name,
+                    'code' => $row->documentType->code,
+                    'accepted_mimes' => $row->documentType->accepted_mimes,
+                    'max_size_kb' => (int) $row->documentType->max_size_kb,
+                    'description' => $row->documentType->description,
+                ],
+            ])
+            ->values();
 
         return response()->json(['data' => $rows]);
     }
@@ -171,6 +186,10 @@ class ClientPortalController extends Controller
             'document_type_id' => ['required', 'integer', 'exists:document_types,id'],
             'file' => ['required', 'file'],
         ]);
+
+        // Resolve admin rules first, then re-validate the file strictly against them.
+        $documentType = $documents->resolveAllowedDocumentType($ticket, (int) $data['document_type_id']);
+        $documents->assertFileMatchesDocumentType($data['file'], $documentType);
 
         $doc = $documents->storeForCustomer(
             $ticket,

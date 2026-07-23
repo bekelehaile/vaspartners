@@ -25,11 +25,14 @@ class SubscriptionLifecycleService
     public function assertTicketAllowed(int $customerId, array $data, Requisition $requisition, Service $service): void
     {
         if ($requisition->requires_active_subscription || $requisition->renews_subscription || $requisition->terminates_subscription) {
-            $subscription = $this->resolveSubscription($data['subscription_id'] ?? null, $customerId, $service->id);
-            if (! $subscription || ! $subscription->status->isAlive()) {
-                throw ValidationException::withMessages([
-                    'subscription_id' => 'An active subscription is required for this request type.',
-                ]);
+            // Non-subscription services are managed without an alive subscription.
+            if ($service->is_subscription_based) {
+                $subscription = $this->resolveSubscription($data['subscription_id'] ?? null, $customerId, $service->id);
+                if (! $subscription || ! $subscription->status->isAlive()) {
+                    throw ValidationException::withMessages([
+                        'subscription_id' => 'An active subscription is required for this request type.',
+                    ]);
+                }
             }
         }
 

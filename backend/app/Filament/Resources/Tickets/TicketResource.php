@@ -7,12 +7,15 @@ use App\Enums\DocumentReviewStatus;
 use App\Enums\TicketStatus;
 use App\Filament\Resources\Tickets\Pages\ListTickets;
 use App\Filament\Resources\Tickets\Pages\ViewTicket;
+use App\Filament\Resources\Tickets\RelationManagers\DocumentsRelationManager;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Services\TicketWorkflowService;
 use Filament\Actions\Action;
+use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
@@ -37,6 +40,29 @@ class TicketResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([]);
+    }
+
+    public static function infolist(Schema $schema): Schema
+    {
+        return $schema->components([
+            TextEntry::make('tt_number')->label('Request ID'),
+            TextEntry::make('status')->badge(),
+            TextEntry::make('document_review_status')->label('Document review')->badge(),
+            TextEntry::make('customer.name')->label('Customer'),
+            TextEntry::make('customer.phone_number')->label('Phone'),
+            TextEntry::make('service.name')->label('Service'),
+            TextEntry::make('requisition.name')->label('Request type'),
+            TextEntry::make('assignee.name')->label('Account manager'),
+            TextEntry::make('description')->columnSpanFull(),
+            TextEntry::make('created_at')->dateTime(),
+        ])->columns(2);
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            DocumentsRelationManager::class,
+        ];
     }
 
     public static function table(Table $table): Table
@@ -82,6 +108,7 @@ class TicketResource extends Resource
                     }),
             ])
             ->recordActions([
+                ViewAction::make(),
                 Action::make('assign_to_me')
                     ->label('Assign to me')
                     ->icon('heroicon-o-user-plus')

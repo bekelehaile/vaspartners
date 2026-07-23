@@ -45,13 +45,11 @@ export function LandingBlogSection() {
         </div>
       )}
 
-      {posts.length > 6 && (
-        <div className="section-more">
-          <Link href="/blog" className="linkish">
-            View all posts →
-          </Link>
-        </div>
-      )}
+      <div className="section-more">
+        <Link href="/blog" className="linkish">
+          View all posts →
+        </Link>
+      </div>
     </section>
   );
 }

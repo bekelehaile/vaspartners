@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useGallery } from "@/hooks/use-customer";
 
@@ -66,7 +67,7 @@ export function LandingGallerySection({
         <p className="muted">Loading gallery…</p>
       ) : (
         <div className="gallery-grid">
-          {visible.map((item) => (
+          {(showIntro ? visible.slice(0, 8) : visible).map((item) => (
             <figure key={item.id} className="gallery-card">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -80,6 +81,14 @@ export function LandingGallerySection({
               </figcaption>
             </figure>
           ))}
+        </div>
+      )}
+
+      {showIntro && items.length > 0 && (
+        <div className="section-more">
+          <Link href="/gallery" className="linkish">
+            View full gallery →
+          </Link>
         </div>
       )}
     </section>

@@ -25,6 +25,13 @@ function LogInIcon() {
   );
 }
 
+const publicNav = [
+  { href: "/#services", label: "Services" },
+  { href: "/blog", label: "Blog" },
+  { href: "/gallery", label: "Gallery" },
+  { href: "/faq", label: "FAQ" },
+] as const;
+
 export function SiteShell({
   children,
   me,
@@ -64,10 +71,17 @@ export function SiteShell({
               </div>
             ) : (
               <>
-                <a href="/#services">Services</a>
-                <a href="/#blog">Blog</a>
-                <a href="/#gallery">Gallery</a>
-                <a href="/#faq">FAQ</a>
+                {publicNav.map((item) =>
+                  item.href.startsWith("/#") ? (
+                    <a key={item.href} href={item.href}>
+                      {item.label}
+                    </a>
+                  ) : (
+                    <Link key={item.href} href={item.href}>
+                      {item.label}
+                    </Link>
+                  )
+                )}
                 <a className="btn-login" href={faydaLoginUrl()}>
                   <LogInIcon />
                   <span>Login</span>
@@ -109,18 +123,21 @@ export function SiteShell({
                 </div>
               ) : (
                 <>
-                  <a href="/#services" onClick={() => setOpen(false)}>
-                    Services
-                  </a>
-                  <a href="/#blog" onClick={() => setOpen(false)}>
-                    Blog
-                  </a>
-                  <a href="/#gallery" onClick={() => setOpen(false)}>
-                    Gallery
-                  </a>
-                  <a href="/#faq" onClick={() => setOpen(false)}>
-                    FAQ
-                  </a>
+                  {publicNav.map((item) =>
+                    item.href.startsWith("/#") ? (
+                      <a key={item.href} href={item.href} onClick={() => setOpen(false)}>
+                        {item.label}
+                      </a>
+                    ) : (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setOpen(false)}
+                      >
+                        {item.label}
+                      </Link>
+                    )
+                  )}
                   <a
                     className="btn-login"
                     href={faydaLoginUrl()}
@@ -142,6 +159,11 @@ export function SiteShell({
       <footer className="site-footer">
         <div className="site-footer-inner">
           <p>© {new Date().getFullYear()} Ethio telecom. All rights reserved.</p>
+          <nav className="footer-links" aria-label="Site">
+            <Link href="/blog">Blog</Link>
+            <Link href="/gallery">Gallery</Link>
+            <Link href="/faq">FAQ</Link>
+          </nav>
           <div className="footer-social">
             <a href="https://www.ethiotelecom.et/" target="_blank" rel="noreferrer" aria-label="Website">
               Web
