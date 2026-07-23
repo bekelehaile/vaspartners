@@ -365,6 +365,17 @@ class TicketWorkflowService
             $ticket->needs_reverification = false;
 
             if ($result === DocumentReviewStatus::Failed) {
+                $ticket->current_approver_user_id = null;
+                $ticket->needs_reverification = true;
+                $ticket->save();
+
+                $this->transition(
+                    $ticket,
+                    TicketStatus::Rejected,
+                    $reviewer,
+                    $note ?? 'Documents need correction by the partner',
+                );
+
                 $notifyTicket = $ticket;
                 $notifyNote = $note;
                 DB::afterCommit(function () use ($notifyTicket, $notifyNote) {
@@ -373,6 +384,18 @@ class TicketWorkflowService
                         $notifyNote,
                     );
                 });
+
+                return $ticket->fresh(['customer', 'service', 'requisition']);
+            }
+
+            // Passed — resume handling / start approval chain
+            if ($ticket->status === TicketStatus::Rejected) {
+                $this->transition(
+                    $ticket,
+                    TicketStatus::InProgress,
+                    $reviewer,
+                    $note ?? 'Documents re-verified — continuing review',
+                );
             }
 
             if (! $this->hasRequiredDocuments($ticket->service_id, $ticket->requisition_id)) {
@@ -407,6 +430,12 @@ class TicketWorkflowService
 
     public function decide(Ticket $ticket, User $approver, ApprovalAction $action, ?string $note = null): Ticket
     {
+        if ($action === ApprovalAction::Rejected && blank(trim((string) $note))) {
+            throw ValidationException::withMessages([
+                'note' => 'A reason is required when rejecting a request.',
+            ]);
+        }
+
         return DB::transaction(function () use ($ticket, $approver, $action, $note) {
             if ($ticket->current_approver_user_id !== $approver->id) {
                 throw ValidationException::withMessages(['ticket' => 'You are not the current approver for this ticket.']);
@@ -435,11 +464,11 @@ class TicketWorkflowService
                 $ticket->current_approver_user_id = null;
                 $ticket->needs_reverification = true;
             } elseif ($action === ApprovalAction::Rejected && $docStatus === DocumentReviewStatus::Passed) {
-                // Push back to AM to fix docs
+                // Send back to partner to fix documents
                 $ticket->document_review_status = DocumentReviewStatus::Failed;
                 $ticket->current_approver_user_id = null;
                 $ticket->needs_reverification = true;
-                $nextStatus = TicketStatus::InProgress;
+                $nextStatus = TicketStatus::Rejected;
             } else { // Rejected + Failed
                 if ($isFinal) {
                     // Accept with missed docs path → complete (legacy matrix)
@@ -467,7 +496,14 @@ class TicketWorkflowService
 
             $ticket->save();
             if ($nextStatus) {
-                $this->transition($ticket, $nextStatus, $approver, $note);
+                $this->transition($ticket, $nextStatus, $approver, $note, [
+                    'approval_action' => $action->value,
+                    'approver_user_id' => $approver->id,
+                    'approver_name' => $approver->name,
+                    'is_final' => $isFinal && $nextStatus === TicketStatus::Completed,
+                    'escalated_to_user_id' => $escalatedTo,
+                    'document_review_snapshot' => $docStatus->value,
+                ]);
             }
 
             $fresh = $ticket->fresh(['customer', 'service', 'requisition']);

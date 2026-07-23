@@ -110,12 +110,6 @@ export type Ticket = {
   requisition?: { id: number; name: string };
   created_at: string;
   updated_at?: string;
-  status_histories?: {
-    from_status?: string | null;
-    to_status: string;
-    note?: string | null;
-    created_at: string;
-  }[];
   messages?: TicketMessage[];
   messages_meta?: {
     total: number;
@@ -127,6 +121,7 @@ export type Ticket = {
   chat_locked?: boolean;
   chat_attachment_max_kb?: number;
   documents_locked?: boolean;
+  customer_can_edit?: boolean;
   documents?: {
     id: number;
     document_type_id?: number;
@@ -213,22 +208,22 @@ export const statusCopy: Record<
   },
   in_progress: {
     label: "In progress",
-    hint: "Our team is reviewing documents or approvals",
+    hint: "MVAS is handling this request. Documents are locked until it is sent back for updates.",
     tone: "tone-progress",
   },
   completed: {
     label: "Approved",
-    hint: "Approval finished — closing shortly",
+    hint: "Approval finished — this request is locked for changes.",
     tone: "tone-done",
   },
   closed: {
     label: "Closed",
-    hint: "This request is complete",
+    hint: "This request is complete and locked.",
     tone: "tone-closed",
   },
   rejected: {
-    label: "Needs attention",
-    hint: "Please update documents and we will re-check",
+    label: "Needs your update",
+    hint: "Update documents below, then wait for our team to re-check.",
     tone: "tone-alert",
   },
 };

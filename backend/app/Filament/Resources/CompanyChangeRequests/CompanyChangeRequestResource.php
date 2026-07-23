@@ -64,7 +64,6 @@ class CompanyChangeRequestResource extends Resource
                 }),
                 TextEntry::make('created_at')->dateTime(),
                 TextEntry::make('customer_note')->label('Partner note')->columnSpanFull()->placeholder('—'),
-                TextEntry::make('admin_note')->label('Admin note')->columnSpanFull()->placeholder('—'),
             ])->columns(2),
             Section::make('Partner')->schema([
                 TextEntry::make('customer.name'),
@@ -85,9 +84,10 @@ class CompanyChangeRequestResource extends Resource
                     TextEntry::make('proposal_original_name')->label('Proposal PDF')->placeholder('—'),
                     TextEntry::make('letter_original_name')->label('Letter PDF')->placeholder('—'),
                 ])->columns(2),
-            Section::make('Decision')->schema([
-                TextEntry::make('reviewer.name')->label('Reviewed by')->placeholder('—'),
-                TextEntry::make('reviewed_at')->dateTime()->placeholder('—'),
+            Section::make('Decision audit')->schema([
+                TextEntry::make('reviewer.name')->label('Decided by')->placeholder('Pending'),
+                TextEntry::make('reviewed_at')->label('Decided at')->dateTime()->placeholder('Pending'),
+                TextEntry::make('admin_note')->label('Decision note')->columnSpanFull()->placeholder('—'),
             ])->columns(2),
         ]);
     }
@@ -107,6 +107,8 @@ class CompanyChangeRequestResource extends Resource
                 TextColumn::make('customer.name')->label('Partner')->searchable(),
                 TextColumn::make('company.name')->label('Company')->searchable(),
                 TextColumn::make('company.tin')->label('TIN'),
+                TextColumn::make('reviewer.name')->label('Decided by')->placeholder('—')->toggleable(),
+                TextColumn::make('reviewed_at')->label('Decided at')->dateTime()->placeholder('—')->toggleable(),
                 TextColumn::make('created_at')->dateTime()->sortable(),
             ])
             ->defaultSort('created_at', 'desc')

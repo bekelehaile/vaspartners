@@ -50,10 +50,15 @@ export function TicketDocumentsPanel({
   const locked = documentsLockedStatus(ticket.status, ticket.documents_locked);
   const byType = mapUploadsByType(ticket.documents || []);
 
+  const softOptional = (r: DocumentRequirement) =>
+    r.document_type.code === "document-if-any" || /if any/i.test(r.document_type.name);
+
   const requiredIds = requirements
-    .filter((r) => r.is_required)
+    .filter((r) => r.is_required && !softOptional(r))
     .map((r) => r.document_type.id);
-  const allRequiredUploaded = requiredIds.every((id) => byType[id]);
+  const missingRequired = requirements.filter(
+    (r) => r.is_required && !softOptional(r) && !byType[r.document_type.id]
+  );
 
   const busy = upload.isPending || remove.isPending;
   const errorMessage =
@@ -75,7 +80,7 @@ export function TicketDocumentsPanel({
   function onRemove(documentId: number) {
     setLocalError(null);
     if (locked) {
-      setLocalError("Documents cannot be removed after this request is approved or closed.");
+                    setLocalError("Documents cannot be changed while this request is being handled.");
       return;
     }
     remove.mutate(documentId);
@@ -93,8 +98,18 @@ export function TicketDocumentsPanel({
     <div className="ticket-docs-panel">
       {locked && (
         <p className="muted ticket-docs-lock-note">
-          This request is {ticket.status === "completed" ? "approved" : "closed"}. Documents
-          are locked and cannot be uploaded or removed.
+          {ticket.status === "in_progress"
+            ? "MVAS is handling this request. You cannot upload or remove documents until it is sent back for updates."
+            : ticket.status === "completed"
+              ? "This request is approved. Documents are locked."
+              : ticket.status === "closed"
+                ? "This request is closed. Documents are locked."
+                : "Documents are locked for this request."}
+        </p>
+      )}
+      {!locked && ticket.status === "rejected" && (
+        <p className="alert" style={{ marginBottom: "0.75rem" }} role="status">
+          This request was sent back. Update or replace the documents below so MVAS can re-check.
         </p>
       )}
 
@@ -103,19 +118,14 @@ export function TicketDocumentsPanel({
       {requirements.length > 0 ? (
         <>
           <p className="muted doc-preview-hint" style={{ marginBottom: "0.75rem" }}>
-            Attach each file below
             {requiredIds.length
-              ? ` (${requiredIds.length} required)`
-              : " (all optional for this request type)"}
-            .
+              ? `Files marked * are required (${requiredIds.length}). Optional files can be added later.`
+              : "No required files for this request type — optional uploads only."}
           </p>
           <div className="upload-grid">
             {requirements.map((r) => {
               const uploaded = byType[r.document_type.id];
-              const isOptional =
-                !r.is_required ||
-                r.document_type.code === "document-if-any" ||
-                /if any/i.test(r.document_type.name);
+              const isOptional = !r.is_required || softOptional(r);
               return (
                 <div
                   key={r.id}
@@ -205,20 +215,21 @@ export function TicketDocumentsPanel({
         </ul>
       )}
 
-      {mode === "wizard" &&
-        !locked &&
-        requiredIds.filter((id) => {
-          const req = requirements.find((r) => r.document_type.id === id);
-          if (!req) return false;
-          return !(
-            req.document_type.code === "document-if-any" ||
-            /if any/i.test(req.document_type.name)
-          );
-        }).some((id) => !byType[id]) && (
-          <p className="muted" style={{ marginTop: "0.85rem" }}>
-            Upload all required documents before finishing.
-          </p>
-        )}
+      {mode === "wizard" && !locked && missingRequired.length > 0 && (
+        <div className="alert" style={{ marginTop: "0.85rem" }} role="status">
+          <strong>Still needed before you can finish:</strong>{" "}
+          {missingRequired.map((r) => r.document_type.name).join(", ")}.
+          <br />
+          <span className="muted">
+            Or choose “Upload later” to open the request and attach these from there.
+          </span>
+        </div>
+      )}
+      {mode === "wizard" && !locked && requiredIds.length > 0 && missingRequired.length === 0 && (
+        <p className="muted" style={{ marginTop: "0.85rem", color: "var(--et-green)" }}>
+          All required documents are uploaded. You can finish now.
+        </p>
+      )}
     </div>
   );
 }

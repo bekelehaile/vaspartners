@@ -21,6 +21,18 @@ class TicketApprovalStep extends Model
         ];
     }
 
-    public function ticket(): BelongsTo { return $this->belongsTo(Ticket::class); }
-    public function approver(): BelongsTo { return $this->belongsTo(User::class, 'approver_user_id'); }
+    public function ticket(): BelongsTo
+    {
+        return $this->belongsTo(Ticket::class);
+    }
+
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approver_user_id');
+    }
+
+    public function escalatedTo(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'escalated_to_user_id');
+    }
 }

@@ -7,22 +7,32 @@ use App\Enums\DocumentReviewStatus;
 use App\Enums\TicketStatus;
 use App\Filament\Resources\Tickets\Pages\ListTickets;
 use App\Filament\Resources\Tickets\Pages\ViewTicket;
+use App\Filament\Resources\Tickets\RelationManagers\ApprovalStepsRelationManager;
+use App\Filament\Resources\Tickets\RelationManagers\DocumentReviewsRelationManager;
 use App\Filament\Resources\Tickets\RelationManagers\DocumentsRelationManager;
 use App\Filament\Resources\Tickets\RelationManagers\MessagesRelationManager;
+use App\Filament\Resources\Tickets\RelationManagers\StatusHistoryRelationManager;
+use App\Models\Priority;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Services\TicketWorkflowService;
 use Filament\Actions\Action;
+use Filament\Actions\BulkAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
+use Throwable;
 
 class TicketResource extends Resource
 {
@@ -84,6 +94,9 @@ class TicketResource extends Resource
         return [
             MessagesRelationManager::class,
             DocumentsRelationManager::class,
+            ApprovalStepsRelationManager::class,
+            DocumentReviewsRelationManager::class,
+            StatusHistoryRelationManager::class,
         ];
     }
 
@@ -255,7 +268,7 @@ class TicketResource extends Resource
                     ->label('Verify docs')
                     ->visible(fn (Ticket $record) => $record->assigned_to_user_id === auth()->id()
                         && blank($record->current_approver_user_id)
-                        && $record->status === TicketStatus::InProgress
+                        && in_array($record->status, [TicketStatus::InProgress, TicketStatus::Rejected], true)
                         && $record->document_review_status !== DocumentReviewStatus::Passed)
                     ->form([
                         Select::make('result')->options([
@@ -272,20 +285,45 @@ class TicketResource extends Resource
                             $data['note'] ?? null,
                         );
                     }),
-                Action::make('decide')
+                Action::make('approve')
+                    ->label('Approve')
+                    ->icon('heroicon-o-check-circle')
+                    ->color('success')
                     ->visible(fn (Ticket $record) => $record->current_approver_user_id === auth()->id())
+                    ->modalHeading('Approve this request')
+                    ->modalDescription(fn (): string => 'Logged as '.(auth()->user()?->name ?? 'you').' with a timestamp.')
                     ->form([
-                        Select::make('action')->options([
-                            ApprovalAction::Approved->value => 'Approve',
-                            ApprovalAction::Rejected->value => 'Reject',
-                        ])->required(),
-                        Textarea::make('note'),
+                        Textarea::make('note')->label('Note (optional)'),
                     ])
+                    ->requiresConfirmation()
                     ->action(function (Ticket $record, array $data, TicketWorkflowService $workflow) {
                         $workflow->decide(
                             $record,
                             auth()->user(),
-                            ApprovalAction::from($data['action']),
+                            ApprovalAction::Approved,
+                            $data['note'] ?? null,
+                        );
+                    }),
+                Action::make('reject')
+                    ->label('Reject')
+                    ->icon('heroicon-o-x-circle')
+                    ->color('danger')
+                    ->visible(fn (Ticket $record) => $record->current_approver_user_id === auth()->id())
+                    ->modalHeading('Reject this request')
+                    ->modalDescription(fn (): string => 'Logged as '.(auth()->user()?->name ?? 'you').' with a timestamp. A reason is required.')
+                    ->form([
+                        Textarea::make('note')
+                            ->label('Reason')
+                            ->required()
+                            ->minLength(3)
+                            ->helperText('Shown on the approval log and used when sending the request back.'),
+                    ])
+                    ->requiresConfirmation()
+                    ->action(function (Ticket $record, array $data, TicketWorkflowService $workflow) {
+                        $workflow->decide(
+                            $record,
+                            auth()->user(),
+                            ApprovalAction::Rejected,
                             $data['note'] ?? null,
                         );
                     }),
@@ -295,6 +333,77 @@ class TicketResource extends Resource
                         && ($record->assigned_to_user_id === auth()->id() || auth()->user()?->is_management))
                     ->requiresConfirmation()
                     ->action(fn (Ticket $record, TicketWorkflowService $workflow) => $workflow->close($record, auth()->user())),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    BulkAction::make('assign')
+                        ->label('Assign AM')
+                        ->icon('heroicon-o-user-plus')
+                        ->color('primary')
+                        ->form([
+                            Select::make('assigned_to_user_id')
+                                ->label('Account manager')
+                                ->options(fn () => User::query()
+                                    ->where('is_active', true)
+                                    ->where('is_management', false)
+                                    ->orderBy('name')
+                                    ->pluck('name', 'id'))
+                                ->required()
+                                ->searchable()
+                                ->preload(),
+                            Select::make('priority_id')
+                                ->label('Priority')
+                                ->options(fn () => Priority::query()->orderBy('name')->pluck('name', 'id'))
+                                ->searchable()
+                                ->preload(),
+                            Textarea::make('note'),
+                        ])
+                        ->action(function (Collection $records, array $data, TicketWorkflowService $workflow): void {
+                            $assignee = User::findOrFail($data['assigned_to_user_id']);
+                            $assigner = auth()->user();
+                            $assigned = 0;
+                            $skipped = 0;
+
+                            foreach ($records as $ticket) {
+                                if ($ticket->status !== TicketStatus::Open || filled($ticket->assigned_to_user_id)) {
+                                    $skipped++;
+
+                                    continue;
+                                }
+
+                                try {
+                                    $workflow->assign(
+                                        $ticket,
+                                        $assigner,
+                                        $assignee,
+                                        $data['priority_id'] ?? null,
+                                        $data['note'] ?? null,
+                                    );
+                                    $assigned++;
+                                } catch (Throwable) {
+                                    $skipped++;
+                                }
+                            }
+
+                            if ($assigned > 0) {
+                                Notification::make()
+                                    ->title("Assigned {$assigned} ticket(s)")
+                                    ->body($skipped > 0 ? "{$skipped} skipped (already assigned or not open)." : null)
+                                    ->success()
+                                    ->send();
+                            } else {
+                                Notification::make()
+                                    ->title('No tickets assigned')
+                                    ->body('Only open, unassigned tickets can be bulk-assigned.')
+                                    ->warning()
+                                    ->send();
+                            }
+                        })
+                        ->deselectRecordsAfterCompletion(),
+                    DeleteBulkAction::make()
+                        ->authorizeIndividualRecords('delete')
+                        ->visible(fn (): bool => (bool) auth()->user()?->can('Delete:Ticket')),
+                ]),
             ]);
     }
 

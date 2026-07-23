@@ -93,7 +93,6 @@ class ClientPortalController extends Controller
             ->with([
                 'service:id,name',
                 'requisition:id,name',
-                'statusHistories' => fn ($q) => $q->latest('created_at')->limit(5),
             ])
             ->where('customer_id', $request->user()->id);
 
@@ -127,15 +126,16 @@ class ClientPortalController extends Controller
     {
         abort_unless($ticket->customer_id === $request->user()->id, 404);
 
-        $ticket->load(['service', 'requisition', 'subscription', 'documents.documentType', 'statusHistories']);
+        $ticket->load(['service', 'requisition', 'subscription', 'documents.documentType']);
 
         $payload = $ticket->toArray();
         $thread = $comments->paginateThread($ticket, $request->user(), null, null, 40);
         $payload['messages'] = $thread['data'];
         $payload['messages_meta'] = $thread['meta'];
-        $payload['chat_locked'] = $ticket->status->locksCustomerDocuments();
+        $payload['chat_locked'] = $ticket->status->locksCustomerChat();
         $payload['chat_attachment_max_kb'] = $comments->maxAttachmentKb();
         $payload['documents_locked'] = $ticket->status->locksCustomerDocuments();
+        $payload['customer_can_edit'] = $ticket->status->allowsCustomerEdits();
 
         return response()->json(['data' => $payload]);
     }

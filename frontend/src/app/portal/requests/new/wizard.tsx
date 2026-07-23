@@ -942,6 +942,7 @@ function UploadStep({
   );
   const allRequiredUploaded = requiredIds.every((id) => uploadedTypes.has(id));
   const locked = documentsLockedStatus(ticket?.status, ticket?.documents_locked);
+  const canFinish = locked || allRequiredUploaded || !requiredIds.length;
 
   const panelTicket: Ticket = {
     public_id: publicId,
@@ -963,9 +964,8 @@ function UploadStep({
         </span>
         <h2>Upload documents</h2>
         <p className="muted">
-          Request <strong>{ttNumber}</strong> is open. Attach the files listed for this request
-          type
-          {requiredIds.length ? " (required ones marked with *)" : ""}.
+          Your request <strong>{ttNumber}</strong> is already submitted. Attach the files marked{" "}
+          <strong>*</strong> so MVAS can process it. Optional files can wait.
         </p>
       </div>
 
@@ -977,24 +977,31 @@ function UploadStep({
       />
 
       <div className="form-actions">
-        <Link
-          href={`/portal/requests/${publicId}`}
-          className="btn-primary"
-          style={{
-            pointerEvents:
-              locked || allRequiredUploaded || !requiredIds.length ? "auto" : "none",
-            opacity: locked || allRequiredUploaded || !requiredIds.length ? 1 : 0.5,
-          }}
-          onClick={(e) => {
-            if (!(locked || allRequiredUploaded || !requiredIds.length)) e.preventDefault();
-          }}
-        >
-          Finish
-        </Link>
+        {canFinish ? (
+          <Link href={`/portal/requests/${publicId}`} className="btn-primary">
+            Finish and view request
+          </Link>
+        ) : (
+          <button
+            type="button"
+            className="btn-primary"
+            disabled
+            title="Upload every required file (marked *) first, or use Upload later"
+          >
+            Finish and view request
+          </button>
+        )}
         <Link href={`/portal/requests/${publicId}`} className="btn-ghost">
-          Skip for now
+          Upload later
         </Link>
       </div>
+      {!canFinish && (
+        <p className="muted" style={{ marginTop: "0.75rem" }}>
+          <strong>Finish</strong> stays disabled until every required file (*) is uploaded.{" "}
+          <strong>Upload later</strong> opens the request so you can attach them anytime
+          before review.
+        </p>
+      )}
     </div>
   );
 }

@@ -45,7 +45,7 @@ class TicketDocumentService
     {
         if ($ticket->customerDocumentsAreLocked()) {
             throw ValidationException::withMessages([
-                'documents' => 'Documents cannot be changed after this request is approved or closed.',
+                'documents' => 'Documents cannot be changed while this request is being handled. You can update them if it is sent back (rejected) for corrections.',
             ]);
         }
     }

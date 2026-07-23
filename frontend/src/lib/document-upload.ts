@@ -106,5 +106,6 @@ export function documentsLockedStatus(
   documentsLocked?: boolean
 ): boolean {
   if (typeof documentsLocked === "boolean") return documentsLocked;
-  return status === "completed" || status === "closed";
+  // Editable only while submitted (open) or sent back (rejected)
+  return status !== "open" && status !== "rejected";
 }

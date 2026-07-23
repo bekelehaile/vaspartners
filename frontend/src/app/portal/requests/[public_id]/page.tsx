@@ -63,19 +63,6 @@ export default function RequestDetailPage() {
                   ticket.requisition?.id ? String(ticket.requisition.id) : undefined
                 }
               />
-
-              <h2 style={{ marginTop: "1.5rem" }}>Activity</h2>
-              <ol style={{ margin: 0, paddingLeft: "1.1rem", display: "grid", gap: "0.65rem" }}>
-                {(ticket.status_histories || []).map((h, i) => (
-                  <li key={`${h.created_at}-${i}`} className="muted">
-                    <strong style={{ color: "var(--et-ink)" }}>{h.to_status}</strong>
-                    {h.note ? ` — ${h.note}` : ""}
-                    <div style={{ fontSize: "0.85rem" }}>
-                      {new Date(h.created_at).toLocaleString()}
-                    </div>
-                  </li>
-                ))}
-              </ol>
             </section>
 
             <TicketChatPanel

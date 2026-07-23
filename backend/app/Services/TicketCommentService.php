@@ -25,7 +25,7 @@ class TicketCommentService
      */
     public function post(Ticket $ticket, Customer|User $author, ?string $body, ?UploadedFile $file = null): TicketComment
     {
-        if ($ticket->status instanceof TicketStatus && $ticket->status->locksCustomerDocuments()) {
+        if ($ticket->status instanceof TicketStatus && $ticket->status->locksCustomerChat()) {
             throw ValidationException::withMessages([
                 'body' => 'This request is closed for new messages.',
             ]);
