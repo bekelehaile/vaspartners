@@ -51,14 +51,61 @@ export function useServices() {
   });
 }
 
-export function useTickets(options?: { enabled?: boolean }) {
+export type TicketFilters = {
+  status?: string;
+  search?: string;
+  service_id?: string;
+  page?: number;
+  per_page?: number;
+};
+
+export type TicketsPage = {
+  items: Ticket[];
+  total: number;
+  currentPage: number;
+  lastPage: number;
+  perPage: number;
+};
+
+export function useTickets(
+  filters: TicketFilters = {},
+  options?: { enabled?: boolean }
+) {
   const enabled = options?.enabled ?? true;
+  const normalized = {
+    status: filters.status || "",
+    search: filters.search || "",
+    service_id: filters.service_id || "",
+    page: filters.page || 1,
+    per_page: filters.per_page || 15,
+  };
+
   return useQuery({
-    queryKey: queryKeys.customer.tickets,
+    queryKey: queryKeys.customer.ticketsFiltered(normalized),
     enabled: enabled && !!getToken(),
-    queryFn: async () => {
-      const res = await api<{ data: Ticket[] }>("/tickets");
-      return Array.isArray(res.data) ? res.data : [];
+    queryFn: async (): Promise<TicketsPage> => {
+      const qs = new URLSearchParams();
+      if (normalized.status) qs.set("status", normalized.status);
+      if (normalized.search) qs.set("search", normalized.search);
+      if (normalized.service_id) qs.set("service_id", normalized.service_id);
+      qs.set("page", String(normalized.page));
+      qs.set("per_page", String(normalized.per_page));
+
+      const res = await api<{
+        data: Ticket[];
+        total: number;
+        current_page: number;
+        last_page: number;
+        per_page: number;
+      }>(`/tickets?${qs.toString()}`);
+
+      return {
+        items: Array.isArray(res.data) ? res.data : [],
+        total: res.total ?? 0,
+        currentPage: res.current_page ?? 1,
+        lastPage: res.last_page ?? 1,
+        perPage: res.per_page ?? normalized.per_page,
+      };
     },
   });
 }

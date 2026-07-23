@@ -55,11 +55,44 @@ class ClientPortalController extends Controller
 
     public function tickets(Request $request)
     {
-        $tickets = Ticket::query()
-            ->with(['service:id,name', 'requisition:id,name', 'statusHistories' => fn ($q) => $q->latest('created_at')->limit(5)])
-            ->where('customer_id', $request->user()->id)
-            ->latest()
-            ->paginate(20);
+        $filters = $request->validate([
+            'status' => ['nullable', 'string', 'in:open,in_progress,completed,closed,rejected'],
+            'search' => ['nullable', 'string', 'max:120'],
+            'service_id' => ['nullable', 'integer', 'exists:services,id'],
+            'per_page' => ['nullable', 'integer', 'min:5', 'max:100'],
+            'page' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        $query = Ticket::query()
+            ->with([
+                'service:id,name',
+                'requisition:id,name',
+                'statusHistories' => fn ($q) => $q->latest('created_at')->limit(5),
+            ])
+            ->where('customer_id', $request->user()->id);
+
+        if (! empty($filters['status'])) {
+            $query->where('status', $filters['status']);
+        }
+
+        if (! empty($filters['service_id'])) {
+            $query->where('service_id', $filters['service_id']);
+        }
+
+        if (! empty($filters['search'])) {
+            $search = $filters['search'];
+            $query->where(function ($q) use ($search) {
+                $q->where('tt_number', 'ilike', "%{$search}%")
+                    ->orWhere('description', 'ilike', "%{$search}%")
+                    ->orWhere('building', 'ilike', "%{$search}%")
+                    ->orWhereHas('service', fn ($sq) => $sq->where('name', 'ilike', "%{$search}%"))
+                    ->orWhereHas('requisition', fn ($rq) => $rq->where('name', 'ilike', "%{$search}%"));
+            });
+        }
+
+        $tickets = $query
+            ->latest('id')
+            ->paginate((int) ($filters['per_page'] ?? 15));
 
         return response()->json($tickets);
     }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useForm } from "@tanstack/react-form";
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { PortalPageHeader } from "@/components/PortalPageHeader";
 import {
   useCreateTicket,
   useDocumentRequirements,
@@ -52,15 +53,18 @@ export default function NewRequestWizard() {
 
   return (
     <>
-      <div className="portal-hero">
-        <p className="brand-kicker">New request</p>
-        <h1>Tell us what you need</h1>
-        <p className="muted">
-          Pick the service and request type. We only ask for documents that apply.
-        </p>
-      </div>
+      <PortalPageHeader
+        kicker="New request"
+        title="Submit a service request"
+        description="Choose the VAS service and request type, then attach only the documents that apply."
+        actions={
+          <Link href="/portal/requests" className="btn-ghost">
+            Back to requests
+          </Link>
+        }
+      />
 
-      <div className="section" style={{ paddingTop: 0 }}>
+      <div className="section section-flush form-section">
         {createTicket.isError && (
           <div className="alert">
             {createTicket.error instanceof Error
@@ -78,7 +82,7 @@ export default function NewRequestWizard() {
           />
         ) : (
           <form
-            className="panel"
+            className="panel form-panel"
             onSubmit={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -86,141 +90,160 @@ export default function NewRequestWizard() {
             }}
             noValidate
           >
-            <form.Subscribe selector={(s) => s.values.service_id}>
-              {(serviceId) => {
-                const selected = services.find((s) => String(s.id) === String(serviceId));
-                const requisitions: Requisition[] = selected?.requisitions ?? [];
+            <div className="form-panel-head">
+              <h2>Request details</h2>
+              <p className="muted">
+                Required fields must be completed before creating the request.
+              </p>
+            </div>
 
-                return (
-                  <>
-                    <form.Field name="service_id">
-                      {(field) => {
-                        const err =
-                          form.state.submissionAttempts > 0
-                            ? fieldError(field.state.meta.errors)
-                            : null;
-                        return (
-                          <div className={`field${err ? " has-error" : ""}`}>
-                            <label htmlFor={field.name}>Service</label>
-                            <select
-                              id={field.name}
-                              name={field.name}
-                              value={field.state.value}
-                              onBlur={field.handleBlur}
-                              onChange={(e) => {
-                                field.handleChange(e.target.value);
-                                form.setFieldValue("requisition_id", "");
-                              }}
-                            >
-                              <option value="">Select a service</option>
-                              {services.map((s) => (
-                                <option key={s.id} value={s.id}>
-                                  {s.name}
-                                </option>
-                              ))}
-                            </select>
-                            {err && <p className="field-error">{err}</p>}
+            <div className="form-grid">
+              <form.Subscribe selector={(s) => s.values.service_id}>
+                {(serviceId) => {
+                  const selected = services.find((s) => String(s.id) === String(serviceId));
+                  const requisitions: Requisition[] = selected?.requisitions ?? [];
+
+                  return (
+                    <>
+                      <form.Field name="service_id">
+                        {(field) => {
+                          const err =
+                            form.state.submissionAttempts > 0
+                              ? fieldError(field.state.meta.errors)
+                              : null;
+                          return (
+                            <div className={`field${err ? " has-error" : ""}`}>
+                              <label htmlFor={field.name}>
+                                Service <span className="req">*</span>
+                              </label>
+                              <select
+                                id={field.name}
+                                name={field.name}
+                                value={field.state.value}
+                                onBlur={field.handleBlur}
+                                onChange={(e) => {
+                                  field.handleChange(e.target.value);
+                                  form.setFieldValue("requisition_id", "");
+                                }}
+                              >
+                                <option value="">Select a service</option>
+                                {services.map((s) => (
+                                  <option key={s.id} value={s.id}>
+                                    {s.name}
+                                  </option>
+                                ))}
+                              </select>
+                              {err && <p className="field-error">{err}</p>}
+                            </div>
+                          );
+                        }}
+                      </form.Field>
+
+                      <form.Field name="requisition_id">
+                        {(field) => {
+                          const err =
+                            form.state.submissionAttempts > 0
+                              ? fieldError(field.state.meta.errors)
+                              : null;
+                          return (
+                            <div className={`field${err ? " has-error" : ""}`}>
+                              <label htmlFor={field.name}>
+                                Request type <span className="req">*</span>
+                              </label>
+                              <select
+                                id={field.name}
+                                name={field.name}
+                                value={field.state.value}
+                                onBlur={field.handleBlur}
+                                onChange={(e) => field.handleChange(e.target.value)}
+                                disabled={!requisitions.length}
+                              >
+                                <option value="">Select request type</option>
+                                {requisitions.map((r) => (
+                                  <option key={r.id} value={r.id}>
+                                    {r.name}
+                                  </option>
+                                ))}
+                              </select>
+                              {!serviceId && <small>Choose a service first</small>}
+                              {serviceId && !requisitions.length && (
+                                <small>No request types are enabled for this service yet.</small>
+                              )}
+                              {err && <p className="field-error">{err}</p>}
+                            </div>
+                          );
+                        }}
+                      </form.Field>
+
+                      <form.Subscribe selector={(s) => s.values.requisition_id}>
+                        {(requisitionId) => (
+                          <div className="field-span">
+                            <RequirementsPreview
+                              serviceId={serviceId}
+                              requisitionId={requisitionId}
+                            />
                           </div>
-                        );
-                      }}
-                    </form.Field>
+                        )}
+                      </form.Subscribe>
+                    </>
+                  );
+                }}
+              </form.Subscribe>
 
-                    <form.Field name="requisition_id">
-                      {(field) => {
-                        const err =
-                          form.state.submissionAttempts > 0
-                            ? fieldError(field.state.meta.errors)
-                            : null;
-                        return (
-                          <div className={`field${err ? " has-error" : ""}`}>
-                            <label htmlFor={field.name}>Request type</label>
-                            <select
-                              id={field.name}
-                              name={field.name}
-                              value={field.state.value}
-                              onBlur={field.handleBlur}
-                              onChange={(e) => field.handleChange(e.target.value)}
-                              disabled={!requisitions.length}
-                            >
-                              <option value="">Select request type</option>
-                              {requisitions.map((r) => (
-                                <option key={r.id} value={r.id}>
-                                  {r.name}
-                                </option>
-                              ))}
-                            </select>
-                            {!serviceId && <small>Choose a service first</small>}
-                            {serviceId && !requisitions.length && (
-                              <small>No request types are enabled for this service yet.</small>
-                            )}
-                            {err && <p className="field-error">{err}</p>}
-                          </div>
-                        );
-                      }}
-                    </form.Field>
+              <form.Field name="building">
+                {(field) => (
+                  <div className="field">
+                    <label htmlFor={field.name}>Building / site (optional)</label>
+                    <input
+                      id={field.name}
+                      name={field.name}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                    />
+                  </div>
+                )}
+              </form.Field>
 
-                    <form.Subscribe selector={(s) => s.values.requisition_id}>
-                      {(requisitionId) => (
-                        <RequirementsPreview serviceId={serviceId} requisitionId={requisitionId} />
-                      )}
-                    </form.Subscribe>
-                  </>
-                );
-              }}
-            </form.Subscribe>
+              <form.Field name="location">
+                {(field) => (
+                  <div className="field">
+                    <label htmlFor={field.name}>Location notes (optional)</label>
+                    <input
+                      id={field.name}
+                      name={field.name}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                    />
+                  </div>
+                )}
+              </form.Field>
 
-            <form.Field name="building">
-              {(field) => (
-                <div className="field">
-                  <label htmlFor={field.name}>Building / site (optional)</label>
-                  <input
-                    id={field.name}
-                    name={field.name}
-                    value={field.state.value}
-                    onBlur={field.handleBlur}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                  />
-                </div>
-              )}
-            </form.Field>
-
-            <form.Field name="location">
-              {(field) => (
-                <div className="field">
-                  <label htmlFor={field.name}>Location notes (optional)</label>
-                  <input
-                    id={field.name}
-                    name={field.name}
-                    value={field.state.value}
-                    onBlur={field.handleBlur}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                  />
-                </div>
-              )}
-            </form.Field>
-
-            <form.Field name="description">
-              {(field) => (
-                <div className="field">
-                  <label htmlFor={field.name}>Description (optional)</label>
-                  <textarea
-                    id={field.name}
-                    name={field.name}
-                    rows={4}
-                    value={field.state.value}
-                    onBlur={field.handleBlur}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                  />
-                </div>
-              )}
-            </form.Field>
+              <form.Field name="description">
+                {(field) => (
+                  <div className="field field-span">
+                    <label htmlFor={field.name}>Description (optional)</label>
+                    <textarea
+                      id={field.name}
+                      name={field.name}
+                      rows={4}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                    />
+                  </div>
+                )}
+              </form.Field>
+            </div>
 
             <form.Subscribe
               selector={(s) => [s.values.service_id, s.values.requisition_id, s.isSubmitting]}
             >
               {([serviceId, requisitionId, isSubmitting]) => (
-                <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+                <div className="form-actions">
                   <button
+                    type="submit"
                     className="btn-primary"
                     disabled={
                       !!isSubmitting ||
@@ -231,7 +254,7 @@ export default function NewRequestWizard() {
                   >
                     {isSubmitting || createTicket.isPending ? "Creating…" : "Create request"}
                   </button>
-                  <Link href="/portal" className="btn-ghost">
+                  <Link href="/portal/requests" className="btn-ghost">
                     Cancel
                   </Link>
                 </div>
@@ -255,9 +278,9 @@ function RequirementsPreview({
   if (!requirements.length) return null;
 
   return (
-    <div className="field">
+    <div className="field doc-preview">
       <label>Documents you will need</label>
-      <ul style={{ margin: 0, paddingLeft: "1.1rem", color: "var(--et-muted)" }}>
+      <ul>
         {requirements.map((r) => (
           <li key={r.id}>
             {r.document_type.name}
@@ -288,12 +311,14 @@ function UploadStep({
   const allRequiredUploaded = requiredIds.every((id) => uploads[id]);
 
   return (
-    <div className="panel">
-      <h2>Upload documents</h2>
-      <p className="muted" style={{ marginTop: "-0.5rem" }}>
-        Request <strong>{ttNumber}</strong> is open. Attach the files below
-        {requiredIds.length ? " (required ones marked)" : ""}.
-      </p>
+    <div className="panel form-panel">
+      <div className="form-panel-head">
+        <h2>Upload documents</h2>
+        <p className="muted">
+          Request <strong>{ttNumber}</strong> is open. Attach the files below
+          {requiredIds.length ? " (required ones marked)" : ""}.
+        </p>
+      </div>
 
       {upload.isError && (
         <div className="alert">
@@ -304,9 +329,9 @@ function UploadStep({
       {!requirements.length ? (
         <div className="empty">No documents are required for this request type.</div>
       ) : (
-        <div style={{ display: "grid", gap: "1rem" }}>
+        <div className="upload-grid">
           {requirements.map((r) => (
-            <div key={r.id} className="field">
+            <div key={r.id} className={`doc-slot${uploads[r.document_type.id] ? " is-done" : ""}`}>
               <label>
                 {r.document_type.name}
                 {r.is_required ? " *" : ""}
@@ -345,7 +370,7 @@ function UploadStep({
         </div>
       )}
 
-      <div style={{ marginTop: "1.25rem", display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+      <div className="form-actions">
         <Link
           href={`/portal/requests/${publicId}`}
           className="btn-primary"

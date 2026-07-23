@@ -9,6 +9,8 @@ export const queryKeys = {
   customer: {
     me: ["customer", "me"] as const,
     tickets: ["customer", "tickets"] as const,
+    ticketsFiltered: (filters: Record<string, unknown>) =>
+      ["customer", "tickets", filters] as const,
   },
   catalog: {
     faqs: ["catalog", "faqs"] as const,

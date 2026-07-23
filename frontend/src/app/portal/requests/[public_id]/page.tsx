@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useForm } from "@tanstack/react-form";
 import { useParams } from "next/navigation";
+import { NewRequestButton, PortalPageHeader } from "@/components/PortalPageHeader";
 import { StatusJourney, StatusPill } from "@/components/StatusJourney";
 import { usePostTicketComment, useTicket } from "@/hooks/use-customer";
 import { statusCopy } from "@/lib/api";
@@ -37,21 +38,25 @@ export default function RequestDetailPage() {
 
   return (
     <>
-      <div className="portal-hero">
-        <p className="brand-kicker">
+      <PortalPageHeader
+        kicker={
           <Link href="/portal/requests" className="linkish">
             ← My requests
           </Link>
-        </p>
-        <h1>{ticket?.tt_number || "Request"}</h1>
-        <p className="muted">
-          {ticket?.service?.name || "Service"}
-          {ticket?.requisition?.name ? ` · ${ticket.requisition.name}` : ""}
-        </p>
-        {ticket && <StatusPill status={ticket.status} />}
-      </div>
+        }
+        title={ticket?.tt_number || "Request"}
+        description={`${ticket?.service?.name || "Service"}${
+          ticket?.requisition?.name ? ` · ${ticket.requisition.name}` : ""
+        }`}
+        actions={
+          <>
+            {ticket && <StatusPill status={ticket.status} />}
+            <NewRequestButton />
+          </>
+        }
+      />
 
-      <div className="section" style={{ paddingTop: 0 }}>
+      <div className="section section-flush">
         {(isError || postComment.isError) && (
           <div className="alert">
             {postComment.isError
