@@ -32,6 +32,11 @@ const publicNav = [
   { href: "/faq", label: "FAQ" },
 ] as const;
 
+const portalNav = [
+  { href: "/portal", label: "My requests" },
+  { href: "/portal/services", label: "My services" },
+] as const;
+
 export function SiteShell({
   children,
   me,
@@ -63,15 +68,22 @@ export function SiteShell({
 
           <nav className="topnav" aria-label="Primary">
             {me ? (
-              <div className="portal-header-actions">
-                <PortalSettingsMenu />
-                {me.profile_completed && <NotificationBell />}
-                {onLogout && (
-                  <button type="button" className="portal-signout-btn" onClick={onLogout}>
-                    Sign out
-                  </button>
-                )}
-              </div>
+              <>
+                {portalNav.map((item) => (
+                  <Link key={item.href} href={item.href}>
+                    {item.label}
+                  </Link>
+                ))}
+                <div className="portal-header-actions">
+                  <PortalSettingsMenu />
+                  {me.profile_completed && <NotificationBell />}
+                  {onLogout && (
+                    <button type="button" className="portal-signout-btn" onClick={onLogout}>
+                      Sign out
+                    </button>
+                  )}
+                </div>
+              </>
             ) : (
               <>
                 {publicNav.map((item) =>
@@ -108,22 +120,33 @@ export function SiteShell({
           <div className="mobile-sheet">
             <div className="mobile-sheet-card">
               {me ? (
-                <div className="portal-header-actions portal-header-actions-mobile">
-                  <PortalSettingsMenu onNavigate={() => setOpen(false)} />
-                  {me.profile_completed && <NotificationBell />}
-                  {onLogout && (
-                    <button
-                      type="button"
-                      className="portal-signout-btn"
-                      onClick={() => {
-                        setOpen(false);
-                        onLogout();
-                      }}
+                <>
+                  {portalNav.map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setOpen(false)}
                     >
-                      Sign out
-                    </button>
-                  )}
-                </div>
+                      {item.label}
+                    </Link>
+                  ))}
+                  <div className="portal-header-actions portal-header-actions-mobile">
+                    <PortalSettingsMenu onNavigate={() => setOpen(false)} />
+                    {me.profile_completed && <NotificationBell />}
+                    {onLogout && (
+                      <button
+                        type="button"
+                        className="portal-signout-btn"
+                        onClick={() => {
+                          setOpen(false);
+                          onLogout();
+                        }}
+                      >
+                        Sign out
+                      </button>
+                    )}
+                  </div>
+                </>
               ) : (
                 <>
                   {publicNav.map((item) =>
