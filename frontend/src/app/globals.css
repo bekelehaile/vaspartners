@@ -80,6 +80,7 @@ textarea {
   z-index: 50;
   width: 100%;
   background: linear-gradient(to right, var(--header-from), var(--header-via), var(--header-to));
+  box-shadow: 0 1px 0 color-mix(in oklab, var(--et-line) 70%, transparent);
 }
 
 .topbar-inner {
@@ -716,11 +717,11 @@ textarea {
   margin: 0 auto;
   display: grid;
   gap: 0.5rem;
-  padding: 1rem;
-  border-radius: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  background: rgba(255, 255, 255, 0.85);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  padding: 0.5rem 0;
+  border-radius: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .mobile-sheet a,
@@ -873,25 +874,23 @@ textarea {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--et-line);
+  border: 0;
   border-radius: calc(var(--radius) - 2px);
   padding: 1rem 1.5rem;
   font-weight: 600;
   color: #374151 !important;
-  background: #fff;
+  background: color-mix(in oklab, var(--et-ink) 5%, white);
 }
 
 .btn-hero-ghost:hover {
-  border-color: var(--primary);
+  background: color-mix(in oklab, var(--primary) 12%, white);
   color: var(--primary) !important;
 }
 
 .hero-panel {
   margin-top: 1.5rem;
   border-radius: 1rem;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  border: 1px solid rgba(0, 0, 0, 0.05);
+  background: color-mix(in oklab, var(--secondary-bg) 70%, white);
   padding: 1.5rem;
   min-height: 280px;
   display: grid;
@@ -982,10 +981,9 @@ textarea {
 }
 
 .landing-service-item {
-  border: 1px solid var(--et-line);
+  border: 0;
   border-radius: 0.75rem;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  background: color-mix(in oklab, var(--secondary-bg) 45%, white);
   overflow: hidden;
   opacity: 0;
   transform: translateY(14px);
@@ -993,8 +991,8 @@ textarea {
 }
 
 .landing-service-item.is-open {
-  border-color: color-mix(in oklab, var(--primary) 45%, var(--et-line));
-  box-shadow: 0 8px 24px color-mix(in oklab, var(--primary) 12%, transparent);
+  background: #fff;
+  box-shadow: 0 10px 28px color-mix(in oklab, var(--primary) 10%, transparent);
 }
 
 .landing-service-trigger {
@@ -1064,7 +1062,7 @@ textarea {
 }
 
 .landing-service-item.is-open .landing-service-detail {
-  border-top-color: var(--et-line);
+  border-top-color: color-mix(in oklab, var(--primary) 18%, transparent);
   padding-top: 1rem;
 }
 
@@ -1121,11 +1119,10 @@ textarea {
 }
 
 .faq-item {
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: color-mix(in oklab, var(--secondary-bg) 40%, white);
+  border: 0;
   border-radius: 0.75rem;
   padding: 1rem 1.15rem;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
 
 .faq-item summary {
@@ -2059,10 +2056,10 @@ textarea {
 }
 
 .blog-card {
-  border: 1px solid var(--et-line);
+  border: 0;
   border-radius: 0.75rem;
   overflow: hidden;
-  background: #fff;
+  background: color-mix(in oklab, var(--secondary-bg) 35%, white);
   display: flex;
   flex-direction: column;
 }
@@ -2151,8 +2148,8 @@ textarea {
 }
 
 .gallery-filters button {
-  border: 1px solid var(--et-line);
-  background: #fff;
+  border: 0;
+  background: color-mix(in oklab, var(--et-ink) 5%, white);
   border-radius: 999px;
   padding: 0.35rem 0.85rem;
   font: inherit;
@@ -2164,7 +2161,7 @@ textarea {
 
 .gallery-filters button.is-active,
 .gallery-filters button:hover {
-  border-color: var(--primary);
+  background: color-mix(in oklab, var(--primary) 16%, white);
   color: var(--primary);
 }
 
@@ -2176,10 +2173,10 @@ textarea {
 
 .gallery-card {
   margin: 0;
-  border: 1px solid var(--et-line);
+  border: 0;
   border-radius: 0.75rem;
   overflow: hidden;
-  background: #fff;
+  background: color-mix(in oklab, var(--secondary-bg) 35%, white);
 }
 
 .gallery-card img {
