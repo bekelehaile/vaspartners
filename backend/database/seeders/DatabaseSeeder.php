@@ -6,6 +6,7 @@ use App\Models\Priority;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
 class DatabaseSeeder extends Seeder
@@ -25,6 +26,15 @@ class DatabaseSeeder extends Seeder
         $superAdmin = Role::findOrCreate('super_admin', 'web');
         if (! $admin->hasRole($superAdmin)) {
             $admin->assignRole($superAdmin);
+        }
+
+        // My Tickets page (Filament Shield) — assign to anyone who can view tickets
+        $myTickets = Permission::findOrCreate('View:MyTickets', 'web');
+        $superAdmin->givePermissionTo($myTickets);
+        foreach (Role::query()->where('guard_name', 'web')->get() as $role) {
+            if ($role->hasPermissionTo('ViewAny:Ticket')) {
+                $role->givePermissionTo($myTickets);
+            }
         }
 
         foreach ([

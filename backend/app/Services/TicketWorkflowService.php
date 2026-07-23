@@ -390,8 +390,23 @@ class TicketWorkflowService
             ->exists();
     }
 
+    /**
+     * Unique service-request id: year+month+day+hour + two random digits.
+     * Example: 202607230923
+     */
     protected function generateTtNumber(): string
     {
-        return 'VAS-'.now()->format('Ymd').'-'.strtoupper(substr(uniqid(), -6));
+        $prefix = now()->format('YmdH');
+
+        for ($attempt = 0; $attempt < 50; $attempt++) {
+            $number = $prefix.str_pad((string) random_int(0, 99), 2, '0', STR_PAD_LEFT);
+
+            if (! Ticket::query()->where('tt_number', $number)->exists()) {
+                return $number;
+            }
+        }
+
+        // Same-hour collision fallback: add minutes so the id stays unique.
+        return now()->format('YmdHi').str_pad((string) random_int(0, 99), 2, '0', STR_PAD_LEFT);
     }
 }
