@@ -175,9 +175,6 @@ function ServiceRow({
               Sign in to request
             </a>
           )}
-          <button type="button" className="linkish" onClick={onToggle}>
-            Close details
-          </button>
         </div>
       </div>
     </li>
