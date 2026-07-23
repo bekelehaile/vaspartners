@@ -20,13 +20,8 @@ class CreateUser extends CreateRecord
      */
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        if (blank($data['password'] ?? null)) {
-            $this->plainPassword = Str::password(10);
-            $data['password'] = $this->plainPassword;
-        } else {
-            $this->plainPassword = (string) $data['password'];
-        }
-
+        $this->plainPassword = Str::password(10);
+        $data['password'] = $this->plainPassword;
         $data['is_active'] = $data['is_active'] ?? true;
 
         return $data;

@@ -48,14 +48,6 @@ class UserResource extends Resource
                 ->tel()
                 ->maxLength(32)
                 ->placeholder('e.g. 0912345678'),
-            TextInput::make('password')
-                ->password()
-                ->revealable()
-                ->dehydrated(fn (?string $state): bool => filled($state))
-                ->required(fn (string $operation): bool => $operation === 'create')
-                ->helperText(fn (string $operation): ?string => $operation === 'edit'
-                    ? 'Leave blank to keep the current password.'
-                    : null),
             Select::make('roles')
                 ->relationship('roles', 'name')
                 ->multiple()
