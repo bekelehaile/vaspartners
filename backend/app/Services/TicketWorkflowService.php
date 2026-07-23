@@ -30,6 +30,7 @@ class TicketWorkflowService
 {
     public function __construct(
         protected SubscriptionLifecycleService $subscriptions,
+        protected PartnerNotificationService $notifications,
     ) {}
 
     public function transition(Ticket $ticket, TicketStatus $to, mixed $actor = null, ?string $note = null, array $meta = []): void
@@ -64,6 +65,15 @@ class TicketWorkflowService
             || ($to === TicketStatus::Closed && $from !== TicketStatus::Completed)) {
             $this->subscriptions->applyFromTicket($ticket->fresh(['requisition', 'service', 'subscription']));
         }
+
+        DB::afterCommit(function () use ($ticket, $from, $to, $note) {
+            $this->notifications->ticketStatusChanged(
+                $ticket->fresh(['customer', 'service', 'requisition']),
+                $from,
+                $to,
+                $note,
+            );
+        });
     }
 
     public function requiredDocumentTypeIds(int $serviceId, int $requisitionId): array
@@ -169,7 +179,13 @@ class TicketWorkflowService
                 'created_at' => now(),
             ]);
 
-            return $ticket->fresh();
+            $fresh = $ticket->fresh(['customer', 'service', 'requisition']);
+
+            DB::afterCommit(function () use ($fresh) {
+                $this->notifications->ticketSubmitted($fresh);
+            });
+
+            return $fresh;
         });
     }
 
@@ -218,6 +234,17 @@ class TicketWorkflowService
 
             $ticket->document_review_status = $result;
             $ticket->needs_reverification = false;
+
+            if ($result === DocumentReviewStatus::Failed) {
+                $notifyTicket = $ticket;
+                $notifyNote = $note;
+                DB::afterCommit(function () use ($notifyTicket, $notifyNote) {
+                    $this->notifications->documentsNeedAttention(
+                        $notifyTicket->fresh(['customer', 'service', 'requisition']),
+                        $notifyNote,
+                    );
+                });
+            }
 
             if (! $this->hasRequiredDocuments($ticket->service_id, $ticket->requisition_id)) {
                 // No docs required — AM can move toward close without approval chain.

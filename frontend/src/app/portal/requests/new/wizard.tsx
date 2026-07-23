@@ -1,294 +1,368 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { SiteShell } from "@/components/SiteShell";
+import { useForm } from "@tanstack/react-form";
+import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
-  Customer,
-  DocumentRequirement,
-  Service,
-  Ticket,
-  api,
-  clearToken,
-  getToken,
-} from "@/lib/api";
+  useCreateTicket,
+  useDocumentRequirements,
+  useServices,
+  useUploadTicketDocument,
+} from "@/hooks/use-customer";
+import type { Service } from "@/lib/api";
+import { ticketCreateSchema } from "@/lib/schemas/ticket";
 
 type Requisition = NonNullable<Service["requisitions"]>[number];
 
+function fieldError(errors: unknown): string | null {
+  if (!errors || !Array.isArray(errors) || errors.length === 0) return null;
+  const first = errors[0];
+  if (typeof first === "string") return first;
+  if (first && typeof first === "object" && "message" in first) {
+    return String((first as { message: unknown }).message);
+  }
+  return String(first);
+}
+
 export default function NewRequestWizard() {
-  const router = useRouter();
   const params = useSearchParams();
-  const presetService = params.get("service");
+  const presetService = params.get("service") || "";
 
-  const [me, setMe] = useState<Customer | null>(null);
-  const [services, setServices] = useState<Service[]>([]);
-  const [serviceId, setServiceId] = useState<string>(presetService || "");
-  const [requisitionId, setRequisitionId] = useState("");
-  const [description, setDescription] = useState("");
-  const [building, setBuilding] = useState("");
-  const [location, setLocation] = useState("");
-  const [requirements, setRequirements] = useState<DocumentRequirement[]>([]);
-  const [ticket, setTicket] = useState<Ticket | null>(null);
-  const [uploads, setUploads] = useState<Record<number, string>>({});
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { data: services = [] } = useServices();
+  const createTicket = useCreateTicket();
 
-  useEffect(() => {
-    if (!getToken()) {
-      router.replace("/");
-      return;
-    }
-    (async () => {
-      try {
-        const meRes = await api<{ data: Customer }>("/auth/me");
-        setMe(meRes.data);
-        if (!meRes.data.profile_completed) {
-          router.replace("/portal");
-          return;
-        }
-        const sRes = await api<{ data: Service[] }>("/services");
-        setServices(sRes.data ?? []);
-      } catch {
-        clearToken();
-        router.replace("/");
-      }
-    })();
-  }, [router]);
+  const form = useForm({
+    defaultValues: {
+      service_id: presetService,
+      requisition_id: "",
+      building: "",
+      location: "",
+      description: "",
+    },
+    validators: {
+      onSubmit: ticketCreateSchema,
+    },
+    onSubmit: async ({ value }) => {
+      await createTicket.mutateAsync(ticketCreateSchema.parse(value));
+    },
+  });
 
-  const selectedService = useMemo(
-    () => services.find((s) => String(s.id) === String(serviceId)),
-    [services, serviceId]
+  const ticket = createTicket.data;
+
+  return (
+    <>
+      <div className="portal-hero">
+        <p className="brand-kicker">New request</p>
+        <h1>Tell us what you need</h1>
+        <p className="muted">
+          Pick the service and request type. We only ask for documents that apply.
+        </p>
+      </div>
+
+      <div className="section" style={{ paddingTop: 0 }}>
+        {createTicket.isError && (
+          <div className="alert">
+            {createTicket.error instanceof Error
+              ? createTicket.error.message
+              : "Could not create request"}
+          </div>
+        )}
+
+        {ticket ? (
+          <UploadStep
+            publicId={ticket.public_id}
+            ttNumber={ticket.tt_number}
+            serviceId={String(ticket.service?.id ?? form.state.values.service_id)}
+            requisitionId={String(ticket.requisition?.id ?? form.state.values.requisition_id)}
+          />
+        ) : (
+          <form
+            className="panel"
+            onSubmit={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              void form.handleSubmit();
+            }}
+            noValidate
+          >
+            <form.Subscribe selector={(s) => s.values.service_id}>
+              {(serviceId) => {
+                const selected = services.find((s) => String(s.id) === String(serviceId));
+                const requisitions: Requisition[] = selected?.requisitions ?? [];
+
+                return (
+                  <>
+                    <form.Field name="service_id">
+                      {(field) => {
+                        const err =
+                          form.state.submissionAttempts > 0
+                            ? fieldError(field.state.meta.errors)
+                            : null;
+                        return (
+                          <div className={`field${err ? " has-error" : ""}`}>
+                            <label htmlFor={field.name}>Service</label>
+                            <select
+                              id={field.name}
+                              name={field.name}
+                              value={field.state.value}
+                              onBlur={field.handleBlur}
+                              onChange={(e) => {
+                                field.handleChange(e.target.value);
+                                form.setFieldValue("requisition_id", "");
+                              }}
+                            >
+                              <option value="">Select a service</option>
+                              {services.map((s) => (
+                                <option key={s.id} value={s.id}>
+                                  {s.name}
+                                </option>
+                              ))}
+                            </select>
+                            {err && <p className="field-error">{err}</p>}
+                          </div>
+                        );
+                      }}
+                    </form.Field>
+
+                    <form.Field name="requisition_id">
+                      {(field) => {
+                        const err =
+                          form.state.submissionAttempts > 0
+                            ? fieldError(field.state.meta.errors)
+                            : null;
+                        return (
+                          <div className={`field${err ? " has-error" : ""}`}>
+                            <label htmlFor={field.name}>Request type</label>
+                            <select
+                              id={field.name}
+                              name={field.name}
+                              value={field.state.value}
+                              onBlur={field.handleBlur}
+                              onChange={(e) => field.handleChange(e.target.value)}
+                              disabled={!requisitions.length}
+                            >
+                              <option value="">Select request type</option>
+                              {requisitions.map((r) => (
+                                <option key={r.id} value={r.id}>
+                                  {r.name}
+                                </option>
+                              ))}
+                            </select>
+                            {!serviceId && <small>Choose a service first</small>}
+                            {serviceId && !requisitions.length && (
+                              <small>No request types are enabled for this service yet.</small>
+                            )}
+                            {err && <p className="field-error">{err}</p>}
+                          </div>
+                        );
+                      }}
+                    </form.Field>
+
+                    <form.Subscribe selector={(s) => s.values.requisition_id}>
+                      {(requisitionId) => (
+                        <RequirementsPreview serviceId={serviceId} requisitionId={requisitionId} />
+                      )}
+                    </form.Subscribe>
+                  </>
+                );
+              }}
+            </form.Subscribe>
+
+            <form.Field name="building">
+              {(field) => (
+                <div className="field">
+                  <label htmlFor={field.name}>Building / site (optional)</label>
+                  <input
+                    id={field.name}
+                    name={field.name}
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                  />
+                </div>
+              )}
+            </form.Field>
+
+            <form.Field name="location">
+              {(field) => (
+                <div className="field">
+                  <label htmlFor={field.name}>Location notes (optional)</label>
+                  <input
+                    id={field.name}
+                    name={field.name}
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                  />
+                </div>
+              )}
+            </form.Field>
+
+            <form.Field name="description">
+              {(field) => (
+                <div className="field">
+                  <label htmlFor={field.name}>Description (optional)</label>
+                  <textarea
+                    id={field.name}
+                    name={field.name}
+                    rows={4}
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                  />
+                </div>
+              )}
+            </form.Field>
+
+            <form.Subscribe
+              selector={(s) => [s.values.service_id, s.values.requisition_id, s.isSubmitting]}
+            >
+              {([serviceId, requisitionId, isSubmitting]) => (
+                <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+                  <button
+                    className="btn-primary"
+                    disabled={
+                      !!isSubmitting ||
+                      createTicket.isPending ||
+                      !serviceId ||
+                      !requisitionId
+                    }
+                  >
+                    {isSubmitting || createTicket.isPending ? "Creating…" : "Create request"}
+                  </button>
+                  <Link href="/portal" className="btn-ghost">
+                    Cancel
+                  </Link>
+                </div>
+              )}
+            </form.Subscribe>
+          </form>
+        )}
+      </div>
+    </>
   );
+}
 
-  const requisitions: Requisition[] = selectedService?.requisitions ?? [];
+function RequirementsPreview({
+  serviceId,
+  requisitionId,
+}: {
+  serviceId: string;
+  requisitionId: string;
+}) {
+  const { data: requirements = [] } = useDocumentRequirements(serviceId, requisitionId);
+  if (!requirements.length) return null;
 
-  useEffect(() => {
-    setRequisitionId("");
-    setRequirements([]);
-    setTicket(null);
-    setUploads({});
-  }, [serviceId]);
+  return (
+    <div className="field">
+      <label>Documents you will need</label>
+      <ul style={{ margin: 0, paddingLeft: "1.1rem", color: "var(--et-muted)" }}>
+        {requirements.map((r) => (
+          <li key={r.id}>
+            {r.document_type.name}
+            {r.is_required ? " (required)" : " (optional)"}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
-  useEffect(() => {
-    if (!serviceId || !requisitionId) {
-      setRequirements([]);
-      return;
-    }
-    api<{ data: DocumentRequirement[] }>(
-      `/document-requirements?service_id=${serviceId}&requisition_id=${requisitionId}`
-    )
-      .then((r) => setRequirements(r.data ?? []))
-      .catch((e) => setError(e.message));
-  }, [serviceId, requisitionId]);
-
-  const logout = async () => {
-    try {
-      await api("/auth/logout", { method: "POST" });
-    } catch {
-      /* ignore */
-    }
-    clearToken();
-    router.replace("/");
-  };
-
-  const createTicket = async (e: FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await api<{ data: Ticket }>("/tickets", {
-        method: "POST",
-        body: JSON.stringify({
-          service_id: Number(serviceId),
-          requisition_id: Number(requisitionId),
-          description: description || null,
-          building: building || null,
-          location: location || null,
-        }),
-      });
-      setTicket(res.data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create request");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const uploadFile = async (documentTypeId: number, file: File) => {
-    if (!ticket) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const body = new FormData();
-      body.append("document_type_id", String(documentTypeId));
-      body.append("file", file);
-      await api(`/tickets/${ticket.public_id}/documents`, { method: "POST", body });
-      setUploads((u) => ({ ...u, [documentTypeId]: file.name }));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      setBusy(false);
-    }
-  };
+function UploadStep({
+  publicId,
+  ttNumber,
+  serviceId,
+  requisitionId,
+}: {
+  publicId: string;
+  ttNumber: string;
+  serviceId: string;
+  requisitionId: string;
+}) {
+  const { data: requirements = [] } = useDocumentRequirements(serviceId, requisitionId);
+  const upload = useUploadTicketDocument(publicId);
+  const [uploads, setUploads] = useState<Record<number, string>>({});
 
   const requiredIds = requirements.filter((r) => r.is_required).map((r) => r.document_type.id);
   const allRequiredUploaded = requiredIds.every((id) => uploads[id]);
 
   return (
-    <SiteShell me={me} onLogout={logout} compact>
-      <div className="portal-hero">
-        <p className="brand-kicker">New request</p>
-        <h1>Tell us what you need</h1>
-        <p className="muted">Pick the service and request type. We only ask for documents that apply.</p>
-      </div>
+    <div className="panel">
+      <h2>Upload documents</h2>
+      <p className="muted" style={{ marginTop: "-0.5rem" }}>
+        Request <strong>{ttNumber}</strong> is open. Attach the files below
+        {requiredIds.length ? " (required ones marked)" : ""}.
+      </p>
 
-      <div className="section" style={{ paddingTop: 0 }}>
-        {error && <div className="alert">{error}</div>}
+      {upload.isError && (
+        <div className="alert">
+          {upload.error instanceof Error ? upload.error.message : "Upload failed"}
+        </div>
+      )}
 
-        {!ticket ? (
-          <form className="panel" onSubmit={createTicket}>
-            <div className="field">
-              <label htmlFor="service">Service</label>
-              <select
-                id="service"
-                value={serviceId}
-                onChange={(e) => setServiceId(e.target.value)}
-                required
-              >
-                <option value="">Select a service</option>
-                {services.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="field">
-              <label htmlFor="requisition">Request type</label>
-              <select
-                id="requisition"
-                value={requisitionId}
-                onChange={(e) => setRequisitionId(e.target.value)}
-                required
-                disabled={!requisitions.length}
-              >
-                <option value="">Select request type</option>
-                {requisitions.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
-                ))}
-              </select>
-              {!serviceId && <small>Choose a service first</small>}
-              {serviceId && !requisitions.length && (
-                <small>No request types are enabled for this service yet.</small>
+      {!requirements.length ? (
+        <div className="empty">No documents are required for this request type.</div>
+      ) : (
+        <div style={{ display: "grid", gap: "1rem" }}>
+          {requirements.map((r) => (
+            <div key={r.id} className="field">
+              <label>
+                {r.document_type.name}
+                {r.is_required ? " *" : ""}
+              </label>
+              {uploads[r.document_type.id] ? (
+                <small style={{ color: "var(--et-green)" }}>
+                  Uploaded: {uploads[r.document_type.id]}
+                </small>
+              ) : (
+                <input
+                  type="file"
+                  accept={r.document_type.accepted_mimes
+                    .split(",")
+                    .map((m) => `.${m.trim()}`)
+                    .join(",")}
+                  disabled={upload.isPending}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    upload.mutate(
+                      { documentTypeId: r.document_type.id, file },
+                      {
+                        onSuccess: (result) => {
+                          setUploads((prev) => ({
+                            ...prev,
+                            [result.documentTypeId]: result.fileName,
+                          }));
+                        },
+                      }
+                    );
+                  }}
+                />
               )}
             </div>
+          ))}
+        </div>
+      )}
 
-            <div className="field">
-              <label htmlFor="building">Building / site (optional)</label>
-              <input id="building" value={building} onChange={(e) => setBuilding(e.target.value)} />
-            </div>
-
-            <div className="field">
-              <label htmlFor="location">Location notes (optional)</label>
-              <input id="location" value={location} onChange={(e) => setLocation(e.target.value)} />
-            </div>
-
-            <div className="field">
-              <label htmlFor="description">Description (optional)</label>
-              <textarea
-                id="description"
-                rows={4}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </div>
-
-            {requirements.length > 0 && (
-              <div className="field">
-                <label>Documents you will need</label>
-                <ul style={{ margin: 0, paddingLeft: "1.1rem", color: "var(--et-muted)" }}>
-                  {requirements.map((r) => (
-                    <li key={r.id}>
-                      {r.document_type.name}
-                      {r.is_required ? " (required)" : " (optional)"}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-              <button className="btn-primary" disabled={busy || !serviceId || !requisitionId}>
-                {busy ? "Creating…" : "Create request"}
-              </button>
-              <Link href="/portal" className="btn-ghost">
-                Cancel
-              </Link>
-            </div>
-          </form>
-        ) : (
-          <div className="panel">
-            <h2>Upload documents</h2>
-            <p className="muted" style={{ marginTop: "-0.5rem" }}>
-              Request <strong>{ticket.tt_number}</strong> is open. Attach the files below
-              {requiredIds.length ? " (required ones marked)" : ""}.
-            </p>
-
-            {!requirements.length ? (
-              <div className="empty">No documents are required for this request type.</div>
-            ) : (
-              <div style={{ display: "grid", gap: "1rem" }}>
-                {requirements.map((r) => (
-                  <div key={r.id} className="field">
-                    <label>
-                      {r.document_type.name}
-                      {r.is_required ? " *" : ""}
-                    </label>
-                    {uploads[r.document_type.id] ? (
-                      <small style={{ color: "var(--et-leaf)" }}>
-                        Uploaded: {uploads[r.document_type.id]}
-                      </small>
-                    ) : (
-                      <input
-                        type="file"
-                        accept={r.document_type.accepted_mimes
-                          .split(",")
-                          .map((m) => `.${m.trim()}`)
-                          .join(",")}
-                        disabled={busy}
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) void uploadFile(r.document_type.id, file);
-                        }}
-                      />
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div style={{ marginTop: "1.25rem", display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-              <Link
-                href={`/portal/requests/${ticket.public_id}`}
-                className="btn-primary"
-                style={{ pointerEvents: allRequiredUploaded || !requiredIds.length ? "auto" : "none", opacity: allRequiredUploaded || !requiredIds.length ? 1 : 0.5 }}
-                onClick={(e) => {
-                  if (!(allRequiredUploaded || !requiredIds.length)) e.preventDefault();
-                }}
-              >
-                Finish
-              </Link>
-              <Link href={`/portal/requests/${ticket.public_id}`} className="btn-ghost">
-                Skip for now
-              </Link>
-            </div>
-          </div>
-        )}
+      <div style={{ marginTop: "1.25rem", display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+        <Link
+          href={`/portal/requests/${publicId}`}
+          className="btn-primary"
+          style={{
+            pointerEvents: allRequiredUploaded || !requiredIds.length ? "auto" : "none",
+            opacity: allRequiredUploaded || !requiredIds.length ? 1 : 0.5,
+          }}
+          onClick={(e) => {
+            if (!(allRequiredUploaded || !requiredIds.length)) e.preventDefault();
+          }}
+        >
+          Finish
+        </Link>
+        <Link href={`/portal/requests/${publicId}`} className="btn-ghost">
+          Skip for now
+        </Link>
       </div>
-    </SiteShell>
+    </div>
   );
 }

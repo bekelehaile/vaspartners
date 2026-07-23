@@ -52,12 +52,20 @@ export function SiteShell({
           <nav className="topnav" aria-label="Primary">
             {me ? (
               <>
-                <Link href="/portal">Home</Link>
-                <Link href="/portal/services">Services</Link>
-                <Link href="/portal/requests">My requests</Link>
-                <Link href="/portal/requests/new" className="nav-cta">
-                  New request
-                </Link>
+                {me.profile_completed ? (
+                  <>
+                    <Link href="/portal">Home</Link>
+                    <Link href="/portal/services">Services</Link>
+                    <Link href="/portal/requests">My requests</Link>
+                    <Link href="/portal/requests/new" className="nav-cta">
+                      New request
+                    </Link>
+                  </>
+                ) : (
+                  <span className="muted" style={{ fontSize: "0.9rem" }}>
+                    Complete company profile
+                  </span>
+                )}
                 <div className="user-chip">
                   <span>{me.company_name || me.name}</span>
                   <button type="button" onClick={onLogout} className="linkish">
@@ -93,22 +101,26 @@ export function SiteShell({
             <div className="mobile-sheet-card">
               {me ? (
                 <>
-                  <Link href="/portal" onClick={() => setOpen(false)}>
-                    Home
-                  </Link>
-                  <Link href="/portal/services" onClick={() => setOpen(false)}>
-                    Services
-                  </Link>
-                  <Link href="/portal/requests" onClick={() => setOpen(false)}>
-                    My requests
-                  </Link>
-                  <Link
-                    href="/portal/requests/new"
-                    className="nav-cta"
-                    onClick={() => setOpen(false)}
-                  >
-                    New request
-                  </Link>
+                  {me.profile_completed && (
+                    <>
+                      <Link href="/portal" onClick={() => setOpen(false)}>
+                        Home
+                      </Link>
+                      <Link href="/portal/services" onClick={() => setOpen(false)}>
+                        Services
+                      </Link>
+                      <Link href="/portal/requests" onClick={() => setOpen(false)}>
+                        My requests
+                      </Link>
+                      <Link
+                        href="/portal/requests/new"
+                        className="nav-cta"
+                        onClick={() => setOpen(false)}
+                      >
+                        New request
+                      </Link>
+                    </>
+                  )}
                   <button type="button" className="sheet-link" onClick={onLogout}>
                     Sign out
                   </button>

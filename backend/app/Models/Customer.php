@@ -73,7 +73,11 @@ class Customer extends Authenticatable
     public function getProfileCompletedAttribute(): bool
     {
         return $this->profile_completed_at !== null
-            && filled($this->company_name);
+            && filled($this->company_name)
+            && filled($this->company_tin)
+            && filled($this->company_phone)
+            && filled($this->company_email)
+            && filled($this->company_address);
     }
 
     public function tickets(): HasMany

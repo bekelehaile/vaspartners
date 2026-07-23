@@ -1,70 +1,42 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { SiteShell } from "@/components/SiteShell";
+import { useForm } from "@tanstack/react-form";
+import { useParams } from "next/navigation";
 import { StatusJourney, StatusPill } from "@/components/StatusJourney";
-import { Customer, Ticket, api, clearToken, getToken, statusCopy } from "@/lib/api";
+import { usePostTicketComment, useTicket } from "@/hooks/use-customer";
+import { statusCopy } from "@/lib/api";
+import { commentSchema } from "@/lib/schemas/ticket";
+
+function fieldError(errors: unknown): string | null {
+  if (!errors || !Array.isArray(errors) || errors.length === 0) return null;
+  const first = errors[0];
+  if (typeof first === "string") return first;
+  if (first && typeof first === "object" && "message" in first) {
+    return String((first as { message: unknown }).message);
+  }
+  return String(first);
+}
 
 export default function RequestDetailPage() {
-  const router = useRouter();
   const params = useParams<{ public_id: string }>();
-  const [me, setMe] = useState<Customer | null>(null);
-  const [ticket, setTicket] = useState<Ticket | null>(null);
-  const [comment, setComment] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { data: ticket, isLoading, isError, error } = useTicket(params.public_id);
+  const postComment = usePostTicketComment(params.public_id);
 
-  const load = async () => {
-    const meRes = await api<{ data: Customer }>("/auth/me");
-    setMe(meRes.data);
-    const tRes = await api<{ data: Ticket }>(`/tickets/${params.public_id}`);
-    setTicket(tRes.data);
-  };
-
-  useEffect(() => {
-    if (!getToken()) {
-      router.replace("/");
-      return;
-    }
-    load().catch((e) => {
-      setError(e instanceof Error ? e.message : "Unable to load request");
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.public_id, router]);
-
-  const logout = async () => {
-    try {
-      await api("/auth/logout", { method: "POST" });
-    } catch {
-      /* ignore */
-    }
-    clearToken();
-    router.replace("/");
-  };
-
-  const sendComment = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!ticket || !comment.trim()) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await api(`/tickets/${ticket.public_id}/comments`, {
-        method: "POST",
-        body: JSON.stringify({ body: comment.trim() }),
-      });
-      setComment("");
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not post comment");
-    } finally {
-      setBusy(false);
-    }
-  };
+  const form = useForm({
+    defaultValues: { body: "" },
+    validators: {
+      onSubmit: commentSchema,
+    },
+    onSubmit: async ({ value, formApi }) => {
+      const parsed = commentSchema.parse(value);
+      await postComment.mutateAsync(parsed.body);
+      formApi.reset();
+    },
+  });
 
   return (
-    <SiteShell me={me} onLogout={logout} compact>
+    <>
       <div className="portal-hero">
         <p className="brand-kicker">
           <Link href="/portal/requests" className="linkish">
@@ -80,9 +52,19 @@ export default function RequestDetailPage() {
       </div>
 
       <div className="section" style={{ paddingTop: 0 }}>
-        {error && <div className="alert">{error}</div>}
+        {(isError || postComment.isError) && (
+          <div className="alert">
+            {postComment.isError
+              ? postComment.error instanceof Error
+                ? postComment.error.message
+                : "Could not post comment"
+              : error instanceof Error
+                ? error.message
+                : "Unable to load request"}
+          </div>
+        )}
 
-        {!ticket ? (
+        {isLoading || !ticket ? (
           <div className="panel">
             <div className="empty">Loading request…</div>
           </div>
@@ -129,25 +111,52 @@ export default function RequestDetailPage() {
                 ))}
               </ol>
 
-              <form onSubmit={sendComment} style={{ marginTop: "1.25rem" }}>
-                <div className="field">
-                  <label htmlFor="comment">Add a comment</label>
-                  <textarea
-                    id="comment"
-                    rows={3}
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    required
-                  />
-                </div>
-                <button className="btn-primary" disabled={busy}>
-                  {busy ? "Sending…" : "Send"}
-                </button>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  void form.handleSubmit();
+                }}
+                style={{ marginTop: "1.25rem" }}
+                noValidate
+              >
+                <form.Field name="body">
+                  {(field) => {
+                    const err =
+                      field.state.meta.isTouched || form.state.submissionAttempts > 0
+                        ? fieldError(field.state.meta.errors)
+                        : null;
+                    return (
+                      <div className={`field${err ? " has-error" : ""}`}>
+                        <label htmlFor={field.name}>Add a comment</label>
+                        <textarea
+                          id={field.name}
+                          name={field.name}
+                          rows={3}
+                          value={field.state.value}
+                          onBlur={field.handleBlur}
+                          onChange={(e) => field.handleChange(e.target.value)}
+                        />
+                        {err && <p className="field-error">{err}</p>}
+                      </div>
+                    );
+                  }}
+                </form.Field>
+                <form.Subscribe selector={(s) => s.isSubmitting}>
+                  {(isSubmitting) => (
+                    <button
+                      className="btn-primary"
+                      disabled={isSubmitting || postComment.isPending}
+                    >
+                      {isSubmitting || postComment.isPending ? "Sending…" : "Send"}
+                    </button>
+                  )}
+                </form.Subscribe>
               </form>
             </aside>
           </div>
         )}
       </div>
-    </SiteShell>
+    </>
   );
 }

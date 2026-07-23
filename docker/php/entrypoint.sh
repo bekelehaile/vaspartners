@@ -71,4 +71,7 @@ if [ "${VAS_SEED_ON_START:-true}" = "true" ]; then
   php artisan db:seed --force
 fi
 
+# Filament admin CSS/JS (login + panel) — publish into public/ on every boot
+php artisan filament:assets --ansi
+
 exec "$@"

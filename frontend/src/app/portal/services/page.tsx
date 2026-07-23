@@ -1,40 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { SiteShell } from "@/components/SiteShell";
-import { Customer, Service, api, clearToken, getToken } from "@/lib/api";
+import { useMemo } from "react";
+import { useServices } from "@/hooks/use-customer";
 
 export default function ServicesPage() {
-  const router = useRouter();
-  const [me, setMe] = useState<Customer | null>(null);
-  const [services, setServices] = useState<Service[]>([]);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!getToken()) {
-      router.replace("/");
-      return;
-    }
-    api<{ data: Customer }>("/auth/me").then((r) => setMe(r.data)).catch(() => router.replace("/"));
-    api<{ data: Service[] }>("/services")
-      .then((r) => setServices(r.data ?? []))
-      .catch((e) => setError(e.message));
-  }, [router]);
-
-  const logout = async () => {
-    try {
-      await api("/auth/logout", { method: "POST" });
-    } catch {
-      /* ignore */
-    }
-    clearToken();
-    router.replace("/");
-  };
+  const { data: services = [], error, isError } = useServices();
 
   const grouped = useMemo(() => {
-    const map = new Map<string, Service[]>();
+    const map = new Map<string, typeof services>();
     for (const s of services) {
       const key = s.category?.name || "Other services";
       if (!map.has(key)) map.set(key, []);
@@ -44,7 +18,7 @@ export default function ServicesPage() {
   }, [services]);
 
   return (
-    <SiteShell me={me} onLogout={logout} compact>
+    <>
       <div className="portal-hero">
         <h1>Services</h1>
         <p className="muted">
@@ -53,7 +27,11 @@ export default function ServicesPage() {
         </p>
       </div>
       <div className="section" style={{ paddingTop: 0 }}>
-        {error && <div className="alert">{error}</div>}
+        {isError && (
+          <div className="alert">
+            {error instanceof Error ? error.message : "Unable to load services"}
+          </div>
+        )}
         {grouped.map(([category, rows]) => (
           <div key={category} className="category-block panel">
             <h2>{category}</h2>
@@ -77,12 +55,12 @@ export default function ServicesPage() {
             </div>
           </div>
         ))}
-        {!services.length && !error && (
+        {!services.length && !isError && (
           <div className="panel">
             <div className="empty">Services will appear here once published by the VAS team.</div>
           </div>
         )}
       </div>
-    </SiteShell>
+    </>
   );
 }

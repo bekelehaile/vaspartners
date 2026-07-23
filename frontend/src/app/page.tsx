@@ -1,43 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { SiteShell } from "@/components/SiteShell";
-import { Customer, api, clearToken, faydaLoginUrl, getToken } from "@/lib/api";
+import { faydaLoginUrl } from "@/lib/api";
+import { useCustomer, useFaqs, useLogout } from "@/hooks/use-customer";
 
-type Faq = { id: number; question: string; answer: string };
-
-export default function LandingPage() {
-  const [me, setMe] = useState<Customer | null>(null);
-  const [authError, setAuthError] = useState<string | null>(null);
-  const [faqs, setFaqs] = useState<Faq[]>([]);
-
-  useEffect(() => {
-    const err = new URLSearchParams(window.location.search).get("error");
-    if (err) setAuthError(err);
-
-    api<{ data: Faq[] }>("/faqs")
-      .then((r) => setFaqs(Array.isArray(r.data) ? r.data.slice(0, 12) : []))
-      .catch(() => setFaqs([]));
-
-    if (!getToken()) return;
-    api<{ data: Customer }>("/auth/me")
-      .then((r) => setMe(r.data))
-      .catch(() => clearToken());
-  }, []);
-
-  const logout = async () => {
-    try {
-      await api("/auth/logout", { method: "POST" });
-    } catch {
-      /* ignore */
-    }
-    clearToken();
-    setMe(null);
-  };
+function LandingInner() {
+  const params = useSearchParams();
+  const authError = params.get("error");
+  const { data: me = null } = useCustomer();
+  const { data: faqs = [] } = useFaqs();
+  const logout = useLogout();
 
   return (
-    <SiteShell me={me} onLogout={logout} landing>
+    <SiteShell me={me} onLogout={() => void logout()} landing>
       <div className="hero-wrap">
         <section className="hero" aria-label="Welcome">
           <div className="hero-copy">
@@ -167,5 +145,19 @@ export default function LandingPage() {
         </div>
       </section>
     </SiteShell>
+  );
+}
+
+export default function LandingPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="auth-wait">
+          <div className="spinner" aria-hidden />
+        </main>
+      }
+    >
+      <LandingInner />
+    </Suspense>
   );
 }

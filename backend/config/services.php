@@ -47,4 +47,10 @@ return [
         'algorithm' => env('FAYDA_ALG', 'RS256'),
     ],
 
+    /*
+    | Ethio telecom bulk SMS gateway.
+    | Full URL prefix ending with receiver= — phone + message are appended.
+    */
+    'sms_endpoint' => env('SMS_ENDPOINT', 'https://smsgw.ethiotelecom.et/bl/index.php?receiver='),
+
 ];

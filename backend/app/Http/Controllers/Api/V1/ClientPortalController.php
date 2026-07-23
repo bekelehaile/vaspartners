@@ -10,6 +10,7 @@ use App\Models\Subscription;
 use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Models\TicketDocument;
+use App\Services\PartnerNotificationService;
 use App\Services\TicketWorkflowService;
 use Illuminate\Http\Request;
 
@@ -148,22 +149,28 @@ class ClientPortalController extends Controller
         return response()->json(['data' => $comment], 201);
     }
 
-    public function completeCompanyProfile(Request $request)
+    public function completeCompanyProfile(Request $request, PartnerNotificationService $notifications)
     {
         $data = $request->validate([
-            'company_name' => ['required', 'string', 'max:255'],
-            'company_tin' => ['nullable', 'string', 'max:64'],
-            'company_phone' => ['nullable', 'string', 'max:32'],
-            'company_email' => ['nullable', 'email', 'max:255'],
-            'company_address' => ['nullable', 'string', 'max:2000'],
+            'company_name' => ['required', 'string', 'min:2', 'max:255'],
+            'company_tin' => ['required', 'string', 'min:5', 'max:64'],
+            'company_phone' => ['required', 'string', 'min:9', 'max:32'],
+            'company_email' => ['required', 'email', 'max:255'],
+            'company_address' => ['required', 'string', 'min:5', 'max:2000'],
         ]);
 
         /** @var \App\Models\Customer $customer */
         $customer = $request->user();
+        $wasIncomplete = ! $customer->profile_completed;
         $customer->fill($data);
         $customer->profile_completed_at = now();
         $customer->save();
 
-        return response()->json(['data' => $customer->fresh()]);
+        $fresh = $customer->fresh();
+        if ($wasIncomplete) {
+            $notifications->profileCompleted($fresh);
+        }
+
+        return response()->json(['data' => $fresh]);
     }
 }
