@@ -97,6 +97,12 @@ class CompanyMembershipService
             ]);
         }
 
+        if ($customer->company_membership_active === false) {
+            throw ValidationException::withMessages([
+                'company' => 'Your membership for this company is disabled. Contact an administrator.',
+            ]);
+        }
+
         $tin = $this->normalizeTin($data['company_tin']);
         if (Company::query()->where('tin', $tin)->where('id', '!=', $company->id)->exists()) {
             throw ValidationException::withMessages([
@@ -301,9 +307,59 @@ class CompanyMembershipService
         $customer->forceFill([
             'company_id' => $company->id,
             'company_role' => $role->value,
+            'company_membership_active' => true,
             'profile_completed_at' => now(),
         ]);
         $this->syncCustomerCompanyFields($customer, $company);
+    }
+
+    /**
+     * Enable or disable a member's access to company info and company subscriptions.
+     * Disabled members stay linked but cannot use portal company/services features.
+     */
+    public function setMembershipActive(Company $company, Customer $member, bool $active, User $actor): Customer
+    {
+        if ((int) $member->company_id !== (int) $company->id) {
+            throw ValidationException::withMessages([
+                'member' => 'This partner is not a member of this company.',
+            ]);
+        }
+
+        if ($this->roleOf($member) === CompanyRole::Owner && ! $active) {
+            $otherActive = Customer::query()
+                ->where('company_id', $company->id)
+                ->where('id', '!=', $member->id)
+                ->where('company_membership_active', true)
+                ->exists();
+
+            if ($otherActive) {
+                throw ValidationException::withMessages([
+                    'member' => 'Cannot disable the owner while other active members remain. Transfer ownership first.',
+                ]);
+            }
+        }
+
+        $member->forceFill(['company_membership_active' => $active])->save();
+
+        return $member->fresh(['company']);
+    }
+
+    /**
+     * @throws ValidationException
+     */
+    public function assertCanAccessCompany(Customer $customer): void
+    {
+        if (! $customer->company_id) {
+            throw ValidationException::withMessages([
+                'company' => 'Complete your company profile before continuing.',
+            ]);
+        }
+
+        if ($customer->company_membership_active === false) {
+            throw ValidationException::withMessages([
+                'company' => 'Your membership for this company is disabled. Contact an administrator.',
+            ]);
+        }
     }
 
     /**
@@ -341,6 +397,7 @@ class CompanyMembershipService
         $customer->forceFill([
             'company_id' => null,
             'company_role' => null,
+            'company_membership_active' => true,
             'company_name' => null,
             'company_tin' => null,
             'company_phone' => null,
@@ -365,14 +422,19 @@ class CompanyMembershipService
     {
         $customer->loadMissing('company');
         $pending = $this->pendingRequestFor($customer);
+        $membershipActive = $customer->company_id
+            ? $customer->company_membership_active !== false
+            : null;
         $memberCount = $customer->company_id
             ? Customer::query()->where('company_id', $customer->company_id)->count()
             : 0;
         $isOwner = $this->roleOf($customer) === CompanyRole::Owner;
-        $canDetach = (bool) $customer->company_id && (! $isOwner || $memberCount <= 1);
+        $canDetach = (bool) $customer->company_id
+            && $membershipActive
+            && (! $isOwner || $memberCount <= 1);
 
         $data = $customer->toArray();
-        $data['company'] = $customer->company ? [
+        $data['company'] = ($customer->company && $membershipActive) ? [
             'public_id' => $customer->company->public_id,
             'name' => $customer->company->name,
             'tin' => $customer->company->tin,
@@ -382,8 +444,18 @@ class CompanyMembershipService
             'member_count' => $memberCount,
         ] : null;
         $data['company_role'] = $customer->company_role;
+        $data['company_membership_active'] = $membershipActive;
         $data['company_can_detach'] = $canDetach;
-        $data['company_needs_ownership_transfer'] = $isOwner && $memberCount > 1;
+        $data['company_needs_ownership_transfer'] = $isOwner && $memberCount > 1 && $membershipActive;
+        // Hide denormalized company fields when membership is disabled.
+        if ($membershipActive === false) {
+            $data['company_name'] = null;
+            $data['company_tin'] = null;
+            $data['company_phone'] = null;
+            $data['company_email'] = null;
+            $data['company_address'] = null;
+            $data['profile_completed'] = false;
+        }
         $data['pending_company_request'] = $pending ? [
             'public_id' => $pending->public_id,
             'type' => $pending->type->value,

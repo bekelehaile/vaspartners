@@ -185,16 +185,37 @@ class ClientPortalController extends Controller
 
     public function subscriptions(Request $request)
     {
-        $customerId = $request->user()->id;
+        /** @var \App\Models\Customer $customer */
+        $customer = $request->user();
+        if (! $customer->hasActiveCompanyMembership()) {
+            return response()->json([
+                'data' => [],
+                'current_page' => 1,
+                'last_page' => 1,
+                'per_page' => 100,
+                'total' => 0,
+                'pending_new_service_ids' => [],
+                'pending_requests' => [],
+                'message' => $customer->company_id && $customer->company_membership_active === false
+                    ? 'Your company membership is disabled.'
+                    : 'Complete your company profile to view subscriptions.',
+            ]);
+        }
+
+        $companyId = (int) $customer->company_id;
 
         $rows = Subscription::query()
             ->with(['service:id,name,slug,renewal_interval'])
-            ->where('customer_id', $customerId)
+            ->where('company_id', $companyId)
             ->latest('id')
             ->paginate(100);
 
+        $companyCustomerIds = \App\Models\Customer::query()
+            ->where('company_id', $companyId)
+            ->pluck('id');
+
         $pendingNewServiceIds = Ticket::query()
-            ->where('customer_id', $customerId)
+            ->whereIn('customer_id', $companyCustomerIds)
             ->whereIn('status', ['open', 'in_progress'])
             ->whereHas('requisition', fn ($q) => $q->where('creates_subscription', true))
             ->pluck('service_id')
@@ -202,7 +223,7 @@ class ClientPortalController extends Controller
             ->values();
 
         $pendingRequests = Ticket::query()
-            ->where('customer_id', $customerId)
+            ->whereIn('customer_id', $companyCustomerIds)
             ->whereIn('status', ['open', 'in_progress'])
             ->get(['service_id', 'requisition_id', 'tt_number', 'public_id', 'status'])
             ->map(fn (Ticket $t) => [
@@ -305,6 +326,14 @@ class ClientPortalController extends Controller
 
     public function completeCompanyProfile(Request $request, CompanyMembershipService $membership)
     {
+        /** @var \App\Models\Customer $customer */
+        $customer = $request->user();
+        if ($customer->company_id && $customer->company_membership_active === false) {
+            return response()->json([
+                'message' => 'Your membership for this company is disabled. Contact an administrator.',
+            ], 403);
+        }
+
         $data = $request->validate([
             'company_name' => ['required', 'string', 'min:2', 'max:255'],
             'company_tin' => ['required', 'string', 'min:5', 'max:64'],
@@ -313,8 +342,6 @@ class ClientPortalController extends Controller
             'company_address' => ['required', 'string', 'min:5', 'max:2000'],
         ]);
 
-        /** @var \App\Models\Customer $customer */
-        $customer = $request->user();
         $fresh = $customer->company_id
             ? $membership->updateOwnCompany($customer, $data)
             : $membership->createCompanyForCustomer($customer, $data);
@@ -363,6 +390,14 @@ class ClientPortalController extends Controller
 
     public function requestDetachCompany(Request $request, CompanyMembershipService $membership)
     {
+        /** @var \App\Models\Customer $customer */
+        $customer = $request->user();
+        if ($customer->company_membership_active === false) {
+            return response()->json([
+                'message' => 'Your membership for this company is disabled. Contact an administrator.',
+            ], 403);
+        }
+
         $data = $request->validate([
             'note' => ['nullable', 'string', 'max:2000'],
             'proposal' => ['required', 'file'],
@@ -370,14 +405,14 @@ class ClientPortalController extends Controller
         ]);
 
         $change = $membership->requestDetach(
-            $request->user(),
+            $customer,
             $data['note'] ?? null,
             $request->file('proposal'),
             $request->file('letter'),
         );
 
         return response()->json([
-            'data' => $membership->serializeCustomer($request->user()->fresh()),
+            'data' => $membership->serializeCustomer($customer->fresh()),
             'request' => [
                 'public_id' => $change->public_id,
                 'type' => $change->type->value,

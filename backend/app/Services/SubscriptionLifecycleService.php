@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\RenewalInterval;
 use App\Enums\SubscriptionStatus;
 use App\Enums\TicketStatus;
+use App\Models\Customer;
 use App\Models\Requisition;
 use App\Models\Service;
 use App\Models\Subscription;
@@ -15,6 +16,7 @@ use Illuminate\Validation\ValidationException;
 /**
  * Subscription lifecycle driven by configurable requisition behaviors.
  *
+ * Subscriptions belong to the company once the partner is linked.
  * - creates_subscription (new) → activate on ticket completed/closed
  * - renews_subscription (renew) → extend period on completed/closed
  * - terminates_subscription (terminate) → end subscription on completed/closed
@@ -22,36 +24,43 @@ use Illuminate\Validation\ValidationException;
  */
 class SubscriptionLifecycleService
 {
-    public function assertTicketAllowed(int $customerId, array $data, Requisition $requisition, Service $service): void
+    public function __construct(
+        protected CompanyMembershipService $membership,
+    ) {}
+
+    public function assertTicketAllowed(Customer $customer, array $data, Requisition $requisition, Service $service): void
     {
+        $this->membership->assertCanAccessCompany($customer);
+        $companyId = (int) $customer->company_id;
+
         if ($requisition->requires_active_subscription || $requisition->renews_subscription || $requisition->terminates_subscription) {
             // Non-subscription services are managed without an alive subscription.
             if ($service->is_subscription_based) {
-                $subscription = $this->resolveSubscription($data['subscription_id'] ?? null, $customerId, $service->id);
+                $subscription = $this->resolveSubscription($data['subscription_id'] ?? null, $companyId, $service->id);
                 if (! $subscription || ! $subscription->status->isAlive()) {
                     throw ValidationException::withMessages([
-                        'subscription_id' => 'An active subscription is required for this request type.',
+                        'subscription_id' => 'An active company subscription is required for this request type.',
                     ]);
                 }
             }
         }
 
-        // One active request per service + request type until it is closed (or rejected).
+        // One active request per company + service + request type until it is closed (or rejected).
         $pending = Ticket::query()
-            ->where('customer_id', $customerId)
             ->where('service_id', $service->id)
             ->where('requisition_id', $requisition->id)
             ->whereIn('status', [
                 TicketStatus::Open->value,
                 TicketStatus::InProgress->value,
             ])
+            ->whereHas('customer', fn ($q) => $q->where('company_id', $companyId))
             ->latest('id')
             ->first(['id', 'tt_number', 'public_id', 'status']);
 
         if ($pending) {
             throw ValidationException::withMessages([
                 'service_id' => sprintf(
-                    'You already have an open %s request for %s (%s). Wait until it is closed before submitting another.',
+                    'Your company already has an open %s request for %s (%s). Wait until it is closed before submitting another.',
                     $requisition->name ?: 'service',
                     $service->name ?: 'this service',
                     $pending->tt_number,
@@ -61,9 +70,9 @@ class SubscriptionLifecycleService
         }
 
         if ($requisition->creates_subscription && $service->is_subscription_based) {
-            if ($this->customerHasAliveSubscription($customerId, $service->id)) {
+            if ($this->companyHasAliveSubscription($companyId, $service->id)) {
                 throw ValidationException::withMessages([
-                    'service_id' => 'You already have an active subscription for this service. Use manage / renew / terminate instead of starting another.',
+                    'service_id' => 'Your company already has an active subscription for this service. Use manage / renew / terminate instead of starting another.',
                 ]);
             }
 
@@ -77,7 +86,7 @@ class SubscriptionLifecycleService
 
     public function applyFromTicket(Ticket $ticket): void
     {
-        $ticket->loadMissing(['requisition', 'service', 'subscription']);
+        $ticket->loadMissing(['requisition', 'service', 'subscription', 'customer']);
         $requisition = $ticket->requisition;
         $service = $ticket->service;
 
@@ -105,14 +114,22 @@ class SubscriptionLifecycleService
                 return $ticket->subscription()->firstOrFail();
             }
 
-            // Serialize activation per Fayda customer + service to prevent double subscriptions.
+            $ticket->loadMissing('customer');
+            $companyId = (int) ($ticket->customer?->company_id ?? 0);
+            if ($companyId < 1) {
+                throw ValidationException::withMessages([
+                    'company' => 'Cannot activate a subscription without a company.',
+                ]);
+            }
+
+            // Serialize activation per company + service to prevent double subscriptions.
             Subscription::query()
-                ->where('customer_id', $ticket->customer_id)
+                ->where('company_id', $companyId)
                 ->where('service_id', $ticket->service_id)
                 ->lockForUpdate()
                 ->get();
 
-            $existing = $this->aliveSubscriptionFor($ticket->customer_id, $ticket->service_id);
+            $existing = $this->aliveSubscriptionFor($companyId, $ticket->service_id);
             if ($existing) {
                 $ticket->subscription_id = $existing->id;
                 $ticket->save();
@@ -128,6 +145,7 @@ class SubscriptionLifecycleService
 
             $subscription = Subscription::query()->create([
                 'customer_id' => $ticket->customer_id,
+                'company_id' => $companyId,
                 'service_id' => $ticket->service_id,
                 'status' => SubscriptionStatus::Active,
                 'renewal_interval' => $interval,
@@ -199,7 +217,7 @@ class SubscriptionLifecycleService
         $created = 0;
 
         Subscription::query()
-            ->with(['service.renewalRequisition', 'customer'])
+            ->with(['service.renewalRequisition', 'customer', 'company.owner'])
             ->whereIn('status', [SubscriptionStatus::Active->value, SubscriptionStatus::PendingRenewal->value])
             ->whereNotNull('next_renewal_due_at')
             ->where('next_renewal_due_at', '<=', now())
@@ -228,7 +246,13 @@ class SubscriptionLifecycleService
                         continue;
                     }
 
-                    $workflow->createTicket($subscription->customer, [
+                    $actor = $subscription->company?->owner
+                        ?? $subscription->customer;
+                    if (! $actor) {
+                        continue;
+                    }
+
+                    $workflow->createTicket($actor, [
                         'service_id' => $subscription->service_id,
                         'requisition_id' => $requisition->id,
                         'category_id' => $subscription->service->category_id,
@@ -246,28 +270,39 @@ class SubscriptionLifecycleService
         return $created;
     }
 
-    protected function resolveSubscription(?int $subscriptionId, ?int $customerId, int $serviceId): ?Subscription
+    protected function resolveSubscription(?int $subscriptionId, int $companyId, int $serviceId): ?Subscription
     {
         if ($subscriptionId) {
             return Subscription::query()
                 ->where('id', $subscriptionId)
-                ->where('customer_id', $customerId)
+                ->where('company_id', $companyId)
                 ->where('service_id', $serviceId)
                 ->first();
         }
 
-        return $this->aliveSubscriptionFor((int) $customerId, $serviceId);
+        return $this->aliveSubscriptionFor($companyId, $serviceId);
     }
 
+    public function companyHasAliveSubscription(int $companyId, int $serviceId): bool
+    {
+        return $this->aliveSubscriptionFor($companyId, $serviceId) !== null;
+    }
+
+    /** @deprecated Use companyHasAliveSubscription */
     public function customerHasAliveSubscription(int $customerId, int $serviceId): bool
     {
-        return $this->aliveSubscriptionFor($customerId, $serviceId) !== null;
+        $companyId = (int) Customer::query()->where('id', $customerId)->value('company_id');
+        if ($companyId < 1) {
+            return false;
+        }
+
+        return $this->companyHasAliveSubscription($companyId, $serviceId);
     }
 
-    protected function aliveSubscriptionFor(int $customerId, int $serviceId): ?Subscription
+    protected function aliveSubscriptionFor(int $companyId, int $serviceId): ?Subscription
     {
         return Subscription::query()
-            ->where('customer_id', $customerId)
+            ->where('company_id', $companyId)
             ->where('service_id', $serviceId)
             ->whereIn('status', [
                 SubscriptionStatus::Active->value,

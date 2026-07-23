@@ -17,6 +17,7 @@ class Subscription extends Model
     protected $fillable = [
         'public_id',
         'customer_id',
+        'company_id',
         'service_id',
         'status',
         'renewal_interval',
@@ -55,6 +56,12 @@ class Subscription extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    /** Owning organisation — subscriptions transfer with company ownership/membership. */
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
     }
 
     public function service(): BelongsTo

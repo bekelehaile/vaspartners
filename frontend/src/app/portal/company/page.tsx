@@ -15,7 +15,9 @@ import { queryKeys } from "@/lib/query-keys";
 export default function CompanyProfilePage() {
   const queryClient = useQueryClient();
   const { data: me } = useCustomer();
-  const isLinked = !!me?.profile_completed && !!me?.company_id;
+  const membershipDisabled =
+    !!me?.company_id && me?.company_membership_active === false;
+  const isLinked = !!me?.profile_completed && !!me?.company_id && !membershipDisabled;
   const pending = me?.pending_company_request;
   const [mode, setMode] = useState<"create" | "attach">("create");
   const [tin, setTin] = useState("");
@@ -33,14 +35,18 @@ export default function CompanyProfilePage() {
       <PortalPageHeader
         kicker={isLinked ? "Settings" : "Welcome"}
         title={
-          isLinked
+          membershipDisabled
+            ? "Membership disabled"
+            : isLinked
             ? "Company membership"
             : pending
               ? "Company request pending"
               : "Link your Fayda account to a company"
         }
         description={
-          isLinked
+          membershipDisabled
+            ? "Your access to this company has been disabled by an administrator."
+            : isLinked
             ? `You are linked to ${me?.company_name || me?.company?.name || "your organisation"} as ${me?.company_role || "member"}.`
             : pending
               ? `Your ${pending.type} request for ${pending.company?.name || "a company"} is waiting for admin approval.`
@@ -49,7 +55,17 @@ export default function CompanyProfilePage() {
       />
 
       <div className="section company-section section-flush">
-        {pending && (
+        {membershipDisabled && (
+          <div className="panel">
+            <h2>Membership disabled</h2>
+            <p className="muted" style={{ marginBottom: 0 }}>
+              You remain linked to the company, but you cannot view company details or manage
+              company services until an administrator re-enables your access.
+            </p>
+          </div>
+        )}
+
+        {!membershipDisabled && pending && (
           <div className="panel">
             <h2>Waiting for admin decision</h2>
             <p className="muted">
@@ -71,7 +87,7 @@ export default function CompanyProfilePage() {
           </div>
         )}
 
-        {!pending && !isLinked && (
+        {!membershipDisabled && !pending && !isLinked && (
           <>
             <div className="journey-tabs" role="tablist" aria-label="Company onboarding">
               <button

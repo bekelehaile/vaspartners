@@ -32,6 +32,14 @@ class Company extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::deleting(function (): bool {
+            // Company records are permanent — soft or hard delete is not allowed.
+            return false;
+        });
+    }
+
     public function uniqueIds(): array
     {
         return ['public_id'];
@@ -68,6 +76,11 @@ class Company extends Model
         return $this->hasMany(CompanyChangeRequest::class);
     }
 
+    public function subscriptions(): HasMany
+    {
+        return $this->hasMany(Subscription::class);
+    }
+
     public function hasOwner(): bool
     {
         return $this->owner()->exists();
@@ -76,5 +89,10 @@ class Company extends Model
     public function memberCount(): int
     {
         return $this->members()->count();
+    }
+
+    public function activeMembers(): HasMany
+    {
+        return $this->hasMany(Customer::class)->where('company_membership_active', true);
     }
 }

@@ -123,4 +123,24 @@ class CompanyResource extends Resource
         // Companies are created by partners (create/attach flow).
         return false;
     }
+
+    public static function canDelete($record): bool
+    {
+        return false;
+    }
+
+    public static function canForceDelete($record): bool
+    {
+        return false;
+    }
+
+    public static function canDeleteAny(): bool
+    {
+        return false;
+    }
+
+    public static function canForceDeleteAny(): bool
+    {
+        return false;
+    }
 }

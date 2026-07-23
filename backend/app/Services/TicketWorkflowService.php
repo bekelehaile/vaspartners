@@ -231,18 +231,20 @@ class TicketWorkflowService
 
             $this->assertOpenTicketLimit($customer, $requisition, $data);
 
-            $this->subscriptions->assertTicketAllowed($customer->id, $data, $requisition, $service);
+            $this->subscriptions->assertTicketAllowed($customer, $data, $requisition, $service);
 
-            if (empty($data['skip_open_limit']) && ! $customer->profile_completed) {
+            if (empty($data['skip_open_limit']) && ! $customer->hasActiveCompanyMembership()) {
                 throw ValidationException::withMessages([
-                    'profile' => 'Please complete your company details before submitting a service request.',
+                    'profile' => $customer->company_id && $customer->company_membership_active === false
+                        ? 'Your membership for this company is disabled. Contact an administrator.'
+                        : 'Please complete your company details before submitting a service request.',
                 ]);
             }
 
             $subscriptionId = $data['subscription_id'] ?? null;
             if (! $subscriptionId && ($requisition->requires_active_subscription || $requisition->renews_subscription || $requisition->terminates_subscription)) {
                 $subscriptionId = \App\Models\Subscription::query()
-                    ->where('customer_id', $customer->id)
+                    ->where('company_id', $customer->company_id)
                     ->where('service_id', $service->id)
                     ->whereIn('status', ['active', 'pending_renewal', 'grace'])
                     ->latest('id')
@@ -305,15 +307,20 @@ class TicketWorkflowService
         }
 
         $maxOpen = (int) config('vas.max_open_tickets', 1);
+        $companyId = (int) $customer->company_id;
         $openCount = Ticket::query()
-            ->where('customer_id', $customer->id)
             ->where('status', TicketStatus::Open)
             ->whereHas('requisition', fn ($q) => $q->where('creates_subscription', true))
+            ->when(
+                $companyId > 0,
+                fn ($q) => $q->whereHas('customer', fn ($cq) => $cq->where('company_id', $companyId)),
+                fn ($q) => $q->where('customer_id', $customer->id),
+            )
             ->count();
 
         if ($openCount >= $maxOpen) {
             throw ValidationException::withMessages([
-                'ticket' => "You already have the maximum of {$maxOpen} open subscription request(s). You can still submit manage requests for other services.",
+                'ticket' => "Your company already has the maximum of {$maxOpen} open subscription request(s). You can still submit manage requests for other services.",
             ]);
         }
     }

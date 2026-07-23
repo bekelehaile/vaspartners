@@ -32,7 +32,9 @@ class SubscriptionResource extends Resource
     {
         return $schema->components([
             TextEntry::make('public_id'),
-            TextEntry::make('customer.name')->label('Customer'),
+            TextEntry::make('company.name')->label('Company')->placeholder('—'),
+            TextEntry::make('company.tin')->label('TIN')->placeholder('—'),
+            TextEntry::make('customer.name')->label('Activated by'),
             TextEntry::make('customer.phone_number')->label('Phone'),
             TextEntry::make('service.name'),
             TextEntry::make('status')->badge(),
@@ -40,7 +42,7 @@ class SubscriptionResource extends Resource
             TextEntry::make('current_period_start')->dateTime(),
             TextEntry::make('current_period_end')->dateTime(),
             TextEntry::make('next_renewal_due_at')->dateTime(),
-            TextEntry::make('activatedByTicket.tt_number')->label('Activated by'),
+            TextEntry::make('activatedByTicket.tt_number')->label('Activated by ticket'),
             TextEntry::make('terminatedByTicket.tt_number')->label('Terminated by'),
         ]);
     }
@@ -49,8 +51,8 @@ class SubscriptionResource extends Resource
     {
         return $table->columns([
             TextColumn::make('public_id')->label('ID')->searchable(),
-            TextColumn::make('customer.name')->label('Customer')->searchable(),
-            TextColumn::make('customer.phone_number')->label('Phone'),
+            TextColumn::make('company.name')->label('Company')->searchable()->placeholder('—'),
+            TextColumn::make('customer.name')->label('Activated by')->searchable()->toggleable(),
             TextColumn::make('service.name')->sortable(),
             TextColumn::make('status')->badge(),
             TextColumn::make('renewal_interval')->badge(),

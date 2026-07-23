@@ -43,6 +43,7 @@ class Customer extends Authenticatable
         'company_address',
         'company_id',
         'company_role',
+        'company_membership_active',
         'is_active',
         'is_banned',
         'profile_completed_at',
@@ -66,8 +67,15 @@ class Customer extends Authenticatable
             'birthdate' => 'date',
             'is_active' => 'boolean',
             'is_banned' => 'boolean',
+            'company_membership_active' => 'boolean',
             'profile_completed_at' => 'datetime',
         ];
+    }
+
+    /** Active membership on a company (disabled members keep the link but lose access). */
+    public function hasActiveCompanyMembership(): bool
+    {
+        return (bool) $this->company_id && $this->company_membership_active !== false;
     }
 
     protected static function booted(): void
@@ -128,6 +136,10 @@ class Customer extends Authenticatable
 
     public function getProfileCompletedAttribute(): bool
     {
+        if ($this->company_id && $this->company_membership_active === false) {
+            return false;
+        }
+
         if ($this->company_id) {
             return $this->profile_completed_at !== null
                 && filled($this->company_name)

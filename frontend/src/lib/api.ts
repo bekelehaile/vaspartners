@@ -26,6 +26,7 @@ export type Customer = {
   } | null;
   company_can_detach?: boolean;
   company_needs_ownership_transfer?: boolean;
+  company_membership_active?: boolean | null;
   pending_company_request?: {
     public_id: string;
     type: "attach" | "detach";
