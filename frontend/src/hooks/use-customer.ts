@@ -221,6 +221,8 @@ export function useSwitchCompany() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.customer.me });
       void queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions });
       void queryClient.invalidateQueries({ queryKey: queryKeys.customer.tickets });
+      void queryClient.invalidateQueries({ queryKey: ["company-members"] });
+      void queryClient.invalidateQueries({ queryKey: ["company-membership-requests"] });
     },
   });
 }

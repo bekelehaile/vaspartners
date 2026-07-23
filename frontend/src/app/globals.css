@@ -247,12 +247,79 @@ textarea {
   display: flex;
   align-items: center;
   gap: 0.65rem;
+  flex-wrap: wrap;
 }
 
 .portal-header-actions-mobile {
   width: 100%;
   justify-content: space-between;
   padding: 0.25rem 0 0.5rem;
+}
+
+.company-switcher {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.company-switcher-header {
+  max-width: 16rem;
+}
+
+.company-switcher-page {
+  max-width: 32rem;
+  width: 100%;
+}
+
+.company-switcher-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--et-muted);
+}
+
+.company-switcher-select {
+  width: 100%;
+  min-height: 2.25rem;
+  padding: 0.35rem 2rem 0.35rem 0.7rem;
+  border: 1px solid var(--et-line);
+  border-radius: 0.5rem;
+  background: #fff;
+  color: var(--et-ink);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.company-switcher-select:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.company-switcher-select:focus {
+  outline: 2px solid color-mix(in oklab, var(--primary) 35%, white);
+  outline-offset: 1px;
+  border-color: var(--primary);
+}
+
+.company-switcher-hint {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.company-switcher-error {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.portal-header-actions-mobile .company-switcher {
+  width: 100%;
+  max-width: none;
+  order: -1;
+  flex: 1 1 100%;
 }
 
 .portal-settings {

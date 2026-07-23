@@ -13,15 +13,14 @@ import {
   useDetachCompany,
   useLookupCompany,
   useMembershipRequests,
-  useSwitchCompany,
   useTransferOwnership,
 } from "@/hooks/use-customer";
+import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { queryKeys } from "@/lib/query-keys";
 
 export default function CompanyProfilePage() {
   const queryClient = useQueryClient();
   const { data: me } = useCustomer();
-  const switchCompany = useSwitchCompany();
   const [creatingAnother, setCreatingAnother] = useState(false);
   const membershipDisabled =
     !!me?.company_id && me?.company_membership_active === false;
@@ -102,53 +101,17 @@ export default function CompanyProfilePage() {
           <div className="panel">
             <h2>Your companies</h2>
             <p className="muted">
-              Subscriptions and manage-service requests use the selected company. You can be
-              owner of some companies and member of others.
+              Pick the active company from the list. Subscriptions and service requests use
+              that company. You can own some companies and be a member of others.
             </p>
-            <ul style={{ listStyle: "none", padding: 0, margin: "0 0 1rem" }}>
-              {(me?.memberships ?? []).map((m) => (
-                <li
-                  key={`${m.company_public_id}-${m.role}`}
-                  style={{
-                    display: "flex",
-                    gap: "0.75rem",
-                    flexWrap: "wrap",
-                    alignItems: "center",
-                    padding: "0.65rem 0",
-                    borderTop: "1px solid color-mix(in oklab, var(--et-ink) 10%, white)",
-                  }}
-                >
-                  <div style={{ flex: "1 1 12rem" }}>
-                    <strong>{m.company_name || "Company"}</strong>
-                    <span className="muted">
-                      {" "}
-                      · {m.role}
-                      {m.is_current ? " · current" : ""}
-                      {!m.is_active ? " · disabled" : ""}
-                      {m.approval_status && m.approval_status !== "approved"
-                        ? ` · ${m.approval_status}`
-                        : ""}
-                    </span>
-                  </div>
-                  {!m.is_current && m.is_active && m.company_public_id && (
-                    <button
-                      type="button"
-                      className="btn-ghost"
-                      disabled={switchCompany.isPending}
-                      onClick={() =>
-                        void switchCompany.mutateAsync(m.company_public_id!)
-                      }
-                    >
-                      Switch
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
+            {me && (
+              <CompanySwitcher me={me} variant="page" showHint />
+            )}
             {isLinked && (
               <button
                 type="button"
                 className="btn-ghost"
+                style={{ marginTop: "1rem" }}
                 onClick={() => setCreatingAnother((v) => !v)}
               >
                 {creatingAnother ? "Cancel" : "Create another company"}
@@ -162,13 +125,6 @@ export default function CompanyProfilePage() {
                   createNew
                   redirectTo="/portal/company"
                 />
-              </div>
-            )}
-            {switchCompany.isError && (
-              <div className="alert" style={{ marginTop: "1rem" }}>
-                {switchCompany.error instanceof Error
-                  ? switchCompany.error.message
-                  : "Could not switch company"}
               </div>
             )}
           </div>
