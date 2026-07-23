@@ -36,26 +36,34 @@ class SubscriptionLifecycleService
             }
         }
 
+        // One active request per service + request type until it is closed (or rejected).
+        $pending = Ticket::query()
+            ->where('customer_id', $customerId)
+            ->where('service_id', $service->id)
+            ->where('requisition_id', $requisition->id)
+            ->whereIn('status', [
+                TicketStatus::Open->value,
+                TicketStatus::InProgress->value,
+            ])
+            ->latest('id')
+            ->first(['id', 'tt_number', 'public_id', 'status']);
+
+        if ($pending) {
+            throw ValidationException::withMessages([
+                'service_id' => sprintf(
+                    'You already have an open %s request for %s (%s). Wait until it is closed before submitting another.',
+                    $requisition->name ?: 'service',
+                    $service->name ?: 'this service',
+                    $pending->tt_number,
+                ),
+                'duplicate_ticket_public_id' => $pending->public_id,
+            ]);
+        }
+
         if ($requisition->creates_subscription && $service->is_subscription_based) {
             if ($this->customerHasAliveSubscription($customerId, $service->id)) {
                 throw ValidationException::withMessages([
                     'service_id' => 'You already have an active subscription for this service. Use manage / renew / terminate instead of starting another.',
-                ]);
-            }
-
-            $pendingNew = Ticket::query()
-                ->where('customer_id', $customerId)
-                ->where('service_id', $service->id)
-                ->where('requisition_id', $requisition->id)
-                ->whereIn('status', [
-                    TicketStatus::Open->value,
-                    TicketStatus::InProgress->value,
-                ])
-                ->exists();
-
-            if ($pendingNew) {
-                throw ValidationException::withMessages([
-                    'service_id' => 'You already have a new-subscription request in progress for this service.',
                 ]);
             }
 

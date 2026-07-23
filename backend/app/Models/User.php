@@ -55,4 +55,27 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(Category::class);
     }
+
+    /** Who may start impersonation (Filament Impersonate). */
+    public function canImpersonate(): bool
+    {
+        return $this->is_active
+            && (method_exists($this, 'hasRole') && $this->hasRole('super_admin'));
+    }
+
+    /** Who may be impersonated. */
+    public function canBeImpersonated(): bool
+    {
+        if (! $this->is_active) {
+            return false;
+        }
+
+        // Never allow impersonating yourself.
+        if (auth()->id() && (int) auth()->id() === (int) $this->id) {
+            return false;
+        }
+
+        // Soft-deleted users are already blocked by the package by default.
+        return true;
+    }
 }

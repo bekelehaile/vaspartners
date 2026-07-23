@@ -201,6 +201,19 @@ class ClientPortalController extends Controller
             ->unique()
             ->values();
 
+        $pendingRequests = Ticket::query()
+            ->where('customer_id', $customerId)
+            ->whereIn('status', ['open', 'in_progress'])
+            ->get(['service_id', 'requisition_id', 'tt_number', 'public_id', 'status'])
+            ->map(fn (Ticket $t) => [
+                'service_id' => (int) $t->service_id,
+                'requisition_id' => (int) $t->requisition_id,
+                'tt_number' => $t->tt_number,
+                'public_id' => $t->public_id,
+                'status' => $t->status instanceof \BackedEnum ? $t->status->value : (string) $t->status,
+            ])
+            ->values();
+
         return response()->json([
             'data' => $rows->items(),
             'current_page' => $rows->currentPage(),
@@ -208,6 +221,7 @@ class ClientPortalController extends Controller
             'per_page' => $rows->perPage(),
             'total' => $rows->total(),
             'pending_new_service_ids' => $pendingNewServiceIds,
+            'pending_requests' => $pendingRequests,
         ]);
     }
 

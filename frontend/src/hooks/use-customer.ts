@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import {
   BlogPost,
   Customer,
@@ -11,6 +12,7 @@ import {
   Service,
   Subscription,
   Ticket,
+  TicketMessage,
   api,
   clearToken,
   getToken,
@@ -93,11 +95,27 @@ export function useSubscriptions(options?: { enabled?: boolean }) {
       const res = await api<{
         data: Subscription[];
         pending_new_service_ids?: number[];
+        pending_requests?: {
+          service_id: number;
+          requisition_id: number;
+          tt_number: string;
+          public_id: string;
+          status: string;
+        }[];
       }>("/subscriptions?per_page=100");
       return {
         items: Array.isArray(res.data) ? res.data : [],
         pendingNewServiceIds: Array.isArray(res.pending_new_service_ids)
           ? res.pending_new_service_ids.map(Number)
+          : [],
+        pendingRequests: Array.isArray(res.pending_requests)
+          ? res.pending_requests.map((r) => ({
+              service_id: Number(r.service_id),
+              requisition_id: Number(r.requisition_id),
+              tt_number: r.tt_number,
+              public_id: r.public_id,
+              status: r.status,
+            }))
           : [],
       };
     },
@@ -338,6 +356,149 @@ export function useDeleteTicketDocument(publicId: string) {
   });
 }
 
+export function useTicketMessages(
+  publicId: string,
+  options?: {
+    initialMessages?: TicketMessage[];
+    initialHasMoreOlder?: boolean;
+    initialTotal?: number;
+    pollMs?: number;
+  },
+) {
+  const queryClient = useQueryClient();
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const query = useQuery({
+    queryKey: queryKeys.ticketMessages(publicId),
+    enabled: !!publicId && !!getToken(),
+    initialData: options?.initialMessages?.length
+      ? {
+          messages: options.initialMessages,
+          meta: {
+            total: options.initialTotal ?? options.initialMessages.length,
+            has_more_older: options.initialHasMoreOlder ?? false,
+            has_more_newer: false,
+            oldest_id: options.initialMessages[0]?.id ?? null,
+            newest_id: options.initialMessages[options.initialMessages.length - 1]?.id ?? null,
+          },
+        }
+      : undefined,
+    refetchInterval: options?.pollMs ?? 8000,
+    queryFn: async () => {
+      const current = queryClient.getQueryData<{
+        messages: TicketMessage[];
+        meta: {
+          total: number;
+          has_more_older: boolean;
+          has_more_newer: boolean;
+          oldest_id: number | null;
+          newest_id: number | null;
+        };
+      }>(queryKeys.ticketMessages(publicId));
+
+      const newestId = current?.meta?.newest_id ?? current?.messages?.[current.messages.length - 1]?.id;
+      if (newestId) {
+        const res = await api<{
+          data: TicketMessage[];
+          meta: {
+            total: number;
+            has_more_older: boolean;
+            has_more_newer: boolean;
+            oldest_id: number | null;
+            newest_id: number | null;
+          };
+        }>(`/tickets/${publicId}/messages?after_id=${newestId}&limit=50`);
+
+        const existing = current?.messages ?? [];
+        const byId = new Map<number, TicketMessage>();
+        for (const m of existing) byId.set(m.id, m);
+        for (const m of res.data ?? []) byId.set(m.id, m);
+        const merged = [...byId.values()].sort((a, b) => a.id - b.id);
+
+        return {
+          messages: merged,
+          meta: {
+            total: res.meta?.total ?? merged.length,
+            has_more_older: current?.meta?.has_more_older ?? false,
+            has_more_newer: res.meta?.has_more_newer ?? false,
+            oldest_id: merged[0]?.id ?? null,
+            newest_id: merged[merged.length - 1]?.id ?? null,
+          },
+        };
+      }
+
+      const res = await api<{
+        data: TicketMessage[];
+        meta: {
+          total: number;
+          has_more_older: boolean;
+          has_more_newer: boolean;
+          oldest_id: number | null;
+          newest_id: number | null;
+        };
+      }>(`/tickets/${publicId}/messages?limit=40`);
+
+      return {
+        messages: res.data ?? [],
+        meta: res.meta,
+      };
+    },
+  });
+
+  const loadOlder = async () => {
+    const current = query.data;
+    const oldestId = current?.meta?.oldest_id ?? current?.messages?.[0]?.id;
+    if (!oldestId || loadingOlder) return;
+    setLoadingOlder(true);
+    setError(null);
+    try {
+      const res = await api<{
+        data: TicketMessage[];
+        meta: {
+          total: number;
+          has_more_older: boolean;
+          has_more_newer: boolean;
+          oldest_id: number | null;
+          newest_id: number | null;
+        };
+      }>(`/tickets/${publicId}/messages?before_id=${oldestId}&limit=30`);
+
+      const existing = current?.messages ?? [];
+      const byId = new Map<number, TicketMessage>();
+      for (const m of res.data ?? []) byId.set(m.id, m);
+      for (const m of existing) byId.set(m.id, m);
+      const merged = [...byId.values()].sort((a, b) => a.id - b.id);
+
+      queryClient.setQueryData(queryKeys.ticketMessages(publicId), {
+        messages: merged,
+        meta: {
+          total: res.meta?.total ?? merged.length,
+          has_more_older: res.meta?.has_more_older ?? false,
+          has_more_newer: current?.meta?.has_more_newer ?? false,
+          oldest_id: merged[0]?.id ?? null,
+          newest_id: merged[merged.length - 1]?.id ?? null,
+        },
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e : new Error("Could not load earlier messages"));
+    } finally {
+      setLoadingOlder(false);
+    }
+  };
+
+  return {
+    messages: query.data?.messages ?? options?.initialMessages ?? [],
+    total: query.data?.meta?.total ?? options?.initialMessages?.length ?? 0,
+    hasMoreOlder: query.data?.meta?.has_more_older ?? false,
+    loadingOlder,
+    isLoading: query.isLoading,
+    error: error || (query.error instanceof Error ? query.error : null),
+    loadOlder,
+    refetch: query.refetch,
+  };
+}
+
 export function usePostTicketComment(publicId: string) {
   const queryClient = useQueryClient();
 
@@ -348,13 +509,44 @@ export function usePostTicketComment(publicId: string) {
       if (body) form.append("body", body);
       if (payload.attachment) form.append("attachment", payload.attachment);
 
-      await api(`/tickets/${publicId}/comments`, {
+      const res = await api<{ data: TicketMessage }>(`/tickets/${publicId}/comments`, {
         method: "POST",
         body: form,
       });
+      return res.data;
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.ticket(publicId) });
+    onSuccess: (message) => {
+      queryClient.setQueryData(
+        queryKeys.ticketMessages(publicId),
+        (prev:
+          | {
+              messages: TicketMessage[];
+              meta: {
+                total: number;
+                has_more_older: boolean;
+                has_more_newer: boolean;
+                oldest_id: number | null;
+                newest_id: number | null;
+              };
+            }
+          | undefined) => {
+          const existing = prev?.messages ?? [];
+          if (existing.some((m) => m.id === message.id)) {
+            return prev;
+          }
+          const merged = [...existing, message].sort((a, b) => a.id - b.id);
+          return {
+            messages: merged,
+            meta: {
+              total: (prev?.meta?.total ?? existing.length) + 1,
+              has_more_older: prev?.meta?.has_more_older ?? false,
+              has_more_newer: false,
+              oldest_id: merged[0]?.id ?? null,
+              newest_id: merged[merged.length - 1]?.id ?? null,
+            },
+          };
+        },
+      );
       void queryClient.invalidateQueries({ queryKey: queryKeys.notifications });
     },
   });

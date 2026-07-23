@@ -117,6 +117,13 @@ export type Ticket = {
     created_at: string;
   }[];
   messages?: TicketMessage[];
+  messages_meta?: {
+    total: number;
+    has_more_older: boolean;
+    has_more_newer: boolean;
+    oldest_id?: number | null;
+    newest_id?: number | null;
+  };
   chat_locked?: boolean;
   chat_attachment_max_kb?: number;
   documents_locked?: boolean;

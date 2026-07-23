@@ -23,6 +23,7 @@ export const queryKeys = {
   },
   subscriptions: ["customer", "subscriptions"] as const,
   ticket: (publicId: string) => ["ticket", publicId] as const,
+  ticketMessages: (publicId: string) => ["ticket", publicId, "messages"] as const,
   notifications: ["customer", "notifications"] as const,
 };
 

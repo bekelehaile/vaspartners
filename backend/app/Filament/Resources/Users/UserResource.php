@@ -16,6 +16,7 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use STS\FilamentImpersonate\Actions\Impersonate;
 use UnitEnum;
 
 class UserResource extends Resource
@@ -99,6 +100,8 @@ class UserResource extends Resource
             ])
             ->defaultSort('name')
             ->recordActions([
+                Impersonate::make()
+                    ->redirectTo(filament()->getCurrentOrDefaultPanel()?->getUrl() ?? '/admin'),
                 \Filament\Actions\EditAction::make(),
             ]);
     }

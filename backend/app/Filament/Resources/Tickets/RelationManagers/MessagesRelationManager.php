@@ -37,19 +37,23 @@ class MessagesRelationManager extends RelationManager
     {
         $maxKb = app(TicketCommentService::class)->maxAttachmentKb();
 
-        return $schema->components([
-            Textarea::make('body')
-                ->label('Message')
-                ->rows(4)
-                ->maxLength(5000)
-                ->helperText('Ask for missing documents or clarify requirements. Optional if you attach a PDF.'),
-            FileUpload::make('attachment')
-                ->label('PDF attachment')
-                ->acceptedFileTypes(['application/pdf'])
-                ->maxSize($maxKb)
-                ->storeFiles(false)
-                ->helperText("Optional. PDF only, max {$maxKb} KB."),
-        ]);
+        return $schema
+            ->columns(1)
+            ->components([
+                Textarea::make('body')
+                    ->label('Description')
+                    ->rows(5)
+                    ->maxLength(5000)
+                    ->columnSpanFull()
+                    ->helperText('Ask for missing documents or clarify requirements. Optional if you attach a PDF.'),
+                FileUpload::make('attachment')
+                    ->label('Attachment')
+                    ->acceptedFileTypes(['application/pdf'])
+                    ->maxSize($maxKb)
+                    ->storeFiles(false)
+                    ->columnSpanFull()
+                    ->helperText("Optional. PDF only, max {$maxKb} KB."),
+            ]);
     }
 
     public function table(Table $table): Table

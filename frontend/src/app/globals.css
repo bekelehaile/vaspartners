@@ -2483,3 +2483,39 @@ textarea {
   color: var(--et-ink);
   background: var(--et-foam);
 }
+
+.chat-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.chat-load-older {
+  align-self: center;
+  border: 1px solid var(--et-line);
+  background: #fff;
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--et-muted);
+  cursor: pointer;
+}
+
+.chat-load-older:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.chat-panel .chat-thread {
+  max-height: min(60vh, 36rem);
+}
+
+.journey-option.is-disabled,
+.journey-option:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  border-style: dashed;
+}

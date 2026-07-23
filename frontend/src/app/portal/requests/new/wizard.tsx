@@ -75,6 +75,22 @@ export default function NewRequestWizard() {
     () => new Set(subscriptionData?.pendingNewServiceIds ?? []),
     [subscriptionData?.pendingNewServiceIds]
   );
+  const pendingByServiceRequisition = useMemo(() => {
+    const map = new Map<
+      string,
+      { tt_number: string; public_id: string; status: string }
+    >();
+    for (const row of subscriptionData?.pendingRequests ?? []) {
+      map.set(`${row.service_id}:${row.requisition_id}`, {
+        tt_number: row.tt_number,
+        public_id: row.public_id,
+        status: row.status,
+      });
+    }
+    return map;
+  }, [subscriptionData?.pendingRequests]);
+  const pendingFor = (serviceIdNum: number, requisitionIdNum: number) =>
+    pendingByServiceRequisition.get(`${serviceIdNum}:${requisitionIdNum}`);
 
   const aliveSubs = useMemo(
     () => subscriptions.filter(isAliveSubscription),
@@ -219,11 +235,14 @@ export default function NewRequestWizard() {
   // Auto-pick sole requisition for one-off manage path
   useEffect(() => {
     if (intent !== "manage" || !managingOneOff || !serviceId) return;
-    if (manageTypes.length === 1 && requisitionId !== String(manageTypes[0].id)) {
-      form.setFieldValue("requisition_id", String(manageTypes[0].id));
+    if (manageTypes.length !== 1) return;
+    const only = manageTypes[0];
+    if (pendingFor(Number(serviceId), Number(only.id))) return;
+    if (requisitionId !== String(only.id)) {
+      form.setFieldValue("requisition_id", String(only.id));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selection only
-  }, [intent, managingOneOff, serviceId, manageTypes.length, requisitionId]);
+  }, [intent, managingOneOff, serviceId, manageTypes.length, requisitionId, pendingByServiceRequisition]);
 
   // Deep-link shortcuts: skip chooser + jump ahead when context is clear
   useEffect(() => {
@@ -754,12 +773,20 @@ export default function NewRequestWizard() {
                       <div className="journey-option-list">
                         {manageTypes.map((r) => {
                           const selected = String(r.id) === String(requisitionId);
+                          const pending = pendingFor(manageServiceId, Number(r.id));
                           return (
                             <button
                               key={r.id}
                               type="button"
-                              className={`journey-option${selected ? " is-selected" : ""}`}
+                              className={`journey-option${selected ? " is-selected" : ""}${pending ? " is-disabled" : ""}`}
+                              disabled={!!pending}
+                              title={
+                                pending
+                                  ? `Already open: ${pending.tt_number}. Close it before submitting another.`
+                                  : undefined
+                              }
                               onClick={() => {
+                                if (pending) return;
                                 if (selected) {
                                   setStep(2);
                                   return;
@@ -767,19 +794,22 @@ export default function NewRequestWizard() {
                                 form.setFieldValue("requisition_id", String(r.id));
                               }}
                               onDoubleClick={() => {
+                                if (pending) return;
                                 form.setFieldValue("requisition_id", String(r.id));
                                 setStep(2);
                               }}
                             >
                               <strong>{r.name}</strong>
                               <span>
-                                {managingOneOff
-                                  ? "Non-subscription request"
-                                  : r.terminates_subscription
-                                    ? "Ends the subscription"
-                                    : r.renews_subscription
-                                      ? "Extends the subscription period"
-                                      : "Requires an active subscription"}
+                                {pending
+                                  ? `In progress — ${pending.tt_number}. Open that request instead.`
+                                  : managingOneOff
+                                    ? "Non-subscription request"
+                                    : r.terminates_subscription
+                                      ? "Ends the subscription"
+                                      : r.renews_subscription
+                                        ? "Extends the subscription period"
+                                        : "Requires an active subscription"}
                               </span>
                             </button>
                           );
