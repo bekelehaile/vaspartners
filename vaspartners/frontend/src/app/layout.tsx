@@ -65,8 +65,12 @@ export const metadata: Metadata = {
     },
   },
   icons: {
-    icon: [{ url: "/brand/ethio_logo_full.png", type: "image/png" }],
-    apple: [{ url: "/brand/ethio_logo_full.png" }],
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/brand/etlogo.png", type: "image/png" },
+    ],
+    shortcut: ["/favicon.ico"],
+    apple: [{ url: "/brand/etlogo.png", type: "image/png" }],
   },
 };
 

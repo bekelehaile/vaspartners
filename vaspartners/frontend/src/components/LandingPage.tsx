@@ -20,10 +20,10 @@ function LandingInner() {
   return (
     <SiteShell me={me} onLogout={() => void logout()} landing>
       <div className="hero-wrap">
-        <section className="hero" aria-label="Welcome">
+        <section className="hero" aria-label="VAS Partners">
           <div className="hero-copy">
             <h1 className="hero-brand">
-              Manage Your <em>VAS Partners</em> Online
+              Manage Your <em>VAS Services</em> Online
             </h1>
             <p className="hero-lead">
               Request Value Added Services, upload documents, and track every approval step — the
@@ -31,7 +31,7 @@ function LandingInner() {
             </p>
             {authError && (
               <p className="alert" style={{ marginBottom: "1rem", maxWidth: "28rem" }}>
-                Fayda sign-in failed ({authError}). Try again, or check API logs if it keeps failing.
+                Fayda sign-in failed ({authError}). Please try again.
               </p>
             )}
             <div className="hero-actions">
@@ -40,13 +40,11 @@ function LandingInner() {
                   className="btn-hero"
                   href={me.profile_completed ? "/portal" : "/portal/company"}
                 >
-                  {me.profile_completed
-                    ? "Go to my portal →"
-                    : "Complete company setup →"}
+                  {me.profile_completed ? "Go to my portal" : "Complete company setup"}
                 </Link>
               ) : (
                 <a className="btn-hero" href={faydaLoginUrl()}>
-                  Get started →
+                  Get started
                 </a>
               )}
               <a className="btn-hero-ghost" href="#services">
@@ -55,11 +53,11 @@ function LandingInner() {
             </div>
           </div>
 
-          <div className="hero-visual">
+          <div className="hero-visual" aria-hidden="true">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/brand/services.svg"
-              alt="Value Added Services for Ethio telecom partners"
+              alt=""
               width={560}
               height={420}
             />
@@ -69,36 +67,46 @@ function LandingInner() {
 
       <LandingServicesSection />
 
+      <section className="feature-band" id="how-it-works" aria-labelledby="how-heading">
+        <div className="section">
+          <header className="section-head">
+            <span className="section-label">Process</span>
+            <h2 id="how-heading">How it works</h2>
+            <p className="section-lead">
+              A clear path from identity verification to service approval.
+            </p>
+          </header>
+          <ol className="process-steps">
+            <li className="process-step">
+              <span className="process-step-num" aria-hidden>
+                01
+              </span>
+              <h3>Sign in with Fayda</h3>
+              <p>Verify your identity with National ID and open your partner account.</p>
+            </li>
+            <li className="process-step">
+              <span className="process-step-num" aria-hidden>
+                02
+              </span>
+              <h3>Select a service</h3>
+              <p>Choose the VAS product, review criteria, and attach required documents.</p>
+            </li>
+            <li className="process-step">
+              <span className="process-step-num" aria-hidden>
+                03
+              </span>
+              <h3>Track approval</h3>
+              <p>Follow assignment, document review, and final decision in one place.</p>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <LandingFaqSection />
+
       <LandingBlogSection />
 
       <LandingGallerySection />
-
-      <div className="feature-band">
-        <section className="section" id="how-it-works">
-          <span className="section-label">How it works</span>
-          <h2>From Fayda sign-in to approval</h2>
-          <p className="section-lead">
-            Same Ethio telecom customer experience as fixed services — secure identity, clear steps,
-            official processing.
-          </p>
-          <div className="quiet-steps">
-            <article className="quiet-step">
-              <h3>Sign in with Fayda</h3>
-              <p>Use your National ID — Fayda verifies you and opens your partner portal.</p>
-            </article>
-            <article className="quiet-step">
-              <h3>Choose category &amp; service</h3>
-              <p>Pick the VAS service and requisition type, then attach the required documents.</p>
-            </article>
-            <article className="quiet-step">
-              <h3>Track your ticket</h3>
-              <p>Follow assignment, document review, and approvals without chasing emails.</p>
-            </article>
-          </div>
-        </section>
-      </div>
-
-      <LandingFaqSection />
     </SiteShell>
   );
 }

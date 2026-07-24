@@ -1,4 +1,4 @@
-# Build context is repo root for the PHP image
+# Build context is ./vaspartners (nested app under parent deploy dir)
 .git
 frontend/node_modules
 backend/node_modules

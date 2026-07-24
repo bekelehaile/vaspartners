@@ -41,6 +41,7 @@ export function SiteShell({
   children,
   me,
   onLogout,
+  landing = false,
 }: {
   children: ReactNode;
   me?: Customer | null;
@@ -51,7 +52,7 @@ export function SiteShell({
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="site">
+    <div className={landing ? "site site-landing" : "site"}>
       <a href="#main-content" className="skip-link">
         Skip to content
       </a>
@@ -61,7 +62,7 @@ export function SiteShell({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/brand/ethio_logo_full.png"
-              alt="Ethio Telecom Logo"
+              alt="Ethio telecom"
               className="brand-logo"
             />
           </Link>
@@ -184,70 +185,56 @@ export function SiteShell({
 
       <footer className="site-footer">
         <div className="site-footer-inner">
-          <p>© {new Date().getFullYear()} Ethio telecom. All rights reserved.</p>
-          <nav className="footer-links" aria-label="Site">
+          <div className="footer-brand">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/ethio_logo_full.png"
+              alt=""
+              className="footer-logo"
+              width={160}
+              height={44}
+            />
+            <p className="footer-tagline">
+              VAS Partners — official Ethio telecom portal for Value Added Service partners.
+            </p>
+          </div>
+          <nav className="footer-col" aria-label="Portal">
+            <h2>Portal</h2>
+            <Link href="/#services">Services</Link>
             <Link href="/blog">Blog</Link>
             <Link href="/gallery">Gallery</Link>
             <Link href="/faq">FAQ</Link>
           </nav>
-          <div className="footer-social">
+          <nav className="footer-col" aria-label="Ethio telecom">
+            <h2>Ethio telecom</h2>
             <a
               href="https://www.ethiotelecom.et/"
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="Ethio telecom website"
             >
-              Web
+              Corporate website
             </a>
             <a
               href="https://www.facebook.com/ethiotelecom/"
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="Ethio telecom on Facebook"
             >
               Facebook
-            </a>
-            <a
-              href="https://www.instagram.com/ethiotelecom/"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Ethio telecom on Instagram"
-            >
-              Instagram
-            </a>
-            <a
-              href="https://t.me/ethio_telecom"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Ethio telecom on Telegram"
-            >
-              Telegram
             </a>
             <a
               href="https://www.linkedin.com/company/ethio-telecom"
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="Ethio telecom on LinkedIn"
             >
               LinkedIn
             </a>
-            <a
-              href="https://twitter.com/ethiotelecom"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Ethio telecom on X"
-            >
-              X
+            <a href="https://t.me/ethio_telecom" target="_blank" rel="noopener noreferrer">
+              Telegram
             </a>
-            <a
-              href="https://www.youtube.com/channel/UCW4ZjqFCCFukY94tZO0O5FA"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Ethio telecom on YouTube"
-            >
-              YouTube
-            </a>
-          </div>
+          </nav>
+        </div>
+        <div className="site-footer-bar">
+          <p>© {new Date().getFullYear()} Ethio telecom. All rights reserved.</p>
         </div>
       </footer>
     </div>

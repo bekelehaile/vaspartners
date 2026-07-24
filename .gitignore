@@ -4,3 +4,6 @@
 *.sql.gz
 *.sql.bz2
 mvas_*.dump
+
+# Staging secrets (keep .env.staging.example)
+.env.staging

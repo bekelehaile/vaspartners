@@ -2,11 +2,21 @@
 
 Rebuild of Ethio Telecom **MVAS Partners Portal**.
 
+Layout (same as `mvasportal`):
+
+```
+/data-disk/applications/vaspartners/     # parent (compose, deploy scripts, .env.staging)
+└── vaspartners/                         # app (backend, frontend, docker)
+    ├── backend/                         # Laravel API + Filament
+    ├── frontend/                        # Next.js portal
+    └── docker/
+```
+
 | Layer | Stack | Path |
 |-------|--------|------|
-| Customer portal | Next.js 15 | `frontend/` |
-| API + admin | Laravel 12 + Filament 5 + Sanctum | `backend/` |
-| Partner auth | Fayda (eSignet) — same pattern as fixedservices; creates `customers` on sign-in | `backend/app/Services/EsignetService.php` |
+| Customer portal | Next.js 15 | `vaspartners/frontend/` |
+| API + admin | Laravel 12 + Filament 5 + Sanctum | `vaspartners/backend/` |
+| Partner auth | Fayda (eSignet) — same pattern as fixedservices; creates `customers` on sign-in | `vaspartners/backend/app/Services/EsignetService.php` |
 | Staff auth | Filament login (`/admin`) | Filament Shield RBAC |
 
 ## Workflow (unchanged)
@@ -29,11 +39,13 @@ See [`docs/SCHEMA.md`](docs/SCHEMA.md). Highlights: configurable request types, 
 Brings up **Postgres 18**, **PgBouncer**, **Redis**, **Laravel (PHP 8.4)**, and **Next.js**.
 
 ```bash
-# 1) Fayda secrets in backend/.env (never commit the private key)
-cp backend/.env.example backend/.env
+# From parent: /data-disk/applications/vaspartners
+
+# 1) Fayda secrets (never commit the private key)
+cp vaspartners/backend/.env.example vaspartners/backend/.env
 # edit FAYDA_* + ensure APP_KEY is set (or let container generate it)
 
-cp frontend/.env.example frontend/.env.local
+cp vaspartners/frontend/.env.example vaspartners/frontend/.env.local
 
 # 2) Start / stop
 ./up.sh
@@ -60,7 +72,39 @@ docker compose exec backend php artisan queue:work
 docker compose logs -f backend frontend
 ```
 
-Compose overrides DB/Redis hosts inside containers (`pgbouncer`, `redis`). Your `backend/.env` Fayda values are still loaded.
+Compose overrides DB/Redis hosts inside containers (`pgbouncer`, `redis`). Your `vaspartners/backend/.env` Fayda values are still loaded.
+
+## Staging (server — Tele SSL on :8443)
+
+| | Production (old) | Staging (new) |
+|--|------------------|---------------|
+| Parent dir | `/data-disk/applications/mvasportal` | `/data-disk/applications/vaspartners` |
+| App dir | `mvasportal/` | `vaspartners/` |
+| Containers | `mvasportal-app`, `mvasportal-nginx` | `vaspartners-app`, `vaspartners-nginx`, … |
+| Public | `https://vaspartnersportal.ethiotelecom.et` (:443) | `https://vaspartnersportal.ethiotelecom.et:8443` |
+| Proxy | host nginx → `:30011` | Docker `vaspartners-nginx` (Tele wildcard cert) |
+| DB | external MySQL | **Postgres in Docker** (`vaspartners-postgres`) |
+
+Production `mvasportal` on :443 is left alone. Staging runs **everything** in containers (Postgres, PgBouncer, Redis, Laravel, queue, Next.js, nginx).
+
+```bash
+# From /data-disk/applications/vaspartners
+cp .env.staging.example .env.staging   # or let deploy-staging.sh copy from vaspartners/backend/.env
+# set FAYDA_* in .env.staging
+
+./deploy-staging.sh
+./down-staging.sh          # keep volumes
+./down-staging.sh -v       # wipe staging Postgres volumes
+```
+
+| URL | |
+|-----|--|
+| Portal | https://vaspartnersportal.ethiotelecom.et:8443 |
+| Admin | https://vaspartnersportal.ethiotelecom.et:8443/admin |
+| API | https://vaspartnersportal.ethiotelecom.et:8443/api/v1 |
+
+Containers: `vaspartners-postgres`, `vaspartners-pgbouncer`, `vaspartners-redis`, `vaspartners-app`, `vaspartners-queue`, `vaspartners-frontend`, `vaspartners-nginx`.  
+Network / volumes: `vaspartners-network`, `vaspartners-pg`, `vaspartners-storage`, `vaspartners-logs`.
 
 ## Fayda local login
 

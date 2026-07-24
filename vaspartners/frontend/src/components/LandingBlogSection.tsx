@@ -9,10 +9,14 @@ export function LandingBlogSection() {
   if (!isLoading && !posts.length) return null;
 
   return (
-    <section className="section" id="blog">
-      <span className="section-label">Blog</span>
-      <h2>Latest updates</h2>
-      <p className="section-lead">News and guidance for VAS partners from Ethio telecom.</p>
+    <section className="section" id="blog" aria-labelledby="blog-heading">
+      <header className="section-head">
+        <span className="section-label">Updates</span>
+        <h2 id="blog-heading">News &amp; guidance</h2>
+        <p className="section-lead">
+          Official updates for VAS partners from Ethio telecom.
+        </p>
+      </header>
 
       {isLoading ? (
         <p className="muted">Loading posts…</p>
@@ -52,7 +56,7 @@ export function LandingBlogSection() {
 
       <div className="section-more">
         <Link href="/blog" className="linkish">
-          View all posts →
+          View all posts
         </Link>
       </div>
     </section>

@@ -36,7 +36,12 @@ class AccountManagerRoleSeeder extends Seeder
             if ($existing->name === 'account_manager') {
                 continue;
             }
-            if ($existing->hasPermissionTo('ViewAny:Ticket') && ! $existing->hasPermissionTo($myTickets)) {
+            $managesAllTickets = Permission::query()
+                ->where('name', 'ViewAny:Ticket')
+                ->where('guard_name', 'web')
+                ->exists()
+                && $existing->hasPermissionTo('ViewAny:Ticket');
+            if ($managesAllTickets && ! $existing->hasPermissionTo($myTickets)) {
                 $existing->givePermissionTo($myTickets);
             }
         }

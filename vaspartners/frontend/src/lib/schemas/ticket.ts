@@ -25,12 +25,12 @@ export type TicketCreateValues = z.infer<typeof ticketCreateSchema>;
 
 export const commentSchema = z
   .object({
-    body: z.string().max(5000, "Message is too long").optional().default(""),
-    attachment: z.any().optional().nullable(),
+    body: z.string().max(5000, "Message is too long"),
+    attachment: z.custom<File | null>().nullable(),
   })
   .superRefine((value, ctx) => {
-    const body = (value.body || "").trim();
-    const file = value.attachment as File | null | undefined;
+    const body = value.body.trim();
+    const file = value.attachment;
     if (!body && !file) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -38,7 +38,7 @@ export const commentSchema = z
         path: ["body"],
       });
     }
-    if (file && file instanceof File) {
+    if (file) {
       const name = file.name.toLowerCase();
       if (!name.endsWith(".pdf") && file.type !== "application/pdf") {
         ctx.addIssue({

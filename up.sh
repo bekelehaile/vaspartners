@@ -4,14 +4,16 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 
-if [[ ! -f backend/.env ]]; then
-  echo "Missing backend/.env — copy backend/.env.example and set FAYDA_* first."
+APP_DIR="$ROOT/vaspartners"
+
+if [[ ! -f "$APP_DIR/backend/.env" ]]; then
+  echo "Missing vaspartners/backend/.env — copy .env.example and set FAYDA_* first."
   exit 1
 fi
 
-if [[ ! -f frontend/.env.local ]]; then
-  cp frontend/.env.example frontend/.env.local
-  echo "Created frontend/.env.local from .env.example"
+if [[ ! -f "$APP_DIR/frontend/.env.local" ]]; then
+  cp "$APP_DIR/frontend/.env.example" "$APP_DIR/frontend/.env.local"
+  echo "Created vaspartners/frontend/.env.local from .env.example"
 fi
 
 echo "Starting VAS Partners stack..."

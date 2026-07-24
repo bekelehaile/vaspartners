@@ -32,13 +32,13 @@ export function LandingGallerySection({
   return (
     <section className="section" id={showIntro ? "gallery" : undefined}>
       {showIntro && (
-        <>
+        <header className="section-head">
           <span className="section-label">Gallery</span>
-          <h2>In pictures</h2>
+          <h2>Partner programmes</h2>
           <p className="section-lead">
-            Moments from Ethio telecom VAS partner programmes and events.
+            Selected moments from Ethio telecom VAS partner activities.
           </p>
-        </>
+        </header>
       )}
 
       {albums.length > 0 && (

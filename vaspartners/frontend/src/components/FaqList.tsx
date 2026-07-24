@@ -39,18 +39,20 @@ export function LandingFaqSection() {
   if (!isLoading && !faqs.length) return null;
 
   return (
-    <section className="section" id="faq">
-      <span className="section-label">FAQ</span>
-      <h2>Frequently asked questions</h2>
-      <p className="section-lead">Common VAS partner questions from Ethio telecom.</p>
-      <FaqList limit={6} />
-      {faqs.length > 0 && (
-        <div className="section-more">
-          <Link href="/faq" className="linkish">
-            View all FAQ →
-          </Link>
-        </div>
-      )}
+    <section className="section" id="faq" aria-labelledby="faq-heading">
+      <header className="section-head">
+        <span className="section-label">Support</span>
+        <h2 id="faq-heading">Frequently asked questions</h2>
+        <p className="section-lead">
+          Common questions about partner onboarding and service requests.
+        </p>
+      </header>
+      {isLoading ? <p className="muted">Loading FAQ…</p> : <FaqList limit={6} />}
+      <div className="section-more">
+        <Link href="/faq" className="linkish">
+          View all FAQs
+        </Link>
+      </div>
     </section>
   );
 }
