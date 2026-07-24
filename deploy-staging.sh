@@ -61,6 +61,12 @@ DOCKER_BUILDKIT=1 "${COMPOSE[@]}" build \
 echo "==> Starting staging stack (Postgres + PgBouncer + Redis + app + queue + web + nginx)..."
 "${COMPOSE[@]}" up -d --remove-orphans
 
+# Nginx caches upstream IPs unless config uses Docker DNS variables; always
+# reload after app/frontend recreate so a stale IP cannot cause 502s.
+echo "==> Reloading nginx upstreams..."
+"${COMPOSE[@]}" exec -T nginx nginx -s reload 2>/dev/null \
+  || "${COMPOSE[@]}" restart nginx
+
 echo "==> Waiting for backend health..."
 for i in $(seq 1 90); do
   if "${COMPOSE[@]}" ps backend 2>/dev/null | grep -q '(healthy)'; then
