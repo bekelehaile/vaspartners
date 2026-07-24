@@ -25,7 +25,7 @@ class ChangeRequestsRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn ($query) => $query->with(['customer', 'reviewer'])->latest('id'))
+            ->modifyQueryUsing(fn ($query) => $query->with(['customer', 'reviewer']))
             ->columns([
                 TextColumn::make('public_id')->label('ID')->searchable(),
                 TextColumn::make('type')

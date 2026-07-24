@@ -36,8 +36,7 @@ class MessagesRelationManager extends RelationManager
             ->description('Public messages across all tickets on this subscription. Reply from the related ticket view.')
             ->modifyQueryUsing(fn ($query) => $query
                 ->where('ticket_comments.is_public', true)
-                ->with(['author', 'ticket'])
-                ->latest('ticket_comments.id'))
+                ->with(['author', 'ticket']))
             ->columns([
                 TextColumn::make('ticket.tt_number')
                     ->label('Request number')

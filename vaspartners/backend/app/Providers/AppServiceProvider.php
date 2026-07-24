@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use Filament\Tables\Table;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
@@ -16,6 +17,13 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // All admin tables: newest first, no clickable row navigation (use explicit actions).
+        Table::configureUsing(function (Table $table): void {
+            $table
+                ->defaultSort('created_at', 'desc')
+                ->recordUrl(null);
+        });
+
         // Filament Shield / Spatie: allow super_admin everything once roles exist
         Gate::before(function ($user, string $ability) {
             return method_exists($user, 'hasRole') && $user->hasRole('super_admin') ? true : null;

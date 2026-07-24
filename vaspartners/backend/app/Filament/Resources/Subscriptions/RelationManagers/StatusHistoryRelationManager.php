@@ -32,7 +32,7 @@ class StatusHistoryRelationManager extends RelationManager
     {
         return $table
             ->description('Status change history across all tickets on this subscription.')
-            ->modifyQueryUsing(fn ($query) => $query->with(['actor', 'ticket'])->oldest('ticket_status_histories.id'))
+            ->modifyQueryUsing(fn ($query) => $query->with(['actor', 'ticket']))
             ->columns([
                 TextColumn::make('created_at')
                     ->label('When')
@@ -78,7 +78,7 @@ class StatusHistoryRelationManager extends RelationManager
                     ->placeholder('—')
                     ->toggleable(),
             ])
-            ->defaultSort('id')
+            ->defaultSort('created_at', 'desc')
             ->recordActions([])
             ->headerActions([])
             ->toolbarActions([])

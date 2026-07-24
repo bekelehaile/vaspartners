@@ -34,7 +34,7 @@ class ApprovalStepsRelationManager extends RelationManager
             ->description('Immutable record of each manager approval decision: who acted, what they decided, and when. Empty until the request enters the approval chain after documents pass review.')
             ->emptyStateHeading('No approval decisions yet')
             ->emptyStateDescription('This request has not reached manager approval. Document checks and status changes appear under Document reviews and Status history.')
-            ->modifyQueryUsing(fn ($query) => $query->with(['approver', 'escalatedTo'])->oldest('id'))
+            ->modifyQueryUsing(fn ($query) => $query->with(['approver', 'escalatedTo']))
             ->columns([
                 TextColumn::make('created_at')
                     ->label('When')
@@ -84,7 +84,7 @@ class ApprovalStepsRelationManager extends RelationManager
                     ->placeholder('—')
                     ->toggleable(),
             ])
-            ->defaultSort('id')
+            ->defaultSort('created_at', 'desc')
             ->paginated([10, 25, 50])
             ->recordActions([])
             ->toolbarActions([]);

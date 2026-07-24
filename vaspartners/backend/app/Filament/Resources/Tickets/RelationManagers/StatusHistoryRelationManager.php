@@ -31,7 +31,7 @@ class StatusHistoryRelationManager extends RelationManager
     {
         return $table
             ->description('Full lifecycle trail of status changes with actor and timestamp.')
-            ->modifyQueryUsing(fn ($query) => $query->with('actor')->oldest('id'))
+            ->modifyQueryUsing(fn ($query) => $query->with('actor'))
             ->columns([
                 TextColumn::make('created_at')
                     ->label('When')
@@ -70,7 +70,7 @@ class StatusHistoryRelationManager extends RelationManager
                     ->placeholder('—')
                     ->toggleable(),
             ])
-            ->defaultSort('id')
+            ->defaultSort('created_at', 'desc')
             ->paginated([10, 25, 50])
             ->recordActions([])
             ->toolbarActions([]);

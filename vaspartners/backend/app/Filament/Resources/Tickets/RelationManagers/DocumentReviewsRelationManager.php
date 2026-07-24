@@ -31,7 +31,7 @@ class DocumentReviewsRelationManager extends RelationManager
     {
         return $table
             ->description('Who verified attachments and when, including pass/fail outcomes.')
-            ->modifyQueryUsing(fn ($query) => $query->with('reviewer')->oldest('id'))
+            ->modifyQueryUsing(fn ($query) => $query->with('reviewer'))
             ->columns([
                 TextColumn::make('created_at')
                     ->label('When')
@@ -63,7 +63,7 @@ class DocumentReviewsRelationManager extends RelationManager
                     ->limit(80)
                     ->placeholder('—'),
             ])
-            ->defaultSort('id')
+            ->defaultSort('created_at', 'desc')
             ->paginated([10, 25, 50])
             ->recordActions([])
             ->toolbarActions([]);

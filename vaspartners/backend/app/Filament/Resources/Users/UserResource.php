@@ -124,7 +124,7 @@ class UserResource extends Resource
                 IconColumn::make('is_active')->label('Active')->boolean(),
                 TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->defaultSort('name')
+            ->defaultSort('created_at', 'desc')
             ->recordActions([
                 Impersonate::make()
                     ->redirectTo(filament()->getCurrentOrDefaultPanel()?->getUrl() ?? '/admin')

@@ -73,7 +73,7 @@ class MessagesRelationManager extends RelationManager
             ->description($locked
                 ? 'Messaging is closed for completed/closed requests.'
                 : 'Chat with the partner about missing documents or extra information. Small PDF attachments allowed.')
-            ->modifyQueryUsing(fn ($query) => $query->where('is_public', true)->with('author')->latest('id'))
+            ->modifyQueryUsing(fn ($query) => $query->where('is_public', true)->with('author'))
             ->columns([
                 TextColumn::make('author_label')
                     ->label('From')

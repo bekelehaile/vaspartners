@@ -47,7 +47,7 @@ class RecipientsRelationManager extends RelationManager
                 TextColumn::make('error')->limit(60)->wrap()->placeholder('—'),
                 TextColumn::make('sent_at')->dateTime()->placeholder('—')->toggleable(),
             ])
-            ->defaultSort('id')
+            ->defaultSort('created_at', 'desc')
             ->filters([
                 SelectFilter::make('status')->options(collect(BulkMessageRecipientStatus::cases())->mapWithKeys(
                     fn (BulkMessageRecipientStatus $s) => [$s->value => $s->label()]

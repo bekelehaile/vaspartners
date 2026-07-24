@@ -34,7 +34,7 @@ class DocumentsRelationManager extends RelationManager
     {
         return $table
             ->description('Customer uploads from all tickets on this subscription. Open a ticket for document review.')
-            ->modifyQueryUsing(fn ($query) => $query->with(['documentType', 'ticket'])->latest('ticket_documents.id'))
+            ->modifyQueryUsing(fn ($query) => $query->with(['documentType', 'ticket']))
             ->columns([
                 TextColumn::make('ticket.tt_number')
                     ->label('Request number')

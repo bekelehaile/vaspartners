@@ -25,7 +25,7 @@ class SubscriptionsRelationManager extends RelationManager
     {
         return $table
             ->description('Subscriptions belong to this company and stay with it when ownership transfers.')
-            ->modifyQueryUsing(fn ($query) => $query->with(['service', 'customer'])->latest('id'))
+            ->modifyQueryUsing(fn ($query) => $query->with(['service', 'customer']))
             ->columns([
                 TextColumn::make('service.name')->label('Service')->searchable()->wrap(),
                 TextColumn::make('status')
