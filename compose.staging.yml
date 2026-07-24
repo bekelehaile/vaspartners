@@ -159,6 +159,38 @@ services:
         max-size: "50m"
         max-file: "3"
 
+  scheduler:
+    image: vaspartners-php:latest
+    container_name: vaspartners-scheduler
+    build:
+      context: ./vaspartners
+      dockerfile: docker/php/Dockerfile.staging
+    restart: unless-stopped
+    env_file:
+      - .env.staging
+    environment:
+      <<: *backend-env
+      VAS_RUN_BOOTSTRAP: "false"
+      VAS_SEED_ON_START: "false"
+    volumes:
+      - vaspartners-storage:/var/www/html/storage/app
+      - vaspartners-logs:/var/www/html/storage/logs
+    command: ["php", "artisan", "schedule:work"]
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - vaspartners-network
+    extra_hosts:
+      - "smsgw.ethiotelecom.et:197.156.68.29"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
   frontend:
     image: vaspartners-web:latest
     container_name: vaspartners-frontend

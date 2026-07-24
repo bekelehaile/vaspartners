@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\CompanyRole;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -252,5 +253,50 @@ class Contact extends Authenticatable
             'id',
             'service_id',
         );
+    }
+
+    /**
+     * Contacts with no memberships, tickets, subscriptions, or change requests,
+     * and no current company context.
+     *
+     * @param  Builder<Contact>  $query
+     * @return Builder<Contact>
+     */
+    public function scopeOrphans(Builder $query): Builder
+    {
+        return $query
+            ->whereNull('current_company_id')
+            ->whereDoesntHave('memberships')
+            ->whereDoesntHave('tickets')
+            ->whereDoesntHave('subscriptions')
+            ->whereDoesntHave('companyChangeRequests');
+    }
+
+    /**
+     * Safe for admin bulk soft-delete: no company links or operational data.
+     */
+    public function isSafeToSoftDelete(): bool
+    {
+        if ($this->current_company_id) {
+            return false;
+        }
+
+        if ($this->relationLoaded('memberships') && $this->memberships->isNotEmpty()) {
+            return false;
+        }
+        if ($this->relationLoaded('tickets') && $this->tickets->isNotEmpty()) {
+            return false;
+        }
+        if ($this->relationLoaded('subscriptions') && $this->subscriptions->isNotEmpty()) {
+            return false;
+        }
+        if ($this->relationLoaded('companyChangeRequests') && $this->companyChangeRequests->isNotEmpty()) {
+            return false;
+        }
+
+        return ! $this->memberships()->exists()
+            && ! $this->tickets()->exists()
+            && ! $this->subscriptions()->exists()
+            && ! $this->companyChangeRequests()->exists();
     }
 }

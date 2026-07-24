@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -25,4 +26,13 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
+    })
+    ->withSchedule(function (Schedule $schedule): void {
+        $schedule->command('vas:open-due-renewals')
+            ->dailyAt('01:00')
+            ->description('Open renewal service requests for subscriptions in the renewal lead window');
+
+        $schedule->command('vas:cleanup-orphan-contacts')
+            ->dailyAt('02:30')
+            ->description('Soft-delete contacts with no memberships, tickets, or subscriptions (7+ days old)');
     })->create();
