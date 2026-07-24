@@ -407,23 +407,36 @@ class ClientPortalController extends Controller
 
     public function membershipRequests(Request $request, CompanyMembershipService $membership)
     {
+        // Backward-compatible: owners still get pending attach list for current company.
+        // Prefer GET profile/company/requests for the shared inbox.
         $rows = $membership->pendingMembershipRequestsForOwner($request->user())
-            ->map(fn ($change) => [
-                'public_id' => $change->public_id,
-                'type' => $change->type->value,
-                'status' => $change->status->value,
-                'customer_note' => $change->customer_note,
-                'created_at' => optional($change->created_at)?->toIso8601String(),
-                'applicant' => [
-                    'public_id' => $change->customer?->public_id,
-                    'name' => $change->customer?->name,
-                    'phone_number' => $change->customer?->phone_number,
-                    'email' => $change->customer?->email,
-                ],
-            ])
+            ->map(fn ($change) => $membership->serializeRequestCard($change, $request->user(), 'to_review'))
             ->values();
 
         return response()->json(['data' => $rows]);
+    }
+
+    public function companyRequestsInbox(Request $request, CompanyMembershipService $membership)
+    {
+        return response()->json([
+            'data' => $membership->companyRequestsInbox($request->user()),
+        ]);
+    }
+
+    public function cancelCompanyRequest(
+        Request $request,
+        string $changeRequest,
+        CompanyMembershipService $membership,
+    ) {
+        $record = \App\Models\CompanyChangeRequest::query()
+            ->where('public_id', $changeRequest)
+            ->firstOrFail();
+
+        $membership->cancelOwnRequest($request->user(), $record);
+
+        return response()->json([
+            'data' => $membership->serializeCustomer($request->user()->fresh()),
+        ]);
     }
 
     public function approveMembershipRequest(

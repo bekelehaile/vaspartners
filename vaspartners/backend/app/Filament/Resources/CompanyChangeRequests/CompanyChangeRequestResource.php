@@ -30,9 +30,9 @@ class CompanyChangeRequestResource extends Resource
 
     protected static string|\UnitEnum|null $navigationGroup = 'Partners';
 
-    protected static ?string $navigationLabel = 'Company requests';
+    protected static ?string $navigationLabel = 'Company & membership requests';
 
-    protected static ?string $modelLabel = 'Company request';
+    protected static ?string $modelLabel = 'Company / membership request';
 
     protected static ?string $recordTitleAttribute = 'public_id';
 

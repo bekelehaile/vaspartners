@@ -223,6 +223,7 @@ export function useSwitchCompany() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.customer.tickets });
       void queryClient.invalidateQueries({ queryKey: ["company-members"] });
       void queryClient.invalidateQueries({ queryKey: ["company-membership-requests"] });
+      void queryClient.invalidateQueries({ queryKey: ["company-requests-inbox"] });
     },
   });
 }
@@ -243,6 +244,7 @@ export function useCompleteCompanyProfile() {
     onSuccess: (customer) => {
       queryClient.setQueryData(queryKeys.customer.me, customer);
       void queryClient.invalidateQueries({ queryKey: queryKeys.customer.me });
+      void queryClient.invalidateQueries({ queryKey: ["company-requests-inbox"] });
     },
   });
 }
@@ -283,6 +285,7 @@ export function useAttachCompany() {
     onSuccess: (customer) => {
       queryClient.setQueryData(queryKeys.customer.me, customer);
       void queryClient.invalidateQueries({ queryKey: queryKeys.customer.me });
+      void queryClient.invalidateQueries({ queryKey: ["company-requests-inbox"] });
     },
   });
 }
@@ -300,6 +303,81 @@ export type MembershipRequest = {
     email?: string | null;
   };
 };
+
+export type CompanyRequestCard = {
+  kind: "membership_change" | "company_profile";
+  public_id: string;
+  type: string;
+  status: string;
+  direction?: "submitted" | "to_review";
+  awaiting?: string | null;
+  customer_note?: string | null;
+  decision_note?: string | null;
+  decided_by?: string | null;
+  created_at?: string | null;
+  reviewed_at?: string | null;
+  can_approve?: boolean;
+  can_reject?: boolean;
+  can_cancel?: boolean;
+  company?: {
+    public_id?: string | null;
+    name?: string | null;
+    tin?: string | null;
+    license_number?: string | null;
+  } | null;
+  applicant?: {
+    public_id?: string | null;
+    name?: string | null;
+    phone_number?: string | null;
+    email?: string | null;
+  } | null;
+  target_customer?: {
+    public_id?: string | null;
+    name?: string | null;
+  } | null;
+};
+
+export type CompanyRequestsInboxData = {
+  submitted: CompanyRequestCard[];
+  to_review: CompanyRequestCard[];
+  summary: {
+    submitted_pending: number;
+    to_review_pending: number;
+  };
+};
+
+export function useCompanyRequestsInbox(enabled: boolean) {
+  return useQuery({
+    queryKey: ["company-requests-inbox"],
+    enabled,
+    queryFn: async () => {
+      const res = await api<{ data: CompanyRequestsInboxData }>(
+        "/profile/company/requests",
+      );
+      return res.data;
+    },
+  });
+}
+
+export function useCancelCompanyRequest() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (publicId: string) => {
+      const res = await api<{ data: Customer }>(
+        `/profile/company/requests/${publicId}/cancel`,
+        { method: "POST", body: "{}" },
+      );
+      return res.data;
+    },
+    onSuccess: (customer) => {
+      queryClient.setQueryData(queryKeys.customer.me, customer);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.customer.me });
+      void queryClient.invalidateQueries({ queryKey: ["company-requests-inbox"] });
+      void queryClient.invalidateQueries({ queryKey: ["company-membership-requests"] });
+    },
+  });
+}
 
 export function useMembershipRequests(enabled: boolean) {
   return useQuery({
@@ -336,6 +414,7 @@ export function useDecideMembershipRequest() {
       queryClient.setQueryData(queryKeys.customer.me, customer);
       void queryClient.invalidateQueries({ queryKey: queryKeys.customer.me });
       void queryClient.invalidateQueries({ queryKey: ["company-membership-requests"] });
+      void queryClient.invalidateQueries({ queryKey: ["company-requests-inbox"] });
     },
   });
 }
@@ -356,6 +435,7 @@ export function useDetachCompany() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.customer.me });
       void queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions });
       void queryClient.invalidateQueries({ queryKey: ["company-membership-requests"] });
+      void queryClient.invalidateQueries({ queryKey: ["company-requests-inbox"] });
     },
   });
 }

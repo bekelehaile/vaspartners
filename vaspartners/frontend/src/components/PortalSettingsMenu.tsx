@@ -87,6 +87,13 @@ export function PortalSettingsMenu({
             Company profile
           </Link>
           <Link
+            href="/portal/company#company-requests"
+            role="menuitem"
+            onClick={close}
+          >
+            Company &amp; membership requests
+          </Link>
+          <Link
             href="/portal/company#company-members-panel"
             role="menuitem"
             onClick={close}

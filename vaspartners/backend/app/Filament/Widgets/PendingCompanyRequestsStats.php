@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Enums\CompanyChangeStatus;
+use App\Enums\CompanyChangeType;
 use App\Filament\Resources\CompanyChangeRequests\CompanyChangeRequestResource;
 use App\Models\CompanyChangeRequest;
 use Filament\Support\Icons\Heroicon;
@@ -13,36 +14,44 @@ class PendingCompanyRequestsStats extends StatsOverviewWidget
 {
     protected static ?int $sort = 3;
 
-    protected ?string $heading = 'Company requests';
+    protected ?string $heading = 'Company & membership requests';
 
     protected ?string $pollingInterval = '60s';
 
     protected function getStats(): array
     {
-        $pending = CompanyChangeRequest::query()
+        $pendingTransfers = CompanyChangeRequest::query()
             ->where('status', CompanyChangeStatus::Pending)
+            ->where('type', CompanyChangeType::TransferOwnership)
+            ->count();
+        $pendingJoins = CompanyChangeRequest::query()
+            ->where('status', CompanyChangeStatus::Pending)
+            ->where('type', CompanyChangeType::Attach)
             ->count();
         $approvedToday = CompanyChangeRequest::query()
             ->where('status', CompanyChangeStatus::Approved)
             ->whereDate('reviewed_at', today())
             ->count();
-        $rejectedToday = CompanyChangeRequest::query()
-            ->where('status', CompanyChangeStatus::Rejected)
-            ->whereDate('reviewed_at', today())
-            ->count();
 
         return [
-            Stat::make('Pending', $pending)
-                ->description('Awaiting admin decision')
+            Stat::make('Transfers to decide', $pendingTransfers)
+                ->description('Admin must approve ownership transfers')
                 ->descriptionIcon(Heroicon::OutlinedBuildingOffice2)
-                ->color($pending > 0 ? 'warning' : 'gray')
+                ->color($pendingTransfers > 0 ? 'warning' : 'gray')
+                ->url(CompanyChangeRequestResource::getUrl('index', [
+                    'tableFilters' => [
+                        'type' => ['value' => CompanyChangeType::TransferOwnership->value],
+                        'status' => ['value' => CompanyChangeStatus::Pending->value],
+                    ],
+                ])),
+            Stat::make('Joins awaiting owner', $pendingJoins)
+                ->description('Partners decide these in the portal inbox')
+                ->descriptionIcon(Heroicon::OutlinedUserPlus)
+                ->color($pendingJoins > 0 ? 'info' : 'gray')
                 ->url(CompanyChangeRequestResource::getUrl('index')),
             Stat::make('Approved today', $approvedToday)
                 ->descriptionIcon(Heroicon::OutlinedCheckCircle)
                 ->color('success'),
-            Stat::make('Rejected today', $rejectedToday)
-                ->descriptionIcon(Heroicon::OutlinedXCircle)
-                ->color('danger'),
         ];
     }
 }

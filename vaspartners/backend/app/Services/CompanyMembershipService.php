@@ -612,13 +612,243 @@ class CompanyMembershipService
             ->get();
     }
 
+    /**
+     * Shared inbox: requests this partner submitted + membership joins they must review as owner.
+     *
+     * @return array{submitted: list<array<string, mixed>>, to_review: list<array<string, mixed>>, summary: array<string, int>}
+     */
+    public function companyRequestsInbox(Customer $customer): array
+    {
+        $ownedCompanyIds = CompanyMembership::query()
+            ->where('customer_id', $customer->id)
+            ->where('role', CompanyRole::Owner->value)
+            ->where('is_active', true)
+            ->pluck('company_id');
+
+        $submittedChanges = CompanyChangeRequest::query()
+            ->with(['customer', 'company', 'targetCustomer', 'reviewer', 'customerReviewer'])
+            ->where('customer_id', $customer->id)
+            ->latest('id')
+            ->limit(50)
+            ->get()
+            ->map(fn (CompanyChangeRequest $r) => $this->serializeRequestCard($r, $customer, 'submitted'))
+            ->all();
+
+        $profileCards = Company::query()
+            ->where(function ($q) use ($customer, $ownedCompanyIds) {
+                $q->where('created_by_customer_id', $customer->id);
+                if ($ownedCompanyIds->isNotEmpty()) {
+                    $q->orWhereIn('id', $ownedCompanyIds);
+                }
+            })
+            ->whereIn('approval_status', [
+                CompanyApprovalStatus::Pending->value,
+                CompanyApprovalStatus::Rejected->value,
+            ])
+            ->latest('id')
+            ->limit(20)
+            ->get()
+            ->map(fn (Company $company) => $this->serializeCompanyProfileCard($company))
+            ->all();
+
+        $submitted = array_values(array_merge($profileCards, $submittedChanges));
+        usort($submitted, function (array $a, array $b): int {
+            return strcmp((string) ($b['created_at'] ?? ''), (string) ($a['created_at'] ?? ''));
+        });
+
+        $toReview = [];
+        if ($ownedCompanyIds->isNotEmpty()) {
+            $toReview = CompanyChangeRequest::query()
+                ->with(['customer', 'company', 'targetCustomer', 'reviewer', 'customerReviewer'])
+                ->whereIn('company_id', $ownedCompanyIds)
+                ->where('type', CompanyChangeType::Attach)
+                ->where('status', CompanyChangeStatus::Pending)
+                ->latest('id')
+                ->limit(50)
+                ->get()
+                ->map(fn (CompanyChangeRequest $r) => $this->serializeRequestCard($r, $customer, 'to_review'))
+                ->all();
+        }
+
+        return [
+            'submitted' => $submitted,
+            'to_review' => $toReview,
+            'summary' => [
+                'submitted_pending' => count(array_filter(
+                    $submitted,
+                    fn (array $row) => in_array(($row['status'] ?? ''), [
+                        CompanyChangeStatus::Pending->value,
+                        CompanyApprovalStatus::Pending->value,
+                    ], true),
+                )),
+                'to_review_pending' => count($toReview),
+            ],
+        ];
+    }
+
+    public function cancelOwnRequest(Customer $customer, CompanyChangeRequest $request): CompanyChangeRequest
+    {
+        if ((int) $request->customer_id !== (int) $customer->id) {
+            throw ValidationException::withMessages([
+                'request' => 'You can only cancel your own requests.',
+            ]);
+        }
+
+        if ($request->status !== CompanyChangeStatus::Pending) {
+            throw ValidationException::withMessages([
+                'request' => 'Only pending requests can be cancelled.',
+            ]);
+        }
+
+        if ($request->type === CompanyChangeType::Detach) {
+            throw ValidationException::withMessages([
+                'request' => 'Leave requests are applied immediately and cannot be cancelled.',
+            ]);
+        }
+
+        $request->fill([
+            'status' => CompanyChangeStatus::Rejected,
+            'admin_note' => 'Cancelled by requester.',
+            'reviewed_by_customer_id' => $customer->id,
+            'reviewed_by_user_id' => null,
+            'reviewed_at' => now(),
+        ])->save();
+
+        return $request->fresh(['customer', 'company', 'targetCustomer']);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function serializeRequestCard(
+        CompanyChangeRequest $request,
+        ?Customer $viewer = null,
+        string $direction = 'submitted',
+    ): array {
+        $type = $request->type instanceof CompanyChangeType
+            ? $request->type->value
+            : (string) $request->type;
+        $status = $request->status instanceof CompanyChangeStatus
+            ? $request->status->value
+            : (string) $request->status;
+
+        $awaiting = match (true) {
+            $status !== CompanyChangeStatus::Pending->value => 'none',
+            $type === CompanyChangeType::Attach->value => 'company_owner',
+            $type === CompanyChangeType::TransferOwnership->value => 'admin',
+            default => 'admin',
+        };
+
+        $canDecide = $viewer
+            && $direction === 'to_review'
+            && $status === CompanyChangeStatus::Pending->value
+            && $type === CompanyChangeType::Attach->value
+            && $this->customerOwnsCompany($viewer, (int) $request->company_id);
+
+        $canCancel = $viewer
+            && $direction === 'submitted'
+            && $status === CompanyChangeStatus::Pending->value
+            && (int) $request->customer_id === (int) $viewer->id
+            && $type !== CompanyChangeType::Detach->value;
+
+        return [
+            'kind' => 'membership_change',
+            'public_id' => $request->public_id,
+            'type' => $type,
+            'status' => $status,
+            'direction' => $direction,
+            'awaiting' => $awaiting,
+            'customer_note' => $request->customer_note,
+            'decision_note' => $request->admin_note,
+            'decided_by' => $request->decidedByLabel(),
+            'created_at' => optional($request->created_at)?->toIso8601String(),
+            'reviewed_at' => optional($request->reviewed_at)?->toIso8601String(),
+            'can_approve' => $canDecide,
+            'can_reject' => $canDecide,
+            'can_cancel' => $canCancel,
+            'has_proposal' => $request->hasProposal(),
+            'has_letter' => $request->hasLetter(),
+            'company' => $request->company ? [
+                'public_id' => $request->company->public_id,
+                'name' => $request->company->name,
+                'tin' => $request->company->tin,
+                'license_number' => $request->company->license_number,
+            ] : null,
+            'applicant' => $request->customer ? [
+                'public_id' => $request->customer->public_id,
+                'name' => $request->customer->name,
+                'phone_number' => $request->customer->phone_number,
+                'email' => $request->customer->email,
+            ] : null,
+            'target_customer' => $request->targetCustomer ? [
+                'public_id' => $request->targetCustomer->public_id,
+                'name' => $request->targetCustomer->name,
+            ] : null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function serializeCompanyProfileCard(Company $company): array
+    {
+        $status = $company->approval_status instanceof CompanyApprovalStatus
+            ? $company->approval_status->value
+            : (string) $company->approval_status;
+
+        return [
+            'kind' => 'company_profile',
+            'public_id' => $company->public_id,
+            'type' => 'company_profile',
+            'status' => $status,
+            'direction' => 'submitted',
+            'awaiting' => $status === CompanyApprovalStatus::Pending->value ? 'admin' : 'none',
+            'customer_note' => null,
+            'decision_note' => $company->approval_note,
+            'decided_by' => $status === CompanyApprovalStatus::Pending->value ? '—' : 'admin',
+            'created_at' => optional($company->created_at)?->toIso8601String(),
+            'reviewed_at' => optional($company->approved_at)?->toIso8601String(),
+            'can_approve' => false,
+            'can_reject' => false,
+            'can_cancel' => false,
+            'has_proposal' => false,
+            'has_letter' => false,
+            'company' => [
+                'public_id' => $company->public_id,
+                'name' => $company->name,
+                'tin' => $company->tin,
+                'license_number' => $company->license_number,
+            ],
+            'applicant' => null,
+            'target_customer' => null,
+        ];
+    }
+
+    protected function customerOwnsCompany(Customer $customer, int $companyId): bool
+    {
+        return CompanyMembership::query()
+            ->where('customer_id', $customer->id)
+            ->where('company_id', $companyId)
+            ->where('role', CompanyRole::Owner->value)
+            ->where('is_active', true)
+            ->exists();
+    }
+
     protected function assertOwnerMayReview(Customer $owner, CompanyChangeRequest $request): void
     {
-        $this->assertIsActiveOwner($owner);
-
-        if ((int) $owner->current_company_id !== (int) $request->company_id) {
+        if (! $this->customerOwnsCompany($owner, (int) $request->company_id)) {
             throw ValidationException::withMessages([
-                'status' => 'Switch to that company first, then decide membership requests.',
+                'status' => 'Only the company owner can decide this membership request.',
+            ]);
+        }
+
+        $company = $request->relationLoaded('company')
+            ? $request->company
+            : Company::query()->find($request->company_id);
+
+        if (! $company?->isApproved()) {
+            throw ValidationException::withMessages([
+                'company' => 'Membership requests are available after admin approves this company profile.',
             ]);
         }
     }

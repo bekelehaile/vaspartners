@@ -28,6 +28,8 @@ Route::prefix('v1')->group(function () {
         Route::get('profile/company/members', [ClientPortalController::class, 'companyMembers']);
         Route::post('profile/company/transfer-ownership', [ClientPortalController::class, 'requestTransferOwnership']);
         Route::get('profile/company/membership-requests', [ClientPortalController::class, 'membershipRequests']);
+        Route::get('profile/company/requests', [ClientPortalController::class, 'companyRequestsInbox']);
+        Route::post('profile/company/requests/{changeRequest}/cancel', [ClientPortalController::class, 'cancelCompanyRequest']);
         Route::post('profile/company/membership-requests/{changeRequest}/approve', [ClientPortalController::class, 'approveMembershipRequest']);
         Route::post('profile/company/membership-requests/{changeRequest}/reject', [ClientPortalController::class, 'rejectMembershipRequest']);
 

@@ -3,16 +3,15 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { CompanyProfileForm } from "@/components/CompanyProfileForm";
+import { CompanyRequestsInbox } from "@/components/CompanyRequestsInbox";
 import { FaydaIdentityPanel } from "@/components/FaydaIdentityPanel";
 import { PortalPageHeader } from "@/components/PortalPageHeader";
 import {
   useAttachCompany,
   useCompanyMembers,
   useCustomer,
-  useDecideMembershipRequest,
   useDetachCompany,
   useLookupCompany,
-  useMembershipRequests,
   useTransferOwnership,
 } from "@/hooks/use-customer";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
@@ -42,13 +41,14 @@ export default function CompanyProfilePage() {
   const attach = useAttachCompany();
   const detach = useDetachCompany();
   const transfer = useTransferOwnership();
-  const membershipRequests = useMembershipRequests(!!isOwner && isLinked);
   const companyMembers = useCompanyMembers(!!isLinked && !pending);
-  const decideMembership = useDecideMembershipRequest();
   const [detachNote, setDetachNote] = useState("");
   const [transferTarget, setTransferTarget] = useState("");
   const [transferNote, setTransferNote] = useState("");
   const [transferLetter, setTransferLetter] = useState<File | null>(null);
+
+  const showRequestsInbox =
+    !membershipDisabled && (!!pending || isLinked || awaitingApproval || !!me);
 
   const waitingFor =
     pending?.type === "attach"
@@ -141,39 +141,14 @@ export default function CompanyProfilePage() {
         )}
 
         {!membershipDisabled && pending && (
-          <div className="panel">
-            <h2>Waiting for {waitingFor} decision</h2>
-            <p className="muted">
-              Type: <strong>{pending.type}</strong> · Status:{" "}
-              <strong>{pending.status}</strong>
-            </p>
-            {pending.company && (
-              <p>
-                {pending.company.name} · TIN {pending.company.tin}
-                {pending.company.license_number
-                  ? ` · License ${pending.company.license_number}`
-                  : ""}
-              </p>
-            )}
-            {pending.type === "transfer_ownership" && pending.target_customer && (
-              <p>
-                Proposed new owner: <strong>{pending.target_customer.name}</strong>
-              </p>
-            )}
-            {pending.customer_note && (
-              <p className="muted">Your note: {pending.customer_note}</p>
-            )}
-            {pending.type === "transfer_ownership" && (
-              <p className="muted">
-                Letter attached: {pending.has_letter ? "yes" : "no"}
-              </p>
-            )}
-            <p className="muted" style={{ marginBottom: 0 }}>
-              You will receive an SMS and in-app notification when the request is
-              approved or rejected.
-            </p>
+          <div className="alert" style={{ marginBottom: "1rem" }}>
+            Your {pending.type.replaceAll("_", " ")} request
+            {pending.company?.name ? ` for ${pending.company.name}` : ""} is waiting for{" "}
+            {waitingFor}. Track it in <strong>Company &amp; membership requests</strong> below.
           </div>
         )}
+
+        {showRequestsInbox && <CompanyRequestsInbox enabled />}
 
         {!membershipDisabled && !pending && !isLinked && !awaitingApproval && (
           <>
@@ -442,84 +417,12 @@ export default function CompanyProfilePage() {
             </div>
 
             {isOwner && (
-              <div className="panel" id="membership-requests">
-                <h2>Membership requests</h2>
-                <p className="muted">
-                  Approve or reject partners who asked to join your company.
-                </p>
-                {membershipRequests.isLoading && (
-                  <p className="muted">Loading requests…</p>
-                )}
-                {!membershipRequests.isLoading &&
-                  (membershipRequests.data?.length ?? 0) === 0 && (
-                    <p className="muted" style={{ marginBottom: 0 }}>
-                      No pending membership requests.
-                    </p>
-                  )}
-                {(membershipRequests.data ?? []).map((req) => (
-                  <div
-                    key={req.public_id}
-                    style={{
-                      borderTop: "1px solid color-mix(in oklab, var(--et-ink) 12%, white)",
-                      paddingTop: "1rem",
-                      marginTop: "1rem",
-                    }}
-                  >
-                    <p style={{ margin: "0 0 0.35rem" }}>
-                      <strong>{req.applicant?.name || "Partner"}</strong>
-                      {req.applicant?.phone_number
-                        ? ` · ${req.applicant.phone_number}`
-                        : ""}
-                    </p>
-                    {req.customer_note && (
-                      <p className="muted">Note: {req.customer_note}</p>
-                    )}
-                    <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-                      <button
-                        type="button"
-                        className="btn-primary"
-                        disabled={decideMembership.isPending}
-                        onClick={() =>
-                          void decideMembership.mutateAsync({
-                            public_id: req.public_id,
-                            decision: "approve",
-                          })
-                        }
-                      >
-                        Approve
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-ghost"
-                        disabled={decideMembership.isPending}
-                        onClick={() =>
-                          void decideMembership.mutateAsync({
-                            public_id: req.public_id,
-                            decision: "reject",
-                          })
-                        }
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                {decideMembership.isError && (
-                  <div className="alert" style={{ marginTop: "1rem" }}>
-                    {decideMembership.error instanceof Error
-                      ? decideMembership.error.message
-                      : "Could not update request"}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {isOwner && (
               <div className="panel" id="transfer-ownership">
                 <h2>Transfer ownership</h2>
                 <p className="muted">
                   Required before you can leave. Choose an active member as the new owner and
                   upload a signed letter (PDF). An administrator must approve the transfer.
+                  Track the transfer under <strong>Company &amp; membership requests</strong> above.
                 </p>
                 {companyMembers.isLoading && (
                   <p className="muted">Loading members…</p>
