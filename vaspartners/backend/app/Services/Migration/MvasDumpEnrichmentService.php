@@ -17,7 +17,6 @@ use App\Models\TicketDocument;
 use App\Models\User;
 use App\Support\Migration\MvasDumpTableReader;
 use App\Support\Migration\MvasStaffLegacyMap;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;

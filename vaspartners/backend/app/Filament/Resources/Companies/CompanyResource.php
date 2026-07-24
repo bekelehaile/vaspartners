@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Companies;
 
 use App\Enums\CompanyApprovalStatus;
+use App\Enums\CompanyRole;
 use App\Filament\Resources\Companies\Pages\EditCompany;
 use App\Filament\Resources\Companies\Pages\ListCompanies;
 use App\Filament\Resources\Companies\Pages\ViewCompany;
@@ -102,10 +103,18 @@ class CompanyResource extends Resource
                     }),
                 TextEntry::make('is_active')->badge()->formatStateUsing(fn ($state) => $state ? 'Active' : 'Inactive')
                     ->color(fn ($state) => $state ? 'success' : 'gray'),
+                TextEntry::make('ownership_flag')
+                    ->label('Ownership')
+                    ->badge()
+                    ->state(fn (Company $record): string => $record->isOwnerless() ? 'No owner' : 'Has owner')
+                    ->color(fn (Company $record): string => $record->isOwnerless() ? 'warning' : 'success')
+                    ->helperText(fn (Company $record): ?string => $record->isOwnerless()
+                        ? 'No membership/owner yet — Fayda phone claim or Assign owner after verification.'
+                        : null),
                 TextEntry::make('owner_name')
                     ->label('Owner')
                     ->state(fn (Company $record): ?string => $record->ownerCustomer()?->name)
-                    ->placeholder('No owner — Fayda phone claim or Assign owner')
+                    ->placeholder('—')
                     ->color('success'),
                 TextEntry::make('legacy_mvas_client_id')
                     ->label('Legacy MVAS client ID')
@@ -127,8 +136,22 @@ class CompanyResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn ($query) => $query->withExists([
+                'ownerMembership as has_owner_flag',
+            ]))
             ->columns([
                 TextColumn::make('name')->searchable()->sortable(),
+                TextColumn::make('ownership_flag')
+                    ->label('Ownership')
+                    ->badge()
+                    ->state(fn (Company $record): string => $record->isOwnerless() ? 'No owner' : 'Has owner')
+                    ->color(fn (Company $record): string => $record->isOwnerless() ? 'warning' : 'success')
+                    ->sortable(query: function ($query, string $direction) {
+                        $query->orderByRaw(
+                            '(EXISTS (SELECT 1 FROM company_memberships WHERE company_memberships.company_id = companies.id AND company_memberships.role = ?)) '.$direction,
+                            ['owner'],
+                        );
+                    }),
                 TextColumn::make('tin')->label('TIN')->searchable()->sortable(),
                 TextColumn::make('license_number')->label('License')->searchable()->sortable(),
                 TextColumn::make('owner_name')
@@ -162,6 +185,19 @@ class CompanyResource extends Resource
                     CompanyApprovalStatus::Rejected->value => CompanyApprovalStatus::Rejected->label(),
                 ]),
                 TernaryFilter::make('is_active')->label('Active'),
+                TernaryFilter::make('no_owner')
+                    ->label('No owner')
+                    ->placeholder('All ownership')
+                    ->trueLabel('No owner only')
+                    ->falseLabel('Has owner only')
+                    ->queries(
+                        true: fn ($query) => $query->ownerless(),
+                        false: fn ($query) => $query->whereHas(
+                            'memberships',
+                            fn ($q) => $q->where('role', CompanyRole::Owner->value),
+                        ),
+                        blank: fn ($query) => $query,
+                    ),
             ])
             ->recordActions([
                 ViewAction::make(),

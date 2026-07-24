@@ -157,7 +157,25 @@ class Company extends Model
 
     public function hasOwner(): bool
     {
+        if (array_key_exists('has_owner_flag', $this->attributes)) {
+            return (bool) $this->attributes['has_owner_flag'];
+        }
+
         return $this->memberships()->where('role', CompanyRole::Owner->value)->exists();
+    }
+
+    /** True when the company has no owner membership (orphan / awaiting claim). */
+    public function isOwnerless(): bool
+    {
+        return ! $this->hasOwner();
+    }
+
+    public function scopeOwnerless(Builder $query): Builder
+    {
+        return $query->whereDoesntHave(
+            'memberships',
+            fn (Builder $q) => $q->where('role', CompanyRole::Owner->value),
+        );
     }
 
     public function ownerCustomer(): ?Customer

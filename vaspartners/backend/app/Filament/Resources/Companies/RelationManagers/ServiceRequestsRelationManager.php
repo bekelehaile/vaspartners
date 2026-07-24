@@ -14,17 +14,20 @@ use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\Relation;
 
 class ServiceRequestsRelationManager extends RelationManager
 {
-    protected static string $relationship = 'serviceRequests';
+    // Placeholder relationship (Filament requires one); table uses ->query() instead.
+    protected static string $relationship = 'subscriptions';
 
     protected static ?string $title = 'Service requests';
 
-    protected static ?string $relatedResource = TicketResource::class;
-
     public function isReadOnly(): bool
+    {
+        return true;
+    }
+
+    public static function canViewForRecord(Model $ownerRecord, string $pageClass): bool
     {
         return true;
     }
@@ -37,17 +40,14 @@ class ServiceRequestsRelationManager extends RelationManager
         return $count > 0 ? (string) $count : null;
     }
 
-    public function getRelationship(): Relation|Builder
+    public function table(Table $table): Table
     {
         /** @var Company $company */
         $company = $this->getOwnerRecord();
 
-        return $company->serviceRequests();
-    }
-
-    public function table(Table $table): Table
-    {
         return $table
+            ->query(fn (): Builder => $company->serviceRequests())
+            ->relationship(null)
             ->description('New subscriptions and manage-service requests for this company (via members, legacy client match, or subscription).')
             ->defaultSort('created_at', 'desc')
             ->modifyQueryUsing(fn (Builder $query) => $query->with([
@@ -58,12 +58,6 @@ class ServiceRequestsRelationManager extends RelationManager
             ]))
             ->columns([
                 TextColumn::make('tt_number')->label('Request ID')->searchable()->sortable(),
-                TextColumn::make('requisition.name')
-                    ->label('Request type')
-                    ->badge()
-                    ->color(fn (Ticket $record): string => $record->requisition?->creates_subscription
-                        ? 'success'
-                        : 'info'),
                 TextColumn::make('journey')
                     ->label('Journey')
                     ->state(fn (Ticket $record): string => $record->requisition?->creates_subscription
@@ -71,6 +65,7 @@ class ServiceRequestsRelationManager extends RelationManager
                         : 'Manage service')
                     ->badge()
                     ->color(fn (string $state): string => $state === 'New subscription' ? 'success' : 'info'),
+                TextColumn::make('requisition.name')->label('Type')->toggleable(),
                 TextColumn::make('service.name')->label('Service')->searchable()->wrap(),
                 TextColumn::make('status')
                     ->badge()

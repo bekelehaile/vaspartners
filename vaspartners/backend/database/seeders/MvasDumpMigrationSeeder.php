@@ -2,41 +2,36 @@
 
 namespace Database\Seeders;
 
+use App\Services\Migration\MvasDumpEnrichmentService;
 use App\Services\Migration\MvasDumpMigrationService;
 use Illuminate\Database\Seeder;
 
 /**
- * Seed companies, customers, and tickets from an MVAS MySQL `.dump`.
+ * Optional seeder wrapper around the MVAS dump migrate pipeline.
+ *
+ * Prefer artisan:
+ *   php artisan vas:migrate-mvas-dump --fresh --force --dump=... --storage=...
  *
  * Env:
- *   MVAS_DUMP_PATH=/path/to/mvas_YYYYMMDD_HHMMSS.dump  (required unless --dump passed via artisan)
- *   MVAS_SEED_COMPANY_LIMIT= (optional int)
- *   MVAS_SEED_TICKET_LIMIT= (optional int)
- *   MVAS_SEED_DRY_RUN=false
- *   MVAS_SEED_ONLY_VERIFIED=false
- *   MVAS_SEED_LINK_MEMBERSHIPS=true
- *
- * Prefer the artisan command for interactive runs:
- *   php artisan vas:seed-mvas-dump --dump=/tmp/mvas.dump
+ *   MVAS_DUMP_PATH, MVAS_STORAGE_PATH
+ *   MVAS_SEED_COMPANY_LIMIT, MVAS_SEED_TICKET_LIMIT, MVAS_SEED_DRY_RUN
+ *   MVAS_SEED_ONLY_VERIFIED, MVAS_SEED_INCLUDE_ETHIO, MVAS_SEED_LINK_MEMBERSHIPS
+ *   MVAS_SEED_SKIP_ATTACHMENTS, MVAS_SEED_SKIP_APPROVERS, MVAS_SEED_SKIP_SUBSCRIPTIONS
  */
 class MvasDumpMigrationSeeder extends Seeder
 {
-    public function run(MvasDumpMigrationService $migration): void
-    {
-        $dump = (string) (
-            env('MVAS_DUMP_PATH')
-            ?: config('services.mvas.dump_path')
-            ?: ''
-        );
-
+    public function run(
+        MvasDumpMigrationService $migration,
+        MvasDumpEnrichmentService $enrichment,
+    ): void {
+        $dump = (string) (env('MVAS_DUMP_PATH') ?: '');
         if ($dump === '' || ! is_file($dump)) {
-            $this->command?->error(
-                'Set MVAS_DUMP_PATH to a readable MVAS .dump file (or use: php artisan vas:seed-mvas-dump --dump=...).'
-            );
+            $this->command?->error('Set MVAS_DUMP_PATH to a readable MVAS .dump (or use vas:migrate-mvas-dump).');
 
             return;
         }
 
+        $storage = (string) (env('MVAS_STORAGE_PATH') ?: '');
         $companyLimit = env('MVAS_SEED_COMPANY_LIMIT');
         $ticketLimit = env('MVAS_SEED_TICKET_LIMIT');
 
@@ -52,37 +47,24 @@ class MvasDumpMigrationSeeder extends Seeder
             'link_memberships' => filter_var(env('MVAS_SEED_LINK_MEMBERSHIPS', false), FILTER_VALIDATE_BOOLEAN),
         ]);
 
+        $enrichStats = $enrichment->enrich([
+            'dump' => $dump,
+            'storage' => $storage !== '' ? $storage : null,
+            'dry_run' => filter_var(env('MVAS_SEED_DRY_RUN', false), FILTER_VALIDATE_BOOLEAN),
+            'skip_subscriptions' => filter_var(env('MVAS_SEED_SKIP_SUBSCRIPTIONS', false), FILTER_VALIDATE_BOOLEAN),
+            'skip_approvers' => filter_var(env('MVAS_SEED_SKIP_APPROVERS', false), FILTER_VALIDATE_BOOLEAN),
+            'skip_attachments' => filter_var(env('MVAS_SEED_SKIP_ATTACHMENTS', false), FILTER_VALIDATE_BOOLEAN),
+        ]);
+
         $this->command?->table(
-            ['Entity', 'Selected', 'Imported', 'Skipped', 'Other'],
+            ['Entity', 'Imported', 'Skipped'],
             [
-                [
-                    'companies',
-                    $stats['companies']['selected'],
-                    $stats['companies']['imported'],
-                    $stats['companies']['skipped'],
-                    '',
-                ],
-                [
-                    'customers',
-                    $stats['customers']['selected'],
-                    $stats['customers']['imported'],
-                    $stats['customers']['skipped'],
-                    '',
-                ],
-                [
-                    'tickets',
-                    $stats['tickets']['selected'],
-                    $stats['tickets']['imported'],
-                    $stats['tickets']['skipped'],
-                    'orphaned='.$stats['tickets']['orphaned'],
-                ],
-                [
-                    'memberships',
-                    '',
-                    $stats['memberships']['linked'],
-                    $stats['memberships']['skipped'],
-                    '',
-                ],
+                ['companies', $stats['companies']['imported'], $stats['companies']['skipped']],
+                ['customers', $stats['customers']['imported'], $stats['customers']['skipped']],
+                ['tickets', $stats['tickets']['imported'], $stats['tickets']['skipped']],
+                ['subscriptions', $enrichStats['subscriptions']['imported'], $enrichStats['subscriptions']['skipped']],
+                ['approvers', $enrichStats['approvers']['imported'], $enrichStats['approvers']['skipped']],
+                ['attachments', $enrichStats['attachments']['imported'], $enrichStats['attachments']['skipped']],
             ],
         );
     }
