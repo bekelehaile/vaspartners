@@ -2,8 +2,6 @@
 
 namespace App\Models;
 
-use App\Services\SmsService;
-use Filament\Facades\Filament;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Auth\Passwords\CanResetPassword;
@@ -80,26 +78,13 @@ class User extends Authenticatable implements CanResetPasswordContract, Filament
     }
 
     /**
-     * Deliver password-reset links by SMS (admin staff use mobile numbers).
+     * Unused by admin OTP reset flow; kept for Laravel CanResetPassword contract.
      */
     public function sendPasswordResetNotification(#[\SensitiveParameter] $token): void
     {
-        $url = Filament::getResetPasswordUrl($token, $this);
-
-        if (! filled($this->phone)) {
-            Log::warning('Password reset skipped — user has no phone', [
-                'user_id' => $this->id,
-                'email' => $this->email,
-            ]);
-
-            return;
-        }
-
-        $message = "VAS Partners admin password reset.\n"
-            ."Open this link to set a new password:\n{$url}\n"
-            .'If you did not request this, ignore this message. Ethio telecom';
-
-        app(SmsService::class)->send($this->phone, $message);
+        Log::info('Password reset notification skipped — admin uses OTP flow', [
+            'user_id' => $this->id,
+        ]);
     }
 
     /** Who may start impersonation (Filament Impersonate). */
