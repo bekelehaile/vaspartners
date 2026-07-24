@@ -12,7 +12,7 @@ import {
   useSubscriptions,
   useTicket,
   uploadTicketDocumentFile,
-} from "@/hooks/use-customer";
+} from "@/hooks/use-contact";
 import type { Service, Subscription, Ticket } from "@/lib/api";
 import { documentsLockedStatus } from "@/lib/document-upload";
 import { ticketCreateSchema } from "@/lib/schemas/ticket";

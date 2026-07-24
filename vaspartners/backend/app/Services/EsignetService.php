@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\Customer;
+use App\Models\Contact;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use phpseclib3\Crypt\RSA;
@@ -11,7 +11,7 @@ use Throwable;
 
 /**
  * Fayda (eSignet) OIDC — same pattern as fixedservices.
- * Customer profile is created/refreshed from userinfo on sign-in (no signup form).
+ * Contact profile is created/refreshed from userinfo on sign-in (no signup form).
  */
 class EsignetService
 {
@@ -118,19 +118,19 @@ class EsignetService
             return ['status' => 'error', 'message' => 'Invalid user info payload'];
         }
 
-        $result = $this->createOrUpdateCustomerBySub($payload);
+        $result = $this->createOrUpdateContactBySub($payload);
         if ($result['status'] !== 'ok') {
             return $result;
         }
 
-        return ['status' => 'ok', 'customer' => $result['customer']];
+        return ['status' => 'ok', 'contact' => $result['contact']];
     }
 
     /**
-     * Persist Fayda userinfo into customers (fixedservices-compatible mapping).
+     * Persist Fayda userinfo into contacts (fixedservices-compatible mapping).
      * First sign-in creates the row; later sign-ins refresh identity fields from Fayda.
      */
-    public function createOrUpdateCustomerBySub(array $payload): array
+    public function createOrUpdateContactBySub(array $payload): array
     {
         $sub = $payload['sub'] ?? null;
         if (! $sub) {
@@ -158,44 +158,44 @@ class EsignetService
             $birthdate = date('Y-m-d', strtotime(str_replace('/', '-', $payload['birthdate'])));
         }
 
-        $customer = Customer::query()->where('sub', $sub)->first();
+        $contact = Contact::query()->where('sub', $sub)->first();
 
         // Adopt migrated placeholder (mvas-client-*) so tickets stay with this identity.
-        if (! $customer) {
-            $customer = Customer::query()
+        if (! $contact) {
+            $contact = Contact::query()
                 ->where('phone_number', $phoneNumber)
                 ->where('sub', 'like', 'mvas-client-%')
                 ->first();
         }
 
-        $customer ??= new Customer;
+        $contact ??= new Contact;
 
-        $customer->syncFromFayda([
+        $contact->syncFromFayda([
             'sub' => $sub,
-            'name' => $payload['name'] ?? $customer->name ?? 'Customer',
+            'name' => $payload['name'] ?? $contact->name ?? 'Contact',
             'phone_number' => $phoneNumber,
-            'email' => $payload['email'] ?? $customer->email,
-            'gender' => $payload['gender'] ?? $customer->gender,
-            'nationality' => $payload['nationality'] ?? $customer->nationality,
-            'identification_type' => $customer->identification_type ?: '2',
-            'identification_number' => $customer->identification_number ?: $sub,
-            'birthdate' => $birthdate ?? $customer->birthdate,
-            'picture' => $picture ?? $customer->picture,
-            'address' => $payload['address'] ?? $customer->address,
+            'email' => $payload['email'] ?? $contact->email,
+            'gender' => $payload['gender'] ?? $contact->gender,
+            'nationality' => $payload['nationality'] ?? $contact->nationality,
+            'identification_type' => $contact->identification_type ?: '2',
+            'identification_number' => $contact->identification_number ?: $sub,
+            'birthdate' => $birthdate ?? $contact->birthdate,
+            'picture' => $picture ?? $contact->picture,
+            'address' => $payload['address'] ?? $contact->address,
         ]);
 
-        $customer->forceFill(['is_active' => true])->save();
+        $contact->forceFill(['is_active' => true])->save();
 
         // Phone (or legacy client id) matches one ownerless migrated company → claim as owner.
         // No match → partner submits company, or admin Assign owner for orphan companies.
         try {
-            app(CompanyMembershipService::class)->tryAutoClaimMigratedCompanyByPhone($customer->fresh());
+            app(CompanyMembershipService::class)->tryAutoClaimMigratedCompanyByPhone($contact->fresh());
         } catch (Throwable $e) {
             // Never block Fayda login on claim failure; partner can complete profile manually.
             report($e);
         }
 
-        return ['status' => 'ok', 'customer' => $customer->fresh(['company', 'memberships.company'])];
+        return ['status' => 'ok', 'contact' => $contact->fresh(['company', 'memberships.company'])];
     }
 
     protected function generateClientAssertion(): string

@@ -3,7 +3,7 @@
 namespace App\Filament\Resources\Companies\RelationManagers;
 
 use App\Enums\CompanyRole;
-use App\Filament\Resources\Customers\CustomerResource;
+use App\Filament\Resources\Contacts\ContactResource;
 use App\Models\CompanyMembership;
 use App\Services\CompanyMembershipService;
 use Filament\Actions\Action;
@@ -30,11 +30,11 @@ class MembersRelationManager extends RelationManager
     {
         return $table
             ->description('Ownership transfers are requested by the company owner (with a letter PDF) and approved under Company change requests. Admins enable or disable member access here.')
-            ->modifyQueryUsing(fn ($query) => $query->with('customer')->orderByRaw("CASE WHEN role = 'owner' THEN 0 ELSE 1 END")->orderBy('id'))
+            ->modifyQueryUsing(fn ($query) => $query->with('contact')->orderByRaw("CASE WHEN role = 'owner' THEN 0 ELSE 1 END")->orderBy('id'))
             ->columns([
-                TextColumn::make('customer.name')->searchable()->sortable(),
-                TextColumn::make('customer.phone_number')->label('Phone')->searchable(),
-                TextColumn::make('customer.email')->toggleable(),
+                TextColumn::make('contact.name')->searchable()->sortable(),
+                TextColumn::make('contact.phone_number')->label('Phone')->searchable(),
+                TextColumn::make('contact.email')->toggleable(),
                 TextColumn::make('role')
                     ->label('Role')
                     ->badge()
@@ -55,8 +55,8 @@ class MembersRelationManager extends RelationManager
             ])
             ->recordActions([
                 ViewAction::make()
-                    ->url(fn (CompanyMembership $record): string => $record->customer
-                        ? CustomerResource::getUrl('view', ['record' => $record->customer])
+                    ->url(fn (CompanyMembership $record): string => $record->contact
+                        ? ContactResource::getUrl('view', ['record' => $record->contact])
                         : '#'),
                 Action::make('disable_membership')
                     ->label('Disable access')
@@ -66,12 +66,12 @@ class MembersRelationManager extends RelationManager
                     ->requiresConfirmation()
                     ->action(function (CompanyMembership $record, CompanyMembershipService $membership): void {
                         try {
-                            if (! $record->customer) {
+                            if (! $record->contact) {
                                 return;
                             }
                             $membership->setMembershipActive(
                                 $this->getOwnerRecord(),
-                                $record->customer,
+                                $record->contact,
                                 false,
                                 auth()->user(),
                             );
@@ -95,12 +95,12 @@ class MembersRelationManager extends RelationManager
                     ->visible(fn (CompanyMembership $record): bool => ! $record->is_active)
                     ->requiresConfirmation()
                     ->action(function (CompanyMembership $record, CompanyMembershipService $membership): void {
-                        if (! $record->customer) {
+                        if (! $record->contact) {
                             return;
                         }
                         $membership->setMembershipActive(
                             $this->getOwnerRecord(),
-                            $record->customer,
+                            $record->contact,
                             true,
                             auth()->user(),
                         );

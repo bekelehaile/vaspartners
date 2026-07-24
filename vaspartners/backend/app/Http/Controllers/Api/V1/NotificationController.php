@@ -10,10 +10,10 @@ class NotificationController extends Controller
 {
     public function index(Request $request)
     {
-        /** @var \App\Models\Customer $customer */
-        $customer = $request->user();
+        /** @var \App\Models\Contact $contact */
+        $contact = $request->user();
 
-        $notifications = $customer->notifications()
+        $notifications = $contact->notifications()
             ->latest()
             ->limit(40)
             ->get()
@@ -21,16 +21,16 @@ class NotificationController extends Controller
 
         return response()->json([
             'data' => $notifications,
-            'unread_count' => $customer->unreadNotifications()->count(),
+            'unread_count' => $contact->unreadNotifications()->count(),
         ]);
     }
 
     public function markRead(Request $request, string $id)
     {
-        /** @var \App\Models\Customer $customer */
-        $customer = $request->user();
+        /** @var \App\Models\Contact $contact */
+        $contact = $request->user();
 
-        $notification = $customer->notifications()->where('id', $id)->firstOrFail();
+        $notification = $contact->notifications()->where('id', $id)->firstOrFail();
         $notification->markAsRead();
 
         return response()->json(['data' => $this->transform($notification->fresh())]);
@@ -38,9 +38,9 @@ class NotificationController extends Controller
 
     public function markAllRead(Request $request)
     {
-        /** @var \App\Models\Customer $customer */
-        $customer = $request->user();
-        $customer->unreadNotifications->markAsRead();
+        /** @var \App\Models\Contact $contact */
+        $contact = $request->user();
+        $contact->unreadNotifications->markAsRead();
 
         return response()->json([
             'data' => true,

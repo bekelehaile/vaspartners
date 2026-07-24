@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ReactNode, useState } from "react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { PortalSettingsMenu } from "@/components/PortalSettingsMenu";
-import { Customer, clearToken, faydaLoginUrl } from "@/lib/api";
+import { Contact, clearToken, faydaLoginUrl } from "@/lib/api";
 
 function LogInIcon() {
   return (
@@ -44,7 +44,7 @@ export function SiteShell({
   landing = false,
 }: {
   children: ReactNode;
-  me?: Customer | null;
+  me?: Contact | null;
   onLogout?: () => void;
   compact?: boolean;
   landing?: boolean;

@@ -25,12 +25,12 @@ return new class extends Migration
             $table->unique('license_number');
         });
 
-        Schema::table('customers', function (Blueprint $table) {
+        Schema::table('contacts', function (Blueprint $table) {
             $table->string('company_license_number', 64)->nullable()->after('company_tin');
         });
 
         DB::statement('
-            UPDATE customers c
+            UPDATE contacts c
             SET company_license_number = co.license_number
             FROM companies co
             WHERE c.company_id = co.id
@@ -38,10 +38,10 @@ return new class extends Migration
         ');
 
         Schema::table('company_change_requests', function (Blueprint $table) {
-            $table->foreignId('reviewed_by_customer_id')
+            $table->foreignId('reviewed_by_contact_id')
                 ->nullable()
                 ->after('reviewed_by_user_id')
-                ->constrained('customers')
+                ->constrained('contacts')
                 ->nullOnDelete();
         });
     }
@@ -49,10 +49,10 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('company_change_requests', function (Blueprint $table) {
-            $table->dropConstrainedForeignId('reviewed_by_customer_id');
+            $table->dropConstrainedForeignId('reviewed_by_contact_id');
         });
 
-        Schema::table('customers', function (Blueprint $table) {
+        Schema::table('contacts', function (Blueprint $table) {
             $table->dropColumn('company_license_number');
         });
 

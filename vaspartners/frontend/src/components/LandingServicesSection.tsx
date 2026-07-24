@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, type CSSProperties } from "react";
-import { useServices } from "@/hooks/use-customer";
+import { useServices } from "@/hooks/use-contact";
 import { serviceImageUrl, sortServicesForLanding } from "@/lib/service-images";
 
 /**

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { AuthWait } from "@/components/AuthWait";
 import { SiteShell } from "@/components/SiteShell";
 import { getToken } from "@/lib/api";
-import { useCustomer, useLogout } from "@/hooks/use-customer";
+import { useContact, useLogout } from "@/hooks/use-contact";
 
 /**
  * Auth + approved-company gate for all /portal routes.
@@ -16,7 +16,7 @@ export function PortalGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const logout = useLogout();
-  const { data: me, isLoading, isError, error } = useCustomer();
+  const { data: me, isLoading, isError, error } = useContact();
 
   const onCompanyPage = pathname === "/portal/company";
   const canUseServices = !!me?.profile_completed;

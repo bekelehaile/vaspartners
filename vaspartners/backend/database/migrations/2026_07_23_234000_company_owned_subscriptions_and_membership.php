@@ -10,7 +10,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('customers', function (Blueprint $table) {
+        Schema::table('contacts', function (Blueprint $table) {
             $table->boolean('company_membership_active')
                 ->default(true)
                 ->after('company_role');
@@ -19,18 +19,18 @@ return new class extends Migration
         Schema::table('subscriptions', function (Blueprint $table) {
             $table->foreignId('company_id')
                 ->nullable()
-                ->after('customer_id')
+                ->after('contact_id')
                 ->constrained('companies')
                 ->restrictOnDelete();
             $table->index(['company_id', 'service_id', 'status'], 'subscriptions_company_service_status');
         });
 
-        // Backfill: subscriptions belong to the customer's company when linked.
+        // Backfill: subscriptions belong to the contact's company when linked.
         DB::statement('
             UPDATE subscriptions s
             SET company_id = c.company_id
-            FROM customers c
-            WHERE s.customer_id = c.id
+            FROM contacts c
+            WHERE s.contact_id = c.id
               AND c.company_id IS NOT NULL
               AND s.company_id IS NULL
         ');
@@ -86,10 +86,10 @@ return new class extends Migration
         ");
 
         // Hard-delete of a company must fail while members or subscriptions exist.
-        DB::statement('ALTER TABLE customers DROP CONSTRAINT IF EXISTS customers_company_id_foreign');
+        DB::statement('ALTER TABLE contacts DROP CONSTRAINT IF EXISTS contacts_company_id_foreign');
         DB::statement('
-            ALTER TABLE customers
-            ADD CONSTRAINT customers_company_id_foreign
+            ALTER TABLE contacts
+            ADD CONSTRAINT contacts_company_id_foreign
             FOREIGN KEY (company_id) REFERENCES companies(id)
             ON DELETE RESTRICT
         ');
@@ -97,10 +97,10 @@ return new class extends Migration
 
     public function down(): void
     {
-        DB::statement('ALTER TABLE customers DROP CONSTRAINT IF EXISTS customers_company_id_foreign');
+        DB::statement('ALTER TABLE contacts DROP CONSTRAINT IF EXISTS contacts_company_id_foreign');
         DB::statement('
-            ALTER TABLE customers
-            ADD CONSTRAINT customers_company_id_foreign
+            ALTER TABLE contacts
+            ADD CONSTRAINT contacts_company_id_foreign
             FOREIGN KEY (company_id) REFERENCES companies(id)
             ON DELETE SET NULL
         ');
@@ -109,7 +109,7 @@ return new class extends Migration
 
         DB::statement("
             CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_one_alive_per_customer_service
-            ON subscriptions (customer_id, service_id)
+            ON subscriptions (contact_id, service_id)
             WHERE deleted_at IS NULL
               AND status IN ('active', 'pending_renewal', 'grace')
         ");
@@ -119,7 +119,7 @@ return new class extends Migration
             $table->dropConstrainedForeignId('company_id');
         });
 
-        Schema::table('customers', function (Blueprint $table) {
+        Schema::table('contacts', function (Blueprint $table) {
             $table->dropColumn('company_membership_active');
         });
     }

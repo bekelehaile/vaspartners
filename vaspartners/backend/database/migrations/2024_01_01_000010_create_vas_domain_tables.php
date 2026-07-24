@@ -16,7 +16,7 @@ return new class extends Migration
             $table->softDeletes();
         });
 
-        Schema::create('customers', function (Blueprint $table) {
+        Schema::create('contacts', function (Blueprint $table) {
             $table->id();
             $table->ulid('public_id')->unique();
             // Fayda (eSignet) subject — account is created on first successful sign-in (no signup)
@@ -171,7 +171,7 @@ return new class extends Migration
             $table->id();
             $table->ulid('public_id')->unique();
             $table->string('tt_number')->unique();
-            $table->foreignId('customer_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('contact_id')->constrained()->cascadeOnDelete();
             $table->foreignId('service_id')->constrained()->restrictOnDelete();
             $table->foreignId('requisition_id')->constrained()->restrictOnDelete();
             $table->foreignId('category_id')->constrained()->restrictOnDelete();
@@ -198,7 +198,7 @@ return new class extends Migration
             $table->index(['status', 'assigned_to_user_id'], 'tickets_recent_idx');
             $table->index(['assigned_to_user_id', 'status', 'current_approver_user_id'], 'tickets_my_idx');
             $table->index(['current_approver_user_id', 'status'], 'tickets_approval_idx');
-            $table->index(['customer_id', 'status', 'created_at'], 'tickets_customer_idx');
+            $table->index(['contact_id', 'status', 'created_at'], 'tickets_contact_idx');
             $table->index(['category_id', 'status'], 'tickets_category_idx');
         });
 
@@ -213,7 +213,7 @@ return new class extends Migration
             $table->unsignedBigInteger('size_bytes')->default(0);
             $table->string('verification_status', 32)->default('pending'); // pending|accepted|rejected
             $table->text('remark')->nullable();
-            $table->foreignId('uploaded_by_customer_id')->nullable()->constrained('customers')->nullOnDelete();
+            $table->foreignId('uploaded_by_contact_id')->nullable()->constrained('contacts')->nullOnDelete();
             $table->timestamps();
             $table->softDeletes();
             $table->index(['ticket_id', 'document_type_id']);
@@ -298,7 +298,7 @@ return new class extends Migration
         Schema::dropIfExists('requisitions');
         Schema::dropIfExists('services');
         Schema::dropIfExists('categories');
-        Schema::dropIfExists('customers');
+        Schema::dropIfExists('contacts');
 
         Schema::table('users', function (Blueprint $table) {
             $table->dropConstrainedForeignId('manager_id');

@@ -22,7 +22,7 @@ class ViewTicket extends ViewRecord
     protected function resolveRecord(int|string $key): Model
     {
         return parent::resolveRecord($key)->loadMissing([
-            'customer.company',
+            'contact.company',
             'service',
             'requisition',
             'category',
@@ -55,7 +55,7 @@ class ViewTicket extends ViewRecord
             $record->service?->name,
             $record->requisition?->name,
             $status,
-            $record->customer?->name,
+            $record->contact?->name,
         ]);
 
         return $bits !== []

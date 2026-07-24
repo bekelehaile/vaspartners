@@ -7,7 +7,7 @@ import {
   useMarkAllNotificationsRead,
   useMarkNotificationRead,
   useNotifications,
-} from "@/hooks/use-customer";
+} from "@/hooks/use-contact";
 
 function formatRelativeTime(iso?: string | null): string {
   if (!iso) return "";

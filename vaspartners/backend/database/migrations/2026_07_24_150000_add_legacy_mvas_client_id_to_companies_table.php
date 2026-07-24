@@ -12,7 +12,7 @@ return new class extends Migration
             $table->unsignedBigInteger('legacy_mvas_client_id')
                 ->nullable()
                 ->unique()
-                ->after('created_by_customer_id');
+                ->after('created_by_contact_id');
         });
     }
 

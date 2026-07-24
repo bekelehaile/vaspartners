@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class CompanyMembership extends Model
 {
     protected $fillable = [
-        'customer_id',
+        'contact_id',
         'company_id',
         'role',
         'is_active',
@@ -23,9 +23,9 @@ class CompanyMembership extends Model
         ];
     }
 
-    public function customer(): BelongsTo
+    public function contact(): BelongsTo
     {
-        return $this->belongsTo(Customer::class);
+        return $this->belongsTo(Contact::class);
     }
 
     public function company(): BelongsTo

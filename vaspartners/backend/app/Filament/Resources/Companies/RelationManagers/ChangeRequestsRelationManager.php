@@ -25,7 +25,7 @@ class ChangeRequestsRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn ($query) => $query->with(['customer', 'reviewer']))
+            ->modifyQueryUsing(fn ($query) => $query->with(['contact', 'reviewer']))
             ->columns([
                 TextColumn::make('public_id')->label('Request number')->searchable(),
                 TextColumn::make('type')
@@ -39,7 +39,7 @@ class ChangeRequestsRelationManager extends RelationManager
                         'rejected' => 'danger',
                         default => 'gray',
                     }),
-                TextColumn::make('customer.name')->label('Partner'),
+                TextColumn::make('contact.name')->label('Partner'),
                 TextColumn::make('created_at')->dateTime()->sortable(),
             ])
             ->recordActions([

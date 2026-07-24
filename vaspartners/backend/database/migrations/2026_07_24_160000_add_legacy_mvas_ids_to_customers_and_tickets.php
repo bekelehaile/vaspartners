@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('customers', function (Blueprint $table) {
+        Schema::table('contacts', function (Blueprint $table) {
             $table->unsignedBigInteger('legacy_mvas_client_id')
                 ->nullable()
                 ->unique();
@@ -28,7 +28,7 @@ return new class extends Migration
             $table->dropColumn('legacy_mvas_ticket_id');
         });
 
-        Schema::table('customers', function (Blueprint $table) {
+        Schema::table('contacts', function (Blueprint $table) {
             $table->dropUnique(['legacy_mvas_client_id']);
             $table->dropColumn('legacy_mvas_client_id');
         });

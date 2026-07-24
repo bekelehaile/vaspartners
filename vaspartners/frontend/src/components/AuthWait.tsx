@@ -2,7 +2,7 @@ import { ReactNode } from "react";
 
 /**
  * Branded loading / auth-handoff screen (Ethio logo + lemon spinner).
- * Matches admin panel logo treatment on customer portal wait states.
+ * Matches admin panel logo treatment on contact portal wait states.
  */
 export function AuthWait({
   title,

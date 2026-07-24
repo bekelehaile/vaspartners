@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { useGallery } from "@/hooks/use-customer";
+import { useGallery } from "@/hooks/use-contact";
 
 export function LandingGallerySection({
   showIntro = true,

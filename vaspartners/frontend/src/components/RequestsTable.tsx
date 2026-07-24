@@ -9,7 +9,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { StatusPill } from "@/components/StatusJourney";
-import { useServices, useTickets, type TicketFilters } from "@/hooks/use-customer";
+import { useServices, useTickets, type TicketFilters } from "@/hooks/use-contact";
 import { statusCopy, type Ticket } from "@/lib/api";
 
 const columnHelper = createColumnHelper<Ticket>();

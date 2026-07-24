@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useBlogPosts } from "@/hooks/use-customer";
+import { useBlogPosts } from "@/hooks/use-contact";
 
 export function LandingBlogSection() {
   const { data: posts = [], isLoading } = useBlogPosts();

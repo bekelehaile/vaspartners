@@ -6,7 +6,7 @@ import {
   acceptAttrFromMimes,
   validateFileAgainstDocType,
 } from "@/lib/document-upload";
-import { useDocumentRequirements } from "@/hooks/use-customer";
+import { useDocumentRequirements } from "@/hooks/use-contact";
 
 export type StagedAttachments = Record<number, File>;
 

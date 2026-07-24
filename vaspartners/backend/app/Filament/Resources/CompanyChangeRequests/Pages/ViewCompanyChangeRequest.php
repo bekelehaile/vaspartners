@@ -57,7 +57,7 @@ class ViewCompanyChangeRequest extends ViewRecord
                 ->modalDescription('The selected member becomes the sole owner. The current owner becomes a member.')
                 ->action(function (array $data) use ($record, $membership) {
                     $membership->approve($record, auth()->user(), $data['admin_note'] ?? null);
-                    $this->refreshFormData(['status', 'admin_note', 'reviewed_at', 'reviewed_by_user_id', 'reviewed_by_customer_id']);
+                    $this->refreshFormData(['status', 'admin_note', 'reviewed_at', 'reviewed_by_user_id', 'reviewed_by_contact_id']);
                 }),
             Action::make('reject')
                 ->label('Reject')
@@ -70,7 +70,7 @@ class ViewCompanyChangeRequest extends ViewRecord
                 ->requiresConfirmation()
                 ->action(function (array $data) use ($record, $membership) {
                     $membership->reject($record, auth()->user(), $data['admin_note'] ?? null);
-                    $this->refreshFormData(['status', 'admin_note', 'reviewed_at', 'reviewed_by_user_id', 'reviewed_by_customer_id']);
+                    $this->refreshFormData(['status', 'admin_note', 'reviewed_at', 'reviewed_by_user_id', 'reviewed_by_contact_id']);
                 }),
         ];
     }

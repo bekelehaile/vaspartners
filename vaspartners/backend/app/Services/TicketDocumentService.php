@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\Customer;
+use App\Models\Contact;
 use App\Models\DocumentType;
 use App\Models\ServiceRequisitionDocument;
 use App\Models\Ticket;
@@ -41,24 +41,24 @@ class TicketDocumentService
         'zip' => ['application/zip', 'application/x-zip-compressed', 'multipart/x-zip'],
     ];
 
-    public function assertCustomerCanMutateDocuments(Ticket $ticket): void
+    public function assertContactCanMutateDocuments(Ticket $ticket): void
     {
-        if ($ticket->customerDocumentsAreLocked()) {
+        if ($ticket->contactDocumentsAreLocked()) {
             throw ValidationException::withMessages([
                 'documents' => 'Documents cannot be changed while this request is being handled. You can update them if it is sent back (rejected) for corrections.',
             ]);
         }
     }
 
-    public function storeForCustomer(Ticket $ticket, Customer $customer, int $documentTypeId, UploadedFile $file): TicketDocument
+    public function storeForContact(Ticket $ticket, Contact $contact, int $documentTypeId, UploadedFile $file): TicketDocument
     {
-        abort_unless($ticket->customer_id === $customer->id, 404);
-        $this->assertCustomerCanMutateDocuments($ticket);
+        abort_unless($ticket->contact_id === $contact->id, 404);
+        $this->assertContactCanMutateDocuments($ticket);
 
         $documentType = $this->resolveAllowedDocumentType($ticket, $documentTypeId);
         $this->assertFileMatchesDocumentType($file, $documentType);
 
-        // One current file per document type — replace previous customer upload.
+        // One current file per document type — replace previous contact upload.
         $previous = $ticket->documents()
             ->where('document_type_id', $documentType->id)
             ->get();
@@ -73,7 +73,7 @@ class TicketDocumentService
             'original_name' => $this->safeOriginalName($file),
             'mime_type' => $file->getMimeType() ?: $file->getClientMimeType(),
             'size_bytes' => $file->getSize(),
-            'uploaded_by_customer_id' => $customer->id,
+            'uploaded_by_contact_id' => $contact->id,
         ]);
 
         foreach ($previous as $old) {
@@ -84,11 +84,11 @@ class TicketDocumentService
         return $doc->load('documentType');
     }
 
-    public function deleteForCustomer(Ticket $ticket, TicketDocument $document, Customer $customer): void
+    public function deleteForContact(Ticket $ticket, TicketDocument $document, Contact $contact): void
     {
-        abort_unless($ticket->customer_id === $customer->id, 404);
+        abort_unless($ticket->contact_id === $contact->id, 404);
         abort_unless($document->ticket_id === $ticket->id, 404);
-        $this->assertCustomerCanMutateDocuments($ticket);
+        $this->assertContactCanMutateDocuments($ticket);
 
         $this->purgeStoredFile($document);
         $document->delete();

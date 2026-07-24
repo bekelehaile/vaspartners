@@ -17,7 +17,7 @@ class Subscription extends Model
 
     protected $fillable = [
         'public_id',
-        'customer_id',
+        'contact_id',
         'company_id',
         'service_id',
         'status',
@@ -65,9 +65,9 @@ class Subscription extends Model
         return 'public_id';
     }
 
-    public function customer(): BelongsTo
+    public function contact(): BelongsTo
     {
-        return $this->belongsTo(Customer::class);
+        return $this->belongsTo(Contact::class);
     }
 
     /** Owning organisation — subscriptions transfer with company ownership/membership. */
@@ -102,7 +102,7 @@ class Subscription extends Model
         return $this->hasManyThrough(TicketComment::class, Ticket::class);
     }
 
-    /** Customer document uploads across all tickets on this subscription. */
+    /** Contact document uploads across all tickets on this subscription. */
     public function documents(): HasManyThrough
     {
         return $this->hasManyThrough(TicketDocument::class, Ticket::class);

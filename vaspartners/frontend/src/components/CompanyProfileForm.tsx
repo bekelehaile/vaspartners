@@ -7,14 +7,14 @@ import type {
 } from "react";
 import { useForm } from "@tanstack/react-form";
 import { useRouter } from "next/navigation";
-import { Customer } from "@/lib/api";
+import { Contact } from "@/lib/api";
 import { FaydaIdentityPanel } from "@/components/FaydaIdentityPanel";
 import {
   CompanyProfileValues,
   companyProfileSchema,
   emptyCompanyProfile,
 } from "@/lib/schemas/company";
-import { useCompleteCompanyProfile } from "@/hooks/use-customer";
+import { useCompleteCompanyProfile } from "@/hooks/use-contact";
 
 function fieldError(errors: unknown): string | null {
   if (!errors || !Array.isArray(errors) || errors.length === 0) return null;
@@ -26,7 +26,7 @@ function fieldError(errors: unknown): string | null {
   return String(first);
 }
 
-function fromCustomer(me?: Customer | null, createNew = false): CompanyProfileValues {
+function fromContact(me?: Contact | null, createNew = false): CompanyProfileValues {
   if (!me || createNew) return emptyCompanyProfile;
   return {
     company_name: me.company_name ?? "",
@@ -114,7 +114,7 @@ export function CompanyProfileForm({
   redirectTo = "/portal",
   createNew = false,
 }: {
-  me?: Customer | null;
+  me?: Contact | null;
   redirectTo?: string;
   createNew?: boolean;
 }) {
@@ -123,7 +123,7 @@ export function CompanyProfileForm({
   const isUpdate = !!me?.company_id && !createNew;
 
   const form = useForm({
-    defaultValues: fromCustomer(me, createNew),
+    defaultValues: fromContact(me, createNew),
     validators: {
       onChange: companyProfileSchema,
       onSubmit: companyProfileSchema,

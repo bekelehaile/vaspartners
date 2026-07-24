@@ -120,7 +120,7 @@ class CompanyResource extends Resource
                         : null),
                 TextEntry::make('owner_name')
                     ->label('Owner')
-                    ->state(fn (Company $record): ?string => $record->ownerCustomer()?->name)
+                    ->state(fn (Company $record): ?string => $record->ownerContact()?->name)
                     ->placeholder('—')
                     ->color('success'),
                 TextEntry::make('legacy_mvas_client_id')
@@ -164,7 +164,7 @@ class CompanyResource extends Resource
                 TextColumn::make('phone')->label('Phone')->toggleable()->placeholder('—'),
                 TextColumn::make('owner_name')
                     ->label('Owner')
-                    ->state(fn (Company $record): ?string => $record->ownerCustomer()?->name)
+                    ->state(fn (Company $record): ?string => $record->ownerContact()?->name)
                     ->placeholder('—')
                     ->toggleable(),
                 TextColumn::make('approval_status')

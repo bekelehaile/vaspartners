@@ -94,7 +94,7 @@ class ClientPortalController extends Controller
                 'service:id,name',
                 'requisition:id,name',
             ])
-            ->where('customer_id', $request->user()->id);
+            ->where('contact_id', $request->user()->id);
 
         if (! empty($filters['status'])) {
             $query->where('status', $filters['status']);
@@ -124,7 +124,7 @@ class ClientPortalController extends Controller
 
     public function showTicket(Request $request, Ticket $ticket, TicketCommentService $comments)
     {
-        abort_unless($ticket->customer_id === $request->user()->id, 404);
+        abort_unless($ticket->contact_id === $request->user()->id, 404);
 
         $ticket->load(['service', 'requisition', 'subscription', 'documents.documentType']);
 
@@ -132,17 +132,17 @@ class ClientPortalController extends Controller
         $thread = $comments->paginateThread($ticket, $request->user(), null, null, 40);
         $payload['messages'] = $thread['data'];
         $payload['messages_meta'] = $thread['meta'];
-        $payload['chat_locked'] = $ticket->status->locksCustomerChat();
+        $payload['chat_locked'] = $ticket->status->locksContactChat();
         $payload['chat_attachment_max_kb'] = $comments->maxAttachmentKb();
-        $payload['documents_locked'] = $ticket->status->locksCustomerDocuments();
-        $payload['customer_can_edit'] = $ticket->status->allowsCustomerEdits();
+        $payload['documents_locked'] = $ticket->status->locksContactDocuments();
+        $payload['contact_can_edit'] = $ticket->status->allowsContactEdits();
 
         return response()->json(['data' => $payload]);
     }
 
     public function ticketMessages(Request $request, Ticket $ticket, TicketCommentService $comments)
     {
-        abort_unless($ticket->customer_id === $request->user()->id, 404);
+        abort_unless($ticket->contact_id === $request->user()->id, 404);
 
         $data = $request->validate([
             'before_id' => ['nullable', 'integer', 'min:1'],
@@ -185,11 +185,11 @@ class ClientPortalController extends Controller
 
     public function subscriptions(Request $request, CompanyMembershipService $membership)
     {
-        /** @var \App\Models\Customer $customer */
-        $customer = $request->user();
+        /** @var \App\Models\Contact $contact */
+        $contact = $request->user();
 
         try {
-            $membership->assertCanAccessCompany($customer);
+            $membership->assertCanAccessCompany($contact);
         } catch (\Illuminate\Validation\ValidationException $e) {
             $message = collect($e->errors())->flatten()->first()
                 ?: 'Complete and get your company TIN approved before viewing subscriptions.';
@@ -206,7 +206,7 @@ class ClientPortalController extends Controller
             ]);
         }
 
-        $companyId = (int) $customer->current_company_id;
+        $companyId = (int) $contact->current_company_id;
 
         $rows = Subscription::query()
             ->with(['service:id,name,slug,renewal_interval'])
@@ -214,12 +214,12 @@ class ClientPortalController extends Controller
             ->latest('id')
             ->paginate(100);
 
-        $companyCustomerIds = \App\Models\CompanyMembership::query()
+        $companyContactIds = \App\Models\CompanyMembership::query()
             ->where('company_id', $companyId)
-            ->pluck('customer_id');
+            ->pluck('contact_id');
 
         $pendingNewServiceIds = Ticket::query()
-            ->whereIn('customer_id', $companyCustomerIds)
+            ->whereIn('contact_id', $companyContactIds)
             ->whereIn('status', ['open', 'in_progress'])
             ->whereHas('requisition', fn ($q) => $q->where('creates_subscription', true))
             ->pluck('service_id')
@@ -227,7 +227,7 @@ class ClientPortalController extends Controller
             ->values();
 
         $pendingRequests = Ticket::query()
-            ->whereIn('customer_id', $companyCustomerIds)
+            ->whereIn('contact_id', $companyContactIds)
             ->whereIn('status', ['open', 'in_progress'])
             ->get(['service_id', 'requisition_id', 'tt_number', 'public_id', 'status'])
             ->map(fn (Ticket $t) => [
@@ -252,7 +252,7 @@ class ClientPortalController extends Controller
 
     public function uploadDocument(Request $request, Ticket $ticket, TicketDocumentService $documents)
     {
-        abort_unless($ticket->customer_id === $request->user()->id, 404);
+        abort_unless($ticket->contact_id === $request->user()->id, 404);
 
         $data = $request->validate([
             'document_type_id' => ['required', 'integer', 'exists:document_types,id'],
@@ -263,7 +263,7 @@ class ClientPortalController extends Controller
         $documentType = $documents->resolveAllowedDocumentType($ticket, (int) $data['document_type_id']);
         $documents->assertFileMatchesDocumentType($data['file'], $documentType);
 
-        $doc = $documents->storeForCustomer(
+        $doc = $documents->storeForContact(
             $ticket,
             $request->user(),
             (int) $data['document_type_id'],
@@ -279,16 +279,16 @@ class ClientPortalController extends Controller
         TicketDocument $document,
         TicketDocumentService $documents,
     ) {
-        abort_unless($ticket->customer_id === $request->user()->id, 404);
+        abort_unless($ticket->contact_id === $request->user()->id, 404);
 
-        $documents->deleteForCustomer($ticket, $document, $request->user());
+        $documents->deleteForContact($ticket, $document, $request->user());
 
         return response()->json(['message' => 'Document removed.']);
     }
 
     public function comment(Request $request, Ticket $ticket, TicketCommentService $comments, PartnerNotificationService $notifications)
     {
-        abort_unless($ticket->customer_id === $request->user()->id, 404);
+        abort_unless($ticket->contact_id === $request->user()->id, 404);
 
         $data = $request->validate([
             'body' => ['nullable', 'string', 'max:5000'],
@@ -315,7 +315,7 @@ class ClientPortalController extends Controller
         TicketComment $comment,
         TicketCommentService $comments,
     ): StreamedResponse {
-        abort_unless($ticket->customer_id === $request->user()->id, 404);
+        abort_unless($ticket->contact_id === $request->user()->id, 404);
         abort_unless((int) $comment->ticket_id === (int) $ticket->id, 404);
         abort_unless($comment->is_public, 404);
         abort_unless($comments->attachmentExists($comment), 404);
@@ -330,9 +330,9 @@ class ClientPortalController extends Controller
 
     public function completeCompanyProfile(Request $request, CompanyMembershipService $membership)
     {
-        /** @var \App\Models\Customer $customer */
-        $customer = $request->user();
-        if ($customer->current_company_id && ! $customer->hasActiveCompanyMembership()) {
+        /** @var \App\Models\Contact $contact */
+        $contact = $request->user();
+        if ($contact->current_company_id && ! $contact->hasActiveCompanyMembership()) {
             return response()->json([
                 'message' => 'Your membership for this company is disabled. Contact an administrator.',
             ], 403);
@@ -351,11 +351,11 @@ class ClientPortalController extends Controller
         $createNew = (bool) ($data['create_new'] ?? false);
         unset($data['create_new']);
 
-        $fresh = ($createNew || ! $customer->current_company_id)
-            ? $membership->createCompanyForCustomer($customer, $data)
-            : $membership->updateOwnCompany($customer, $data);
+        $fresh = ($createNew || ! $contact->current_company_id)
+            ? $membership->createCompanyForContact($contact, $data)
+            : $membership->updateOwnCompany($contact, $data);
 
-        return response()->json(['data' => $membership->serializeCustomer($fresh)]);
+        return response()->json(['data' => $membership->serializeContact($fresh)]);
     }
 
     public function lookupCompany(Request $request, CompanyMembershipService $membership)
@@ -396,7 +396,7 @@ class ClientPortalController extends Controller
         );
 
         return response()->json([
-            'data' => $membership->serializeCustomer($request->user()->fresh()),
+            'data' => $membership->serializeContact($request->user()->fresh()),
             'request' => [
                 'public_id' => $change->public_id,
                 'type' => $change->type->value,
@@ -435,7 +435,7 @@ class ClientPortalController extends Controller
         $membership->cancelOwnRequest($request->user(), $record);
 
         return response()->json([
-            'data' => $membership->serializeCustomer($request->user()->fresh()),
+            'data' => $membership->serializeContact($request->user()->fresh()),
         ]);
     }
 
@@ -455,7 +455,7 @@ class ClientPortalController extends Controller
         $fresh = $membership->approve($record, $request->user(), $data['note'] ?? null);
 
         return response()->json([
-            'data' => $membership->serializeCustomer($request->user()->fresh()),
+            'data' => $membership->serializeContact($request->user()->fresh()),
             'request' => [
                 'public_id' => $fresh->public_id,
                 'status' => $fresh->status->value,
@@ -479,7 +479,7 @@ class ClientPortalController extends Controller
         $fresh = $membership->reject($record, $request->user(), $data['note'] ?? null);
 
         return response()->json([
-            'data' => $membership->serializeCustomer($request->user()->fresh()),
+            'data' => $membership->serializeContact($request->user()->fresh()),
             'request' => [
                 'public_id' => $fresh->public_id,
                 'status' => $fresh->status->value,
@@ -499,14 +499,14 @@ class ClientPortalController extends Controller
 
         $fresh = $membership->switchCompany($request->user(), $company);
 
-        return response()->json(['data' => $membership->serializeCustomer($fresh)]);
+        return response()->json(['data' => $membership->serializeContact($fresh)]);
     }
 
     public function requestDetachCompany(Request $request, CompanyMembershipService $membership)
     {
-        /** @var \App\Models\Customer $customer */
-        $customer = $request->user();
-        if (! $customer->hasActiveCompanyMembership()) {
+        /** @var \App\Models\Contact $contact */
+        $contact = $request->user();
+        if (! $contact->hasActiveCompanyMembership()) {
             return response()->json([
                 'message' => 'Your membership for this company is disabled. Contact an administrator.',
             ], 403);
@@ -516,10 +516,10 @@ class ClientPortalController extends Controller
             'note' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $fresh = $membership->leaveCompany($customer, $data['note'] ?? null);
+        $fresh = $membership->leaveCompany($contact, $data['note'] ?? null);
 
         return response()->json([
-            'data' => $membership->serializeCustomer($fresh),
+            'data' => $membership->serializeContact($fresh),
             'message' => 'You have left the company.',
         ]);
     }
@@ -533,29 +533,29 @@ class ClientPortalController extends Controller
 
     public function requestTransferOwnership(Request $request, CompanyMembershipService $membership)
     {
-        /** @var \App\Models\Customer $customer */
-        $customer = $request->user();
-        if (! $customer->hasActiveCompanyMembership()) {
+        /** @var \App\Models\Contact $contact */
+        $contact = $request->user();
+        if (! $contact->hasActiveCompanyMembership()) {
             return response()->json([
                 'message' => 'Your membership for this company is disabled. Contact an administrator.',
             ], 403);
         }
 
         $data = $request->validate([
-            'target_customer' => ['required', 'string', 'max:64'],
+            'target_contact' => ['required', 'string', 'max:64'],
             'letter' => ['required', 'file'],
             'note' => ['nullable', 'string', 'max:2000'],
         ]);
 
         $change = $membership->requestOwnershipTransfer(
-            $customer,
-            $data['target_customer'],
+            $contact,
+            $data['target_contact'],
             $request->file('letter'),
             $data['note'] ?? null,
         );
 
         return response()->json([
-            'data' => $membership->serializeCustomer($customer->fresh()),
+            'data' => $membership->serializeContact($contact->fresh()),
             'request' => [
                 'public_id' => $change->public_id,
                 'type' => $change->type->value,

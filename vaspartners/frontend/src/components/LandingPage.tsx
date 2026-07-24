@@ -10,12 +10,12 @@ import { LandingFaqSection } from "@/components/FaqList";
 import { LandingGallerySection } from "@/components/LandingGallerySection";
 import { LandingServicesSection } from "@/components/LandingServicesSection";
 import { faydaLoginUrl } from "@/lib/api";
-import { useCustomer, useLogout } from "@/hooks/use-customer";
+import { useContact, useLogout } from "@/hooks/use-contact";
 
 function LandingInner() {
   const params = useSearchParams();
   const authError = params.get("error");
-  const { data: me = null } = useCustomer();
+  const { data: me = null } = useContact();
   const logout = useLogout();
 
   return (

@@ -12,7 +12,7 @@ class ViewSubscription extends ViewRecord
 
     protected function resolveRecord(int|string $key): \Illuminate\Database\Eloquent\Model
     {
-        return parent::resolveRecord($key)->loadMissing(['service', 'company', 'customer']);
+        return parent::resolveRecord($key)->loadMissing(['service', 'company', 'contact']);
     }
 
     public function getTitle(): string|Htmlable

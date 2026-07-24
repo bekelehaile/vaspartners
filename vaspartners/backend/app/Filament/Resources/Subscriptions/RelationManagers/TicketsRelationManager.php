@@ -34,7 +34,7 @@ class TicketsRelationManager extends RelationManager
     {
         return $table
             ->description('Requests linked to this subscription (activation, renewals, upgrades, and other manage flows). Open a ticket for messaging and document review.')
-            ->modifyQueryUsing(fn ($query) => $query->with(['service', 'requisition', 'customer']))
+            ->modifyQueryUsing(fn ($query) => $query->with(['service', 'requisition', 'contact']))
             ->columns([
                 TextColumn::make('tt_number')->label('Request number')->searchable()->sortable(),
                 TextColumn::make('requisition.name')->label('Type')->toggleable(),
@@ -50,7 +50,7 @@ class TicketsRelationManager extends RelationManager
                         TicketStatus::Open => 'warning',
                         default => 'gray',
                     }),
-                TextColumn::make('customer.name')->label('Partner')->toggleable(),
+                TextColumn::make('contact.name')->label('Partner')->toggleable(),
                 TextColumn::make('created_at')->dateTime()->sortable(),
             ])
             ->filters([

@@ -6,7 +6,7 @@ use App\Enums\ApprovalAction;
 use App\Enums\DocumentReviewStatus;
 use App\Enums\TicketStatus;
 use App\Filament\Resources\Companies\CompanyResource;
-use App\Filament\Resources\Customers\CustomerResource;
+use App\Filament\Resources\Contacts\ContactResource;
 use App\Filament\Resources\Subscriptions\SubscriptionResource;
 use App\Filament\Resources\Tickets\Pages\ListTickets;
 use App\Filament\Resources\Tickets\Pages\ViewTicket;
@@ -112,23 +112,23 @@ class TicketResource extends Resource
             ])->columns(2),
 
             Section::make('Partner & company')->schema([
-                TextEntry::make('customer.name')
-                    ->label('Customer')
+                TextEntry::make('contact.name')
+                    ->label('Contact')
                     ->placeholder('—')
-                    ->url(fn (Ticket $record): ?string => $record->customer
-                        ? CustomerResource::getUrl('view', ['record' => $record->customer])
+                    ->url(fn (Ticket $record): ?string => $record->contact
+                        ? ContactResource::getUrl('view', ['record' => $record->contact])
                         : null),
-                TextEntry::make('customer.phone_number')->label('Phone')->placeholder('—'),
+                TextEntry::make('contact.phone_number')->label('Phone')->placeholder('—'),
                 TextEntry::make('company_name')
                     ->label('Company')
                     ->placeholder('—')
                     ->state(function (Ticket $record): ?string {
                         return $record->subscription?->company?->name
-                            ?? $record->customer?->company?->name
-                            ?? $record->customer?->company_name;
+                            ?? $record->contact?->company?->name
+                            ?? $record->contact?->company_name;
                     })
                     ->url(function (Ticket $record): ?string {
-                        $company = $record->subscription?->company ?? $record->customer?->company;
+                        $company = $record->subscription?->company ?? $record->contact?->company;
 
                         return $company ? CompanyResource::getUrl('view', ['record' => $company]) : null;
                     }),
@@ -136,8 +136,8 @@ class TicketResource extends Resource
                     ->label('TIN')
                     ->placeholder('—')
                     ->state(fn (Ticket $record): ?string => $record->subscription?->company?->tin
-                        ?? $record->customer?->company?->tin
-                        ?? $record->customer?->company_tin),
+                        ?? $record->contact?->company?->tin
+                        ?? $record->contact?->company_tin),
             ])->columns(2),
 
             Section::make('Assignment & timeline')->schema([
@@ -186,8 +186,8 @@ class TicketResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('tt_number')->label('Request number')->searchable()->sortable(),
-                TextColumn::make('customer.name')->label('Customer')->toggleable(),
-                TextColumn::make('customer.phone_number')->label('Phone')->toggleable(),
+                TextColumn::make('contact.name')->label('Contact')->toggleable(),
+                TextColumn::make('contact.phone_number')->label('Phone')->toggleable(),
                 TextColumn::make('service.name')->sortable(),
                 TextColumn::make('requisition.name')->label('Type')->toggleable(),
                 TextColumn::make('status')->badge(),

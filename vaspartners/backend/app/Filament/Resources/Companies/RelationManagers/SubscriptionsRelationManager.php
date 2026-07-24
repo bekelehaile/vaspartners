@@ -25,7 +25,7 @@ class SubscriptionsRelationManager extends RelationManager
     {
         return $table
             ->description('Subscriptions belong to this company and stay with it when ownership transfers.')
-            ->modifyQueryUsing(fn ($query) => $query->with(['service', 'customer']))
+            ->modifyQueryUsing(fn ($query) => $query->with(['service', 'contact']))
             ->columns([
                 TextColumn::make('service.name')->label('Service')->searchable()->wrap(),
                 TextColumn::make('status')
@@ -33,7 +33,7 @@ class SubscriptionsRelationManager extends RelationManager
                     ->formatStateUsing(fn ($state) => $state instanceof SubscriptionStatus
                         ? $state->value
                         : (string) $state),
-                TextColumn::make('customer.name')->label('Activated by')->toggleable(),
+                TextColumn::make('contact.name')->label('Activated by')->toggleable(),
                 TextColumn::make('current_period_end')->dateTime()->sortable()->toggleable(),
                 TextColumn::make('next_renewal_due_at')->dateTime()->toggleable(),
             ])

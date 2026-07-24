@@ -7,7 +7,7 @@ use App\Enums\CompanyChangeType;
 use App\Filament\Resources\Companies\CompanyResource;
 use App\Filament\Resources\CompanyChangeRequests\Pages\ListCompanyChangeRequests;
 use App\Filament\Resources\CompanyChangeRequests\Pages\ViewCompanyChangeRequest;
-use App\Filament\Resources\Customers\CustomerResource;
+use App\Filament\Resources\Contacts\ContactResource;
 use App\Models\CompanyChangeRequest;
 use App\Services\CompanyMembershipService;
 use Filament\Actions\Action;
@@ -81,30 +81,30 @@ class CompanyChangeRequestResource extends Resource
                     default => 'gray',
                 }),
                 TextEntry::make('created_at')->dateTime(),
-                TextEntry::make('customer_note')->label('Partner note')->columnSpanFull()->placeholder('—'),
+                TextEntry::make('contact_note')->label('Partner note')->columnSpanFull()->placeholder('—'),
             ])->columns(2),
             Section::make('Partner')->schema([
-                TextEntry::make('customer.name')
+                TextEntry::make('contact.name')
                     ->label(fn (CompanyChangeRequest $record): string => $record->type === CompanyChangeType::TransferOwnership
                         ? 'Current owner'
                         : 'Partner')
-                    ->url(fn (CompanyChangeRequest $record): ?string => $record->customer
-                        ? CustomerResource::getUrl('view', ['record' => $record->customer])
+                    ->url(fn (CompanyChangeRequest $record): ?string => $record->contact
+                        ? ContactResource::getUrl('view', ['record' => $record->contact])
                         : null),
-                TextEntry::make('customer.phone_number'),
-                TextEntry::make('customer.email'),
-                TextEntry::make('customer.identification_number')->label('ID number'),
+                TextEntry::make('contact.phone_number'),
+                TextEntry::make('contact.email'),
+                TextEntry::make('contact.identification_number')->label('ID number'),
             ])->columns(2),
             Section::make('Proposed new owner')
                 ->visible(fn (CompanyChangeRequest $record): bool => $record->type === CompanyChangeType::TransferOwnership)
                 ->schema([
-                    TextEntry::make('targetCustomer.name')
+                    TextEntry::make('targetContact.name')
                         ->label('New owner')
-                        ->url(fn (CompanyChangeRequest $record): ?string => $record->targetCustomer
-                            ? CustomerResource::getUrl('view', ['record' => $record->targetCustomer])
+                        ->url(fn (CompanyChangeRequest $record): ?string => $record->targetContact
+                            ? ContactResource::getUrl('view', ['record' => $record->targetContact])
                             : null),
-                    TextEntry::make('targetCustomer.phone_number')->label('Phone'),
-                    TextEntry::make('targetCustomer.email')->label('Email'),
+                    TextEntry::make('targetContact.phone_number')->label('Phone'),
+                    TextEntry::make('targetContact.email')->label('Email'),
                 ])->columns(2),
             Section::make('Company')->schema([
                 TextEntry::make('company.name')
@@ -131,7 +131,7 @@ class CompanyChangeRequestResource extends Resource
             Section::make('Decision audit')->schema([
                 TextEntry::make('decided_by')
                     ->label('Decided by')
-                    ->state(fn (CompanyChangeRequest $record): string => $record->loadMissing(['reviewer', 'customerReviewer'])->decidedByLabel())
+                    ->state(fn (CompanyChangeRequest $record): string => $record->loadMissing(['reviewer', 'contactReviewer'])->decidedByLabel())
                     ->placeholder('Pending'),
                 TextEntry::make('reviewed_at')->label('Decided at')->dateTime()->placeholder('Pending'),
                 TextEntry::make('admin_note')->label('Decision note')->columnSpanFull()->placeholder('—'),
@@ -178,18 +178,18 @@ class CompanyChangeRequestResource extends Resource
                     'rejected' => 'danger',
                     default => 'gray',
                 }),
-                TextColumn::make('customer.name')
+                TextColumn::make('contact.name')
                     ->label('Requester')
                     ->searchable()
-                    ->url(fn (CompanyChangeRequest $record): ?string => $record->customer
-                        ? CustomerResource::getUrl('view', ['record' => $record->customer])
+                    ->url(fn (CompanyChangeRequest $record): ?string => $record->contact
+                        ? ContactResource::getUrl('view', ['record' => $record->contact])
                         : null),
-                TextColumn::make('targetCustomer.name')
+                TextColumn::make('targetContact.name')
                     ->label('New owner')
                     ->placeholder('—')
                     ->toggleable()
-                    ->url(fn (CompanyChangeRequest $record): ?string => $record->targetCustomer
-                        ? CustomerResource::getUrl('view', ['record' => $record->targetCustomer])
+                    ->url(fn (CompanyChangeRequest $record): ?string => $record->targetContact
+                        ? ContactResource::getUrl('view', ['record' => $record->targetContact])
                         : null),
                 TextColumn::make('decided_by_role')
                     ->label('Decided by role')
@@ -202,7 +202,7 @@ class CompanyChangeRequestResource extends Resource
                             };
                         }
 
-                        return $record->loadMissing(['reviewer', 'customerReviewer'])->decidedByLabel() ?: '—';
+                        return $record->loadMissing(['reviewer', 'contactReviewer'])->decidedByLabel() ?: '—';
                     })
                     ->toggleable(),
                 TextColumn::make('company.name')
@@ -215,7 +215,7 @@ class CompanyChangeRequestResource extends Resource
                 TextColumn::make('company.license_number')->label('License')->toggleable(),
                 TextColumn::make('decided_by')
                     ->label('Decided by')
-                    ->state(fn (CompanyChangeRequest $record): string => $record->loadMissing(['reviewer', 'customerReviewer'])->decidedByLabel())
+                    ->state(fn (CompanyChangeRequest $record): string => $record->loadMissing(['reviewer', 'contactReviewer'])->decidedByLabel())
                     ->placeholder('—')
                     ->toggleable(),
                 TextColumn::make('reviewed_at')->label('Decided at')->dateTime()->placeholder('—')->toggleable(),

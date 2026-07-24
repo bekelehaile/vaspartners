@@ -6,7 +6,7 @@ import {
   useCompanyRequestsInbox,
   useDecideMembershipRequest,
   type CompanyRequestCard,
-} from "@/hooks/use-customer";
+} from "@/hooks/use-contact";
 
 function typeLabel(type: string): string {
   switch (type) {
@@ -80,13 +80,13 @@ function RequestCard({
           {row.applicant.phone_number ? ` · ${row.applicant.phone_number}` : ""}
         </p>
       )}
-      {row.target_customer?.name && (
+      {row.target_contact?.name && (
         <p className="muted" style={{ margin: "0 0 0.35rem" }}>
-          New owner: {row.target_customer.name}
+          New owner: {row.target_contact.name}
         </p>
       )}
       {wait && <p className="muted">{wait}</p>}
-      {row.customer_note && <p className="muted">Note: {row.customer_note}</p>}
+      {row.contact_note && <p className="muted">Note: {row.contact_note}</p>}
       {row.decision_note && (
         <p className="muted">Decision note: {row.decision_note}</p>
       )}

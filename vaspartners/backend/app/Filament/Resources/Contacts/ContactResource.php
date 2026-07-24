@@ -1,14 +1,14 @@
 <?php
 
-namespace App\Filament\Resources\Customers;
+namespace App\Filament\Resources\Contacts;
 
 use App\Filament\Resources\Companies\CompanyResource;
-use App\Filament\Resources\Customers\Pages\ListCustomers;
-use App\Filament\Resources\Customers\Pages\ViewCustomer;
-use App\Filament\Resources\Customers\RelationManagers\ServicesRelationManager;
-use App\Filament\Resources\Customers\RelationManagers\SubscriptionsRelationManager;
-use App\Filament\Resources\Customers\RelationManagers\TicketsRelationManager;
-use App\Models\Customer;
+use App\Filament\Resources\Contacts\Pages\ListContacts;
+use App\Filament\Resources\Contacts\Pages\ViewContact;
+use App\Filament\Resources\Contacts\RelationManagers\ServicesRelationManager;
+use App\Filament\Resources\Contacts\RelationManagers\SubscriptionsRelationManager;
+use App\Filament\Resources\Contacts\RelationManagers\TicketsRelationManager;
+use App\Models\Contact;
 use Filament\Actions\ViewAction;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
@@ -19,9 +19,9 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
 
-class CustomerResource extends Resource
+class ContactResource extends Resource
 {
-    protected static ?string $model = Customer::class;
+    protected static ?string $model = Contact::class;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-user-circle';
 
@@ -30,6 +30,12 @@ class CustomerResource extends Resource
     protected static ?string $recordTitleAttribute = 'name';
 
     protected static ?int $navigationSort = 1;
+
+    protected static ?string $modelLabel = 'Contact';
+
+    protected static ?string $navigationLabel = 'Contacts';
+
+    protected static ?string $pluralModelLabel = 'Contacts';
 
     public static function form(Schema $schema): Schema
     {
@@ -62,7 +68,7 @@ class CustomerResource extends Resource
                 TextEntry::make('company.name')
                     ->label('Company')
                     ->placeholder('—')
-                    ->url(fn (Customer $record): ?string => $record->company
+                    ->url(fn (Contact $record): ?string => $record->company
                         ? CompanyResource::getUrl('view', ['record' => $record->company])
                         : null),
                 TextEntry::make('company.tin')->label('TIN')->placeholder('—'),
@@ -87,7 +93,7 @@ class CustomerResource extends Resource
             ->columns([
                 TextColumn::make('name')->searchable()->sortable(),
                 TextColumn::make('company.name')->label('Company')->searchable()->placeholder('—')
-                    ->url(fn (Customer $record): ?string => $record->company
+                    ->url(fn (Contact $record): ?string => $record->company
                         ? CompanyResource::getUrl('view', ['record' => $record->company])
                         : null),
                 TextColumn::make('phone_number')->searchable(),
@@ -114,8 +120,8 @@ class CustomerResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => ListCustomers::route('/'),
-            'view' => ViewCustomer::route('/{record}'),
+            'index' => ListContacts::route('/'),
+            'view' => ViewContact::route('/{record}'),
         ];
     }
 

@@ -4,7 +4,7 @@ namespace App\Filament\Resources\Subscriptions;
 
 use App\Enums\SubscriptionStatus;
 use App\Filament\Resources\Companies\CompanyResource;
-use App\Filament\Resources\Customers\CustomerResource;
+use App\Filament\Resources\Contacts\ContactResource;
 use App\Filament\Resources\Subscriptions\Pages\ListSubscriptions;
 use App\Filament\Resources\Subscriptions\Pages\ViewSubscription;
 use App\Filament\Resources\Subscriptions\RelationManagers\DocumentsRelationManager;
@@ -86,13 +86,13 @@ class SubscriptionResource extends Resource
                         ? CompanyResource::getUrl('view', ['record' => $record->company])
                         : null),
                 TextEntry::make('company.tin')->label('TIN')->placeholder('—'),
-                TextEntry::make('customer.name')
+                TextEntry::make('contact.name')
                     ->label('Activated by')
                     ->placeholder('—')
-                    ->url(fn (Subscription $record): ?string => $record->customer
-                        ? CustomerResource::getUrl('view', ['record' => $record->customer])
+                    ->url(fn (Subscription $record): ?string => $record->contact
+                        ? ContactResource::getUrl('view', ['record' => $record->contact])
                         : null),
-                TextEntry::make('customer.phone_number')->label('Phone')->placeholder('—'),
+                TextEntry::make('contact.phone_number')->label('Phone')->placeholder('—'),
             ])->columns(2),
             Section::make('Linked tickets')->schema([
                 TextEntry::make('activatedByTicket.tt_number')
@@ -120,7 +120,7 @@ class SubscriptionResource extends Resource
             TextColumn::make('company.name')->label('Company')->searchable()->placeholder('—'),
             TextColumn::make('service.name')->sortable(),
             TextColumn::make('status')->badge(),
-            TextColumn::make('customer.name')->label('Activated by')->searchable()->toggleable(),
+            TextColumn::make('contact.name')->label('Activated by')->searchable()->toggleable(),
             TextColumn::make('renewal_interval')->badge(),
             TextColumn::make('current_period_end')->dateTime()->sortable()->toggleable(),
             TextColumn::make('next_renewal_due_at')->dateTime()->toggleable(),

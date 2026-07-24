@@ -35,7 +35,7 @@ class MigrateMvasDumpCommand extends Command
         {--skip-attachments : Skip attachment copy}
         {--skip-approvers : Skip final-approver import}
         {--skip-subscriptions : Skip subscription derivation}
-        {--link-memberships : Link customers as owners during seed (default off)}
+        {--link-memberships : Link contacts as owners during seed (default off)}
         {--dry-run : Report without writing}';
 
     protected $description = 'Clear (optional) + seed + enrich MVAS dump into VAS Partners format';
@@ -77,9 +77,9 @@ class MigrateMvasDumpCommand extends Command
                 'clear_attachment_files' => true,
             ]);
             $this->line(sprintf(
-                '  companies=%d customers=%d tickets=%d subs=%d docs=%d approvers=%d',
+                '  companies=%d contacts=%d tickets=%d subs=%d docs=%d approvers=%d',
                 $clearStats['companies'],
-                $clearStats['customers'],
+                $clearStats['contacts'],
                 $clearStats['tickets'],
                 $clearStats['subscriptions'],
                 $clearStats['ticket_documents'],
@@ -97,7 +97,7 @@ class MigrateMvasDumpCommand extends Command
         $ticketLimit = $this->option('ticket-limit');
         $attachmentLimit = $this->option('attachment-limit');
 
-        $this->info($dryRun ? '[2/3] Seed (dry-run)' : '[2/3] Seed companies / customers / tickets');
+        $this->info($dryRun ? '[2/3] Seed (dry-run)' : '[2/3] Seed companies / contacts / tickets');
         $stats = $migration->migrate([
             'dump' => $dump,
             'company_limit' => $companyLimit !== null && $companyLimit !== '' ? (int) $companyLimit : null,
@@ -126,7 +126,7 @@ class MigrateMvasDumpCommand extends Command
             ['Entity', 'Imported', 'Skipped', 'Notes'],
             [
                 ['companies', $stats['companies']['imported'], $stats['companies']['skipped'], 'selected '.$stats['companies']['selected']],
-                ['customers', $stats['customers']['imported'], $stats['customers']['skipped'], ''],
+                ['contacts', $stats['contacts']['imported'], $stats['contacts']['skipped'], ''],
                 ['tickets', $stats['tickets']['imported'], $stats['tickets']['skipped'], 'orphaned '.$stats['tickets']['orphaned']],
                 ['subscriptions', $enrichStats['subscriptions']['imported'], $enrichStats['subscriptions']['skipped'], 'linked '.$enrichStats['subscriptions']['linked_tickets']],
                 ['approvers', $enrichStats['approvers']['imported'], $enrichStats['approvers']['skipped'], ''],

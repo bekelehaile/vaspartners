@@ -123,7 +123,7 @@ class DocumentsRelationManager extends RelationManager
             ->emptyStateDescription(
                 $status['state'] === 'incomplete'
                     ? 'Missing: '.implode(', ', $status['missing_names'])
-                    : 'When the customer uploads files, they will appear here for open/download only.'
+                    : 'When the contact uploads files, they will appear here for open/download only.'
             )
             ->paginated(false);
     }

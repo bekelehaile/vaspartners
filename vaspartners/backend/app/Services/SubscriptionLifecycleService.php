@@ -5,7 +5,7 @@ namespace App\Services;
 use App\Enums\RenewalInterval;
 use App\Enums\SubscriptionStatus;
 use App\Enums\TicketStatus;
-use App\Models\Customer;
+use App\Models\Contact;
 use App\Models\Requisition;
 use App\Models\Service;
 use App\Models\Subscription;
@@ -28,10 +28,10 @@ class SubscriptionLifecycleService
         protected CompanyMembershipService $membership,
     ) {}
 
-    public function assertTicketAllowed(Customer $customer, array $data, Requisition $requisition, Service $service): void
+    public function assertTicketAllowed(Contact $contact, array $data, Requisition $requisition, Service $service): void
     {
-        $this->membership->assertCanAccessCompany($customer);
-        $companyId = (int) $customer->company_id;
+        $this->membership->assertCanAccessCompany($contact);
+        $companyId = (int) $contact->company_id;
 
         if ($requisition->requires_active_subscription || $requisition->renews_subscription || $requisition->terminates_subscription) {
             // Non-subscription services are managed without an alive subscription.
@@ -53,7 +53,7 @@ class SubscriptionLifecycleService
                 TicketStatus::Open->value,
                 TicketStatus::InProgress->value,
             ])
-            ->whereHas('customer.memberships', fn ($q) => $q->where('company_id', $companyId))
+            ->whereHas('contact.memberships', fn ($q) => $q->where('company_id', $companyId))
             ->latest('id')
             ->first(['id', 'tt_number', 'public_id', 'status']);
 
@@ -86,7 +86,7 @@ class SubscriptionLifecycleService
 
     public function applyFromTicket(Ticket $ticket): void
     {
-        $ticket->loadMissing(['requisition', 'service', 'subscription', 'customer']);
+        $ticket->loadMissing(['requisition', 'service', 'subscription', 'contact']);
         $requisition = $ticket->requisition;
         $service = $ticket->service;
 
@@ -114,8 +114,8 @@ class SubscriptionLifecycleService
                 return $ticket->subscription()->firstOrFail();
             }
 
-            $ticket->loadMissing('customer');
-            $companyId = (int) ($ticket->customer?->company_id ?? 0);
+            $ticket->loadMissing('contact');
+            $companyId = (int) ($ticket->contact?->company_id ?? 0);
             if ($companyId < 1) {
                 throw ValidationException::withMessages([
                     'company' => 'Cannot activate a subscription without a company.',
@@ -144,7 +144,7 @@ class SubscriptionLifecycleService
             $end = $start->copy()->addMonthsNoOverflow($interval->months());
 
             $subscription = Subscription::query()->create([
-                'customer_id' => $ticket->customer_id,
+                'contact_id' => $ticket->contact_id,
                 'company_id' => $companyId,
                 'service_id' => $ticket->service_id,
                 'status' => SubscriptionStatus::Active,
@@ -217,7 +217,7 @@ class SubscriptionLifecycleService
         $created = 0;
 
         Subscription::query()
-            ->with(['service.renewalRequisition', 'customer', 'company'])
+            ->with(['service.renewalRequisition', 'contact', 'company'])
             ->whereIn('status', [SubscriptionStatus::Active->value, SubscriptionStatus::PendingRenewal->value])
             ->whereNotNull('next_renewal_due_at')
             ->where('next_renewal_due_at', '<=', now())
@@ -246,8 +246,8 @@ class SubscriptionLifecycleService
                         continue;
                     }
 
-                    $actor = $subscription->company?->ownerCustomer()
-                        ?? $subscription->customer;
+                    $actor = $subscription->company?->ownerContact()
+                        ?? $subscription->contact;
                     if (! $actor) {
                         continue;
                     }
@@ -289,9 +289,9 @@ class SubscriptionLifecycleService
     }
 
     /** @deprecated Use companyHasAliveSubscription */
-    public function customerHasAliveSubscription(int $customerId, int $serviceId): bool
+    public function contactHasAliveSubscription(int $contactId, int $serviceId): bool
     {
-        $companyId = (int) Customer::query()->where('id', $customerId)->value('company_id');
+        $companyId = (int) Contact::query()->where('id', $contactId)->value('company_id');
         if ($companyId < 1) {
             return false;
         }

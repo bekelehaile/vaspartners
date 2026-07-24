@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { AuthWait } from "@/components/AuthWait";
 import { api, setToken } from "@/lib/api";
-import type { Customer } from "@/lib/api";
+import type { Contact } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 
 export default function AuthCallbackInner() {
@@ -27,9 +27,9 @@ export default function AuthCallbackInner() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await api<{ data: Customer }>("/auth/me");
+        const res = await api<{ data: Contact }>("/auth/me");
         if (cancelled) return;
-        queryClient.setQueryData(queryKeys.customer.me, res.data);
+        queryClient.setQueryData(queryKeys.contact.me, res.data);
         const next = res.data.profile_completed ? "/portal" : "/portal/company";
         router.replace(next);
       } catch {

@@ -67,7 +67,7 @@ class MessagesRelationManager extends RelationManager
     {
         /** @var Ticket $ticket */
         $ticket = $this->getOwnerRecord();
-        $locked = $ticket->status->locksCustomerChat();
+        $locked = $ticket->status->locksContactChat();
 
         return $table
             ->description($locked

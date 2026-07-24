@@ -7,7 +7,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 
 /**
- * In-app notification for Fayda partner portal customers.
+ * In-app notification for Fayda partner portal contacts.
  */
 class PartnerPortalNotification extends Notification implements ShouldQueue
 {

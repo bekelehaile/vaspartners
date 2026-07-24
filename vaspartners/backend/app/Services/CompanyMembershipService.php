@@ -9,7 +9,7 @@ use App\Enums\CompanyRole;
 use App\Models\Company;
 use App\Models\CompanyChangeRequest;
 use App\Models\CompanyMembership;
-use App\Models\Customer;
+use App\Models\Contact;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -34,9 +34,9 @@ class CompanyMembershipService
      *
      * @param  array{company_name: string, company_tin: string, company_license_number: string, company_phone: string, company_email: string, company_address: string}  $data
      */
-    public function createCompanyForCustomer(Customer $customer, array $data): Customer
+    public function createCompanyForContact(Contact $contact, array $data): Contact
     {
-        if ($this->pendingRequestFor($customer)) {
+        if ($this->pendingRequestFor($contact)) {
             throw ValidationException::withMessages([
                 'company' => 'You already have a pending company request. Wait for a decision.',
             ]);
@@ -46,7 +46,7 @@ class CompanyMembershipService
         $license = $this->normalizeCode($data['company_license_number']);
         $this->assertUniqueIdentity($tin, $license);
 
-        return DB::transaction(function () use ($customer, $data, $tin, $license) {
+        return DB::transaction(function () use ($contact, $data, $tin, $license) {
             $company = Company::query()->create([
                 'name' => trim($data['company_name']),
                 'tin' => $tin,
@@ -56,11 +56,11 @@ class CompanyMembershipService
                 'address' => trim($data['company_address']),
                 'is_active' => false,
                 'approval_status' => CompanyApprovalStatus::Pending,
-                'created_by_customer_id' => $customer->id,
+                'created_by_contact_id' => $contact->id,
             ]);
 
-            $this->linkCustomer($customer, $company, CompanyRole::Owner, switchTo: true);
-            $fresh = $customer->fresh(['company', 'memberships.company']);
+            $this->linkContact($contact, $company, CompanyRole::Owner, switchTo: true);
+            $fresh = $contact->fresh(['company', 'memberships.company']);
             $this->notifications->companyProfileSubmitted($fresh);
 
             return $fresh;
@@ -73,24 +73,24 @@ class CompanyMembershipService
      *
      * @param  array{company_name: string, company_tin: string, company_license_number: string, company_phone: string, company_email: string, company_address: string}  $data
      */
-    public function updateOwnCompany(Customer $customer, array $data): Customer
+    public function updateOwnCompany(Contact $contact, array $data): Contact
     {
-        if (! $customer->current_company_id) {
-            return $this->createCompanyForCustomer($customer, $data);
+        if (! $contact->current_company_id) {
+            return $this->createCompanyForContact($contact, $data);
         }
 
-        $company = $customer->company;
+        $company = $contact->company;
         if (! $company) {
             throw ValidationException::withMessages(['company' => 'Company not found.']);
         }
 
-        if ($this->roleOf($customer) !== CompanyRole::Owner) {
+        if ($this->roleOf($contact) !== CompanyRole::Owner) {
             throw ValidationException::withMessages([
                 'company' => 'Only the company owner can update organisation details.',
             ]);
         }
 
-        if (! $customer->hasActiveCompanyMembership()) {
+        if (! $contact->hasActiveCompanyMembership()) {
             throw ValidationException::withMessages([
                 'company' => 'Your membership for this company is disabled. Contact an administrator.',
             ]);
@@ -106,7 +106,7 @@ class CompanyMembershipService
         $license = $this->normalizeCode($data['company_license_number']);
         $this->assertUniqueIdentity($tin, $license, $company->id);
 
-        return DB::transaction(function () use ($customer, $company, $data, $tin, $license) {
+        return DB::transaction(function () use ($contact, $company, $data, $tin, $license) {
             $company->fill([
                 'name' => trim($data['company_name']),
                 'tin' => $tin,
@@ -123,7 +123,7 @@ class CompanyMembershipService
 
             $this->syncAllMembersDenormalizedFields($company);
 
-            $fresh = $customer->fresh(['company', 'memberships.company']);
+            $fresh = $contact->fresh(['company', 'memberships.company']);
             $this->notifications->companyProfileSubmitted($fresh);
 
             return $fresh;
@@ -170,7 +170,7 @@ class CompanyMembershipService
         ])->save();
 
         $fresh = $company->fresh(['memberships', 'approvedBy']);
-        $owner = $fresh->ownerCustomer();
+        $owner = $fresh->ownerContact();
         if ($owner) {
             $this->notifications->companyProfileDecided($fresh, $owner, approved: true);
         }
@@ -195,7 +195,7 @@ class CompanyMembershipService
         ])->save();
 
         $fresh = $company->fresh(['memberships', 'approvedBy']);
-        $owner = $fresh->ownerCustomer();
+        $owner = $fresh->ownerContact();
         if ($owner) {
             $this->notifications->companyProfileDecided($fresh, $owner, approved: false);
         }
@@ -231,12 +231,12 @@ class CompanyMembershipService
     }
 
     public function requestAttach(
-        Customer $customer,
+        Contact $contact,
         string $tin,
         string $licenseNumber,
         ?string $note = null,
     ): CompanyChangeRequest {
-        if ($this->pendingRequestFor($customer)) {
+        if ($this->pendingRequestFor($contact)) {
             throw ValidationException::withMessages([
                 'company_tin' => 'You already have a pending company request.',
             ]);
@@ -249,7 +249,7 @@ class CompanyMembershipService
             ]);
         }
 
-        if ($this->membershipFor($customer, $company)) {
+        if ($this->membershipFor($contact, $company)) {
             throw ValidationException::withMessages([
                 'company_tin' => 'You are already a member of this company. Switch to it in the portal.',
             ]);
@@ -262,82 +262,82 @@ class CompanyMembershipService
         }
 
         $request = CompanyChangeRequest::query()->create([
-            'customer_id' => $customer->id,
+            'contact_id' => $contact->id,
             'company_id' => $company->id,
             'type' => CompanyChangeType::Attach,
             'status' => CompanyChangeStatus::Pending,
-            'customer_note' => filled($note) ? trim($note) : null,
+            'contact_note' => filled($note) ? trim($note) : null,
         ]);
 
         $this->notifications->companyChangeRequested($request);
 
-        return $request->load(['company', 'customer']);
+        return $request->load(['company', 'contact']);
     }
 
     /**
      * Personal leave: partner detaches themselves from the current company immediately.
      * No admin approval or PDFs. Joining still requires company-owner approval.
      */
-    public function leaveCompany(Customer $customer, ?string $note = null): Customer
+    public function leaveCompany(Contact $contact, ?string $note = null): Contact
     {
-        if (! $customer->current_company_id) {
+        if (! $contact->current_company_id) {
             throw ValidationException::withMessages([
                 'company' => 'Select a company context before leaving.',
             ]);
         }
 
-        if (! $customer->hasActiveCompanyMembership()) {
+        if (! $contact->hasActiveCompanyMembership()) {
             throw ValidationException::withMessages([
                 'company' => 'Your membership for this company is disabled. Contact an administrator.',
             ]);
         }
 
-        if ($this->pendingRequestFor($customer)) {
+        if ($this->pendingRequestFor($contact)) {
             throw ValidationException::withMessages([
                 'company' => 'You have a pending membership request. Wait for a decision or cancel it first.',
             ]);
         }
 
-        $this->assertOwnerMayLeave($customer);
+        $this->assertOwnerMayLeave($contact);
 
-        $company = $customer->company;
+        $company = $contact->company;
         if (! $company) {
             throw ValidationException::withMessages(['company' => 'Company not found.']);
         }
 
-        $owner = $company->ownerCustomer();
+        $owner = $company->ownerContact();
         $companyId = $company->id;
 
-        return DB::transaction(function () use ($customer, $company, $companyId, $owner, $note) {
+        return DB::transaction(function () use ($contact, $company, $companyId, $owner, $note) {
             CompanyChangeRequest::query()->create([
-                'customer_id' => $customer->id,
+                'contact_id' => $contact->id,
                 'company_id' => $companyId,
                 'type' => CompanyChangeType::Detach,
                 'status' => CompanyChangeStatus::Approved,
-                'customer_note' => filled($note) ? trim($note) : null,
+                'contact_note' => filled($note) ? trim($note) : null,
                 'admin_note' => 'Personal leave — no admin approval required.',
-                'reviewed_by_customer_id' => $customer->id,
+                'reviewed_by_contact_id' => $contact->id,
                 'reviewed_at' => now(),
             ]);
 
-            $this->unlinkCustomer($customer, $company);
+            $this->unlinkContact($contact, $company);
 
-            if ($owner && (int) $owner->id !== (int) $customer->id) {
-                DB::afterCommit(function () use ($company, $owner, $customer, $note) {
+            if ($owner && (int) $owner->id !== (int) $contact->id) {
+                DB::afterCommit(function () use ($company, $owner, $contact, $note) {
                     $this->notifications->memberLeftCompany(
                         $company->fresh(),
                         $owner->fresh(),
-                        $customer->fresh(),
+                        $contact->fresh(),
                         $note,
                     );
                 });
             }
 
-            return $customer->fresh(['company', 'memberships.company']);
+            return $contact->fresh(['company', 'memberships.company']);
         });
     }
 
-    public function approve(CompanyChangeRequest $request, User|Customer $actor, ?string $adminNote = null): CompanyChangeRequest
+    public function approve(CompanyChangeRequest $request, User|Contact $actor, ?string $adminNote = null): CompanyChangeRequest
     {
         if ($request->status !== CompanyChangeStatus::Pending) {
             throw ValidationException::withMessages(['status' => 'This request was already decided.']);
@@ -365,7 +365,7 @@ class CompanyMembershipService
             ]);
         }
 
-        if ($actor instanceof Customer) {
+        if ($actor instanceof Contact) {
             $this->assertOwnerMayReview($actor, $request);
             if ($request->type !== CompanyChangeType::Attach) {
                 throw ValidationException::withMessages([
@@ -375,13 +375,13 @@ class CompanyMembershipService
         }
 
         return DB::transaction(function () use ($request, $actor, $adminNote) {
-            $request->loadMissing(['customer', 'company']);
-            $customer = $request->customer;
+            $request->loadMissing(['contact', 'company']);
+            $contact = $request->contact;
             $company = $request->company;
 
-            if ($this->membershipFor($customer, $company)) {
+            if ($this->membershipFor($contact, $company)) {
                 throw ValidationException::withMessages([
-                    'status' => 'Customer is already a member of this company.',
+                    'status' => 'Contact is already a member of this company.',
                 ]);
             }
             if (! $company->hasOwner()) {
@@ -389,23 +389,23 @@ class CompanyMembershipService
                     'status' => 'This company has no owner. Attach cannot be approved until an owner exists.',
                 ]);
             }
-            $this->linkCustomer($customer, $company, CompanyRole::Member, switchTo: false);
+            $this->linkContact($contact, $company, CompanyRole::Member, switchTo: false);
 
             $request->fill([
                 'status' => CompanyChangeStatus::Approved,
                 'admin_note' => filled($adminNote) ? trim($adminNote) : null,
                 'reviewed_by_user_id' => $actor instanceof User ? $actor->id : null,
-                'reviewed_by_customer_id' => $actor instanceof Customer ? $actor->id : null,
+                'reviewed_by_contact_id' => $actor instanceof Contact ? $actor->id : null,
                 'reviewed_at' => now(),
             ])->save();
 
-            $this->notifications->companyChangeDecided($request->fresh(['customer', 'company']));
+            $this->notifications->companyChangeDecided($request->fresh(['contact', 'company']));
 
-            return $request->fresh(['customer', 'company', 'reviewer', 'customerReviewer']);
+            return $request->fresh(['contact', 'company', 'reviewer', 'contactReviewer']);
         });
     }
 
-    public function reject(CompanyChangeRequest $request, User|Customer $actor, ?string $adminNote = null): CompanyChangeRequest
+    public function reject(CompanyChangeRequest $request, User|Contact $actor, ?string $adminNote = null): CompanyChangeRequest
     {
         if ($request->status !== CompanyChangeStatus::Pending) {
             throw ValidationException::withMessages(['status' => 'This request was already decided.']);
@@ -429,7 +429,7 @@ class CompanyMembershipService
             ]);
         }
 
-        if ($actor instanceof Customer) {
+        if ($actor instanceof Contact) {
             $this->assertOwnerMayReview($actor, $request);
             if ($request->type !== CompanyChangeType::Attach) {
                 throw ValidationException::withMessages([
@@ -442,13 +442,13 @@ class CompanyMembershipService
             'status' => CompanyChangeStatus::Rejected,
             'admin_note' => filled($adminNote) ? trim($adminNote) : null,
             'reviewed_by_user_id' => $actor instanceof User ? $actor->id : null,
-            'reviewed_by_customer_id' => $actor instanceof Customer ? $actor->id : null,
+            'reviewed_by_contact_id' => $actor instanceof Contact ? $actor->id : null,
             'reviewed_at' => now(),
         ])->save();
 
-        $this->notifications->companyChangeDecided($request->fresh(['customer', 'company', 'targetCustomer']));
+        $this->notifications->companyChangeDecided($request->fresh(['contact', 'company', 'targetContact']));
 
-        return $request->fresh(['customer', 'company', 'reviewer', 'customerReviewer', 'targetCustomer']);
+        return $request->fresh(['contact', 'company', 'reviewer', 'contactReviewer', 'targetContact']);
     }
 
     /**
@@ -456,7 +456,7 @@ class CompanyMembershipService
      * Admin must approve in Filament.
      */
     public function requestOwnershipTransfer(
-        Customer $owner,
+        Contact $owner,
         string $newOwnerPublicId,
         UploadedFile $letter,
         ?string $note = null,
@@ -476,42 +476,42 @@ class CompanyMembershipService
             ]);
         }
 
-        $newOwner = Customer::query()->where('public_id', $newOwnerPublicId)->first();
+        $newOwner = Contact::query()->where('public_id', $newOwnerPublicId)->first();
         if (! $newOwner) {
             throw ValidationException::withMessages([
-                'target_customer' => 'Selected partner was not found.',
+                'target_contact' => 'Selected partner was not found.',
             ]);
         }
 
         if ((int) $newOwner->id === (int) $owner->id) {
             throw ValidationException::withMessages([
-                'target_customer' => 'Choose a different partner as the new owner.',
+                'target_contact' => 'Choose a different partner as the new owner.',
             ]);
         }
 
         $membership = $this->membershipFor($newOwner, $company);
         if (! $membership || ! $membership->is_active) {
             throw ValidationException::withMessages([
-                'target_customer' => 'The new owner must be an active member of this company.',
+                'target_contact' => 'The new owner must be an active member of this company.',
             ]);
         }
 
         $letterMeta = $this->storePdf($owner, $letter, 'letter');
 
         $request = CompanyChangeRequest::query()->create([
-            'customer_id' => $owner->id,
+            'contact_id' => $owner->id,
             'company_id' => $company->id,
-            'target_customer_id' => $newOwner->id,
+            'target_contact_id' => $newOwner->id,
             'type' => CompanyChangeType::TransferOwnership,
             'status' => CompanyChangeStatus::Pending,
-            'customer_note' => filled($note) ? trim($note) : null,
+            'contact_note' => filled($note) ? trim($note) : null,
             'letter_disk' => $letterMeta['disk'],
             'letter_path' => $letterMeta['path'],
             'letter_original_name' => $letterMeta['original_name'],
             'letter_size_bytes' => $letterMeta['size'],
         ]);
 
-        $this->notifications->companyChangeRequested($request->load(['company', 'customer', 'targetCustomer']));
+        $this->notifications->companyChangeRequested($request->load(['company', 'contact', 'targetContact']));
 
         return $request;
     }
@@ -519,10 +519,10 @@ class CompanyMembershipService
     protected function approveOwnershipTransfer(CompanyChangeRequest $request, User $admin, ?string $adminNote = null): CompanyChangeRequest
     {
         return DB::transaction(function () use ($request, $admin, $adminNote) {
-            $request->loadMissing(['customer', 'company', 'targetCustomer']);
+            $request->loadMissing(['contact', 'company', 'targetContact']);
             $company = $request->company;
-            $currentOwner = $request->customer;
-            $newOwner = $request->targetCustomer;
+            $currentOwner = $request->contact;
+            $newOwner = $request->targetContact;
 
             if (! $company || ! $currentOwner || ! $newOwner) {
                 throw ValidationException::withMessages(['status' => 'Transfer request is incomplete.']);
@@ -530,7 +530,7 @@ class CompanyMembershipService
 
             $ownerMembership = CompanyMembership::query()
                 ->where('company_id', $company->id)
-                ->where('customer_id', $currentOwner->id)
+                ->where('contact_id', $currentOwner->id)
                 ->where('role', CompanyRole::Owner->value)
                 ->first();
 
@@ -546,13 +546,13 @@ class CompanyMembershipService
                 'status' => CompanyChangeStatus::Approved,
                 'admin_note' => filled($adminNote) ? trim($adminNote) : null,
                 'reviewed_by_user_id' => $admin->id,
-                'reviewed_by_customer_id' => null,
+                'reviewed_by_contact_id' => null,
                 'reviewed_at' => now(),
             ])->save();
 
-            $this->notifications->companyChangeDecided($request->fresh(['customer', 'company', 'targetCustomer']));
+            $this->notifications->companyChangeDecided($request->fresh(['contact', 'company', 'targetContact']));
 
-            return $request->fresh(['customer', 'company', 'reviewer', 'targetCustomer']);
+            return $request->fresh(['contact', 'company', 'reviewer', 'targetContact']);
         });
     }
 
@@ -562,18 +562,18 @@ class CompanyMembershipService
      *
      * @return \Illuminate\Support\Collection<int, array<string, mixed>>
      */
-    public function listCurrentCompanyMembers(Customer $viewer)
+    public function listCurrentCompanyMembers(Contact $viewer)
     {
         $this->assertCanAccessCompany($viewer);
 
         return CompanyMembership::query()
-            ->with('customer')
+            ->with('contact')
             ->where('company_id', $viewer->current_company_id)
             ->orderByRaw("CASE WHEN role = 'owner' THEN 0 ELSE 1 END")
             ->orderBy('id')
             ->get()
             ->map(function (CompanyMembership $m) {
-                $c = $m->customer;
+                $c = $m->contact;
                 $role = $m->role instanceof CompanyRole ? $m->role->value : (string) $m->role;
 
                 return [
@@ -599,12 +599,12 @@ class CompanyMembershipService
      *
      * @return \Illuminate\Support\Collection<int, CompanyChangeRequest>
      */
-    public function pendingMembershipRequestsForOwner(Customer $owner)
+    public function pendingMembershipRequestsForOwner(Contact $owner)
     {
         $this->assertIsActiveOwner($owner);
 
         return CompanyChangeRequest::query()
-            ->with(['customer', 'company'])
+            ->with(['contact', 'company'])
             ->where('company_id', $owner->current_company_id)
             ->where('type', CompanyChangeType::Attach)
             ->where('status', CompanyChangeStatus::Pending)
@@ -617,26 +617,26 @@ class CompanyMembershipService
      *
      * @return array{submitted: list<array<string, mixed>>, to_review: list<array<string, mixed>>, summary: array<string, int>}
      */
-    public function companyRequestsInbox(Customer $customer): array
+    public function companyRequestsInbox(Contact $contact): array
     {
         $ownedCompanyIds = CompanyMembership::query()
-            ->where('customer_id', $customer->id)
+            ->where('contact_id', $contact->id)
             ->where('role', CompanyRole::Owner->value)
             ->where('is_active', true)
             ->pluck('company_id');
 
         $submittedChanges = CompanyChangeRequest::query()
-            ->with(['customer', 'company', 'targetCustomer', 'reviewer', 'customerReviewer'])
-            ->where('customer_id', $customer->id)
+            ->with(['contact', 'company', 'targetContact', 'reviewer', 'contactReviewer'])
+            ->where('contact_id', $contact->id)
             ->latest('id')
             ->limit(50)
             ->get()
-            ->map(fn (CompanyChangeRequest $r) => $this->serializeRequestCard($r, $customer, 'submitted'))
+            ->map(fn (CompanyChangeRequest $r) => $this->serializeRequestCard($r, $contact, 'submitted'))
             ->all();
 
         $profileCards = Company::query()
-            ->where(function ($q) use ($customer, $ownedCompanyIds) {
-                $q->where('created_by_customer_id', $customer->id);
+            ->where(function ($q) use ($contact, $ownedCompanyIds) {
+                $q->where('created_by_contact_id', $contact->id);
                 if ($ownedCompanyIds->isNotEmpty()) {
                     $q->orWhereIn('id', $ownedCompanyIds);
                 }
@@ -659,14 +659,14 @@ class CompanyMembershipService
         $toReview = [];
         if ($ownedCompanyIds->isNotEmpty()) {
             $toReview = CompanyChangeRequest::query()
-                ->with(['customer', 'company', 'targetCustomer', 'reviewer', 'customerReviewer'])
+                ->with(['contact', 'company', 'targetContact', 'reviewer', 'contactReviewer'])
                 ->whereIn('company_id', $ownedCompanyIds)
                 ->where('type', CompanyChangeType::Attach)
                 ->where('status', CompanyChangeStatus::Pending)
                 ->latest('id')
                 ->limit(50)
                 ->get()
-                ->map(fn (CompanyChangeRequest $r) => $this->serializeRequestCard($r, $customer, 'to_review'))
+                ->map(fn (CompanyChangeRequest $r) => $this->serializeRequestCard($r, $contact, 'to_review'))
                 ->all();
         }
 
@@ -686,9 +686,9 @@ class CompanyMembershipService
         ];
     }
 
-    public function cancelOwnRequest(Customer $customer, CompanyChangeRequest $request): CompanyChangeRequest
+    public function cancelOwnRequest(Contact $contact, CompanyChangeRequest $request): CompanyChangeRequest
     {
-        if ((int) $request->customer_id !== (int) $customer->id) {
+        if ((int) $request->contact_id !== (int) $contact->id) {
             throw ValidationException::withMessages([
                 'request' => 'You can only cancel your own requests.',
             ]);
@@ -709,12 +709,12 @@ class CompanyMembershipService
         $request->fill([
             'status' => CompanyChangeStatus::Rejected,
             'admin_note' => 'Cancelled by requester.',
-            'reviewed_by_customer_id' => $customer->id,
+            'reviewed_by_contact_id' => $contact->id,
             'reviewed_by_user_id' => null,
             'reviewed_at' => now(),
         ])->save();
 
-        return $request->fresh(['customer', 'company', 'targetCustomer']);
+        return $request->fresh(['contact', 'company', 'targetContact']);
     }
 
     /**
@@ -722,7 +722,7 @@ class CompanyMembershipService
      */
     public function serializeRequestCard(
         CompanyChangeRequest $request,
-        ?Customer $viewer = null,
+        ?Contact $viewer = null,
         string $direction = 'submitted',
     ): array {
         $type = $request->type instanceof CompanyChangeType
@@ -748,7 +748,7 @@ class CompanyMembershipService
         $canCancel = $viewer
             && $direction === 'submitted'
             && $status === CompanyChangeStatus::Pending->value
-            && (int) $request->customer_id === (int) $viewer->id
+            && (int) $request->contact_id === (int) $viewer->id
             && $type !== CompanyChangeType::Detach->value;
 
         return [
@@ -758,7 +758,7 @@ class CompanyMembershipService
             'status' => $status,
             'direction' => $direction,
             'awaiting' => $awaiting,
-            'customer_note' => $request->customer_note,
+            'contact_note' => $request->contact_note,
             'decision_note' => $request->admin_note,
             'decided_by' => $request->decidedByLabel(),
             'created_at' => optional($request->created_at)?->toIso8601String(),
@@ -774,15 +774,15 @@ class CompanyMembershipService
                 'tin' => $request->company->tin,
                 'license_number' => $request->company->license_number,
             ] : null,
-            'applicant' => $request->customer ? [
-                'public_id' => $request->customer->public_id,
-                'name' => $request->customer->name,
-                'phone_number' => $request->customer->phone_number,
-                'email' => $request->customer->email,
+            'applicant' => $request->contact ? [
+                'public_id' => $request->contact->public_id,
+                'name' => $request->contact->name,
+                'phone_number' => $request->contact->phone_number,
+                'email' => $request->contact->email,
             ] : null,
-            'target_customer' => $request->targetCustomer ? [
-                'public_id' => $request->targetCustomer->public_id,
-                'name' => $request->targetCustomer->name,
+            'target_contact' => $request->targetContact ? [
+                'public_id' => $request->targetContact->public_id,
+                'name' => $request->targetContact->name,
             ] : null,
         ];
     }
@@ -803,7 +803,7 @@ class CompanyMembershipService
             'status' => $status,
             'direction' => 'submitted',
             'awaiting' => $status === CompanyApprovalStatus::Pending->value ? 'admin' : 'none',
-            'customer_note' => null,
+            'contact_note' => null,
             'decision_note' => $company->approval_note,
             'decided_by' => $status === CompanyApprovalStatus::Pending->value ? '—' : 'admin',
             'created_at' => optional($company->created_at)?->toIso8601String(),
@@ -820,21 +820,21 @@ class CompanyMembershipService
                 'license_number' => $company->license_number,
             ],
             'applicant' => null,
-            'target_customer' => null,
+            'target_contact' => null,
         ];
     }
 
-    protected function customerOwnsCompany(Customer $customer, int $companyId): bool
+    protected function customerOwnsCompany(Contact $contact, int $companyId): bool
     {
         return CompanyMembership::query()
-            ->where('customer_id', $customer->id)
+            ->where('contact_id', $contact->id)
             ->where('company_id', $companyId)
             ->where('role', CompanyRole::Owner->value)
             ->where('is_active', true)
             ->exists();
     }
 
-    protected function assertOwnerMayReview(Customer $owner, CompanyChangeRequest $request): void
+    protected function assertOwnerMayReview(Contact $owner, CompanyChangeRequest $request): void
     {
         if (! $this->customerOwnsCompany($owner, (int) $request->company_id)) {
             throw ValidationException::withMessages([
@@ -853,46 +853,46 @@ class CompanyMembershipService
         }
     }
 
-    protected function assertIsActiveOwner(Customer $customer): void
+    protected function assertIsActiveOwner(Contact $contact): void
     {
-        if ($this->roleOf($customer) !== CompanyRole::Owner || ! $customer->current_company_id) {
+        if ($this->roleOf($contact) !== CompanyRole::Owner || ! $contact->current_company_id) {
             throw ValidationException::withMessages([
                 'company' => 'Only the company owner can manage membership requests.',
             ]);
         }
 
-        if (! $customer->hasActiveCompanyMembership()) {
+        if (! $contact->hasActiveCompanyMembership()) {
             throw ValidationException::withMessages([
                 'company' => 'Your membership for this company is disabled.',
             ]);
         }
 
-        $customer->loadMissing('company');
-        if (! $customer->company?->isApproved()) {
+        $contact->loadMissing('company');
+        if (! $contact->company?->isApproved()) {
             throw ValidationException::withMessages([
                 'company' => 'Membership requests are available after admin approves your company profile.',
             ]);
         }
     }
 
-    public function pendingRequestFor(Customer $customer): ?CompanyChangeRequest
+    public function pendingRequestFor(Contact $contact): ?CompanyChangeRequest
     {
         return CompanyChangeRequest::query()
             ->with('company')
-            ->where('customer_id', $customer->id)
+            ->where('contact_id', $contact->id)
             ->where('status', CompanyChangeStatus::Pending)
             ->latest('id')
             ->first();
     }
 
-    public function linkCustomer(Customer $customer, Company $company, CompanyRole $role, bool $switchTo = true): void
+    public function linkContact(Contact $contact, Company $company, CompanyRole $role, bool $switchTo = true): void
     {
         if ($role === CompanyRole::Owner) {
             $existingOwnerId = CompanyMembership::query()
                 ->where('company_id', $company->id)
                 ->where('role', CompanyRole::Owner->value)
-                ->value('customer_id');
-            if ($existingOwnerId && (int) $existingOwnerId !== (int) $customer->id) {
+                ->value('contact_id');
+            if ($existingOwnerId && (int) $existingOwnerId !== (int) $contact->id) {
                 throw ValidationException::withMessages([
                     'company' => 'This company already has an owner. Transfer ownership first.',
                 ]);
@@ -907,7 +907,7 @@ class CompanyMembershipService
 
         CompanyMembership::query()->updateOrCreate(
             [
-                'customer_id' => $customer->id,
+                'contact_id' => $contact->id,
                 'company_id' => $company->id,
             ],
             [
@@ -916,14 +916,14 @@ class CompanyMembershipService
             ],
         );
 
-        if ($switchTo || ! $customer->current_company_id) {
-            $customer->forceFill([
+        if ($switchTo || ! $contact->current_company_id) {
+            $contact->forceFill([
                 'current_company_id' => $company->id,
                 'profile_completed_at' => now(),
             ]);
-            $this->syncCustomerCompanyFields($customer, $company);
+            $this->syncContactCompanyFields($contact, $company);
         } else {
-            $customer->forceFill(['profile_completed_at' => $customer->profile_completed_at ?? now()])->save();
+            $contact->forceFill(['profile_completed_at' => $contact->profile_completed_at ?? now()])->save();
         }
     }
 
@@ -932,17 +932,17 @@ class CompanyMembershipService
      * Prefer legacy_mvas_client_id match (migrated dump), else unique phone last-9 match.
      * Orphan / ambiguous companies stay ownerless for admin Assign owner.
      */
-    public function tryAutoClaimMigratedCompanyByPhone(Customer $customer): ?Company
+    public function tryAutoClaimMigratedCompanyByPhone(Contact $contact): ?Company
     {
-        if ($customer->memberships()->exists() || filled($customer->current_company_id)) {
+        if ($contact->memberships()->exists() || filled($contact->current_company_id)) {
             return null;
         }
 
         $company = null;
 
-        if (filled($customer->legacy_mvas_client_id)) {
+        if (filled($contact->legacy_mvas_client_id)) {
             $company = Company::query()
-                ->where('legacy_mvas_client_id', $customer->legacy_mvas_client_id)
+                ->where('legacy_mvas_client_id', $contact->legacy_mvas_client_id)
                 ->where('is_active', true)
                 ->where('approval_status', CompanyApprovalStatus::Approved->value)
                 ->whereDoesntHave('memberships', function ($query) {
@@ -952,7 +952,7 @@ class CompanyMembershipService
         }
 
         if (! $company) {
-            $last9 = app(SmsService::class)->normalizePhone((string) $customer->phone_number);
+            $last9 = app(SmsService::class)->normalizePhone((string) $contact->phone_number);
             if ($last9 === '' || ! preg_match('/^\d{9}$/', $last9)) {
                 return null;
             }
@@ -975,7 +975,7 @@ class CompanyMembershipService
             if ($candidates->count() !== 1) {
                 if ($candidates->count() > 1) {
                     Log::warning('Fayda auto-claim skipped — ambiguous company phone match', [
-                        'customer_id' => $customer->id,
+                        'contact_id' => $contact->id,
                         'phone_last9' => $last9,
                         'company_ids' => $candidates->pluck('id')->all(),
                     ]);
@@ -987,21 +987,21 @@ class CompanyMembershipService
             $company = $candidates->first();
         }
 
-        return DB::transaction(function () use ($customer, $company) {
+        return DB::transaction(function () use ($contact, $company) {
             if ($company->hasOwner()) {
                 return null;
             }
 
-            $this->linkCustomer($customer, $company, CompanyRole::Owner, switchTo: true);
+            $this->linkContact($contact, $company, CompanyRole::Owner, switchTo: true);
 
-            if (! filled($company->created_by_customer_id)) {
+            if (! filled($company->created_by_contact_id)) {
                 $company->forceFill([
-                    'created_by_customer_id' => $customer->id,
+                    'created_by_contact_id' => $contact->id,
                 ])->save();
             }
 
             Log::info('Fayda auto-claimed migrated company', [
-                'customer_id' => $customer->id,
+                'contact_id' => $contact->id,
                 'company_id' => $company->id,
                 'legacy_mvas_client_id' => $company->legacy_mvas_client_id,
                 'company_tin' => $company->tin,
@@ -1014,7 +1014,7 @@ class CompanyMembershipService
     /**
      * Admin verification: assign an owner to an orphan (ownerless) company.
      */
-    public function adminAssignOwner(Company $company, Customer $customer, User $admin, ?string $note = null): Company
+    public function adminAssignOwner(Company $company, Contact $contact, User $admin, ?string $note = null): Company
     {
         if ($company->hasOwner()) {
             throw ValidationException::withMessages([
@@ -1022,17 +1022,17 @@ class CompanyMembershipService
             ]);
         }
 
-        if (! $customer->is_active || $customer->is_banned) {
+        if (! $contact->is_active || $contact->is_banned) {
             throw ValidationException::withMessages([
                 'owner' => 'Cannot assign an inactive or banned partner as owner.',
             ]);
         }
 
-        return DB::transaction(function () use ($company, $customer, $admin, $note) {
-            $this->linkCustomer($customer, $company, CompanyRole::Owner, switchTo: true);
+        return DB::transaction(function () use ($company, $contact, $admin, $note) {
+            $this->linkContact($contact, $company, CompanyRole::Owner, switchTo: true);
 
             $company->forceFill([
-                'created_by_customer_id' => $company->created_by_customer_id ?: $customer->id,
+                'created_by_contact_id' => $company->created_by_contact_id ?: $contact->id,
                 'approval_status' => CompanyApprovalStatus::Approved,
                 'is_active' => true,
                 'approved_by_user_id' => $admin->id,
@@ -1042,15 +1042,15 @@ class CompanyMembershipService
 
             Log::info('Admin assigned owner to orphan company', [
                 'company_id' => $company->id,
-                'customer_id' => $customer->id,
+                'contact_id' => $contact->id,
                 'admin_id' => $admin->id,
             ]);
 
-            return $company->fresh(['memberships.customer']);
+            return $company->fresh(['memberships.contact']);
         });
     }
 
-    public function setMembershipActive(Company $company, Customer $member, bool $active, User $actor): Customer
+    public function setMembershipActive(Company $company, Contact $member, bool $active, User $actor): Contact
     {
         $membership = $this->membershipFor($member, $company);
         if (! $membership) {
@@ -1062,7 +1062,7 @@ class CompanyMembershipService
         if ($membership->isOwner() && ! $active) {
             $otherActive = CompanyMembership::query()
                 ->where('company_id', $company->id)
-                ->where('customer_id', '!=', $member->id)
+                ->where('contact_id', '!=', $member->id)
                 ->where('is_active', true)
                 ->exists();
 
@@ -1082,35 +1082,35 @@ class CompanyMembershipService
         return $member->fresh(['company', 'memberships.company']);
     }
 
-    public function assertCanAccessCompany(Customer $customer): void
+    public function assertCanAccessCompany(Contact $contact): void
     {
-        if (! $customer->current_company_id) {
+        if (! $contact->current_company_id) {
             throw ValidationException::withMessages([
                 'company' => 'Create a company with a unique TIN (or join an approved company) before using VAS services.',
             ]);
         }
 
-        if (! $customer->hasActiveCompanyMembership()) {
+        if (! $contact->hasActiveCompanyMembership()) {
             throw ValidationException::withMessages([
                 'company' => 'Your membership for this company is disabled. Contact an administrator.',
             ]);
         }
 
-        $customer->loadMissing('company');
-        if (! $customer->company?->isApproved()) {
+        $contact->loadMissing('company');
+        if (! $contact->company?->isApproved()) {
             throw ValidationException::withMessages([
                 'company' => 'Services are locked until an administrator approves your company profile for this TIN. Complete company details and wait for approval.',
             ]);
         }
 
-        if (! filled($customer->company->tin)) {
+        if (! filled($contact->company->tin)) {
             throw ValidationException::withMessages([
                 'company' => 'A valid company TIN is required before using VAS services.',
             ]);
         }
     }
 
-    public function transferOwnership(Company $company, Customer $newOwner, User $actor): Company
+    public function transferOwnership(Company $company, Contact $newOwner, User $actor): Company
     {
         return DB::transaction(function () use ($company, $newOwner) {
             $newMembership = $this->membershipFor($newOwner, $company);
@@ -1125,7 +1125,7 @@ class CompanyMembershipService
                 ->where('role', CompanyRole::Owner->value)
                 ->first();
 
-            if ($currentOwnerMembership && (int) $currentOwnerMembership->customer_id === (int) $newOwner->id) {
+            if ($currentOwnerMembership && (int) $currentOwnerMembership->contact_id === (int) $newOwner->id) {
                 return $company->fresh(['memberships']);
             }
 
@@ -1142,27 +1142,27 @@ class CompanyMembershipService
         });
     }
 
-    public function unlinkCustomer(Customer $customer, ?Company $company = null): void
+    public function unlinkContact(Contact $contact, ?Company $company = null): void
     {
-        $company ??= $customer->company;
+        $company ??= $contact->company;
         if (! $company) {
             return;
         }
 
-        $customer->forceFill(['current_company_id' => $company->id])->save();
-        $this->assertOwnerMayLeave($customer->fresh());
+        $contact->forceFill(['current_company_id' => $company->id])->save();
+        $this->assertOwnerMayLeave($contact->fresh());
 
         CompanyMembership::query()
-            ->where('customer_id', $customer->id)
+            ->where('contact_id', $contact->id)
             ->where('company_id', $company->id)
             ->delete();
 
-        $this->switchToFallbackCompany($customer->fresh(), exceptCompanyId: $company->id);
+        $this->switchToFallbackCompany($contact->fresh(), exceptCompanyId: $company->id);
     }
 
-    public function switchCompany(Customer $customer, Company $company): Customer
+    public function switchCompany(Contact $contact, Company $company): Contact
     {
-        $membership = $this->membershipFor($customer, $company);
+        $membership = $this->membershipFor($contact, $company);
         if (! $membership) {
             throw ValidationException::withMessages([
                 'company' => 'You are not a member of that company.',
@@ -1174,15 +1174,15 @@ class CompanyMembershipService
             ]);
         }
 
-        $customer->forceFill(['current_company_id' => $company->id]);
-        $this->syncCustomerCompanyFields($customer, $company);
+        $contact->forceFill(['current_company_id' => $company->id]);
+        $this->syncContactCompanyFields($contact, $company);
 
-        return $customer->fresh(['company', 'memberships.company']);
+        return $contact->fresh(['company', 'memberships.company']);
     }
 
-    public function syncCustomerCompanyFields(Customer $customer, Company $company): void
+    public function syncContactCompanyFields(Contact $contact, Company $company): void
     {
-        $customer->forceFill([
+        $contact->forceFill([
             'company_name' => $company->name,
             'company_tin' => $company->tin,
             'company_license_number' => $company->license_number,
@@ -1196,58 +1196,58 @@ class CompanyMembershipService
     {
         CompanyMembership::query()
             ->where('company_id', $company->id)
-            ->with('customer')
+            ->with('contact')
             ->orderBy('id')
             ->each(function (CompanyMembership $membership) use ($company): void {
-                $member = $membership->customer;
+                $member = $membership->contact;
                 if (! $member) {
                     return;
                 }
                 if ((int) $member->current_company_id === (int) $company->id) {
-                    $this->syncCustomerCompanyFields($member, $company);
+                    $this->syncContactCompanyFields($member, $company);
                 }
             });
     }
 
-    public function serializeCustomer(Customer $customer): array
+    public function serializeContact(Contact $contact): array
     {
-        $customer->loadMissing(['company', 'memberships.company']);
-        $pending = $this->pendingRequestFor($customer);
+        $contact->loadMissing(['company', 'memberships.company']);
+        $pending = $this->pendingRequestFor($contact);
         if ($pending) {
-            $pending->loadMissing(['company', 'targetCustomer']);
+            $pending->loadMissing(['company', 'targetContact']);
         }
-        $company = $customer->company;
+        $company = $contact->company;
         $approvalStatus = $company?->approval_status instanceof CompanyApprovalStatus
             ? $company->approval_status
             : ($company ? CompanyApprovalStatus::tryFrom((string) $company->approval_status) : null);
         $companyApproved = $company?->isApproved() === true;
-        $membershipActive = $customer->current_company_id
-            ? $customer->hasActiveCompanyMembership()
+        $membershipActive = $contact->current_company_id
+            ? $contact->hasActiveCompanyMembership()
             : null;
-        $memberCount = $customer->current_company_id
-            ? CompanyMembership::query()->where('company_id', $customer->current_company_id)->count()
+        $memberCount = $contact->current_company_id
+            ? CompanyMembership::query()->where('company_id', $contact->current_company_id)->count()
             : 0;
-        $isOwner = $this->roleOf($customer) === CompanyRole::Owner;
+        $isOwner = $this->roleOf($contact) === CompanyRole::Owner;
         $canEditCompany = $isOwner
             && $membershipActive
             && $company
             && ! $companyApproved;
-        $canDetach = (bool) $customer->current_company_id
+        $canDetach = (bool) $contact->current_company_id
             && $membershipActive
             && $companyApproved
             && ! $isOwner;
-        $pendingMembershipCount = ($isOwner && $membershipActive && $companyApproved && $customer->current_company_id)
+        $pendingMembershipCount = ($isOwner && $membershipActive && $companyApproved && $contact->current_company_id)
             ? CompanyChangeRequest::query()
-                ->where('company_id', $customer->current_company_id)
+                ->where('company_id', $contact->current_company_id)
                 ->where('type', CompanyChangeType::Attach)
                 ->where('status', CompanyChangeStatus::Pending)
                 ->count()
             : 0;
 
-        $data = $customer->toArray();
-        $data['company_id'] = $customer->current_company_id;
-        $data['current_company_id'] = $customer->current_company_id;
-        $data['company'] = ($company && $membershipActive !== false && $customer->current_company_id) ? [
+        $data = $contact->toArray();
+        $data['company_id'] = $contact->current_company_id;
+        $data['current_company_id'] = $contact->current_company_id;
+        $data['company'] = ($company && $membershipActive !== false && $contact->current_company_id) ? [
             'public_id' => $company->public_id,
             'name' => $company->name,
             'tin' => $company->tin,
@@ -1260,16 +1260,16 @@ class CompanyMembershipService
             'approval_note' => $company->approval_note,
             'is_approved' => $companyApproved,
         ] : null;
-        $data['company_role'] = $customer->company_role;
+        $data['company_role'] = $contact->company_role;
         $data['company_membership_active'] = $membershipActive;
         $data['company_can_detach'] = $canDetach;
         $data['company_can_edit'] = $canEditCompany;
         // Owner must transfer ownership (admin-approved) before they can leave.
-        $data['company_needs_ownership_transfer'] = $isOwner && $membershipActive && (bool) $customer->current_company_id;
+        $data['company_needs_ownership_transfer'] = $isOwner && $membershipActive && (bool) $contact->current_company_id;
         $data['pending_membership_requests_count'] = $pendingMembershipCount;
-        $data['profile_completed'] = $customer->profile_completed;
-        $data['memberships'] = $customer->memberships
-            ->map(function (CompanyMembership $m) use ($customer) {
+        $data['profile_completed'] = $contact->profile_completed;
+        $data['memberships'] = $contact->memberships
+            ->map(function (CompanyMembership $m) use ($contact) {
                 $c = $m->company;
                 $role = $m->role instanceof CompanyRole ? $m->role->value : (string) $m->role;
 
@@ -1280,7 +1280,7 @@ class CompanyMembershipService
                     'company_license_number' => $c?->license_number,
                     'role' => $role,
                     'is_active' => (bool) $m->is_active,
-                    'is_current' => (int) $m->company_id === (int) $customer->current_company_id,
+                    'is_current' => (int) $m->company_id === (int) $contact->current_company_id,
                     'is_approved' => $c?->isApproved() === true,
                     'approval_status' => $c?->approval_status instanceof CompanyApprovalStatus
                         ? $c->approval_status->value
@@ -1302,16 +1302,16 @@ class CompanyMembershipService
             'public_id' => $pending->public_id,
             'type' => $pending->type->value,
             'status' => $pending->status->value,
-            'customer_note' => $pending->customer_note,
+            'contact_note' => $pending->contact_note,
             'company' => $pending->company ? [
                 'public_id' => $pending->company->public_id,
                 'name' => $pending->company->name,
                 'tin' => $pending->company->tin,
                 'license_number' => $pending->company->license_number,
             ] : null,
-            'target_customer' => $pending->targetCustomer ? [
-                'public_id' => $pending->targetCustomer->public_id,
-                'name' => $pending->targetCustomer->name,
+            'target_contact' => $pending->targetContact ? [
+                'public_id' => $pending->targetContact->public_id,
+                'name' => $pending->targetContact->name,
             ] : null,
             'created_at' => optional($pending->created_at)?->toIso8601String(),
             'has_proposal' => $pending->hasProposal(),
@@ -1321,9 +1321,9 @@ class CompanyMembershipService
         return $data;
     }
 
-    protected function roleOf(Customer $customer): ?CompanyRole
+    protected function roleOf(Contact $contact): ?CompanyRole
     {
-        $membership = $customer->membershipForCurrentCompany();
+        $membership = $contact->membershipForCurrentCompany();
         if (! $membership) {
             return null;
         }
@@ -1333,18 +1333,18 @@ class CompanyMembershipService
             : CompanyRole::tryFrom((string) $membership->role);
     }
 
-    protected function membershipFor(Customer $customer, Company $company): ?CompanyMembership
+    protected function membershipFor(Contact $contact, Company $company): ?CompanyMembership
     {
         return CompanyMembership::query()
-            ->where('customer_id', $customer->id)
+            ->where('contact_id', $contact->id)
             ->where('company_id', $company->id)
             ->first();
     }
 
-    protected function switchToFallbackCompany(Customer $customer, ?int $exceptCompanyId = null): void
+    protected function switchToFallbackCompany(Contact $contact, ?int $exceptCompanyId = null): void
     {
         $next = CompanyMembership::query()
-            ->where('customer_id', $customer->id)
+            ->where('contact_id', $contact->id)
             ->where('is_active', true)
             ->when($exceptCompanyId, fn ($q) => $q->where('company_id', '!=', $exceptCompanyId))
             ->orderByRaw("CASE WHEN role = 'owner' THEN 0 ELSE 1 END")
@@ -1353,17 +1353,17 @@ class CompanyMembershipService
 
         if ($next) {
             $company = Company::query()->find($next->company_id);
-            $customer->forceFill(['current_company_id' => $next->company_id]);
+            $contact->forceFill(['current_company_id' => $next->company_id]);
             if ($company) {
-                $this->syncCustomerCompanyFields($customer, $company);
+                $this->syncContactCompanyFields($contact, $company);
             } else {
-                $customer->save();
+                $contact->save();
             }
 
             return;
         }
 
-        $customer->forceFill([
+        $contact->forceFill([
             'current_company_id' => null,
             'company_name' => null,
             'company_tin' => null,
@@ -1380,9 +1380,9 @@ class CompanyMembershipService
      * They must request an ownership transfer (letter + admin approval) first,
      * then leave as a member.
      */
-    protected function assertOwnerMayLeave(Customer $customer): void
+    protected function assertOwnerMayLeave(Contact $contact): void
     {
-        if ($this->roleOf($customer) !== CompanyRole::Owner || ! $customer->current_company_id) {
+        if ($this->roleOf($contact) !== CompanyRole::Owner || ! $contact->current_company_id) {
             return;
         }
 
@@ -1425,7 +1425,7 @@ class CompanyMembershipService
     }
 
     /** @return array{disk: string, path: string, original_name: string, size: int} */
-    protected function storePdf(Customer $customer, UploadedFile $file, string $kind): array
+    protected function storePdf(Contact $contact, UploadedFile $file, string $kind): array
     {
         $maxKb = $this->maxDocKb();
         if ($file->getSize() === false || $file->getSize() < 1) {
@@ -1448,7 +1448,7 @@ class CompanyMembershipService
 
         $disk = 'local';
         $path = $file->storeAs(
-            'company-changes/'.$customer->id,
+            'company-changes/'.$contact->id,
             $kind.'-'.Str::uuid()->toString().'.pdf',
             $disk,
         );

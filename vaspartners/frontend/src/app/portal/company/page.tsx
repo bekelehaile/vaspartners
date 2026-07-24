@@ -9,17 +9,17 @@ import { PortalPageHeader } from "@/components/PortalPageHeader";
 import {
   useAttachCompany,
   useCompanyMembers,
-  useCustomer,
+  useContact,
   useDetachCompany,
   useLookupCompany,
   useTransferOwnership,
-} from "@/hooks/use-customer";
+} from "@/hooks/use-contact";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { queryKeys } from "@/lib/query-keys";
 
 export default function CompanyProfilePage() {
   const queryClient = useQueryClient();
-  const { data: me } = useCustomer();
+  const { data: me } = useContact();
   const [creatingAnother, setCreatingAnother] = useState(false);
   const membershipDisabled =
     !!me?.company_id && me?.company_membership_active === false;
@@ -243,7 +243,7 @@ export default function CompanyProfilePage() {
                         })
                         .then(() => {
                           void queryClient.invalidateQueries({
-                            queryKey: queryKeys.customer.me,
+                            queryKey: queryKeys.contact.me,
                           });
                         })
                     }
@@ -490,7 +490,7 @@ export default function CompanyProfilePage() {
                         if (!transferLetter) return;
                         void transfer
                           .mutateAsync({
-                            target_customer: transferTarget,
+                            target_contact: transferTarget,
                             letter: transferLetter,
                             note: transferNote,
                           })
@@ -562,7 +562,7 @@ export default function CompanyProfilePage() {
                       void detach.mutateAsync({ note: detachNote }).then(() => {
                         setDetachNote("");
                         void queryClient.invalidateQueries({
-                          queryKey: queryKeys.customer.me,
+                          queryKey: queryKeys.contact.me,
                         });
                       });
                     }}

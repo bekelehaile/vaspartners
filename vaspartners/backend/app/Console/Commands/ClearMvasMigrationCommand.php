@@ -20,7 +20,7 @@ class ClearMvasMigrationCommand extends Command
         {--keep-files : Do not delete attachment files from disk}
         {--dry-run : Count rows that would be removed}';
 
-    protected $description = 'Clear migrated MVAS companies/customers/tickets/subscriptions/attachments so dump migration can be re-run';
+    protected $description = 'Clear migrated MVAS companies/contacts/tickets/subscriptions/attachments so dump migration can be re-run';
 
     public function handle(MvasDumpClearService $clearer): int
     {
@@ -50,7 +50,7 @@ class ClearMvasMigrationCommand extends Command
                 ['tickets', $stats['tickets']],
                 ['subscriptions', $stats['subscriptions']],
                 ['memberships', $stats['memberships']],
-                ['customers', $stats['customers']],
+                ['contacts', $stats['contacts']],
                 ['companies', $stats['companies']],
                 ['approvers', $stats['approvers']],
             ],

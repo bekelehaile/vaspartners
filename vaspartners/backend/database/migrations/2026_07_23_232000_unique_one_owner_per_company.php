@@ -7,10 +7,10 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // At most one owner per company (soft-deleted customers excluded).
+        // At most one owner per company (soft-deleted contacts excluded).
         DB::statement("
-            CREATE UNIQUE INDEX customers_one_owner_per_company
-            ON customers (company_id)
+            CREATE UNIQUE INDEX contacts_one_owner_per_company
+            ON contacts (company_id)
             WHERE company_id IS NOT NULL
               AND company_role = 'owner'
               AND deleted_at IS NULL
@@ -19,6 +19,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        DB::statement('DROP INDEX IF EXISTS customers_one_owner_per_company');
+        DB::statement('DROP INDEX IF EXISTS contacts_one_owner_per_company');
     }
 };

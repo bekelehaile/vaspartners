@@ -42,9 +42,9 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
-        'customer' => [
+        'contact' => [
             'driver' => 'sanctum',
-            'provider' => 'customers',
+            'provider' => 'contacts',
         ],
     ],
 
@@ -70,9 +70,9 @@ return [
             'driver' => 'eloquent',
             'model' => env('AUTH_MODEL', User::class),
         ],
-        'customers' => [
+        'contacts' => [
             'driver' => 'eloquent',
-            'model' => App\Models\Customer::class,
+            'model' => App\Models\Contact::class,
         ],
     ],
 

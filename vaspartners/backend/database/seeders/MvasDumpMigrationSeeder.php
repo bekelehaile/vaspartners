@@ -60,7 +60,7 @@ class MvasDumpMigrationSeeder extends Seeder
             ['Entity', 'Imported', 'Skipped'],
             [
                 ['companies', $stats['companies']['imported'], $stats['companies']['skipped']],
-                ['customers', $stats['customers']['imported'], $stats['customers']['skipped']],
+                ['contacts', $stats['contacts']['imported'], $stats['contacts']['skipped']],
                 ['tickets', $stats['tickets']['imported'], $stats['tickets']['skipped']],
                 ['subscriptions', $enrichStats['subscriptions']['imported'], $enrichStats['subscriptions']['skipped']],
                 ['approvers', $enrichStats['approvers']['imported'], $enrichStats['approvers']['skipped']],

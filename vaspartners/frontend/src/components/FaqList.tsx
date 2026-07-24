@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useFaqs } from "@/hooks/use-customer";
+import { useFaqs } from "@/hooks/use-contact";
 
 export function FaqList({
   limit,

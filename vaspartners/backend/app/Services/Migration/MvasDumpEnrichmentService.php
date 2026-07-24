@@ -6,7 +6,7 @@ use App\Enums\RenewalInterval;
 use App\Enums\SubscriptionStatus;
 use App\Enums\TicketStatus;
 use App\Models\Company;
-use App\Models\Customer;
+use App\Models\Contact;
 use App\Models\DocumentType;
 use App\Models\Requisition;
 use App\Models\Service;
@@ -113,15 +113,15 @@ class MvasDumpEnrichmentService
         $aliveByKey = [];
 
         foreach ($activationTickets as $ticket) {
-            $customer = Customer::query()->find($ticket->customer_id);
-            if (! $customer?->legacy_mvas_client_id) {
+            $contact = Contact::query()->find($ticket->contact_id);
+            if (! $contact?->legacy_mvas_client_id) {
                 $stats['subscriptions']['skipped']++;
 
                 continue;
             }
 
             $company = Company::query()
-                ->where('legacy_mvas_client_id', $customer->legacy_mvas_client_id)
+                ->where('legacy_mvas_client_id', $contact->legacy_mvas_client_id)
                 ->first();
             if (! $company) {
                 $stats['subscriptions']['skipped']++;
@@ -178,7 +178,7 @@ class MvasDumpEnrichmentService
             $periodEnd = (clone $started)->addMonthsNoOverflow($months);
 
             $subscription = Subscription::query()->create([
-                'customer_id' => $customer->id,
+                'contact_id' => $contact->id,
                 'company_id' => $company->id,
                 'service_id' => $ticket->service_id,
                 'status' => SubscriptionStatus::Active,
@@ -188,7 +188,7 @@ class MvasDumpEnrichmentService
                 'current_period_end' => $periodEnd,
                 'next_renewal_due_at' => $periodEnd,
                 'activated_by_ticket_id' => $ticket->id,
-                'legacy_mvas_client_id' => $customer->legacy_mvas_client_id,
+                'legacy_mvas_client_id' => $contact->legacy_mvas_client_id,
                 'legacy_mvas_service_id' => null,
             ]);
             $subscription->forceFill([
@@ -210,12 +210,12 @@ class MvasDumpEnrichmentService
             ->get();
 
         foreach ($manageTickets as $ticket) {
-            $customer = Customer::query()->find($ticket->customer_id);
-            if (! $customer?->legacy_mvas_client_id) {
+            $contact = Contact::query()->find($ticket->contact_id);
+            if (! $contact?->legacy_mvas_client_id) {
                 continue;
             }
             $company = Company::query()
-                ->where('legacy_mvas_client_id', $customer->legacy_mvas_client_id)
+                ->where('legacy_mvas_client_id', $contact->legacy_mvas_client_id)
                 ->first();
             if (! $company) {
                 continue;
@@ -250,12 +250,12 @@ class MvasDumpEnrichmentService
                 ->get();
 
             foreach ($termTickets as $ticket) {
-                $customer = Customer::query()->find($ticket->customer_id);
-                if (! $customer?->legacy_mvas_client_id) {
+                $contact = Contact::query()->find($ticket->contact_id);
+                if (! $contact?->legacy_mvas_client_id) {
                     continue;
                 }
                 $company = Company::query()
-                    ->where('legacy_mvas_client_id', $customer->legacy_mvas_client_id)
+                    ->where('legacy_mvas_client_id', $contact->legacy_mvas_client_id)
                     ->first();
                 if (! $company) {
                     continue;
@@ -407,7 +407,7 @@ class MvasDumpEnrichmentService
 
         $ticketsByLegacy = Ticket::query()
             ->whereNotNull('legacy_mvas_ticket_id')
-            ->get(['id', 'public_id', 'legacy_mvas_ticket_id', 'customer_id'])
+            ->get(['id', 'public_id', 'legacy_mvas_ticket_id', 'contact_id'])
             ->keyBy(fn (Ticket $t) => (int) $t->legacy_mvas_ticket_id);
 
         $seen = 0;
@@ -497,7 +497,7 @@ class MvasDumpEnrichmentService
                 'size_bytes' => $file['size'] ?: (int) filesize($destAbs),
                 'verification_status' => $verified ? 'accepted' : 'pending',
                 'remark' => $requested !== '' ? 'Migrated from MVAS: '.$requested : 'Migrated from MVAS',
-                'uploaded_by_customer_id' => $ticket->customer_id,
+                'uploaded_by_contact_id' => $ticket->contact_id,
                 'legacy_mvas_file_id' => $fileId,
             ]);
 

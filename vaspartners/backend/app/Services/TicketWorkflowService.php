@@ -5,7 +5,7 @@ namespace App\Services;
 use App\Enums\ApprovalAction;
 use App\Enums\DocumentReviewStatus;
 use App\Enums\TicketStatus;
-use App\Models\Customer;
+use App\Models\Contact;
 use App\Models\Requisition;
 use App\Models\Service;
 use App\Models\ServiceFinalApprover;
@@ -70,7 +70,7 @@ class TicketWorkflowService
 
         DB::afterCommit(function () use ($ticket, $from, $to, $note) {
             $this->notifications->ticketStatusChanged(
-                $ticket->fresh(['customer', 'service', 'requisition']),
+                $ticket->fresh(['contact', 'service', 'requisition']),
                 $from,
                 $to,
                 $note,
@@ -219,12 +219,12 @@ class TicketWorkflowService
         return (bool) preg_match('/if any/i', (string) $type->name);
     }
 
-    public function createTicket(Customer $customer, array $data): Ticket
+    public function createTicket(Contact $contact, array $data): Ticket
     {
-        return DB::transaction(function () use ($customer, $data) {
+        return DB::transaction(function () use ($contact, $data) {
             // Hard gate: no VAS service requests until the company TIN is admin-approved.
             if (empty($data['skip_open_limit'])) {
-                $this->membership->assertCanAccessCompany($customer);
+                $this->membership->assertCanAccessCompany($contact);
             }
 
             $service = Service::query()->findOrFail($data['service_id']);
@@ -236,14 +236,14 @@ class TicketWorkflowService
                 ]);
             }
 
-            $this->assertOpenTicketLimit($customer, $requisition, $data);
+            $this->assertOpenTicketLimit($contact, $requisition, $data);
 
-            $this->subscriptions->assertTicketAllowed($customer, $data, $requisition, $service);
+            $this->subscriptions->assertTicketAllowed($contact, $data, $requisition, $service);
 
             $subscriptionId = $data['subscription_id'] ?? null;
             if (! $subscriptionId && ($requisition->requires_active_subscription || $requisition->renews_subscription || $requisition->terminates_subscription)) {
                 $subscriptionId = \App\Models\Subscription::query()
-                    ->where('company_id', $customer->company_id)
+                    ->where('company_id', $contact->company_id)
                     ->where('service_id', $service->id)
                     ->whereIn('status', ['active', 'pending_renewal', 'grace'])
                     ->latest('id')
@@ -252,7 +252,7 @@ class TicketWorkflowService
 
             $ticket = Ticket::query()->create([
                 'tt_number' => $this->generateTtNumber(),
-                'customer_id' => $customer->id,
+                'contact_id' => $contact->id,
                 'service_id' => $data['service_id'],
                 'requisition_id' => $data['requisition_id'],
                 'subscription_id' => $subscriptionId,
@@ -272,13 +272,13 @@ class TicketWorkflowService
                 'ticket_id' => $ticket->id,
                 'from_status' => null,
                 'to_status' => TicketStatus::Open->value,
-                'actor_type' => Customer::class,
-                'actor_id' => $customer->id,
+                'actor_type' => Contact::class,
+                'actor_id' => $contact->id,
                 'note' => 'Ticket created',
                 'created_at' => now(),
             ]);
 
-            $fresh = $ticket->fresh(['customer', 'service', 'requisition']);
+            $fresh = $ticket->fresh(['contact', 'service', 'requisition']);
 
             DB::afterCommit(function () use ($fresh) {
                 $this->notifications->ticketSubmitted($fresh);
@@ -294,7 +294,7 @@ class TicketWorkflowService
      *
      * @param  array<string, mixed>  $data
      */
-    protected function assertOpenTicketLimit(Customer $customer, Requisition $requisition, array $data): void
+    protected function assertOpenTicketLimit(Contact $contact, Requisition $requisition, array $data): void
     {
         if (! empty($data['skip_open_limit'])) {
             return;
@@ -306,14 +306,14 @@ class TicketWorkflowService
         }
 
         $maxOpen = (int) config('vas.max_open_tickets', 1);
-        $companyId = (int) $customer->company_id;
+        $companyId = (int) $contact->company_id;
         $openCount = Ticket::query()
             ->where('status', TicketStatus::Open)
             ->whereHas('requisition', fn ($q) => $q->where('creates_subscription', true))
             ->when(
                 $companyId > 0,
-                fn ($q) => $q->whereHas('customer.memberships', fn ($cq) => $cq->where('company_id', $companyId)),
-                fn ($q) => $q->where('customer_id', $customer->id),
+                fn ($q) => $q->whereHas('contact.memberships', fn ($cq) => $cq->where('company_id', $companyId)),
+                fn ($q) => $q->where('contact_id', $contact->id),
             )
             ->count();
 
@@ -386,12 +386,12 @@ class TicketWorkflowService
                 $notifyNote = $note;
                 DB::afterCommit(function () use ($notifyTicket, $notifyNote) {
                     $this->notifications->documentsNeedAttention(
-                        $notifyTicket->fresh(['customer', 'service', 'requisition']),
+                        $notifyTicket->fresh(['contact', 'service', 'requisition']),
                         $notifyNote,
                     );
                 });
 
-                return $ticket->fresh(['customer', 'service', 'requisition']);
+                return $ticket->fresh(['contact', 'service', 'requisition']);
             }
 
             // Passed — resume handling / start approval chain
@@ -421,7 +421,7 @@ class TicketWorkflowService
             $ticket->current_approver_user_id = $reviewer->manager_id;
             $ticket->save();
 
-            $fresh = $ticket->fresh(['customer', 'service', 'requisition']);
+            $fresh = $ticket->fresh(['contact', 'service', 'requisition']);
             $approverId = $reviewer->manager_id;
             DB::afterCommit(function () use ($fresh, $approverId) {
                 $approver = User::query()->find($approverId);
@@ -512,7 +512,7 @@ class TicketWorkflowService
                 ]);
             }
 
-            $fresh = $ticket->fresh(['customer', 'service', 'requisition']);
+            $fresh = $ticket->fresh(['contact', 'service', 'requisition']);
             if ($escalatedTo) {
                 DB::afterCommit(function () use ($fresh, $escalatedTo) {
                     $next = User::query()->find($escalatedTo);

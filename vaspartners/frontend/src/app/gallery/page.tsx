@@ -2,10 +2,10 @@
 
 import { SiteShell } from "@/components/SiteShell";
 import { LandingGallerySection } from "@/components/LandingGallerySection";
-import { useCustomer, useLogout } from "@/hooks/use-customer";
+import { useContact, useLogout } from "@/hooks/use-contact";
 
 export default function GalleryPage() {
-  const { data: me = null } = useCustomer();
+  const { data: me = null } = useContact();
   const logout = useLogout();
 
   return (

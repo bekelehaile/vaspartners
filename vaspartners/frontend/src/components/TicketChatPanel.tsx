@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "@tanstack/react-form";
-import { usePostTicketComment, useTicketMessages } from "@/hooks/use-customer";
+import { usePostTicketComment, useTicketMessages } from "@/hooks/use-contact";
 import { getToken, type TicketMessage } from "@/lib/api";
 import { commentSchema } from "@/lib/schemas/ticket";
 
@@ -166,7 +166,7 @@ export function TicketChatPanel({
           </div>
         ) : (
           messages.map((m) => {
-            const mine = m.author_role === "customer";
+            const mine = m.author_role === "contact";
             return (
               <div
                 key={m.id}

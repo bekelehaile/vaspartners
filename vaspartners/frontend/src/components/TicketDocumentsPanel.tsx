@@ -11,7 +11,7 @@ import {
   useDeleteTicketDocument,
   useDocumentRequirements,
   useUploadTicketDocument,
-} from "@/hooks/use-customer";
+} from "@/hooks/use-contact";
 
 type UploadedSlot = { id: number; name: string };
 

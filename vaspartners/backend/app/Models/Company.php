@@ -30,7 +30,7 @@ class Company extends Model
         'approved_by_user_id',
         'approved_at',
         'approval_note',
-        'created_by_customer_id',
+        'created_by_contact_id',
         'legacy_mvas_client_id',
     ];
 
@@ -62,7 +62,7 @@ class Company extends Model
 
     public function creator(): BelongsTo
     {
-        return $this->belongsTo(Customer::class, 'created_by_customer_id');
+        return $this->belongsTo(Contact::class, 'created_by_contact_id');
     }
 
     public function approvedBy(): BelongsTo
@@ -78,7 +78,7 @@ class Company extends Model
     /** All linked partners (owner + members). */
     public function members(): BelongsToMany
     {
-        return $this->belongsToMany(Customer::class, 'company_memberships')
+        return $this->belongsToMany(Contact::class, 'company_memberships')
             ->withPivot(['id', 'role', 'is_active'])
             ->withTimestamps();
     }
@@ -91,7 +91,7 @@ class Company extends Model
 
     public function owner(): BelongsToMany
     {
-        return $this->belongsToMany(Customer::class, 'company_memberships')
+        return $this->belongsToMany(Contact::class, 'company_memberships')
             ->withPivot(['id', 'role', 'is_active'])
             ->wherePivot('role', CompanyRole::Owner->value)
             ->withTimestamps();
@@ -99,7 +99,7 @@ class Company extends Model
 
     public function nonOwnerMembers(): BelongsToMany
     {
-        return $this->belongsToMany(Customer::class, 'company_memberships')
+        return $this->belongsToMany(Contact::class, 'company_memberships')
             ->withPivot(['id', 'role', 'is_active'])
             ->wherePivot('role', CompanyRole::Member->value)
             ->withTimestamps();
@@ -107,7 +107,7 @@ class Company extends Model
 
     public function activeMembers(): BelongsToMany
     {
-        return $this->belongsToMany(Customer::class, 'company_memberships')
+        return $this->belongsToMany(Contact::class, 'company_memberships')
             ->withPivot(['id', 'role', 'is_active'])
             ->wherePivot('is_active', true)
             ->withTimestamps();
@@ -127,7 +127,7 @@ class Company extends Model
      * Service requests (tickets) for this company:
      * - tickets on company subscriptions
      * - tickets owned by current members
-     * - tickets owned by migrated customer with same legacy_mvas_client_id
+     * - tickets owned by migrated contact with same legacy_mvas_client_id
      */
     public function serviceRequests(): Builder
     {
@@ -142,13 +142,13 @@ class Company extends Model
                         fn (Builder $q) => $q->where('company_id', $companyId),
                     )
                     ->orWhereHas(
-                        'customer.memberships',
+                        'contact.memberships',
                         fn (Builder $q) => $q->where('company_id', $companyId),
                     );
 
                 if ($legacyClientId !== null && $legacyClientId !== '') {
                     $query->orWhereHas(
-                        'customer',
+                        'contact',
                         fn (Builder $q) => $q->where('legacy_mvas_client_id', $legacyClientId),
                     );
                 }
@@ -178,7 +178,7 @@ class Company extends Model
         );
     }
 
-    public function ownerCustomer(): ?Customer
+    public function ownerContact(): ?Contact
     {
         return $this->owner()->first();
     }

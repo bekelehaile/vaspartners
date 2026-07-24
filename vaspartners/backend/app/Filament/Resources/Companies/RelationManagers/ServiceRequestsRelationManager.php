@@ -53,7 +53,7 @@ class ServiceRequestsRelationManager extends RelationManager
             ->modifyQueryUsing(fn (Builder $query) => $query->with([
                 'service',
                 'requisition',
-                'customer',
+                'contact',
                 'subscription',
             ]))
             ->columns([
@@ -72,7 +72,7 @@ class ServiceRequestsRelationManager extends RelationManager
                     ->formatStateUsing(fn ($state) => $state instanceof TicketStatus
                         ? $state->label()
                         : (TicketStatus::tryFrom((string) $state)?->label() ?? (string) $state)),
-                TextColumn::make('customer.name')->label('Partner')->toggleable(),
+                TextColumn::make('contact.name')->label('Partner')->toggleable(),
                 TextColumn::make('created_at')->dateTime()->sortable(),
             ])
             ->filters([

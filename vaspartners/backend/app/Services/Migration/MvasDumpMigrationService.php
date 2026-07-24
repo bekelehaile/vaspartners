@@ -9,7 +9,7 @@ use App\Enums\TicketStatus;
 use App\Models\Category;
 use App\Models\Company;
 use App\Models\CompanyMembership;
-use App\Models\Customer;
+use App\Models\Contact;
 use App\Models\Priority;
 use App\Models\Requisition;
 use App\Models\Service;
@@ -24,7 +24,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 /**
- * Full MVAS `.dump` → VAS Partners seed for companies, customers, and tickets.
+ * Full MVAS `.dump` → VAS Partners seed for companies, contacts, and tickets.
  */
 class MvasDumpMigrationService
 {
@@ -54,7 +54,7 @@ class MvasDumpMigrationService
      *   only_verified?: bool,
      *   client_ids?: list<int>,
      *   skip_companies?: bool,
-     *   skip_customers?: bool,
+     *   skip_contacts?: bool,
      *   skip_tickets?: bool,
      *   link_memberships?: bool
      * }  $options
@@ -85,7 +85,7 @@ class MvasDumpMigrationService
 
         $stats = [
             'companies' => ['imported' => 0, 'skipped' => 0, 'selected' => 0],
-            'customers' => ['imported' => 0, 'skipped' => 0, 'selected' => 0],
+            'contacts' => ['imported' => 0, 'skipped' => 0, 'selected' => 0],
             'tickets' => ['imported' => 0, 'skipped' => 0, 'selected' => 0, 'orphaned' => 0],
             'memberships' => ['linked' => 0, 'skipped' => 0],
             'dry_run' => $dryRun,
@@ -93,29 +93,29 @@ class MvasDumpMigrationService
 
         /** @var array<int, int> legacy client id → company id */
         $companyByClient = [];
-        /** @var array<int, int> legacy client id → customer id */
-        $customerByClient = [];
+        /** @var array<int, int> legacy client id → contact id */
+        $contactByClient = [];
         /** @var array<string, true> */
         $usedPhones = [];
         /** @var array<string, true> */
         $usedEmails = [];
 
         // Preload existing unique phones/emails so we do not collide.
-        foreach (Customer::query()->whereNotNull('phone_number')->pluck('phone_number') as $phone) {
+        foreach (Contact::query()->whereNotNull('phone_number')->pluck('phone_number') as $phone) {
             $usedPhones[(string) $phone] = true;
         }
-        foreach (Customer::query()->whereNotNull('email')->pluck('email') as $email) {
+        foreach (Contact::query()->whereNotNull('email')->pluck('email') as $email) {
             $usedEmails[strtolower((string) $email)] = true;
         }
 
         foreach (Company::query()->whereNotNull('legacy_mvas_client_id')->get(['id', 'legacy_mvas_client_id']) as $company) {
             $companyByClient[(int) $company->legacy_mvas_client_id] = (int) $company->id;
         }
-        foreach (Customer::query()->whereNotNull('legacy_mvas_client_id')->get(['id', 'legacy_mvas_client_id']) as $customer) {
-            $customerByClient[(int) $customer->legacy_mvas_client_id] = (int) $customer->id;
+        foreach (Contact::query()->whereNotNull('legacy_mvas_client_id')->get(['id', 'legacy_mvas_client_id']) as $contact) {
+            $contactByClient[(int) $contact->legacy_mvas_client_id] = (int) $contact->id;
         }
 
-        if (! ($options['skip_companies'] ?? false) || ! ($options['skip_customers'] ?? false)) {
+        if (! ($options['skip_companies'] ?? false) || ! ($options['skip_contacts'] ?? false)) {
             $clientsSelected = 0;
 
             foreach ($this->clientReader->clients($dump) as $client) {
@@ -158,29 +158,29 @@ class MvasDumpMigrationService
                     }
                 }
 
-                if (! ($options['skip_customers'] ?? false)) {
-                    $stats['customers']['selected']++;
-                    $customerId = $this->upsertCustomer(
+                if (! ($options['skip_contacts'] ?? false)) {
+                    $stats['contacts']['selected']++;
+                    $contactId = $this->upsertContact(
                         $client,
                         $companyName,
                         $phone,
                         $dryRun,
-                        $customerByClient,
+                        $contactByClient,
                         $usedPhones,
                         $usedEmails,
                         $stats,
                     );
-                    if ($customerId !== null) {
-                        $customerByClient[$client['id']] = $customerId;
+                    if ($contactId !== null) {
+                        $contactByClient[$client['id']] = $contactId;
                     }
 
                     if (
                         $linkMemberships
                         && ! $dryRun
-                        && isset($companyByClient[$client['id']], $customerByClient[$client['id']])
+                        && isset($companyByClient[$client['id']], $contactByClient[$client['id']])
                     ) {
                         $this->linkOwnerMembership(
-                            $customerByClient[$client['id']],
+                            $contactByClient[$client['id']],
                             $companyByClient[$client['id']],
                             $stats,
                         );
@@ -203,16 +203,16 @@ class MvasDumpMigrationService
                 if ($onlyClientIds !== [] && ! in_array($ticket['client_id'], $onlyClientIds, true)) {
                     continue;
                 }
-                if ($companyLimit !== null && ! isset($customerByClient[$ticket['client_id']])) {
+                if ($companyLimit !== null && ! isset($contactByClient[$ticket['client_id']])) {
                     // When limiting companies, only import tickets for imported clients.
-                    // Still allow tickets whose customer was already in DB from a prior run.
-                    $existingCustomerId = Customer::query()
+                    // Still allow tickets whose contact was already in DB from a prior run.
+                    $existingContactId = Contact::query()
                         ->where('legacy_mvas_client_id', $ticket['client_id'])
                         ->value('id');
-                    if (! $existingCustomerId) {
+                    if (! $existingContactId) {
                         continue;
                     }
-                    $customerByClient[$ticket['client_id']] = (int) $existingCustomerId;
+                    $contactByClient[$ticket['client_id']] = (int) $existingContactId;
                 }
 
                 if ($ticketLimit !== null && $ticketsSeen >= $ticketLimit) {
@@ -221,8 +221,8 @@ class MvasDumpMigrationService
                 $ticketsSeen++;
                 $stats['tickets']['selected']++;
 
-                $customerId = $customerByClient[$ticket['client_id']] ?? null;
-                if ($customerId === null) {
+                $contactId = $contactByClient[$ticket['client_id']] ?? null;
+                if ($contactId === null) {
                     $stats['tickets']['orphaned']++;
 
                     continue;
@@ -250,7 +250,7 @@ class MvasDumpMigrationService
 
                 DB::transaction(function () use (
                     $ticket,
-                    $customerId,
+                    $contactId,
                     $serviceId,
                     $requisitionId,
                     $categoryId,
@@ -267,7 +267,7 @@ class MvasDumpMigrationService
                     $model = new Ticket([
                         'tt_number' => $ttNumber,
                         'legacy_mvas_ticket_id' => $ticket['id'],
-                        'customer_id' => $customerId,
+                        'contact_id' => $contactId,
                         'service_id' => $serviceId,
                         'requisition_id' => $requisitionId,
                         'category_id' => $categoryId,
@@ -362,7 +362,7 @@ class MvasDumpMigrationService
             'approval_status' => CompanyApprovalStatus::Approved,
             'approved_at' => now(),
             'approval_note' => 'Migrated from MVAS .dump (clients.id='.$client['id'].').',
-            'created_by_customer_id' => null,
+            'created_by_contact_id' => null,
             'legacy_mvas_client_id' => $client['id'],
         ]);
 
@@ -373,34 +373,34 @@ class MvasDumpMigrationService
 
     /**
      * @param  array<string, mixed>  $client
-     * @param  array<int, int>  $customerByClient
+     * @param  array<int, int>  $contactByClient
      * @param  array<string, true>  $usedPhones
      * @param  array<string, true>  $usedEmails
      * @param  array<string, mixed>  $stats
      */
-    private function upsertCustomer(
+    private function upsertContact(
         array $client,
         string $companyName,
         string $phone,
         bool $dryRun,
-        array $customerByClient,
+        array $contactByClient,
         array &$usedPhones,
         array &$usedEmails,
         array &$stats,
     ): ?int {
-        if (isset($customerByClient[$client['id']])) {
-            $stats['customers']['skipped']++;
+        if (isset($contactByClient[$client['id']])) {
+            $stats['contacts']['skipped']++;
 
-            return $customerByClient[$client['id']];
+            return $contactByClient[$client['id']];
         }
 
-        $existing = Customer::query()
+        $existing = Contact::query()
             ->where('legacy_mvas_client_id', $client['id'])
             ->orWhere('sub', 'mvas-client-'.$client['id'])
             ->first();
 
         if ($existing) {
-            $stats['customers']['skipped']++;
+            $stats['contacts']['skipped']++;
 
             return (int) $existing->id;
         }
@@ -416,13 +416,13 @@ class MvasDumpMigrationService
             if ($safeEmail !== null) {
                 $usedEmails[strtolower($safeEmail)] = true;
             }
-            $stats['customers']['imported']++;
+            $stats['contacts']['imported']++;
 
             return null;
         }
 
-        $customer = new Customer;
-        $customer->syncFromFayda([
+        $contact = new Contact;
+        $contact->syncFromFayda([
             'sub' => 'mvas-client-'.$client['id'],
             'name' => trim((string) ($client['name'] ?: $companyName)) ?: 'Migrated partner',
             'phone_number' => $safePhone,
@@ -433,7 +433,7 @@ class MvasDumpMigrationService
 
         // No company_* / membership yet — Fayda login claims matching company by phone
         // (or admin assigns orphan companies after verification).
-        $customer->forceFill([
+        $contact->forceFill([
             'is_active' => (bool) $client['is_active'],
             'is_banned' => (bool) $client['is_banned'],
             'company_name' => null,
@@ -454,15 +454,15 @@ class MvasDumpMigrationService
             $usedEmails[strtolower($safeEmail)] = true;
         }
 
-        $stats['customers']['imported']++;
+        $stats['contacts']['imported']++;
 
-        return (int) $customer->id;
+        return (int) $contact->id;
     }
 
     /**
      * @param  array<string, mixed>  $stats
      */
-    private function linkOwnerMembership(int $customerId, int $companyId, array &$stats): void
+    private function linkOwnerMembership(int $contactId, int $companyId, array &$stats): void
     {
         $company = Company::query()->find($companyId);
         if (! $company) {
@@ -486,7 +486,7 @@ class MvasDumpMigrationService
         CompanyMembership::query()->firstOrCreate(
             [
                 'company_id' => $companyId,
-                'customer_id' => $customerId,
+                'contact_id' => $contactId,
             ],
             [
                 'role' => CompanyRole::Owner,
@@ -494,7 +494,7 @@ class MvasDumpMigrationService
             ],
         );
 
-        Customer::query()->whereKey($customerId)->update(['current_company_id' => $companyId]);
+        Contact::query()->whereKey($contactId)->update(['current_company_id' => $companyId]);
         $stats['memberships']['linked']++;
     }
 

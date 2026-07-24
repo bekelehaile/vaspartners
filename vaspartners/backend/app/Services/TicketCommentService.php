@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use App\Enums\TicketStatus;
-use App\Models\Customer;
+use App\Models\Contact;
 use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Models\User;
@@ -21,11 +21,11 @@ class TicketCommentService
     }
 
     /**
-     * @param  Customer|User  $author
+     * @param  Contact|User  $author
      */
-    public function post(Ticket $ticket, Customer|User $author, ?string $body, ?UploadedFile $file = null): TicketComment
+    public function post(Ticket $ticket, Contact|User $author, ?string $body, ?UploadedFile $file = null): TicketComment
     {
-        if ($ticket->status instanceof TicketStatus && $ticket->status->locksCustomerChat()) {
+        if ($ticket->status instanceof TicketStatus && $ticket->status->locksContactChat()) {
             throw ValidationException::withMessages([
                 'body' => 'This request is closed for new messages.',
             ]);
@@ -126,7 +126,7 @@ class TicketCommentService
      */
     public function paginateThread(
         Ticket $ticket,
-        ?Customer $viewer = null,
+        ?Contact $viewer = null,
         ?int $beforeId = null,
         ?int $afterId = null,
         int $limit = 30,
@@ -189,24 +189,24 @@ class TicketCommentService
     }
 
     /** @return list<array<string, mixed>> */
-    public function serializeThread(Ticket $ticket, ?Customer $viewer = null): array
+    public function serializeThread(Ticket $ticket, ?Contact $viewer = null): array
     {
         return $this->paginateThread($ticket, $viewer, null, null, 40)['data'];
     }
 
     /** @return array<string, mixed> */
-    public function serializeComment(Ticket $ticket, TicketComment $comment, ?Customer $viewer = null): array
+    public function serializeComment(Ticket $ticket, TicketComment $comment, ?Contact $viewer = null): array
     {
         $author = $comment->author;
         $isStaff = $author instanceof User;
-        $isSelf = $viewer && $author instanceof Customer && (int) $author->id === (int) $viewer->id;
+        $isSelf = $viewer && $author instanceof Contact && (int) $author->id === (int) $viewer->id;
 
         return [
             'id' => $comment->id,
             'body' => ($comment->body === '(PDF attachment)' && filled($comment->attachment_path))
                 ? null
                 : $comment->body,
-            'author_role' => $isStaff ? 'staff' : 'customer',
+            'author_role' => $isStaff ? 'staff' : 'contact',
             'author_label' => $isStaff
                 ? ($author->name ?: 'Account manager')
                 : ($isSelf ? 'You' : ($author->name ?? 'Partner')),

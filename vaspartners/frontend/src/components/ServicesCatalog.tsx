@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useCustomer, useServices } from "@/hooks/use-customer";
+import { useContact, useServices } from "@/hooks/use-contact";
 import { faydaLoginUrl } from "@/lib/api";
 import type { Service } from "@/lib/api";
 import { ServiceRequirements } from "@/components/ServiceRequirements";
@@ -29,7 +29,7 @@ export function ServicesCatalog({
   compact = false,
 }: ServicesCatalogProps) {
   const { data: services = [], isLoading, isError, error } = useServices();
-  const { data: me } = useCustomer();
+  const { data: me } = useContact();
   const signedIn = !!me;
   const canRequest = !!me?.profile_completed;
 

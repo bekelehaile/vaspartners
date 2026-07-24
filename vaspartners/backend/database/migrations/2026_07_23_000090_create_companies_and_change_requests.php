@@ -18,12 +18,12 @@ return new class extends Migration
             $table->string('email')->nullable();
             $table->text('address')->nullable();
             $table->boolean('is_active')->default(true);
-            $table->foreignId('created_by_customer_id')->nullable()->constrained('customers')->nullOnDelete();
+            $table->foreignId('created_by_contact_id')->nullable()->constrained('contacts')->nullOnDelete();
             $table->timestamps();
             $table->softDeletes();
         });
 
-        Schema::table('customers', function (Blueprint $table) {
+        Schema::table('contacts', function (Blueprint $table) {
             $table->foreignId('company_id')->nullable()->after('profile_completed_at')->constrained('companies')->nullOnDelete();
             $table->string('company_role', 16)->nullable()->after('company_id'); // owner|member
         });
@@ -31,11 +31,11 @@ return new class extends Migration
         Schema::create('company_change_requests', function (Blueprint $table) {
             $table->id();
             $table->string('public_id', 26)->unique();
-            $table->foreignId('customer_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('contact_id')->constrained()->cascadeOnDelete();
             $table->foreignId('company_id')->constrained()->cascadeOnDelete();
             $table->string('type', 16); // attach|detach
             $table->string('status', 16)->default('pending'); // pending|approved|rejected
-            $table->text('customer_note')->nullable();
+            $table->text('contact_note')->nullable();
             $table->text('admin_note')->nullable();
             $table->string('proposal_disk', 32)->nullable();
             $table->string('proposal_path')->nullable();
@@ -50,19 +50,19 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
             $table->index(['status', 'type']);
-            $table->index(['customer_id', 'status']);
+            $table->index(['contact_id', 'status']);
         });
 
         // Backfill companies from existing partner profiles
-        $customers = DB::table('customers')
+        $contacts = DB::table('contacts')
             ->whereNotNull('company_tin')
             ->where('company_tin', '!=', '')
             ->whereNull('deleted_at')
             ->orderBy('id')
             ->get();
 
-        foreach ($customers as $customer) {
-            $tin = trim((string) $customer->company_tin);
+        foreach ($contacts as $contact) {
+            $tin = trim((string) $contact->company_tin);
             if ($tin === '') {
                 continue;
             }
@@ -71,19 +71,19 @@ return new class extends Migration
             if (! $companyId) {
                 $companyId = DB::table('companies')->insertGetId([
                     'public_id' => (string) \Illuminate\Support\Str::ulid(),
-                    'name' => $customer->company_name ?: 'Company '.$tin,
+                    'name' => $contact->company_name ?: 'Company '.$tin,
                     'tin' => $tin,
-                    'phone' => $customer->company_phone,
-                    'email' => $customer->company_email,
-                    'address' => $customer->company_address,
+                    'phone' => $contact->company_phone,
+                    'email' => $contact->company_email,
+                    'address' => $contact->company_address,
                     'is_active' => true,
-                    'created_by_customer_id' => $customer->id,
+                    'created_by_contact_id' => $contact->id,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
             }
 
-            DB::table('customers')->where('id', $customer->id)->update([
+            DB::table('contacts')->where('id', $contact->id)->update([
                 'company_id' => $companyId,
                 'company_role' => 'owner',
             ]);
@@ -93,7 +93,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('company_change_requests');
-        Schema::table('customers', function (Blueprint $table) {
+        Schema::table('contacts', function (Blueprint $table) {
             $table->dropConstrainedForeignId('company_id');
             $table->dropColumn('company_role');
         });

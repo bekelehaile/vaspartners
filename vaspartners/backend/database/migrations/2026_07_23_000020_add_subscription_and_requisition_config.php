@@ -29,7 +29,7 @@ return new class extends Migration
         Schema::create('subscriptions', function (Blueprint $table) {
             $table->id();
             $table->string('public_id', 32)->unique();
-            $table->foreignId('customer_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('contact_id')->constrained()->cascadeOnDelete();
             $table->foreignId('service_id')->constrained()->restrictOnDelete();
             $table->string('status', 32)->default('active'); // active|pending_renewal|grace|expired|terminated
             $table->string('renewal_interval', 32); // yearly|bi_yearly (snapshot)
@@ -43,7 +43,7 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
 
-            $table->index(['customer_id', 'service_id', 'status'], 'subscriptions_customer_service_status');
+            $table->index(['contact_id', 'service_id', 'status'], 'subscriptions_customer_service_status');
             $table->index(['status', 'current_period_end'], 'subscriptions_renewal_due');
         });
 

@@ -1,6 +1,6 @@
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
 
-export type Customer = {
+export type Contact = {
   public_id: string;
   name: string;
   phone_number?: string | null;
@@ -52,14 +52,14 @@ export type Customer = {
     public_id: string;
     type: "attach" | "detach" | "transfer_ownership";
     status: string;
-    customer_note?: string | null;
+    contact_note?: string | null;
     company?: {
       public_id: string;
       name: string;
       tin: string;
       license_number?: string | null;
     } | null;
-    target_customer?: {
+    target_contact?: {
       public_id: string;
       name: string;
     } | null;
@@ -155,7 +155,7 @@ export type Ticket = {
   chat_locked?: boolean;
   chat_attachment_max_kb?: number;
   documents_locked?: boolean;
-  customer_can_edit?: boolean;
+  contact_can_edit?: boolean;
   documents?: {
     id: number;
     document_type_id?: number;
@@ -167,7 +167,7 @@ export type Ticket = {
 export type TicketMessage = {
   id: number;
   body?: string | null;
-  author_role: "staff" | "customer";
+  author_role: "staff" | "contact";
   author_label: string;
   has_attachment: boolean;
   attachment_name?: string | null;

@@ -33,7 +33,7 @@ class DocumentsRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->description('Customer uploads from all tickets on this subscription. Open a ticket for document review.')
+            ->description('Contact uploads from all tickets on this subscription. Open a ticket for document review.')
             ->modifyQueryUsing(fn ($query) => $query->with(['documentType', 'ticket']))
             ->columns([
                 TextColumn::make('ticket.tt_number')

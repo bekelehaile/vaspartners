@@ -5,7 +5,7 @@ import { useMemo } from "react";
 import { useParams } from "next/navigation";
 import { SiteShell } from "@/components/SiteShell";
 import { ServiceRequirements } from "@/components/ServiceRequirements";
-import { useCustomer, useLogout, useServices } from "@/hooks/use-customer";
+import { useContact, useLogout, useServices } from "@/hooks/use-contact";
 import { faydaLoginUrl } from "@/lib/api";
 import {
   formatServiceDescription,
@@ -15,7 +15,7 @@ import {
 export default function ServiceDetailPage() {
   const params = useParams<{ slug: string }>();
   const slug = params?.slug ?? "";
-  const { data: me = null } = useCustomer();
+  const { data: me = null } = useContact();
   const logout = useLogout();
   const { data: services = [], isLoading, isError } = useServices();
 

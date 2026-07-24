@@ -1,10 +1,10 @@
 "use client";
 
-import type { Customer } from "@/lib/api";
-import { useSwitchCompany } from "@/hooks/use-customer";
+import type { Contact } from "@/lib/api";
+import { useSwitchCompany } from "@/hooks/use-contact";
 
 function membershipLabel(
-  m: NonNullable<Customer["memberships"]>[number],
+  m: NonNullable<Contact["memberships"]>[number],
 ): string {
   const name = m.company_name || "Company";
   const role = m.role || "member";
@@ -23,7 +23,7 @@ export function CompanySwitcher({
   variant = "header",
   showHint = false,
 }: {
-  me: Customer;
+  me: Contact;
   variant?: "header" | "page";
   showHint?: boolean;
 }) {

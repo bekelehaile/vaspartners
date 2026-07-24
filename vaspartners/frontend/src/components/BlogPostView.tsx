@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { SiteShell } from "@/components/SiteShell";
-import { useBlogPost, useCustomer, useLogout } from "@/hooks/use-customer";
+import { useBlogPost, useContact, useLogout } from "@/hooks/use-contact";
 
 export function BlogPostView({ slug }: { slug: string }) {
-  const { data: me = null } = useCustomer();
+  const { data: me = null } = useContact();
   const logout = useLogout();
   const { data: post, isLoading, isError } = useBlogPost(slug);
 

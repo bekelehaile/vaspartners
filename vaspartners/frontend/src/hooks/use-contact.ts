@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   BlogPost,
-  Customer,
+  Contact,
   DocumentRequirement,
   FaqItem,
   GalleryItem,
@@ -23,13 +23,13 @@ import type { TicketCreateValues } from "@/lib/schemas/ticket";
 
 export { queryKeys };
 
-export function useCustomer(options?: { enabled?: boolean }) {
+export function useContact(options?: { enabled?: boolean }) {
   const enabled = options?.enabled ?? true;
   return useQuery({
-    queryKey: queryKeys.customer.me,
+    queryKey: queryKeys.contact.me,
     enabled: enabled && !!getToken(),
     queryFn: async () => {
-      const res = await api<{ data: Customer }>("/auth/me");
+      const res = await api<{ data: Contact }>("/auth/me");
       return res.data;
     },
   });
@@ -152,7 +152,7 @@ export function useTickets(
   };
 
   return useQuery({
-    queryKey: queryKeys.customer.ticketsFiltered(normalized),
+    queryKey: queryKeys.contact.ticketsFiltered(normalized),
     enabled: enabled && !!getToken(),
     queryFn: async (): Promise<TicketsPage> => {
       const qs = new URLSearchParams();
@@ -210,17 +210,17 @@ export function useSwitchCompany() {
 
   return useMutation({
     mutationFn: async (company_public_id: string) => {
-      const res = await api<{ data: Customer }>("/profile/company/switch", {
+      const res = await api<{ data: Contact }>("/profile/company/switch", {
         method: "POST",
         body: JSON.stringify({ company_public_id }),
       });
       return res.data;
     },
-    onSuccess: (customer) => {
-      queryClient.setQueryData(queryKeys.customer.me, customer);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.customer.me });
+    onSuccess: (contact) => {
+      queryClient.setQueryData(queryKeys.contact.me, contact);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.contact.me });
       void queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.customer.tickets });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.contact.tickets });
       void queryClient.invalidateQueries({ queryKey: ["company-members"] });
       void queryClient.invalidateQueries({ queryKey: ["company-membership-requests"] });
       void queryClient.invalidateQueries({ queryKey: ["company-requests-inbox"] });
@@ -235,15 +235,15 @@ export function useCompleteCompanyProfile() {
     mutationFn: async (
       values: CompanyProfileValues & { create_new?: boolean },
     ) => {
-      const res = await api<{ data: Customer }>("/profile/company", {
+      const res = await api<{ data: Contact }>("/profile/company", {
         method: "POST",
         body: JSON.stringify(values),
       });
       return res.data;
     },
-    onSuccess: (customer) => {
-      queryClient.setQueryData(queryKeys.customer.me, customer);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.customer.me });
+    onSuccess: (contact) => {
+      queryClient.setQueryData(queryKeys.contact.me, contact);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.contact.me });
       void queryClient.invalidateQueries({ queryKey: ["company-requests-inbox"] });
     },
   });
@@ -276,15 +276,15 @@ export function useAttachCompany() {
       company_license_number: string;
       note?: string;
     }) => {
-      const res = await api<{ data: Customer }>("/profile/company/attach", {
+      const res = await api<{ data: Contact }>("/profile/company/attach", {
         method: "POST",
         body: JSON.stringify(payload),
       });
       return res.data;
     },
-    onSuccess: (customer) => {
-      queryClient.setQueryData(queryKeys.customer.me, customer);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.customer.me });
+    onSuccess: (contact) => {
+      queryClient.setQueryData(queryKeys.contact.me, contact);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.contact.me });
       void queryClient.invalidateQueries({ queryKey: ["company-requests-inbox"] });
     },
   });
@@ -294,7 +294,7 @@ export type MembershipRequest = {
   public_id: string;
   type: string;
   status: string;
-  customer_note?: string | null;
+  contact_note?: string | null;
   created_at?: string | null;
   applicant?: {
     public_id?: string | null;
@@ -311,7 +311,7 @@ export type CompanyRequestCard = {
   status: string;
   direction?: "submitted" | "to_review";
   awaiting?: string | null;
-  customer_note?: string | null;
+  contact_note?: string | null;
   decision_note?: string | null;
   decided_by?: string | null;
   created_at?: string | null;
@@ -331,7 +331,7 @@ export type CompanyRequestCard = {
     phone_number?: string | null;
     email?: string | null;
   } | null;
-  target_customer?: {
+  target_contact?: {
     public_id?: string | null;
     name?: string | null;
   } | null;
@@ -364,15 +364,15 @@ export function useCancelCompanyRequest() {
 
   return useMutation({
     mutationFn: async (publicId: string) => {
-      const res = await api<{ data: Customer }>(
+      const res = await api<{ data: Contact }>(
         `/profile/company/requests/${publicId}/cancel`,
         { method: "POST", body: "{}" },
       );
       return res.data;
     },
-    onSuccess: (customer) => {
-      queryClient.setQueryData(queryKeys.customer.me, customer);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.customer.me });
+    onSuccess: (contact) => {
+      queryClient.setQueryData(queryKeys.contact.me, contact);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.contact.me });
       void queryClient.invalidateQueries({ queryKey: ["company-requests-inbox"] });
       void queryClient.invalidateQueries({ queryKey: ["company-membership-requests"] });
     },
@@ -401,7 +401,7 @@ export function useDecideMembershipRequest() {
       decision: "approve" | "reject";
       note?: string;
     }) => {
-      const res = await api<{ data: Customer }>(
+      const res = await api<{ data: Contact }>(
         `/profile/company/membership-requests/${payload.public_id}/${payload.decision}`,
         {
           method: "POST",
@@ -410,9 +410,9 @@ export function useDecideMembershipRequest() {
       );
       return res.data;
     },
-    onSuccess: (customer) => {
-      queryClient.setQueryData(queryKeys.customer.me, customer);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.customer.me });
+    onSuccess: (contact) => {
+      queryClient.setQueryData(queryKeys.contact.me, contact);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.contact.me });
       void queryClient.invalidateQueries({ queryKey: ["company-membership-requests"] });
       void queryClient.invalidateQueries({ queryKey: ["company-requests-inbox"] });
     },
@@ -424,15 +424,15 @@ export function useDetachCompany() {
 
   return useMutation({
     mutationFn: async (payload?: { note?: string }) => {
-      const res = await api<{ data: Customer }>("/profile/company/detach", {
+      const res = await api<{ data: Contact }>("/profile/company/detach", {
         method: "POST",
         body: JSON.stringify({ note: payload?.note?.trim() || undefined }),
       });
       return res.data;
     },
-    onSuccess: (customer) => {
-      queryClient.setQueryData(queryKeys.customer.me, customer);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.customer.me });
+    onSuccess: (contact) => {
+      queryClient.setQueryData(queryKeys.contact.me, contact);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.contact.me });
       void queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions });
       void queryClient.invalidateQueries({ queryKey: ["company-membership-requests"] });
       void queryClient.invalidateQueries({ queryKey: ["company-requests-inbox"] });
@@ -471,25 +471,25 @@ export function useTransferOwnership() {
 
   return useMutation({
     mutationFn: async (payload: {
-      target_customer: string;
+      target_contact: string;
       letter: File;
       note?: string;
     }) => {
       const form = new FormData();
-      form.append("target_customer", payload.target_customer);
+      form.append("target_contact", payload.target_contact);
       form.append("letter", payload.letter);
       if (payload.note?.trim()) {
         form.append("note", payload.note.trim());
       }
-      const res = await api<{ data: Customer }>("/profile/company/transfer-ownership", {
+      const res = await api<{ data: Contact }>("/profile/company/transfer-ownership", {
         method: "POST",
         body: form,
       });
       return res.data;
     },
-    onSuccess: (customer) => {
-      queryClient.setQueryData(queryKeys.customer.me, customer);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.customer.me });
+    onSuccess: (contact) => {
+      queryClient.setQueryData(queryKeys.contact.me, contact);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.contact.me });
       void queryClient.invalidateQueries({ queryKey: ["company-members"] });
     },
   });
@@ -517,7 +517,7 @@ export function useCreateTicket() {
     },
     onSuccess: (ticket) => {
       queryClient.setQueryData(queryKeys.ticket(ticket.tt_number), ticket);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.customer.tickets });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.contact.tickets });
       void queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions });
     },
   });
@@ -554,7 +554,7 @@ export function useUploadTicketDocument(publicId: string) {
     }) => uploadTicketDocumentFile(publicId, documentTypeId, file),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.ticket(publicId) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.customer.tickets });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.contact.tickets });
     },
   });
 }
@@ -569,7 +569,7 @@ export function useDeleteTicketDocument(publicId: string) {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.ticket(publicId) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.customer.tickets });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.contact.tickets });
     },
   });
 }

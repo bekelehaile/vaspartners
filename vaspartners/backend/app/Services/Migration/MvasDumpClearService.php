@@ -4,7 +4,7 @@ namespace App\Services\Migration;
 
 use App\Models\Company;
 use App\Models\CompanyMembership;
-use App\Models\Customer;
+use App\Models\Contact;
 use App\Models\ServiceFinalApprover;
 use App\Models\Subscription;
 use App\Models\Ticket;
@@ -39,21 +39,21 @@ class MvasDumpClearService
             'tickets' => 0,
             'subscriptions' => 0,
             'memberships' => 0,
-            'customers' => 0,
+            'contacts' => 0,
             'companies' => 0,
             'approvers' => 0,
             'dry_run' => $dryRun,
         ];
 
         $companyIds = Company::query()->whereNotNull('legacy_mvas_client_id')->pluck('id');
-        $customerIds = Customer::query()->whereNotNull('legacy_mvas_client_id')->pluck('id');
+        $contactIds = Contact::query()->whereNotNull('legacy_mvas_client_id')->pluck('id');
         $ticketIds = Ticket::withTrashed()
             ->whereNotNull('legacy_mvas_ticket_id')
             ->pluck('id');
 
-        if ($customerIds->isNotEmpty()) {
+        if ($contactIds->isNotEmpty()) {
             $ticketIds = $ticketIds->merge(
-                Ticket::withTrashed()->whereIn('customer_id', $customerIds)->pluck('id')
+                Ticket::withTrashed()->whereIn('contact_id', $contactIds)->pluck('id')
             )->unique()->values();
         }
 
@@ -97,13 +97,13 @@ class MvasDumpClearService
         if ($dryRun) {
             $stats['tickets'] = $ticketIds->count();
             $stats['subscriptions'] = Subscription::withTrashed()
-                ->where(function ($q) use ($companyIds, $customerIds) {
+                ->where(function ($q) use ($companyIds, $contactIds) {
                     $q->whereNotNull('legacy_mvas_client_id');
                     if ($companyIds->isNotEmpty()) {
                         $q->orWhereIn('company_id', $companyIds);
                     }
-                    if ($customerIds->isNotEmpty()) {
-                        $q->orWhereIn('customer_id', $customerIds);
+                    if ($contactIds->isNotEmpty()) {
+                        $q->orWhereIn('contact_id', $contactIds);
                     }
                 })
                 ->count();
@@ -111,13 +111,13 @@ class MvasDumpClearService
             if ($companyIds->isNotEmpty()) {
                 $stats['memberships'] += CompanyMembership::query()->whereIn('company_id', $companyIds)->count();
             }
-            if ($customerIds->isNotEmpty()) {
+            if ($contactIds->isNotEmpty()) {
                 $stats['memberships'] += CompanyMembership::query()
-                    ->whereIn('customer_id', $customerIds)
+                    ->whereIn('contact_id', $contactIds)
                     ->when($companyIds->isNotEmpty(), fn ($q) => $q->whereNotIn('company_id', $companyIds))
                     ->count();
             }
-            $stats['customers'] = $customerIds->count();
+            $stats['contacts'] = $contactIds->count();
             $stats['companies'] = $companyIds->count();
             $stats['approvers'] = $clearApprovers ? ServiceFinalApprover::query()->count() : 0;
 
@@ -128,7 +128,7 @@ class MvasDumpClearService
             $documents,
             $ticketIds,
             $companyIds,
-            $customerIds,
+            $contactIds,
             $clearApprovers,
             &$stats,
         ): void {
@@ -146,13 +146,13 @@ class MvasDumpClearService
 
             // Subscriptions may point at tickets as activated_by / terminated_by.
             $subscriptionIds = Subscription::withTrashed()
-                ->where(function ($q) use ($companyIds, $customerIds) {
+                ->where(function ($q) use ($companyIds, $contactIds) {
                     $q->whereNotNull('legacy_mvas_client_id');
                     if ($companyIds->isNotEmpty()) {
                         $q->orWhereIn('company_id', $companyIds);
                     }
-                    if ($customerIds->isNotEmpty()) {
-                        $q->orWhereIn('customer_id', $customerIds);
+                    if ($contactIds->isNotEmpty()) {
+                        $q->orWhereIn('contact_id', $contactIds);
                     }
                 })
                 ->pluck('id');
@@ -176,9 +176,9 @@ class MvasDumpClearService
                     CompanyMembership::query()->whereIn('company_id', $companyIds)->pluck('id')
                 );
             }
-            if ($customerIds->isNotEmpty()) {
+            if ($contactIds->isNotEmpty()) {
                 $membershipIds = $membershipIds->merge(
-                    CompanyMembership::query()->whereIn('customer_id', $customerIds)->pluck('id')
+                    CompanyMembership::query()->whereIn('contact_id', $contactIds)->pluck('id')
                 );
             }
             $membershipIds = $membershipIds->unique()->values();
@@ -187,19 +187,19 @@ class MvasDumpClearService
                 CompanyMembership::query()->whereIn('id', $membershipIds)->delete();
             }
 
-            if ($customerIds->isNotEmpty()) {
-                Customer::query()->whereIn('id', $customerIds)->update(['current_company_id' => null]);
+            if ($contactIds->isNotEmpty()) {
+                Contact::query()->whereIn('id', $contactIds)->update(['current_company_id' => null]);
             }
             if ($companyIds->isNotEmpty()) {
                 Company::query()->whereIn('id', $companyIds)->update([
-                    'created_by_customer_id' => null,
+                    'created_by_contact_id' => null,
                     'approved_by_user_id' => null,
                 ]);
             }
 
-            if ($customerIds->isNotEmpty()) {
-                $stats['customers'] = Customer::withTrashed()->whereIn('id', $customerIds)->count();
-                Customer::withTrashed()->whereIn('id', $customerIds)->forceDelete();
+            if ($contactIds->isNotEmpty()) {
+                $stats['contacts'] = Contact::withTrashed()->whereIn('id', $contactIds)->count();
+                Contact::withTrashed()->whereIn('id', $contactIds)->forceDelete();
             }
 
             // Company model blocks Eloquent delete — use query builder.

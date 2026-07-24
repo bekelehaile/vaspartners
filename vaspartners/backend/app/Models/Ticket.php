@@ -15,7 +15,7 @@ class Ticket extends Model
     use HasUlids, SoftDeletes;
 
     protected $fillable = [
-        'public_id', 'tt_number', 'legacy_mvas_ticket_id', 'customer_id', 'service_id', 'requisition_id', 'subscription_id',
+        'public_id', 'tt_number', 'legacy_mvas_ticket_id', 'contact_id', 'service_id', 'requisition_id', 'subscription_id',
         'parent_ticket_id', 'category_id', 'priority_id', 'region_id', 'zone_id', 'woreda_id',
         'assigned_to_user_id', 'current_approver_user_id', 'status', 'document_review_status',
         'needs_reverification', 'building', 'location', 'description', 'assigned_at',
@@ -66,14 +66,14 @@ class Ticket extends Model
         })->firstOrFail();
     }
 
-    public function customerDocumentsAreLocked(): bool
+    public function contactDocumentsAreLocked(): bool
     {
-        return $this->status->locksCustomerDocuments();
+        return $this->status->locksContactDocuments();
     }
 
     public function getDocumentsLockedAttribute(): bool
     {
-        return $this->customerDocumentsAreLocked();
+        return $this->contactDocumentsAreLocked();
     }
 
     /** @var array<string, mixed>|null */
@@ -85,7 +85,7 @@ class Ticket extends Model
         return $this->attachmentStatusCache ??= app(\App\Services\TicketWorkflowService::class)->attachmentStatus($this);
     }
 
-    public function customer(): BelongsTo { return $this->belongsTo(Customer::class); }
+    public function contact(): BelongsTo { return $this->belongsTo(Contact::class); }
     public function service(): BelongsTo { return $this->belongsTo(Service::class); }
     public function requisition(): BelongsTo { return $this->belongsTo(Requisition::class); }
     public function subscription(): BelongsTo { return $this->belongsTo(Subscription::class); }

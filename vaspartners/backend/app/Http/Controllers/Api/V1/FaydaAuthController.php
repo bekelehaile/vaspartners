@@ -50,25 +50,25 @@ class FaydaAuthController extends Controller
             return redirect()->away($frontend.'?error='.$reason);
         }
 
-        $customer = $info['customer'];
-        if ($customer->is_banned || ! $customer->is_active) {
+        $contact = $info['contact'];
+        if ($contact->is_banned || ! $contact->is_active) {
             return redirect()->away($frontend.'?error=banned');
         }
 
-        $accessToken = $customer->createToken('fayda')->plainTextToken;
+        $accessToken = $contact->createToken('fayda')->plainTextToken;
         $target = $pkce['frontend_redirect'] ?? $frontend;
         $sep = str_contains($target, '?') ? '&' : '?';
 
         return redirect()->away($target.$sep.http_build_query([
             'token' => $accessToken,
-            'customer_id' => $customer->public_id,
+            'contact_id' => $contact->public_id,
         ]));
     }
 
     public function me(Request $request, CompanyMembershipService $membership)
     {
         return response()->json([
-            'data' => $membership->serializeCustomer($request->user()),
+            'data' => $membership->serializeContact($request->user()),
         ]);
     }
 

@@ -6,7 +6,7 @@ import { JourneyLaunchActions, PortalPageHeader } from "@/components/PortalPageH
 import { StatusJourney } from "@/components/StatusJourney";
 import { TicketChatPanel } from "@/components/TicketChatPanel";
 import { TicketDocumentsPanel } from "@/components/TicketDocumentsPanel";
-import { useTicket } from "@/hooks/use-customer";
+import { useTicket } from "@/hooks/use-contact";
 import { statusCopy } from "@/lib/api";
 
 export default function RequestDetailPage() {

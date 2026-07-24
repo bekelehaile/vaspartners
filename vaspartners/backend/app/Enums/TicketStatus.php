@@ -26,20 +26,20 @@ enum TicketStatus: string
         return in_array($this, [self::Closed], true);
     }
 
-    /** Customer may change documents / request details only while open or rejected. */
-    public function allowsCustomerEdits(): bool
+    /** Contact may change documents / request details only while open or rejected. */
+    public function allowsContactEdits(): bool
     {
         return in_array($this, [self::Open, self::Rejected], true);
     }
 
-    /** Handled by admin (in progress / approved / closed) — customer cannot mutate attachments. */
-    public function locksCustomerDocuments(): bool
+    /** Handled by admin (in progress / approved / closed) — contact cannot mutate attachments. */
+    public function locksContactDocuments(): bool
     {
-        return ! $this->allowsCustomerEdits();
+        return ! $this->allowsContactEdits();
     }
 
     /** Messaging stays open during review; closed after approval or close. */
-    public function locksCustomerChat(): bool
+    public function locksContactChat(): bool
     {
         return in_array($this, [self::Completed, self::Closed], true);
     }

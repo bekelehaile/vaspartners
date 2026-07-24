@@ -17,10 +17,10 @@ use LogicException;
 
 /**
  * Partner identity from Fayda on sign-in; company details completed afterwards.
- * A customer may own and/or join many companies via company_memberships.
+ * A contact may own and/or join many companies via company_memberships.
  * current_company_id is the active portal/tenant context.
  */
-class Customer extends Authenticatable
+class Contact extends Authenticatable
 {
     use HasApiTokens, HasFactory, HasUlids, Notifiable, SoftDeletes;
 
@@ -79,13 +79,13 @@ class Customer extends Authenticatable
 
     protected static function booted(): void
     {
-        static::saving(function (Customer $customer): void {
-            if ($customer->allowFaydaSync) {
+        static::saving(function (Contact $contact): void {
+            if ($contact->allowFaydaSync) {
                 return;
             }
 
             $dirtyFayda = array_values(array_intersect(
-                array_keys($customer->getDirty()),
+                array_keys($contact->getDirty()),
                 self::FAYDA_ATTRIBUTES
             ));
 
@@ -94,7 +94,7 @@ class Customer extends Authenticatable
             }
 
             foreach ($dirtyFayda as $attribute) {
-                $customer->setAttribute($attribute, $customer->getOriginal($attribute));
+                $contact->setAttribute($attribute, $contact->getOriginal($attribute));
             }
         });
     }
@@ -247,7 +247,7 @@ class Customer extends Authenticatable
         return $this->hasManyThrough(
             Service::class,
             Subscription::class,
-            'customer_id',
+            'contact_id',
             'id',
             'id',
             'service_id',

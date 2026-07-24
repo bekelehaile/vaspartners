@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Filament\Resources\Customers\RelationManagers;
+namespace App\Filament\Resources\Contacts\RelationManagers;
 
 use App\Filament\Resources\Tickets\TicketResource;
 use Filament\Actions\Action;

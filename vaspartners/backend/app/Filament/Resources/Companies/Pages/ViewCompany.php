@@ -5,7 +5,7 @@ namespace App\Filament\Resources\Companies\Pages;
 use App\Enums\CompanyApprovalStatus;
 use App\Filament\Resources\Companies\CompanyResource;
 use App\Models\Company;
-use App\Models\Customer;
+use App\Models\Contact;
 use App\Services\CompanyMembershipService;
 use App\Services\SmsService;
 use Filament\Actions\Action;
@@ -59,14 +59,14 @@ class ViewCompany extends ViewRecord
                 ->modalHeading('Assign owner (manual verification)')
                 ->modalDescription('Use for orphan migrated companies when Fayda phone did not auto-claim. Verify the partner identity before assigning.')
                 ->form([
-                    Select::make('customer_id')
-                        ->label('Partner (customer)')
+                    Select::make('contact_id')
+                        ->label('Partner (contact)')
                         ->searchable()
                         ->required()
                         ->getSearchResultsUsing(function (string $search): array {
                             $term = '%'.trim($search).'%';
 
-                            return Customer::query()
+                            return Contact::query()
                                 ->where('is_active', true)
                                 ->where('is_banned', false)
                                 ->where(function ($q) use ($term) {
@@ -77,13 +77,13 @@ class ViewCompany extends ViewRecord
                                 ->orderBy('name')
                                 ->limit(40)
                                 ->get()
-                                ->mapWithKeys(fn (Customer $c) => [
+                                ->mapWithKeys(fn (Contact $c) => [
                                     $c->id => trim($c->name.' · '.($c->phone_number ?: 'no phone').' · '.($c->email ?: 'no email')),
                                 ])
                                 ->all();
                         })
                         ->getOptionLabelUsing(function ($value): ?string {
-                            $c = Customer::query()->find($value);
+                            $c = Contact::query()->find($value);
                             if (! $c) {
                                 return null;
                             }
@@ -98,10 +98,10 @@ class ViewCompany extends ViewRecord
                 ->requiresConfirmation()
                 ->action(function (array $data, CompanyMembershipService $membership): void {
                     try {
-                        $customer = Customer::query()->findOrFail($data['customer_id']);
+                        $contact = Contact::query()->findOrFail($data['contact_id']);
                         $membership->adminAssignOwner(
                             $this->getRecord(),
-                            $customer,
+                            $contact,
                             auth()->user(),
                             $data['approval_note'] ?? null,
                         );
@@ -112,7 +112,7 @@ class ViewCompany extends ViewRecord
                             'approved_at',
                             'approval_note',
                             'approved_by_user_id',
-                            'created_by_customer_id',
+                            'created_by_contact_id',
                         ]);
                     } catch (Throwable $e) {
                         Notification::make()->title('Could not assign owner')->body($e->getMessage())->danger()->send();

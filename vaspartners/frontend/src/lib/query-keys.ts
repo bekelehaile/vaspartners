@@ -1,16 +1,16 @@
 import type {
-  Customer,
+  Contact,
   DocumentRequirement,
   Service,
   Ticket,
 } from "@/lib/api";
 
 export const queryKeys = {
-  customer: {
-    me: ["customer", "me"] as const,
-    tickets: ["customer", "tickets"] as const,
+  contact: {
+    me: ["contact", "me"] as const,
+    tickets: ["contact", "tickets"] as const,
     ticketsFiltered: (filters: Record<string, unknown>) =>
-      ["customer", "tickets", filters] as const,
+      ["contact", "tickets", filters] as const,
   },
   catalog: {
     faqs: ["catalog", "faqs"] as const,
@@ -21,10 +21,10 @@ export const queryKeys = {
     documentRequirements: (serviceId: string, requisitionId: string) =>
       ["catalog", "document-requirements", serviceId, requisitionId] as const,
   },
-  subscriptions: ["customer", "subscriptions"] as const,
+  subscriptions: ["contact", "subscriptions"] as const,
   ticket: (publicId: string) => ["ticket", publicId] as const,
   ticketMessages: (publicId: string) => ["ticket", publicId, "messages"] as const,
-  notifications: ["customer", "notifications"] as const,
+  notifications: ["contact", "notifications"] as const,
 };
 
-export type { Customer, DocumentRequirement, Service, Ticket };
+export type { Contact, DocumentRequirement, Service, Ticket };

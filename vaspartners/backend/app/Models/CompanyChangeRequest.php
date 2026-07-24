@@ -15,12 +15,12 @@ class CompanyChangeRequest extends Model
 
     protected $fillable = [
         'public_id',
-        'customer_id',
+        'contact_id',
         'company_id',
-        'target_customer_id',
+        'target_contact_id',
         'type',
         'status',
-        'customer_note',
+        'contact_note',
         'admin_note',
         'proposal_disk',
         'proposal_path',
@@ -31,7 +31,7 @@ class CompanyChangeRequest extends Model
         'letter_original_name',
         'letter_size_bytes',
         'reviewed_by_user_id',
-        'reviewed_by_customer_id',
+        'reviewed_by_contact_id',
         'reviewed_at',
     ];
 
@@ -56,9 +56,9 @@ class CompanyChangeRequest extends Model
         return 'public_id';
     }
 
-    public function customer(): BelongsTo
+    public function contact(): BelongsTo
     {
-        return $this->belongsTo(Customer::class);
+        return $this->belongsTo(Contact::class);
     }
 
     public function company(): BelongsTo
@@ -66,9 +66,9 @@ class CompanyChangeRequest extends Model
         return $this->belongsTo(Company::class);
     }
 
-    public function targetCustomer(): BelongsTo
+    public function targetContact(): BelongsTo
     {
-        return $this->belongsTo(Customer::class, 'target_customer_id');
+        return $this->belongsTo(Contact::class, 'target_contact_id');
     }
 
     public function reviewer(): BelongsTo
@@ -76,15 +76,15 @@ class CompanyChangeRequest extends Model
         return $this->belongsTo(User::class, 'reviewed_by_user_id');
     }
 
-    public function customerReviewer(): BelongsTo
+    public function contactReviewer(): BelongsTo
     {
-        return $this->belongsTo(Customer::class, 'reviewed_by_customer_id');
+        return $this->belongsTo(Contact::class, 'reviewed_by_contact_id');
     }
 
     public function decidedByLabel(): string
     {
-        if ($this->customerReviewer) {
-            return $this->customerReviewer->name.' (owner)';
+        if ($this->contactReviewer) {
+            return $this->contactReviewer->name.' (owner)';
         }
 
         if ($this->reviewer) {

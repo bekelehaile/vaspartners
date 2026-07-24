@@ -5,7 +5,7 @@ namespace App\Services;
 use App\Enums\TicketStatus;
 use App\Filament\Resources\CompanyChangeRequests\CompanyChangeRequestResource;
 use App\Filament\Resources\Tickets\TicketResource;
-use App\Models\Customer;
+use App\Models\Contact;
 use App\Models\Company;
 use App\Models\CompanyChangeRequest;
 use App\Models\Ticket;
@@ -34,7 +34,7 @@ class PartnerNotificationService
             'New VAS request',
             sprintf(
                 '%s submitted request number %s for %s.',
-                $ticket->customer?->company_name ?: $ticket->customer?->name ?: 'A partner',
+                $ticket->contact?->company_name ?: $ticket->contact?->name ?: 'A partner',
                 $ticket->tt_number,
                 $ticket->service?->name ?: 'a service',
             ),
@@ -85,19 +85,19 @@ class PartnerNotificationService
     }
 
     /** Notify the other party when a public chat message is posted (debounced for rapid back-and-forth). */
-    public function ticketMessagePosted(Ticket $ticket, Customer|User $author, TicketComment $comment): void
+    public function ticketMessagePosted(Ticket $ticket, Contact|User $author, TicketComment $comment): void
     {
         if (! $this->shouldNotifyForChatMessage($ticket, $author, $comment)) {
             return;
         }
 
-        $ticket->loadMissing(['customer', 'service', 'assignee']);
+        $ticket->loadMissing(['contact', 'service', 'assignee']);
         $preview = Str::limit(trim((string) $comment->body), 120);
         if ($comment->hasAttachment()) {
             $preview = trim($preview.' [PDF: '.($comment->attachment_original_name ?: 'attachment').']');
         }
 
-        if ($author instanceof Customer) {
+        if ($author instanceof Contact) {
             $recipients = collect();
             if ($ticket->assignee) {
                 $recipients->push($ticket->assignee);
@@ -116,15 +116,15 @@ class PartnerNotificationService
         }
 
         // Staff → partner (portal notification only — avoid SMS spam on every reply)
-        $ticket->loadMissing(['customer', 'service', 'requisition']);
-        $customer = $ticket->customer;
-        if (! $customer) {
+        $ticket->loadMissing(['contact', 'service', 'requisition']);
+        $contact = $ticket->contact;
+        if (! $contact) {
             return;
         }
 
         $placeholders = [
-            'customer_name' => $customer->name ?: 'Partner',
-            'company_name' => $customer->company_name ?: 'your organisation',
+            'contact_name' => $contact->name ?: 'Partner',
+            'company_name' => $contact->company_name ?: 'your organisation',
             'tt_number' => $ticket->tt_number,
             'service' => $ticket->service?->name ?: 'VAS service',
             'requisition' => $ticket->requisition?->name ?: 'request',
@@ -132,7 +132,7 @@ class PartnerNotificationService
             'note' => $preview,
         ];
         $portalBody = $this->render('portal', 'ticket_message', $placeholders);
-        $customer->notify(new PartnerPortalNotification(
+        $contact->notify(new PartnerPortalNotification(
             title: $this->titleFor('ticket_message'),
             body: Str::limit($portalBody, 280),
             template: 'ticket_message',
@@ -145,7 +145,7 @@ class PartnerNotificationService
      * Skip alerts when the same party keeps sending in a short window —
      * long threads would otherwise flood SMS/in-app notifications.
      */
-    protected function shouldNotifyForChatMessage(Ticket $ticket, Customer|User $author, TicketComment $comment): bool
+    protected function shouldNotifyForChatMessage(Ticket $ticket, Contact|User $author, TicketComment $comment): bool
     {
         $quietMinutes = max(1, (int) config('vas.chat_notify_quiet_minutes', 10));
 
@@ -173,14 +173,14 @@ class PartnerNotificationService
 
     public function companyChangeRequested(CompanyChangeRequest $request): void
     {
-        $request->loadMissing(['customer', 'company', 'targetCustomer']);
+        $request->loadMissing(['contact', 'company', 'targetContact']);
 
         if ($request->type === \App\Enums\CompanyChangeType::Attach) {
-            $owner = $request->company?->ownerCustomer();
+            $owner = $request->company?->ownerContact();
             if ($owner) {
                 $placeholders = [
-                    'customer_name' => $owner->name ?: 'Partner',
-                    'applicant_name' => $request->customer?->name ?: 'A partner',
+                    'contact_name' => $owner->name ?: 'Partner',
+                    'applicant_name' => $request->contact?->name ?: 'A partner',
                     'company_name' => $request->company?->name ?: 'your company',
                     'company_tin' => $request->company?->tin ?: '',
                 ];
@@ -205,14 +205,14 @@ class PartnerNotificationService
         $body = match ($request->type) {
             \App\Enums\CompanyChangeType::TransferOwnership => sprintf(
                 '%s requests ownership transfer of %s (%s) to %s.',
-                $request->customer?->name ?: 'Owner',
+                $request->contact?->name ?: 'Owner',
                 $request->company?->name ?: 'a company',
                 $request->company?->tin ?: 'TIN n/a',
-                $request->targetCustomer?->name ?: 'a member',
+                $request->targetContact?->name ?: 'a member',
             ),
             default => sprintf(
                 '%s submitted %s for %s (%s).',
-                $request->customer?->name ?: 'A partner',
+                $request->contact?->name ?: 'A partner',
                 $request->type->label(),
                 $request->company?->name ?: 'a company',
                 $request->company?->tin ?: 'TIN n/a',
@@ -230,9 +230,9 @@ class PartnerNotificationService
 
     public function companyChangeDecided(CompanyChangeRequest $request): void
     {
-        $request->loadMissing(['customer', 'company', 'targetCustomer']);
-        $customer = $request->customer;
-        if (! $customer) {
+        $request->loadMissing(['contact', 'company', 'targetContact']);
+        $contact = $request->contact;
+        if (! $contact) {
             return;
         }
 
@@ -247,10 +247,10 @@ class PartnerNotificationService
         };
 
         $placeholders = [
-            'customer_name' => $customer->name ?: 'Partner',
+            'contact_name' => $contact->name ?: 'Partner',
             'company_name' => $request->company?->name ?: 'the company',
             'company_tin' => $request->company?->tin ?: '',
-            'applicant_name' => $request->targetCustomer?->name ?: 'the new owner',
+            'applicant_name' => $request->targetContact?->name ?: 'the new owner',
             'note' => filled($request->admin_note) ? trim((string) $request->admin_note) : '',
             'tt_number' => '',
             'service' => '',
@@ -264,11 +264,11 @@ class PartnerNotificationService
             $portalBody = rtrim($portalBody, '.').'. '.trim((string) $request->admin_note);
         }
 
-        if (filled($customer->phone_number)) {
-            $this->sms->send($customer->phone_number, $smsBody);
+        if (filled($contact->phone_number)) {
+            $this->sms->send($contact->phone_number, $smsBody);
         }
 
-        $customer->notify(new PartnerPortalNotification(
+        $contact->notify(new PartnerPortalNotification(
             title: $this->titleFor($template),
             body: Str::limit($portalBody, 280),
             template: $template,
@@ -276,11 +276,11 @@ class PartnerNotificationService
         ));
 
         // Also notify proposed new owner on transfer decisions.
-        if ($request->type === \App\Enums\CompanyChangeType::TransferOwnership && $request->targetCustomer) {
-            $target = $request->targetCustomer;
+        if ($request->type === \App\Enums\CompanyChangeType::TransferOwnership && $request->targetContact) {
+            $target = $request->targetContact;
             $targetPlaceholders = [
                 ...$placeholders,
-                'customer_name' => $target->name ?: 'Partner',
+                'contact_name' => $target->name ?: 'Partner',
             ];
             $targetSms = $this->render('templates', $template, $targetPlaceholders);
             $targetPortal = $this->render('portal', $template, $targetPlaceholders);
@@ -296,28 +296,28 @@ class PartnerNotificationService
         }
     }
 
-    public function companyProfileSubmitted(Customer $customer): void
+    public function companyProfileSubmitted(Contact $contact): void
     {
-        $customer->loadMissing('company');
+        $contact->loadMissing('company');
         $this->notifyStaffDatabase(
             $this->managementUsers(),
             'Company profile pending',
             sprintf(
                 '%s submitted company %s (TIN %s) for approval.',
-                $customer->name ?: 'A partner',
-                $customer->company?->name ?: 'profile',
-                $customer->company?->tin ?: 'n/a',
+                $contact->name ?: 'A partner',
+                $contact->company?->name ?: 'profile',
+                $contact->company?->tin ?: 'n/a',
             ),
             null,
-            \App\Filament\Resources\Companies\CompanyResource::getUrl('view', ['record' => $customer->company]),
+            \App\Filament\Resources\Companies\CompanyResource::getUrl('view', ['record' => $contact->company]),
         );
     }
 
-    public function companyProfileDecided(Company $company, Customer $owner, bool $approved): void
+    public function companyProfileDecided(Company $company, Contact $owner, bool $approved): void
     {
         $template = $approved ? 'company_profile_approved' : 'company_profile_rejected';
         $placeholders = [
-            'customer_name' => $owner->name ?: 'Partner',
+            'contact_name' => $owner->name ?: 'Partner',
             'company_name' => $company->name ?: 'your organisation',
             'company_tin' => $company->tin ?: '',
             'note' => filled($company->approval_note) ? trim((string) $company->approval_note) : '',
@@ -349,10 +349,10 @@ class PartnerNotificationService
         }
     }
 
-    public function memberLeftCompany(Company $company, Customer $owner, Customer $member, ?string $note = null): void
+    public function memberLeftCompany(Company $company, Contact $owner, Contact $member, ?string $note = null): void
     {
         $placeholders = [
-            'customer_name' => $owner->name ?: 'Partner',
+            'contact_name' => $owner->name ?: 'Partner',
             'applicant_name' => $member->name ?: 'A partner',
             'company_name' => $company->name ?: 'your company',
             'company_tin' => $company->tin ?: '',
@@ -374,20 +374,20 @@ class PartnerNotificationService
         ));
     }
 
-    public function profileCompleted(Customer $customer): void
+    public function profileCompleted(Contact $contact): void
     {
         $placeholders = [
-            'customer_name' => $customer->name ?: 'Partner',
-            'company_name' => $customer->company_name ?: 'your organisation',
+            'contact_name' => $contact->name ?: 'Partner',
+            'company_name' => $contact->company_name ?: 'your organisation',
         ];
         $smsBody = $this->render('templates', 'profile_completed', $placeholders);
         $portalBody = $this->render('portal', 'profile_completed', $placeholders);
 
-        if (filled($customer->phone_number)) {
-            $this->sms->send($customer->phone_number, $smsBody);
+        if (filled($contact->phone_number)) {
+            $this->sms->send($contact->phone_number, $smsBody);
         }
 
-        $customer->notify(new PartnerPortalNotification(
+        $contact->notify(new PartnerPortalNotification(
             title: $this->titleFor('profile_completed'),
             body: Str::limit(preg_replace('/\s+/', ' ', $portalBody) ?? $portalBody, 280),
             template: 'profile_completed',
@@ -396,16 +396,16 @@ class PartnerNotificationService
 
     protected function notifyPartner(Ticket $ticket, string $template, ?string $note = null): void
     {
-        $ticket->loadMissing(['customer', 'service', 'requisition']);
-        $customer = $ticket->customer;
+        $ticket->loadMissing(['contact', 'service', 'requisition']);
+        $contact = $ticket->contact;
 
-        if (! $customer) {
+        if (! $contact) {
             return;
         }
 
         $placeholders = [
-            'customer_name' => $customer->name ?: 'Partner',
-            'company_name' => $customer->company_name ?: 'your organisation',
+            'contact_name' => $contact->name ?: 'Partner',
+            'company_name' => $contact->company_name ?: 'your organisation',
             'tt_number' => $ticket->tt_number,
             'service' => $ticket->service?->name ?: 'VAS service',
             'requisition' => $ticket->requisition?->name ?: 'request',
@@ -420,16 +420,16 @@ class PartnerNotificationService
             $portalBody = rtrim($portalBody, '.').'. '.trim((string) $note);
         }
 
-        if (filled($customer->phone_number)) {
-            $this->sms->send($customer->phone_number, $smsBody);
+        if (filled($contact->phone_number)) {
+            $this->sms->send($contact->phone_number, $smsBody);
         } else {
-            Log::info('SMS skipped — customer has no phone', [
+            Log::info('SMS skipped — contact has no phone', [
                 'ticket' => $ticket->tt_number,
                 'template' => $template,
             ]);
         }
 
-        $customer->notify(new PartnerPortalNotification(
+        $contact->notify(new PartnerPortalNotification(
             title: $this->titleFor($template),
             body: Str::limit($portalBody, 280),
             template: $template,

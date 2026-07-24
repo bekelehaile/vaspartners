@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Keep the oldest alive subscription per customer+service; terminate extras.
+        // Keep the oldest alive subscription per contact+service; terminate extras.
         $alive = [
             SubscriptionStatus::Active->value,
             SubscriptionStatus::PendingRenewal->value,
@@ -16,17 +16,17 @@ return new class extends Migration
         ];
 
         $duplicates = DB::table('subscriptions')
-            ->select('customer_id', 'service_id')
+            ->select('contact_id', 'service_id')
             ->whereNull('deleted_at')
             ->whereIn('status', $alive)
-            ->groupBy('customer_id', 'service_id')
+            ->groupBy('contact_id', 'service_id')
             ->havingRaw('COUNT(*) > 1')
             ->get();
 
         foreach ($duplicates as $pair) {
             $ids = DB::table('subscriptions')
                 ->whereNull('deleted_at')
-                ->where('customer_id', $pair->customer_id)
+                ->where('contact_id', $pair->contact_id)
                 ->where('service_id', $pair->service_id)
                 ->whereIn('status', $alive)
                 ->orderBy('id')
@@ -49,8 +49,8 @@ return new class extends Migration
         }
 
         DB::statement("
-            CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_one_alive_per_customer_service
-            ON subscriptions (customer_id, service_id)
+            CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_one_alive_per_contact_service
+            ON subscriptions (contact_id, service_id)
             WHERE deleted_at IS NULL
               AND status IN ('active', 'pending_renewal', 'grace')
         ");
@@ -58,6 +58,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        DB::statement('DROP INDEX IF EXISTS subscriptions_one_alive_per_customer_service');
+        DB::statement('DROP INDEX IF EXISTS subscriptions_one_alive_per_contact_service');
     }
 };
