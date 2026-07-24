@@ -35,6 +35,7 @@ use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Arr;
 use Throwable;
 
 class CompanyResource extends Resource
@@ -205,46 +206,31 @@ class CompanyResource extends Resource
                         ),
                         blank: fn ($query) => $query,
                     ),
-                SelectFilter::make('service_type')
-                    ->label('Service type')
-                    ->options(fn (): array => Service::query()
-                        ->where('is_active', true)
-                        ->whereNotNull('type')
-                        ->where('type', '!=', '')
-                        ->orderBy('type')
-                        ->distinct()
-                        ->pluck('type', 'type')
-                        ->all())
-                    ->searchable()
-                    ->query(function (Builder $query, array $data): Builder {
-                        $type = $data['value'] ?? null;
-                        if (blank($type)) {
-                            return $query;
-                        }
-
-                        return $query->whereHas(
-                            'subscriptions.service',
-                            fn (Builder $services) => $services->where('type', $type),
-                        );
-                    }),
                 SelectFilter::make('service_id')
-                    ->label('Service')
+                    ->label('Services')
                     ->options(fn (): array => Service::query()
                         ->where('is_active', true)
                         ->orderBy('sort_order')
                         ->orderBy('name')
                         ->pluck('name', 'id')
                         ->all())
+                    ->multiple()
                     ->searchable()
                     ->query(function (Builder $query, array $data): Builder {
-                        $serviceId = $data['value'] ?? null;
-                        if (blank($serviceId)) {
+                        $serviceIds = collect(Arr::wrap($data['values'] ?? []))
+                            ->filter(fn ($id) => filled($id))
+                            ->map(fn ($id) => (int) $id)
+                            ->unique()
+                            ->values()
+                            ->all();
+
+                        if ($serviceIds === []) {
                             return $query;
                         }
 
                         return $query->whereHas(
                             'subscriptions',
-                            fn (Builder $subscriptions) => $subscriptions->where('service_id', (int) $serviceId),
+                            fn (Builder $subscriptions) => $subscriptions->whereIn('service_id', $serviceIds),
                         );
                     }),
             ])

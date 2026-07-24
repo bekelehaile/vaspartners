@@ -13,6 +13,7 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\Tabs\Tab;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Arr;
 
 class ListCompanies extends ListRecords
 {
@@ -25,7 +26,7 @@ class ListCompanies extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'Filter by service / type for event SMS. For special one-off lists, use Partners → Bulk messages (CSV import).';
+        return 'Filter by one or more services for event SMS. For special one-off lists, use Partners → Bulk messages (CSV import).';
     }
 
     protected function getHeaderActions(): array
@@ -39,7 +40,7 @@ class ListCompanies extends ListRecords
                 ->disabled(fn (): bool => ! $this->hasServiceAudienceFilter())
                 ->tooltip(fn (): ?string => $this->hasServiceAudienceFilter()
                     ? null
-                    : 'Apply Service type and/or Service filter first')
+                    : 'Select one or more Services first')
                 ->modalHeading('Send SMS to filtered companies')
                 ->modalDescription(fn (): string => $this->filteredAudienceDescription())
                 ->form([
@@ -54,8 +55,8 @@ class ListCompanies extends ListRecords
                 ->action(function (array $data, SmsService $sms): void {
                     if (! $this->hasServiceAudienceFilter()) {
                         Notification::make()
-                            ->title('Filters required')
-                            ->body('Set Service type and/or Service before sending.')
+                            ->title('Services filter required')
+                            ->body('Select one or more Services before sending.')
                             ->warning()
                             ->send();
 
@@ -115,31 +116,39 @@ class ListCompanies extends ListRecords
         ];
     }
 
+    /**
+     * @return list<int>
+     */
+    protected function selectedServiceIds(): array
+    {
+        return collect(Arr::wrap(data_get($this->tableFilters ?? [], 'service_id.values', [])))
+            ->filter(fn ($id) => filled($id))
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
     protected function hasServiceAudienceFilter(): bool
     {
-        $filters = $this->tableFilters ?? [];
-
-        return filled(data_get($filters, 'service_type.value'))
-            || filled(data_get($filters, 'service_id.value'));
+        return $this->selectedServiceIds() !== [];
     }
 
     protected function filteredAudienceDescription(): string
     {
-        $parts = [];
-        $type = data_get($this->tableFilters, 'service_type.value');
-        $serviceId = data_get($this->tableFilters, 'service_id.value');
-
-        if (filled($type)) {
-            $parts[] = 'Type: '.$type;
-        }
-
-        if (filled($serviceId)) {
-            $name = Service::query()->whereKey($serviceId)->value('name') ?: '#'.$serviceId;
-            $parts[] = 'Service: '.$name;
-        }
+        $serviceIds = $this->selectedServiceIds();
+        $names = $serviceIds === []
+            ? []
+            : Service::query()
+                ->whereIn('id', $serviceIds)
+                ->orderBy('name')
+                ->pluck('name')
+                ->all();
 
         $count = $this->getFilteredTableQuery()?->count() ?? 0;
-        $scope = $parts !== [] ? implode(' · ', $parts) : 'current filters';
+        $scope = $names !== []
+            ? 'Services: '.implode(', ', $names)
+            : 'current filters';
 
         return "Audience: {$scope}. About {$count} company(ies) in the current filtered list (other table filters/tabs also apply).";
     }
