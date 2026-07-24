@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
@@ -20,6 +21,9 @@ class AdminPasswordOtpService
 
     private const OTP_RATE_DECAY_SECONDS = 300;
 
+    /** Block a second SMS for the same phone within this window (double-submit / double-click). */
+    private const SEND_COOLDOWN_SECONDS = 60;
+
     public function __construct(
         private readonly SmsService $sms,
     ) {}
@@ -27,6 +31,12 @@ class AdminPasswordOtpService
     public function send(string|int $phone): string
     {
         $normalized = $this->sms->normalizePhone($phone);
+        $cooldownKey = 'admin-otp:cooldown:'.$normalized;
+
+        if (Cache::has($cooldownKey)) {
+            throw new RuntimeException('An OTP was already sent. Please wait a minute before requesting another.');
+        }
+
         $this->applyOtpRateLimit($normalized);
 
         $otp = $this->generateOtp();
@@ -37,6 +47,7 @@ class AdminPasswordOtpService
             .'If you did not request this, ignore this message. Ethio telecom';
 
         $this->sms->send($normalized, $message);
+        Cache::put($cooldownKey, true, self::SEND_COOLDOWN_SECONDS);
 
         Log::info('Admin password-reset OTP sent', [
             'phone_masked' => $this->maskPhone($normalized),
