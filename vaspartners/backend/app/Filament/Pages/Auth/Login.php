@@ -15,8 +15,8 @@ class Login extends BaseLogin
     protected function getEmailFormComponent(): Component
     {
         return TextInput::make('login')
-            ->label('Phone or username')
-            ->placeholder('e.g. 0930011756 or your username')
+            ->label('Email, phone, or username')
+            ->placeholder('e.g. admin@demo.com, 0930011756, or admin')
             ->required()
             ->autocomplete('username')
             ->autofocus();
@@ -63,7 +63,8 @@ class Login extends BaseLogin
         return User::query()
             ->where('is_active', true)
             ->where(function ($query) use ($login, $candidates) {
-                $query->whereRaw('LOWER(username) = ?', [mb_strtolower($login)]);
+                $query->whereRaw('LOWER(username) = ?', [mb_strtolower($login)])
+                    ->orWhereRaw('LOWER(email) = ?', [mb_strtolower($login)]);
 
                 foreach ($candidates as $candidate) {
                     $query->orWhere('phone', $candidate);
