@@ -1,15 +1,10 @@
 import { Suspense } from "react";
+import { AuthWait } from "@/components/AuthWait";
 import NewRequestWizard from "./wizard";
 
 export default function Page() {
   return (
-    <Suspense
-      fallback={
-        <main className="auth-wait">
-          <div className="spinner" />
-        </main>
-      }
-    >
+    <Suspense fallback={<AuthWait />}>
       <NewRequestWizard />
     </Suspense>
   );

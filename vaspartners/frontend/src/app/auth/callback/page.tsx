@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { AuthWait } from "@/components/AuthWait";
 import AuthCallbackInner from "./callback-inner";
 import { buildPageMetadata } from "@/lib/seo";
 
@@ -12,13 +13,7 @@ export const metadata: Metadata = buildPageMetadata({
 
 export default function AuthCallbackPage() {
   return (
-    <Suspense
-      fallback={
-        <main className="auth-wait">
-          <div className="spinner" aria-hidden />
-        </main>
-      }
-    >
+    <Suspense fallback={<AuthWait />}>
       <AuthCallbackInner />
     </Suspense>
   );

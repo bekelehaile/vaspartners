@@ -26,7 +26,7 @@
   --et-foam: #f5fbf6;
   --header-from: #f5fbf6;
   --header-via: #fefffe;
-  --header-to: #f4f7fb;
+  --header-to: #f5fbf6;
 
   --radius: 0.625rem;
   --shadow-soft: 0 10px 30px rgba(17, 24, 39, 0.08);
@@ -1263,7 +1263,7 @@ textarea {
   background:
     radial-gradient(circle at 30% 20%, color-mix(in oklab, var(--primary) 18%, white), transparent 55%),
     radial-gradient(circle at 80% 90%, color-mix(in oklab, var(--primary) 12%, white), transparent 50%),
-    linear-gradient(160deg, #f7fcf8 0%, #eef8f1 55%, #f4f9fc 100%);
+    linear-gradient(160deg, #f7fcf8 0%, #eef8f1 55%, #f5fbf6 100%);
 }
 
 .service-card-glow {
@@ -1642,7 +1642,7 @@ textarea {
 .category-block h2 {
   margin: 0 0 0.85rem;
   font-size: 1.05rem;
-  color: var(--et-navy, #0d2748);
+  color: var(--et-ink);
 }
 
 .service-meta {
@@ -2224,8 +2224,8 @@ textarea {
 }
 
 .tone-open {
-  background: #e8f1ff;
-  color: var(--et-blue);
+  background: color-mix(in oklab, var(--primary) 14%, white);
+  color: color-mix(in oklab, var(--primary) 55%, #146c2e);
 }
 .tone-progress {
   background: #fff6d6;
@@ -2516,12 +2516,48 @@ textarea {
 }
 
 .auth-wait {
-  min-height: 70vh;
+  min-height: 100vh;
   display: grid;
   place-items: center;
   text-align: center;
   padding: 2rem;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, color-mix(in oklab, var(--primary) 18%, transparent), transparent),
+    var(--et-foam);
   animation: rise 0.6s ease both;
+}
+
+.auth-wait-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 22rem;
+}
+
+.auth-wait-logo {
+  height: 2.75rem;
+  width: auto;
+  display: block;
+  margin-bottom: 1.25rem;
+}
+
+.auth-wait-title {
+  margin: 0.35rem 0 0.4rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--et-ink);
+  letter-spacing: -0.02em;
+}
+
+.brand-kicker {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--primary);
+  margin-bottom: 0.55rem;
 }
 
 .auth-wait .spinner {
@@ -2977,7 +3013,7 @@ textarea {
   padding: 0;
   border: 0;
   background: none;
-  color: var(--et-blue);
+  color: var(--primary);
   font: inherit;
   font-weight: 600;
   font-size: 0.88rem;

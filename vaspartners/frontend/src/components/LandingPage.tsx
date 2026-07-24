@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import { AuthWait } from "@/components/AuthWait";
 import { SiteShell } from "@/components/SiteShell";
 import { LandingBlogSection } from "@/components/LandingBlogSection";
 import { LandingFaqSection } from "@/components/FaqList";
@@ -113,13 +114,7 @@ function LandingInner() {
 
 export function LandingPage() {
   return (
-    <Suspense
-      fallback={
-        <main className="auth-wait">
-          <div className="spinner" aria-hidden />
-        </main>
-      }
-    >
+    <Suspense fallback={<AuthWait />}>
       <LandingInner />
     </Suspense>
   );

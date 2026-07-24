@@ -6,6 +6,7 @@ use App\Filament\Pages\Auth\Concerns\ThrottlesAuthByIdentifier;
 use App\Jobs\SendSmsJob;
 use App\Models\User;
 use App\Services\AdminPasswordOtpService;
+use App\Services\SmsService;
 use App\Support\AdminLoginResolver;
 use Filament\Actions\Action;
 use Filament\Auth\Http\Responses\Contracts\PasswordResetResponse;
@@ -34,6 +35,19 @@ class ResetPassword extends BaseResetPassword
     private const RATE_LIMIT_DECAY_SECONDS = 60;
 
     /**
+     * Form state (Filament auth pages that work reliably use statePath `data`).
+     *
+     * @var array<string, mixed>|null
+     */
+    public ?array $data = [];
+
+    public function defaultForm(Schema $schema): Schema
+    {
+        return $schema
+            ->statePath('data');
+    }
+
+    /**
      * Bypass Filament email/token broker checks — OTP is the credential.
      */
     public function mount(?string $email = null, ?string $token = null): void
@@ -45,9 +59,12 @@ class ResetPassword extends BaseResetPassword
         }
 
         $this->email = $email ?? request()->query('email');
+        $this->token = $token ?? request()->query('token');
 
         $this->form->fill([
-            'email' => $this->email,
+            'otp' => '',
+            'password' => '',
+            'passwordConfirmation' => '',
         ]);
     }
 
@@ -81,9 +98,7 @@ class ResetPassword extends BaseResetPassword
         return TextInput::make('otp')
             ->label('OTP')
             ->required()
-            ->numeric()
-            ->minLength(6)
-            ->maxLength(6)
+            ->rule('digits:6')
             ->autocomplete('one-time-code')
             ->autofocus();
     }
@@ -113,6 +128,7 @@ class ResetPassword extends BaseResetPassword
     public function resetPassword(): ?PasswordResetResponse
     {
         $data = $this->form->getState();
+        $otpCode = trim((string) ($data['otp'] ?? ''));
 
         $this->ensureNotAuthThrottled(
             self::RATE_LIMIT_PREFIX,
@@ -122,7 +138,7 @@ class ResetPassword extends BaseResetPassword
 
         try {
             $otpService = app(AdminPasswordOtpService::class);
-            $otpRecord = $otpService->findValidRecord((string) $data['otp']);
+            $otpRecord = $otpService->findValidRecord($otpCode);
 
             if (! $otpRecord) {
                 $this->hitAuthThrottle(self::RATE_LIMIT_PREFIX, self::RATE_LIMIT_DECAY_SECONDS);
@@ -149,19 +165,10 @@ class ResetPassword extends BaseResetPassword
                 ->first();
 
             if (! $user) {
-                // Fallback: resolve by OTP phone only
                 $user = AdminLoginResolver::resolve((string) $otpRecord->phone_number);
             }
 
-            if (! $user instanceof User || ! $user->is_active) {
-                $this->hitAuthThrottle(self::RATE_LIMIT_PREFIX, self::RATE_LIMIT_DECAY_SECONDS);
-
-                throw ValidationException::withMessages([
-                    'data.otp' => 'User not found.',
-                ]);
-            }
-
-            if (! $user->canAccessPanel(Filament::getCurrentOrDefaultPanel())) {
+            if (! $user instanceof User || ! $user->is_active || ! $user->canAccessPanel(Filament::getCurrentOrDefaultPanel())) {
                 $this->hitAuthThrottle(self::RATE_LIMIT_PREFIX, self::RATE_LIMIT_DECAY_SECONDS);
 
                 throw ValidationException::withMessages([
@@ -175,7 +182,7 @@ class ResetPassword extends BaseResetPassword
                 'must_change_password' => false,
             ])->save();
 
-            $otpService->deleteByCode((string) $data['otp']);
+            $otpService->deleteByCode($otpCode);
 
             $this->clearAuthThrottle(self::RATE_LIMIT_PREFIX);
 
@@ -193,7 +200,7 @@ class ResetPassword extends BaseResetPassword
             try {
                 if (filled($user->phone)) {
                     SendSmsJob::dispatch(
-                        app(\App\Services\SmsService::class)->normalizePhone($user->phone),
+                        app(SmsService::class)->normalizePhone($user->phone),
                         'Your VAS Partners admin password was changed. If you did not do this, contact support immediately. Ethio telecom',
                     );
                 }
@@ -204,7 +211,11 @@ class ResetPassword extends BaseResetPassword
                 ]);
             }
 
-            $this->form->fill();
+            $this->form->fill([
+                'otp' => '',
+                'password' => '',
+                'passwordConfirmation' => '',
+            ]);
 
             Notification::make()
                 ->title('Your password has been successfully changed.')

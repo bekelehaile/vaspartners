@@ -39,9 +39,10 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->defaultThemeMode(ThemeMode::Light)
             ->brandName('VAS Partners Admin')
-            ->brandLogo(asset('brand/ethio_logo_full.png', true))
+            // Relative paths so logo/favicon always match the browser origin (:8443 / https).
+            ->brandLogo('/brand/ethio_logo_full.png')
             ->brandLogoHeight('2.75rem')
-            ->favicon(asset('brand/etlogo.png', true))
+            ->favicon('/brand/etlogo.png')
             ->globalSearch(false)
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')

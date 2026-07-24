@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useSearchParams } from "next/navigation";
+import { AuthWait } from "@/components/AuthWait";
 
 /**
  * Fayda (eSignet) registered redirect for local dev is http://localhost:3000/callback.
@@ -17,14 +18,8 @@ export default function FaydaRedirectBridge() {
   }, [params]);
 
   return (
-    <main className="auth-wait">
-      <div>
-        <div className="spinner" aria-hidden />
-        <h1 style={{ fontFamily: "var(--font-display), Georgia, serif", margin: "0 0 0.4rem" }}>
-          Signing in with Fayda
-        </h1>
-        <p className="muted">Handing off to the API to finish secure login…</p>
-      </div>
-    </main>
+    <AuthWait title="Signing in with Fayda">
+      <p className="muted">Handing off to the API to finish secure login…</p>
+    </AuthWait>
   );
 }

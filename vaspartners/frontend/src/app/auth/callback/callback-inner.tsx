@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { AuthWait } from "@/components/AuthWait";
 import { api, setToken } from "@/lib/api";
 import type { Customer } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
@@ -42,12 +43,8 @@ export default function AuthCallbackInner() {
   }, [params, router, queryClient]);
 
   return (
-    <main className="auth-wait">
-      <div>
-        <div className="spinner" aria-hidden />
-        <h1 style={{ margin: "0 0 0.4rem" }}>Welcome aboard</h1>
-        <p className="muted">Confirming your Fayda identity and opening your portal…</p>
-      </div>
-    </main>
+    <AuthWait title="Welcome aboard">
+      <p className="muted">Confirming your Fayda identity and opening your portal…</p>
+    </AuthWait>
   );
 }

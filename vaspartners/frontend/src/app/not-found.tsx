@@ -11,15 +11,23 @@ export const metadata: Metadata = buildPageMetadata({
 
 export default function NotFound() {
   return (
-    <main className="section" style={{ textAlign: "center", paddingTop: "4rem" }}>
-      <p className="brand-kicker">404</p>
-      <h1>Page not found</h1>
-      <p className="muted" style={{ margin: "0.75rem auto 1.5rem", maxWidth: "28rem" }}>
-        This link may be outdated, or the page was moved. Head back to the VAS Partners home page.
-      </p>
-      <Link href="/" className="btn-primary">
-        Back to home
-      </Link>
+    <main className="auth-wait">
+      <div className="auth-wait-card">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/brand/ethio_logo_full.png"
+          alt="Ethio telecom"
+          className="auth-wait-logo"
+        />
+        <p className="brand-kicker">404</p>
+        <h1 className="auth-wait-title">Page not found</h1>
+        <p className="muted" style={{ margin: "0.35rem 0 1.25rem" }}>
+          This link may be outdated, or the page was moved.
+        </p>
+        <Link href="/" className="btn-primary">
+          Back to home
+        </Link>
+      </div>
     </main>
   );
 }

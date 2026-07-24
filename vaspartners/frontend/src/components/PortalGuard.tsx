@@ -2,6 +2,7 @@
 
 import { ReactNode, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { AuthWait } from "@/components/AuthWait";
 import { SiteShell } from "@/components/SiteShell";
 import { getToken } from "@/lib/api";
 import { useCustomer, useLogout } from "@/hooks/use-customer";
@@ -37,32 +38,23 @@ export function PortalGuard({ children }: { children: ReactNode }) {
 
   if (!getToken() || isLoading || !me) {
     return (
-      <main className="auth-wait">
-        <div>
-          <div className="spinner" aria-hidden />
-          <h1 style={{ margin: "0 0 0.4rem" }}>Opening portal</h1>
-          <p className="muted">
-            {isError
-              ? error instanceof Error
-                ? error.message
-                : "Session expired"
-              : "Checking your Fayda session…"}
-          </p>
-        </div>
-      </main>
+      <AuthWait title="Opening portal">
+        <p className="muted">
+          {isError
+            ? error instanceof Error
+              ? error.message
+              : "Session expired"
+            : "Checking your Fayda session…"}
+        </p>
+      </AuthWait>
     );
   }
 
   if (!canUseServices && !onCompanyPage) {
     return (
-      <main className="auth-wait">
-        <div>
-          <div className="spinner" aria-hidden />
-          <p className="muted">
-            Approved company required — redirecting…
-          </p>
-        </div>
-      </main>
+      <AuthWait>
+        <p className="muted">Approved company required — redirecting…</p>
+      </AuthWait>
     );
   }
 
