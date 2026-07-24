@@ -143,7 +143,7 @@ services:
     volumes:
       - vaspartners-storage:/var/www/html/storage/app
       - vaspartners-logs:/var/www/html/storage/logs
-    command: ["php", "artisan", "queue:work", "redis", "--queue=sms,default", "--sleep=1", "--tries=3", "--timeout=60"]
+    command: ["php", "artisan", "queue:work", "redis", "--queue=sms,default", "--sleep=1", "--tries=3", "--timeout=300"]
     depends_on:
       backend:
         condition: service_healthy

@@ -109,4 +109,16 @@ class User extends Authenticatable implements CanResetPasswordContract, Filament
         // Soft-deleted users are already blocked by the package by default.
         return true;
     }
+
+    /** Individual company SMS (events / ad-hoc). Super admin always allowed. */
+    public function canSendCompanySms(): bool
+    {
+        return $this->hasRole('super_admin') || $this->can('SendSms:Company');
+    }
+
+    /** Bulk / filtered company SMS. Super admin always allowed. */
+    public function canBulkSendCompanySms(): bool
+    {
+        return $this->hasRole('super_admin') || $this->can('SendSmsAny:Company');
+    }
 }

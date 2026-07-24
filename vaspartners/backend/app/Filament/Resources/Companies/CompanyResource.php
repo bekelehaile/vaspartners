@@ -12,8 +12,12 @@ use App\Filament\Resources\Companies\RelationManagers\MembersRelationManager;
 use App\Filament\Resources\Companies\RelationManagers\ServiceRequestsRelationManager;
 use App\Filament\Resources\Companies\RelationManagers\SubscriptionsRelationManager;
 use App\Models\Company;
+use App\Models\Service;
 use App\Services\CompanyMembershipService;
+use App\Services\SmsService;
 use Filament\Actions\Action;
+use Filament\Actions\BulkAction;
+use Filament\Actions\BulkActionGroup;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Textarea;
@@ -29,6 +33,8 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Throwable;
 
 class CompanyResource extends Resource
@@ -154,6 +160,7 @@ class CompanyResource extends Resource
                     }),
                 TextColumn::make('tin')->label('TIN')->searchable()->sortable(),
                 TextColumn::make('license_number')->label('License')->searchable()->sortable(),
+                TextColumn::make('phone')->label('Phone')->toggleable()->placeholder('—'),
                 TextColumn::make('owner_name')
                     ->label('Owner')
                     ->state(fn (Company $record): ?string => $record->ownerCustomer()?->name)
@@ -198,10 +205,71 @@ class CompanyResource extends Resource
                         ),
                         blank: fn ($query) => $query,
                     ),
+                SelectFilter::make('service_type')
+                    ->label('Service type')
+                    ->options(fn (): array => Service::query()
+                        ->where('is_active', true)
+                        ->whereNotNull('type')
+                        ->where('type', '!=', '')
+                        ->orderBy('type')
+                        ->distinct()
+                        ->pluck('type', 'type')
+                        ->all())
+                    ->searchable()
+                    ->query(function (Builder $query, array $data): Builder {
+                        $type = $data['value'] ?? null;
+                        if (blank($type)) {
+                            return $query;
+                        }
+
+                        return $query->whereHas(
+                            'subscriptions.service',
+                            fn (Builder $services) => $services->where('type', $type),
+                        );
+                    }),
+                SelectFilter::make('service_id')
+                    ->label('Service')
+                    ->options(fn (): array => Service::query()
+                        ->where('is_active', true)
+                        ->orderBy('sort_order')
+                        ->orderBy('name')
+                        ->pluck('name', 'id')
+                        ->all())
+                    ->searchable()
+                    ->query(function (Builder $query, array $data): Builder {
+                        $serviceId = $data['value'] ?? null;
+                        if (blank($serviceId)) {
+                            return $query;
+                        }
+
+                        return $query->whereHas(
+                            'subscriptions',
+                            fn (Builder $subscriptions) => $subscriptions->where('service_id', (int) $serviceId),
+                        );
+                    }),
             ])
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make(),
+                Action::make('send_sms')
+                    ->label('Send SMS')
+                    ->icon('heroicon-o-chat-bubble-left-ellipsis')
+                    ->color('primary')
+                    ->visible(fn (Company $record): bool => (bool) auth()->user()?->canSendCompanySms()
+                        && filled($record->phone))
+                    ->form([
+                        Textarea::make('message')
+                            ->label('SMS message')
+                            ->required()
+                            ->rows(5)
+                            ->maxLength(640)
+                            ->helperText('Event / ad-hoc SMS to this company phone. Max 640 characters.'),
+                    ])
+                    ->requiresConfirmation()
+                    ->modalHeading(fn (Company $record): string => 'Send SMS to '.$record->name)
+                    ->action(function (Company $record, array $data, SmsService $sms): void {
+                        static::dispatchCompanySms($record, (string) $data['message'], $sms);
+                    }),
                 Action::make('approve')
                     ->label('Approve')
                     ->color('success')
@@ -239,7 +307,107 @@ class CompanyResource extends Resource
                             Notification::make()->title('Could not reject')->body($e->getMessage())->danger()->send();
                         }
                     }),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    BulkAction::make('send_sms')
+                        ->label('Send SMS to selected')
+                        ->icon('heroicon-o-chat-bubble-left-ellipsis')
+                        ->color('primary')
+                        ->visible(fn (): bool => (bool) auth()->user()?->canBulkSendCompanySms())
+                        ->form([
+                            Textarea::make('message')
+                                ->label('SMS message')
+                                ->required()
+                                ->rows(5)
+                                ->maxLength(640)
+                                ->helperText('Event / ad-hoc SMS to each selected company. Max 640 characters.'),
+                        ])
+                        ->requiresConfirmation()
+                        ->modalHeading('Send SMS to selected companies')
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (Collection $records, array $data, SmsService $sms): void {
+                            $result = static::queueSmsToCompanies(
+                                $records,
+                                (string) ($data['message'] ?? ''),
+                                $sms,
+                            );
+
+                            Notification::make()
+                                ->title($result['queued'] > 0
+                                    ? "Queued SMS for {$result['queued']} company(ies)"
+                                    : 'No SMS queued')
+                                ->body($result['skipped'] > 0
+                                    ? "{$result['skipped']} skipped (missing or invalid phone)."
+                                    : null)
+                                ->color($result['queued'] > 0 ? 'success' : 'warning')
+                                ->send();
+                        }),
+                ]),
             ]);
+    }
+
+    /**
+     * @param  Builder<Company>|Collection<int, Company>|iterable<Company>  $companies
+     * @return array{queued:int, skipped:int}
+     */
+    public static function queueSmsToCompanies(Builder|iterable $companies, string $message, SmsService $sms): array
+    {
+        $message = trim($message);
+        $queued = 0;
+        $skipped = 0;
+
+        if ($message === '') {
+            return ['queued' => 0, 'skipped' => 0];
+        }
+
+        $iterator = $companies instanceof Builder
+            ? $companies->cursor()
+            : $companies;
+
+        foreach ($iterator as $company) {
+            if (! $company instanceof Company) {
+                continue;
+            }
+
+            if (! auth()->user()?->canSendCompanySms() && ! auth()->user()?->canBulkSendCompanySms()) {
+                $skipped++;
+
+                continue;
+            }
+
+            if (! filled($company->phone) || ! $sms->ensurePhoneIsLocal($company->phone)) {
+                $skipped++;
+
+                continue;
+            }
+
+            $sms->send($company->phone, $message);
+            $queued++;
+        }
+
+        return ['queued' => $queued, 'skipped' => $skipped];
+    }
+
+    public static function dispatchCompanySms(Company $company, string $message, SmsService $sms): void
+    {
+        $result = static::queueSmsToCompanies([$company], $message, $sms);
+
+        if ($result['queued'] < 1) {
+            Notification::make()
+                ->title('Cannot send SMS')
+                ->body('Company has no usable local mobile number on file.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        Notification::make()
+            ->title('SMS queued')
+            ->body('Message queued for '.$company->phone)
+            ->success()
+            ->send();
     }
 
     public static function getRelations(): array

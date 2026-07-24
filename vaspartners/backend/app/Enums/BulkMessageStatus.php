@@ -4,6 +4,7 @@ namespace App\Enums;
 
 enum BulkMessageStatus: string
 {
+    case Importing = 'importing';
     case Draft = 'draft';
     case Queued = 'queued';
     case Processing = 'processing';
@@ -13,6 +14,7 @@ enum BulkMessageStatus: string
     public function label(): string
     {
         return match ($this) {
+            self::Importing => 'Importing',
             self::Draft => 'Draft',
             self::Queued => 'Queued',
             self::Processing => 'Sending',

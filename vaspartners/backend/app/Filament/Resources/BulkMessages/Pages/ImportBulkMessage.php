@@ -18,6 +18,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Dedicated import screen for bulk company SMS.
@@ -42,7 +43,28 @@ class ImportBulkMessage extends Page
 
     public function getSubheading(): ?string
     {
-        return 'Upload Excel/CSV, match companies by phone (last 9 digits) or TIN, then review and send.';
+        return 'Special-case list: upload phones (CSV/Excel). Matching runs on the queue; company details come from the database. For event SMS by service/type, use Companies.';
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('template')
+                ->label('Download template')
+                ->icon('heroicon-o-arrow-down-tray')
+                ->color('gray')
+                ->action(function (BulkMessageService $bulkMessages): StreamedResponse {
+                    $csv = $bulkMessages->templateCsv();
+
+                    return response()->streamDownload(
+                        function () use ($csv): void {
+                            echo $csv;
+                        },
+                        'bulk-message-template.csv',
+                        ['Content-Type' => 'text/csv; charset=UTF-8'],
+                    );
+                }),
+        ];
     }
 
     public function form(Schema $schema): Schema
@@ -65,7 +87,7 @@ class ImportBulkMessage extends Page
                             ->helperText('Max 640 characters.'),
                     ]),
                 Section::make('Import recipients')
-                    ->description('Header row must include phone and/or tin. Optional: name. Company mobile is taken from companies.phone (last 9 digits).')
+                    ->description('One column is enough: phone (last 9 digits). Name and TIN are filled from the matched company.')
                     ->schema([
                         FileUpload::make('spreadsheet')
                             ->label('Excel / CSV file')
@@ -78,7 +100,8 @@ class ImportBulkMessage extends Page
                             ->disk('local')
                             ->directory('bulk-messages/imports')
                             ->visibility('private')
-                            ->required(),
+                            ->required()
+                            ->helperText('Download the template if needed — only the phone column is used.'),
                     ]),
             ])
             ->statePath('data');
@@ -98,6 +121,21 @@ class ImportBulkMessage extends Page
                                 ->submit('import')
                                 ->color('primary')
                                 ->icon('heroicon-o-arrow-up-tray'),
+                            Action::make('template')
+                                ->label('Download template')
+                                ->color('gray')
+                                ->icon('heroicon-o-arrow-down-tray')
+                                ->action(function (BulkMessageService $bulkMessages): StreamedResponse {
+                                    $csv = $bulkMessages->templateCsv();
+
+                                    return response()->streamDownload(
+                                        function () use ($csv): void {
+                                            echo $csv;
+                                        },
+                                        'bulk-message-template.csv',
+                                        ['Content-Type' => 'text/csv; charset=UTF-8'],
+                                    );
+                                }),
                             Action::make('cancel')
                                 ->label('Cancel')
                                 ->color('gray')
@@ -136,8 +174,8 @@ class ImportBulkMessage extends Page
             );
 
             Notification::make()
-                ->title('Import complete')
-                ->body("Matched {$record->matched_count} of {$record->total_count} rows. Review then send.")
+                ->title('Import queued')
+                ->body('Recipients are being matched in the background. Refresh this page when status is Draft, then send.')
                 ->success()
                 ->send();
 

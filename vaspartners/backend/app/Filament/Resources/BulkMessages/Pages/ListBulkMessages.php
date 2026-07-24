@@ -19,7 +19,7 @@ class ListBulkMessages extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'Import company phones from Excel/CSV (last 9 digits), send SMS, and re-send failures.';
+        return 'Special-case campaigns: import a phone CSV/Excel, review recipients, then queue SMS. For event SMS by service/type, use Companies.';
     }
 
     protected function getHeaderActions(): array
@@ -41,7 +41,7 @@ class ListBulkMessages extends ListRecords
                     );
                 }),
             Action::make('import')
-                ->label('Import & compose')
+                ->label('Import special list')
                 ->icon('heroicon-o-arrow-up-tray')
                 ->url(BulkMessageResource::getUrl('import')),
         ];

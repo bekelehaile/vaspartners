@@ -109,7 +109,7 @@ services:
     volumes:
       - ./vaspartners/backend:/var/www/html
       - backend_vendor:/var/www/html/vendor
-    command: ["php", "artisan", "queue:work", "redis", "--queue=sms,default", "--sleep=1", "--tries=3", "--timeout=60"]
+    command: ["php", "artisan", "queue:work", "redis", "--queue=sms,default", "--sleep=1", "--tries=3", "--timeout=300"]
     depends_on:
       backend:
         condition: service_started

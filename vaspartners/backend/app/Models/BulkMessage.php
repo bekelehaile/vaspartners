@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 
 class BulkMessage extends Model
 {
@@ -30,6 +31,15 @@ class BulkMessage extends Model
         'queued_at',
         'completed_at',
     ];
+
+    protected static function booted(): void
+    {
+        static::deleting(function (BulkMessage $message): void {
+            if (filled($message->source_path)) {
+                Storage::disk('local')->delete($message->source_path);
+            }
+        });
+    }
 
     protected function casts(): array
     {

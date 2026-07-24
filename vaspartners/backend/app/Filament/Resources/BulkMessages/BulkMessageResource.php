@@ -9,6 +9,9 @@ use App\Filament\Resources\BulkMessages\Pages\ViewBulkMessage;
 use App\Models\BulkMessage;
 use App\Services\BulkMessageService;
 use Filament\Actions\Action;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ViewAction;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
@@ -40,6 +43,11 @@ class BulkMessageResource extends Resource
 
     protected static ?int $navigationSort = 4;
 
+    public static function getNavigationBadgeTooltip(): ?string
+    {
+        return 'Special-case SMS campaigns imported from CSV/Excel';
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([]);
@@ -56,7 +64,7 @@ class BulkMessageResource extends Resource
                     ->color(fn ($state) => match ($state instanceof BulkMessageStatus ? $state : BulkMessageStatus::tryFrom((string) $state)) {
                         BulkMessageStatus::Completed => 'success',
                         BulkMessageStatus::Failed => 'danger',
-                        BulkMessageStatus::Processing, BulkMessageStatus::Queued => 'info',
+                        BulkMessageStatus::Importing, BulkMessageStatus::Processing, BulkMessageStatus::Queued => 'info',
                         default => 'gray',
                     }),
                 TextEntry::make('creator.name')->label('Created by')->placeholder('—'),
@@ -87,7 +95,7 @@ class BulkMessageResource extends Resource
                     ->color(fn ($state) => match ($state instanceof BulkMessageStatus ? $state : BulkMessageStatus::tryFrom((string) $state)) {
                         BulkMessageStatus::Completed => 'success',
                         BulkMessageStatus::Failed => 'danger',
-                        BulkMessageStatus::Processing, BulkMessageStatus::Queued => 'info',
+                        BulkMessageStatus::Importing, BulkMessageStatus::Processing, BulkMessageStatus::Queued => 'info',
                         default => 'gray',
                     }),
                 TextColumn::make('total_count')->label('Total'),
@@ -116,7 +124,7 @@ class BulkMessageResource extends Resource
                     ->action(function (BulkMessage $record, BulkMessageService $bulkMessages): void {
                         try {
                             $bulkMessages->queue($record);
-                            Notification::make()->title('Bulk message queued')->success()->send();
+                            Notification::make()->title('Bulk message queued for sending')->success()->send();
                         } catch (ValidationException $e) {
                             Notification::make()
                                 ->title('Could not send')
@@ -148,6 +156,15 @@ class BulkMessageResource extends Resource
                                 ->send();
                         }
                     }),
+                DeleteAction::make()
+                    ->successNotificationTitle('Bulk message deleted'),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make()
+                        ->authorizeIndividualRecords('delete')
+                        ->visible(fn (): bool => (bool) auth()->user()?->can('DeleteAny:BulkMessage')),
+                ]),
             ]);
     }
 
@@ -174,11 +191,6 @@ class BulkMessageResource extends Resource
     }
 
     public static function canEdit(Model $record): bool
-    {
-        return false;
-    }
-
-    public static function canDelete(Model $record): bool
     {
         return false;
     }
