@@ -76,11 +76,13 @@ class AdminPanelProvider extends PanelProvider
             ->spa((bool) env('FILAMENT_SPA', false))
             ->sidebarCollapsibleOnDesktop()
             ->navigationGroups([
+                // Top → bottom (Website last)
                 NavigationGroup::make()->label('Tickets')->icon(Heroicon::Ticket),
-                NavigationGroup::make()->label('Catalog')->icon(Heroicon::Cog6Tooth),
                 NavigationGroup::make()->label('Partners')->icon(Heroicon::BuildingOffice),
                 NavigationGroup::make()->label('User Management')->icon(Heroicon::UserGroup),
+                NavigationGroup::make()->label('Catalog')->icon(Heroicon::Cog6Tooth),
                 NavigationGroup::make()->label('Geo')->icon(Heroicon::Map),
+                NavigationGroup::make()->label('Website')->icon(Heroicon::GlobeAlt),
             ]);
     }
 }
