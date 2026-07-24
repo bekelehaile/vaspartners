@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, type CSSProperties } from "react";
 import { useServices } from "@/hooks/use-customer";
 import { serviceImageUrl, sortServicesForLanding } from "@/lib/service-images";
 
@@ -40,13 +40,18 @@ export function LandingServicesSection() {
       {!isLoading && !isError && rows.length > 0 && (
         <ul className="service-card-grid">
           {rows.map((service, index) => (
-            <li key={service.id} className="service-card">
+            <li
+              key={service.id}
+              className="service-card"
+              style={{ "--card-i": index } as CSSProperties}
+            >
               <Link
                 href={`/services/${service.slug}`}
                 className="service-card-link"
                 aria-label={`${service.name} — view details`}
               >
                 <span className="service-card-media">
+                  <span className="service-card-glow" aria-hidden />
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={serviceImageUrl(service.slug)}
@@ -58,7 +63,18 @@ export function LandingServicesSection() {
                 </span>
                 <span className="service-card-body">
                   <strong>{service.name}</strong>
-                  <span className="service-card-cta">Details</span>
+                  <span className="service-card-cta">
+                    View details
+                    <svg viewBox="0 0 20 20" fill="none" aria-hidden>
+                      <path
+                        d="M4 10h11M11 5l5 5-5 5"
+                        stroke="currentColor"
+                        strokeWidth="1.75"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </span>
                 </span>
               </Link>
             </li>
