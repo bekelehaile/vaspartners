@@ -14,7 +14,7 @@ class PendingCompanyRequestsStats extends StatsOverviewWidget
 {
     protected static ?int $sort = 3;
 
-    protected ?string $heading = 'Company & membership requests';
+    protected ?string $heading = 'Partner requests';
 
     protected ?string $pollingInterval = '60s';
 
@@ -34,24 +34,20 @@ class PendingCompanyRequestsStats extends StatsOverviewWidget
             ->count();
 
         return [
-            Stat::make('Transfers to decide', $pendingTransfers)
-                ->description('Admin must approve ownership transfers')
+            Stat::make('Ownership transfers', $pendingTransfers)
+                ->description('Pending — admin must decide')
                 ->descriptionIcon(Heroicon::OutlinedBuildingOffice2)
                 ->color($pendingTransfers > 0 ? 'warning' : 'gray')
-                ->url(CompanyChangeRequestResource::getUrl('index', [
-                    'tableFilters' => [
-                        'type' => ['value' => CompanyChangeType::TransferOwnership->value],
-                        'status' => ['value' => CompanyChangeStatus::Pending->value],
-                    ],
-                ])),
-            Stat::make('Joins awaiting owner', $pendingJoins)
-                ->description('Partners decide these in the portal inbox')
+                ->url(CompanyChangeRequestResource::getUrl('index').'?tab=ownership'),
+            Stat::make('Membership joins', $pendingJoins)
+                ->description('Pending — owner decides in portal')
                 ->descriptionIcon(Heroicon::OutlinedUserPlus)
                 ->color($pendingJoins > 0 ? 'info' : 'gray')
-                ->url(CompanyChangeRequestResource::getUrl('index')),
+                ->url(CompanyChangeRequestResource::getUrl('index').'?tab=membership'),
             Stat::make('Approved today', $approvedToday)
                 ->descriptionIcon(Heroicon::OutlinedCheckCircle)
-                ->color('success'),
+                ->color('success')
+                ->url(CompanyChangeRequestResource::getUrl('index').'?tab=approved'),
         ];
     }
 }

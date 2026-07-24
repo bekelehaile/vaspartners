@@ -153,7 +153,6 @@ class MyTickets extends Page implements HasActions, HasSchemas, HasTable
 
                 return $this->modifyQueryWithActiveTab($query);
             })
-            ->recordUrl(fn (Ticket $record): string => TicketResource::getUrl('view', ['record' => $record]))
-            ->filters([]);
+            ->recordUrl(fn (Ticket $record): string => TicketResource::getUrl('view', ['record' => $record]));
     }
 }

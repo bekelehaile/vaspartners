@@ -30,9 +30,11 @@ class CompanyChangeRequestResource extends Resource
 
     protected static string|\UnitEnum|null $navigationGroup = 'Partners';
 
-    protected static ?string $navigationLabel = 'Company & membership requests';
+    protected static ?string $navigationLabel = 'Partner requests';
 
-    protected static ?string $modelLabel = 'Company / membership request';
+    protected static ?string $modelLabel = 'Partner request';
+
+    protected static ?string $pluralModelLabel = 'Partner requests';
 
     protected static ?string $recordTitleAttribute = 'public_id';
 
@@ -48,6 +50,11 @@ class CompanyChangeRequestResource extends Resource
         return $count > 0 ? (string) $count : null;
     }
 
+    public static function getNavigationBadgeTooltip(): ?string
+    {
+        return 'Pending ownership transfers awaiting admin decision';
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([]);
@@ -58,7 +65,15 @@ class CompanyChangeRequestResource extends Resource
         return $schema->components([
             Section::make('Request')->schema([
                 TextEntry::make('public_id')->label('Request ID'),
-                TextEntry::make('type')->badge()->formatStateUsing(fn ($state) => $state instanceof CompanyChangeType ? $state->label() : (string) $state),
+                TextEntry::make('type')
+                    ->badge()
+                    ->formatStateUsing(fn ($state) => $state instanceof CompanyChangeType ? $state->label() : (string) $state)
+                    ->color(fn ($state) => match ($state instanceof CompanyChangeType ? $state : CompanyChangeType::tryFrom((string) $state)) {
+                        CompanyChangeType::TransferOwnership => 'warning',
+                        CompanyChangeType::Attach => 'info',
+                        CompanyChangeType::Detach => 'gray',
+                        default => 'gray',
+                    }),
                 TextEntry::make('status')->badge()->color(fn ($state) => match ($state instanceof CompanyChangeStatus ? $state->value : $state) {
                     'pending' => 'warning',
                     'approved' => 'success',
@@ -122,13 +137,22 @@ class CompanyChangeRequestResource extends Resource
                 TextEntry::make('admin_note')->label('Decision note')->columnSpanFull()->placeholder('—'),
             ])->columns(2),
             Section::make('Owner approval')
-                ->description('Membership (join) requests are decided by the company owner in the partner portal. Ownership transfer requires admin approval with a letter.')
+                ->description('Membership joins are decided by the company owner in the partner portal — admins only monitor them here.')
                 ->visible(fn (CompanyChangeRequest $record): bool => $record->type === CompanyChangeType::Attach
                     && $record->status === CompanyChangeStatus::Pending)
                 ->schema([
                     TextEntry::make('owner_hint')
                         ->label('')
-                        ->state('Waiting for the company owner to approve or reject this membership request.'),
+                        ->state('Waiting for the company owner to approve or reject this membership join request.'),
+                ]),
+            Section::make('Admin decision')
+                ->description('Ownership transfers require an admin decision and a signed transfer letter.')
+                ->visible(fn (CompanyChangeRequest $record): bool => $record->type === CompanyChangeType::TransferOwnership
+                    && $record->status === CompanyChangeStatus::Pending)
+                ->schema([
+                    TextEntry::make('admin_hint')
+                        ->label('')
+                        ->state('Use Approve / Reject in the header once you have reviewed the transfer letter.'),
                 ]),
         ]);
     }
@@ -138,7 +162,16 @@ class CompanyChangeRequestResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('public_id')->label('ID')->searchable()->toggleable(),
-                TextColumn::make('type')->badge()->formatStateUsing(fn ($state) => $state instanceof CompanyChangeType ? $state->label() : (string) $state),
+                TextColumn::make('type')
+                    ->label('Request type')
+                    ->badge()
+                    ->formatStateUsing(fn ($state) => $state instanceof CompanyChangeType ? $state->label() : (string) $state)
+                    ->color(fn ($state) => match ($state instanceof CompanyChangeType ? $state : CompanyChangeType::tryFrom((string) $state)) {
+                        CompanyChangeType::TransferOwnership => 'warning',
+                        CompanyChangeType::Attach => 'info',
+                        CompanyChangeType::Detach => 'gray',
+                        default => 'gray',
+                    }),
                 TextColumn::make('status')->badge()->color(fn ($state) => match ($state instanceof CompanyChangeStatus ? $state->value : $state) {
                     'pending' => 'warning',
                     'approved' => 'success',
@@ -158,6 +191,20 @@ class CompanyChangeRequestResource extends Resource
                     ->url(fn (CompanyChangeRequest $record): ?string => $record->targetCustomer
                         ? CustomerResource::getUrl('view', ['record' => $record->targetCustomer])
                         : null),
+                TextColumn::make('decided_by_role')
+                    ->label('Decided by role')
+                    ->state(function (CompanyChangeRequest $record): string {
+                        if ($record->status === CompanyChangeStatus::Pending) {
+                            return match ($record->type) {
+                                CompanyChangeType::TransferOwnership => 'Admin (pending)',
+                                CompanyChangeType::Attach => 'Company owner (pending)',
+                                default => '—',
+                            };
+                        }
+
+                        return $record->loadMissing(['reviewer', 'customerReviewer'])->decidedByLabel() ?: '—';
+                    })
+                    ->toggleable(),
                 TextColumn::make('company.name')
                     ->label('Company')
                     ->searchable()

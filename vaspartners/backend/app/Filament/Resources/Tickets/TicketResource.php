@@ -203,7 +203,8 @@ class TicketResource extends Resource
                     }),
             ])
             ->recordActions([
-                ViewAction::make(),
+                ViewAction::make()
+                    ->url(fn (Ticket $record): string => static::getUrl('view', ['record' => $record])),
                 Action::make('assign_to_me')
                     ->label('Assign to me')
                     ->icon('heroicon-o-user-plus')

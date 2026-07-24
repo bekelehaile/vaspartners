@@ -11,9 +11,9 @@ enum CompanyChangeType: string
     public function label(): string
     {
         return match ($this) {
-            self::Attach => 'Attach to company',
-            self::Detach => 'Detach from company',
-            self::TransferOwnership => 'Transfer ownership',
+            self::Attach => 'Membership join',
+            self::Detach => 'Leave company',
+            self::TransferOwnership => 'Ownership transfer',
         };
     }
 }
