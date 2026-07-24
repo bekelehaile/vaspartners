@@ -13,6 +13,7 @@ use App\Models\Customer;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -694,6 +695,76 @@ class CompanyMembershipService
         } else {
             $customer->forceFill(['profile_completed_at' => $customer->profile_completed_at ?? now()])->save();
         }
+    }
+
+    /**
+     * After Fayda login: if the partner's phone (last 9 digits) matches exactly one
+     * migrated, approved, ownerless company phone, auto-claim that company as owner.
+     * Otherwise the partner must create/submit a company profile for admin approval.
+     */
+    public function tryAutoClaimMigratedCompanyByPhone(Customer $customer): ?Company
+    {
+        if ($customer->memberships()->exists() || filled($customer->current_company_id)) {
+            return null;
+        }
+
+        $last9 = app(SmsService::class)->normalizePhone((string) $customer->phone_number);
+        if ($last9 === '' || ! preg_match('/^\d{9}$/', $last9)) {
+            return null;
+        }
+
+        $candidates = Company::query()
+            ->where('is_active', true)
+            ->where('approval_status', CompanyApprovalStatus::Approved->value)
+            ->whereNotNull('phone')
+            ->where('phone', '!=', '')
+            ->whereRaw(
+                "RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9) = ?",
+                [$last9],
+            )
+            ->whereDoesntHave('memberships', function ($query) {
+                $query->where('role', CompanyRole::Owner->value);
+            })
+            ->limit(3)
+            ->get();
+
+        if ($candidates->count() !== 1) {
+            if ($candidates->count() > 1) {
+                Log::warning('Fayda auto-claim skipped — ambiguous company phone match', [
+                    'customer_id' => $customer->id,
+                    'phone_last9' => $last9,
+                    'company_ids' => $candidates->pluck('id')->all(),
+                ]);
+            }
+
+            return null;
+        }
+
+        /** @var Company $company */
+        $company = $candidates->first();
+
+        return DB::transaction(function () use ($customer, $company) {
+            // Re-check owner inside the transaction to avoid races.
+            if ($company->hasOwner()) {
+                return null;
+            }
+
+            $this->linkCustomer($customer, $company, CompanyRole::Owner, switchTo: true);
+
+            if (! filled($company->created_by_customer_id)) {
+                $company->forceFill([
+                    'created_by_customer_id' => $customer->id,
+                ])->save();
+            }
+
+            Log::info('Fayda auto-claimed migrated company by phone match', [
+                'customer_id' => $customer->id,
+                'company_id' => $company->id,
+                'company_tin' => $company->tin,
+            ]);
+
+            return $company->fresh();
+        });
     }
 
     public function setMembershipActive(Company $company, Customer $member, bool $active, User $actor): Customer

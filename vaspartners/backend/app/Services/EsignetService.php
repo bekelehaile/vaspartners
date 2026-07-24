@@ -176,7 +176,16 @@ class EsignetService
 
         $customer->forceFill(['is_active' => true])->save();
 
-        return ['status' => 'ok', 'customer' => $customer->fresh()];
+        // Migrated companies: Fayda phone last-9 match → auto-claim as owner.
+        // No match → partner must submit company profile for admin approval.
+        try {
+            app(CompanyMembershipService::class)->tryAutoClaimMigratedCompanyByPhone($customer->fresh());
+        } catch (Throwable $e) {
+            // Never block Fayda login on claim failure; partner can complete profile manually.
+            report($e);
+        }
+
+        return ['status' => 'ok', 'customer' => $customer->fresh(['company', 'memberships.company'])];
     }
 
     protected function generateClientAssertion(): string
