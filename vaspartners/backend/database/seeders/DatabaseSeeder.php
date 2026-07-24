@@ -24,6 +24,7 @@ class DatabaseSeeder extends Seeder
                 'email' => 'admin@demo.com',
                 'phone' => '911000000',
                 'password' => Hash::make('password'),
+                'must_change_password' => true,
                 'is_management' => true,
                 'is_active' => true,
             ])->save();
@@ -34,6 +35,7 @@ class DatabaseSeeder extends Seeder
                 'email' => 'admin@demo.com',
                 'phone' => '911000000',
                 'password' => Hash::make('password'),
+                'must_change_password' => true,
                 'is_management' => true,
                 'is_active' => true,
             ]);

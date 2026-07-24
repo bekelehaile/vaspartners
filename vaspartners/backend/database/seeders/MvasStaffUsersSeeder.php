@@ -52,6 +52,7 @@ class MvasStaffUsersSeeder extends Seeder
                     'username' => $row['phone'],
                     'phone' => $row['phone'],
                     'password' => $password,
+                    'must_change_password' => true,
                     'is_management' => $row['is_management'],
                     'is_active' => true,
                     'email_verified_at' => now(),

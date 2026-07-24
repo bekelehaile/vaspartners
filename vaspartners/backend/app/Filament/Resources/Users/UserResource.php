@@ -45,7 +45,7 @@ class UserResource extends Resource
                 ->required()
                 ->unique(ignoreRecord: true)
                 ->maxLength(64)
-                ->helperText('Used to sign in to admin (with phone).'),
+                ->helperText('Used to sign in to admin (with phone or email). Temporary credentials are SMS’d on create.'),
             TextInput::make('email')
                 ->label('Email address')
                 ->email()
@@ -89,6 +89,10 @@ class UserResource extends Resource
             Toggle::make('is_management')
                 ->label('Management / supervisor')
                 ->helperText('Receives new ticket alerts and can close tickets.'),
+            Toggle::make('must_change_password')
+                ->label('Must change password')
+                ->default(true)
+                ->helperText('When enabled, the user must set a new password on next login.'),
             Toggle::make('is_active')
                 ->label('Active')
                 ->default(true)
@@ -110,6 +114,7 @@ class UserResource extends Resource
                     ->separator(','),
                 TextColumn::make('manager.name')->label('Manager')->toggleable(),
                 IconColumn::make('is_management')->label('Mgmt')->boolean(),
+                IconColumn::make('must_change_password')->label('Temp PW')->boolean()->toggleable(),
                 IconColumn::make('is_active')->label('Active')->boolean(),
                 TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
