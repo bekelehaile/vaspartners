@@ -4,10 +4,13 @@ namespace App\Filament\Widgets;
 
 use App\Enums\TicketStatus;
 use App\Filament\Resources\Tickets\TicketResource;
+use App\Filament\Widgets\Concerns\AppliesDashboardFilters;
 use Filament\Widgets\ChartWidget;
 
 class TicketsByStatusChart extends ChartWidget
 {
+    use AppliesDashboardFilters;
+
     protected static ?int $sort = 4;
 
     protected ?string $heading = 'Tickets by status';
@@ -21,7 +24,7 @@ class TicketsByStatusChart extends ChartWidget
 
     protected function getData(): array
     {
-        $query = TicketResource::getEloquentQuery();
+        $query = $this->applyDashboardTicketFilters(TicketResource::getEloquentQuery());
 
         $labels = [];
         $data = [];
@@ -55,5 +58,17 @@ class TicketsByStatusChart extends ChartWidget
     protected function getType(): string
     {
         return 'doughnut';
+    }
+
+    public function getHeading(): ?string
+    {
+        $parts = ['Tickets by status'];
+        $filters = $this->dashboardFilters();
+
+        if (filled($filters['service_id'] ?? null) || $this->hasCustomDateRange()) {
+            $parts[] = '(filtered)';
+        }
+
+        return implode(' ', $parts);
     }
 }

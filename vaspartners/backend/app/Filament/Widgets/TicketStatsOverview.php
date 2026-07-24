@@ -4,6 +4,7 @@ namespace App\Filament\Widgets;
 
 use App\Enums\TicketStatus;
 use App\Filament\Resources\Tickets\TicketResource;
+use App\Filament\Widgets\Concerns\AppliesDashboardFilters;
 use App\Models\Ticket;
 use Filament\Support\Icons\Heroicon;
 use Filament\Widgets\StatsOverviewWidget;
@@ -12,6 +13,8 @@ use Illuminate\Database\Eloquent\Builder;
 
 class TicketStatsOverview extends StatsOverviewWidget
 {
+    use AppliesDashboardFilters;
+
     protected static ?int $sort = 1;
 
     protected ?string $heading = 'Service requests';
@@ -29,14 +32,27 @@ class TicketStatsOverview extends StatsOverviewWidget
             ->count();
         $inProgress = (clone $base)->where('status', TicketStatus::InProgress)->count();
         $rejected = (clone $base)->where('status', TicketStatus::Rejected)->count();
+
         $myApproval = Ticket::query()
             ->where('current_approver_user_id', auth()->id())
-            ->whereNotIn('status', [TicketStatus::Completed, TicketStatus::Closed])
-            ->count();
-        $completedToday = (clone $base)
-            ->where('status', TicketStatus::Completed)
-            ->whereDate('completed_at', today())
-            ->count();
+            ->whereNotIn('status', [TicketStatus::Completed, TicketStatus::Closed]);
+        $this->applyDashboardServiceFilter($myApproval);
+        $this->applyDashboardDateFilter($myApproval, 'created_at');
+        $myApprovalCount = $myApproval->count();
+
+        $completedQuery = TicketResource::getEloquentQuery()
+            ->where('status', TicketStatus::Completed);
+        $this->applyDashboardServiceFilter($completedQuery);
+        if ($this->hasCustomDateRange()) {
+            $this->applyDashboardDateFilter($completedQuery, 'completed_at');
+            $completedLabel = 'Completed in range';
+            $completedDescription = 'Approved in selected dates';
+        } else {
+            $completedQuery->whereDate('completed_at', today());
+            $completedLabel = 'Completed today';
+            $completedDescription = 'Approved today';
+        }
+        $completedCount = $completedQuery->count();
 
         return [
             Stat::make('Open', $open)
@@ -54,13 +70,13 @@ class TicketStatsOverview extends StatsOverviewWidget
                 ->descriptionIcon(Heroicon::OutlinedExclamationTriangle)
                 ->color('danger')
                 ->url(TicketResource::getUrl('index').'?tab=rejected'),
-            Stat::make('My approvals', $myApproval)
+            Stat::make('My approvals', $myApprovalCount)
                 ->description('Waiting on you')
                 ->descriptionIcon(Heroicon::OutlinedCheckBadge)
                 ->color('primary')
                 ->url(\App\Filament\Pages\MyTickets::getUrl().'?tab=approval'),
-            Stat::make('Completed today', $completedToday)
-                ->description('Approved today')
+            Stat::make($completedLabel, $completedCount)
+                ->description($completedDescription)
                 ->descriptionIcon(Heroicon::OutlinedCheckCircle)
                 ->color('success')
                 ->url(TicketResource::getUrl('index').'?tab=completed'),
@@ -69,6 +85,6 @@ class TicketStatsOverview extends StatsOverviewWidget
 
     protected function scopedTickets(): Builder
     {
-        return TicketResource::getEloquentQuery();
+        return $this->applyDashboardTicketFilters(TicketResource::getEloquentQuery());
     }
 }

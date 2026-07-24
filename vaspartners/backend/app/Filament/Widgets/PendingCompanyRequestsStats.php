@@ -5,6 +5,7 @@ namespace App\Filament\Widgets;
 use App\Enums\CompanyChangeStatus;
 use App\Enums\CompanyChangeType;
 use App\Filament\Resources\CompanyChangeRequests\CompanyChangeRequestResource;
+use App\Filament\Widgets\Concerns\AppliesDashboardFilters;
 use App\Models\CompanyChangeRequest;
 use Filament\Support\Icons\Heroicon;
 use Filament\Widgets\StatsOverviewWidget;
@@ -12,6 +13,8 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
 
 class PendingCompanyRequestsStats extends StatsOverviewWidget
 {
+    use AppliesDashboardFilters;
+
     protected static ?int $sort = 3;
 
     protected ?string $heading = 'Change requests';
@@ -20,18 +23,28 @@ class PendingCompanyRequestsStats extends StatsOverviewWidget
 
     protected function getStats(): array
     {
-        $pendingTransfers = CompanyChangeRequest::query()
+        $base = CompanyChangeRequest::query();
+        // Change requests are not service-scoped; date filter still applies.
+        $this->applyDashboardDateFilter($base, 'created_at');
+
+        $pendingTransfers = (clone $base)
             ->where('status', CompanyChangeStatus::Pending)
             ->where('type', CompanyChangeType::TransferOwnership)
             ->count();
-        $pendingJoins = CompanyChangeRequest::query()
+        $pendingJoins = (clone $base)
             ->where('status', CompanyChangeStatus::Pending)
             ->where('type', CompanyChangeType::Attach)
             ->count();
-        $approvedToday = CompanyChangeRequest::query()
-            ->where('status', CompanyChangeStatus::Approved)
-            ->whereDate('reviewed_at', today())
-            ->count();
+
+        $approvedQuery = CompanyChangeRequest::query()
+            ->where('status', CompanyChangeStatus::Approved);
+        if ($this->hasCustomDateRange()) {
+            $this->applyDashboardDateFilter($approvedQuery, 'reviewed_at');
+            $approvedLabel = 'Approved in range';
+        } else {
+            $approvedQuery->whereDate('reviewed_at', today());
+            $approvedLabel = 'Approved today';
+        }
 
         return [
             Stat::make('Ownership transfers', $pendingTransfers)
@@ -44,7 +57,7 @@ class PendingCompanyRequestsStats extends StatsOverviewWidget
                 ->descriptionIcon(Heroicon::OutlinedUserPlus)
                 ->color($pendingJoins > 0 ? 'info' : 'gray')
                 ->url(CompanyChangeRequestResource::getUrl('index').'?tab=membership'),
-            Stat::make('Approved today', $approvedToday)
+            Stat::make($approvedLabel, $approvedQuery->count())
                 ->descriptionIcon(Heroicon::OutlinedCheckCircle)
                 ->color('success')
                 ->url(CompanyChangeRequestResource::getUrl('index').'?tab=approved'),

@@ -13,6 +13,7 @@ use App\Filament\Resources\Subscriptions\RelationManagers\StatusHistoryRelationM
 use App\Filament\Resources\Subscriptions\RelationManagers\TicketsRelationManager;
 use App\Filament\Resources\Tickets\TicketResource;
 use App\Models\Subscription;
+use Filament\Actions\ViewAction;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
@@ -117,14 +118,22 @@ class SubscriptionResource extends Resource
     {
         return $table->columns([
             TextColumn::make('company.name')->label('Company')->searchable()->placeholder('—'),
-            TextColumn::make('customer.name')->label('Activated by')->searchable()->toggleable(),
             TextColumn::make('service.name')->sortable(),
             TextColumn::make('status')->badge(),
+            TextColumn::make('customer.name')->label('Activated by')->searchable()->toggleable(),
             TextColumn::make('renewal_interval')->badge(),
             TextColumn::make('current_period_end')->dateTime()->sortable()->toggleable(),
             TextColumn::make('next_renewal_due_at')->dateTime()->toggleable(),
         ])->filters([
             SelectFilter::make('status')->options(SubscriptionStatus::options()),
+            SelectFilter::make('service_id')
+                ->label('Service')
+                ->relationship('service', 'name')
+                ->searchable()
+                ->preload(),
+        ])->recordActions([
+            ViewAction::make()
+                ->url(fn (Subscription $record): string => static::getUrl('view', ['record' => $record])),
         ]);
     }
 

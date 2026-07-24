@@ -4,6 +4,7 @@ namespace App\Filament\Widgets;
 
 use App\Enums\SubscriptionStatus;
 use App\Filament\Resources\Subscriptions\SubscriptionResource;
+use App\Filament\Widgets\Concerns\AppliesDashboardFilters;
 use App\Models\Subscription;
 use Filament\Support\Icons\Heroicon;
 use Filament\Widgets\StatsOverviewWidget;
@@ -11,6 +12,8 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
 
 class SubscriptionStatsOverview extends StatsOverviewWidget
 {
+    use AppliesDashboardFilters;
+
     protected static ?int $sort = 2;
 
     protected ?string $heading = 'Subscriptions';
@@ -19,9 +22,13 @@ class SubscriptionStatsOverview extends StatsOverviewWidget
 
     protected function getStats(): array
     {
-        $active = Subscription::query()->where('status', SubscriptionStatus::Active)->count();
-        $pendingRenewal = Subscription::query()->where('status', SubscriptionStatus::PendingRenewal)->count();
-        $dueSoon = Subscription::query()
+        $base = Subscription::query();
+        $this->applyDashboardServiceFilter($base);
+        $this->applyDashboardDateFilter($base, 'started_at');
+
+        $active = (clone $base)->where('status', SubscriptionStatus::Active)->count();
+        $pendingRenewal = (clone $base)->where('status', SubscriptionStatus::PendingRenewal)->count();
+        $dueSoon = (clone $base)
             ->whereIn('status', [SubscriptionStatus::Active, SubscriptionStatus::PendingRenewal, SubscriptionStatus::Grace])
             ->whereNotNull('current_period_end')
             ->whereDate('current_period_end', '<=', now()->addDays(30))
