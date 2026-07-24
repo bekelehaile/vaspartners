@@ -57,7 +57,18 @@ class TicketResource extends Resource
     {
         return $schema->components([
             TextEntry::make('tt_number')->label('Request ID'),
-            TextEntry::make('status')->badge(),
+            TextEntry::make('status')
+                ->badge()
+                ->formatStateUsing(fn ($state): string => $state instanceof TicketStatus
+                    ? $state->label()
+                    : (TicketStatus::tryFrom((string) $state)?->label() ?? (string) $state))
+                ->color(fn ($state): string => match ($state instanceof TicketStatus ? $state : TicketStatus::tryFrom((string) $state)) {
+                    TicketStatus::Completed, TicketStatus::Closed => 'success',
+                    TicketStatus::Rejected => 'danger',
+                    TicketStatus::InProgress => 'info',
+                    TicketStatus::Open => 'warning',
+                    default => 'gray',
+                }),
             TextEntry::make('attachments_badge')
                 ->label('Attachments')
                 ->badge()

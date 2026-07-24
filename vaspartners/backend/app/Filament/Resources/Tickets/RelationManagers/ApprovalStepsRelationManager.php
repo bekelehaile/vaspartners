@@ -31,7 +31,9 @@ class ApprovalStepsRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->description('Immutable record of each approval decision: who acted, what they decided, and when.')
+            ->description('Immutable record of each manager approval decision: who acted, what they decided, and when. Empty until the request enters the approval chain after documents pass review.')
+            ->emptyStateHeading('No approval decisions yet')
+            ->emptyStateDescription('This request has not reached manager approval. Document checks and status changes appear under Document reviews and Status history.')
             ->modifyQueryUsing(fn ($query) => $query->with(['approver', 'escalatedTo'])->oldest('id'))
             ->columns([
                 TextColumn::make('created_at')
