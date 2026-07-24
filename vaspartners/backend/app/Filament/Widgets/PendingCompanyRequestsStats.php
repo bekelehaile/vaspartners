@@ -14,7 +14,7 @@ class PendingCompanyRequestsStats extends StatsOverviewWidget
 {
     protected static ?int $sort = 3;
 
-    protected ?string $heading = 'Partner requests';
+    protected ?string $heading = 'Change requests';
 
     protected ?string $pollingInterval = '60s';
 

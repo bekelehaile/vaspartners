@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('company_sms_campaigns', function (Blueprint $table) {
+        Schema::create('bulk_messages', function (Blueprint $table) {
             $table->id();
             $table->ulid('public_id')->unique();
             $table->string('title');
@@ -27,9 +27,9 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        Schema::create('company_sms_recipients', function (Blueprint $table) {
+        Schema::create('bulk_message_recipients', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('campaign_id')->constrained('company_sms_campaigns')->cascadeOnDelete();
+            $table->foreignId('campaign_id')->constrained('bulk_messages')->cascadeOnDelete();
             $table->foreignId('company_id')->nullable()->constrained('companies')->nullOnDelete();
             $table->string('phone_raw', 64)->nullable();
             $table->string('phone_normalized', 16)->nullable()->index();
@@ -48,7 +48,7 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('company_sms_recipients');
-        Schema::dropIfExists('company_sms_campaigns');
+        Schema::dropIfExists('bulk_message_recipients');
+        Schema::dropIfExists('bulk_messages');
     }
 };

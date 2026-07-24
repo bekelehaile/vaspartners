@@ -16,7 +16,7 @@ class ListCompanyChangeRequests extends ListRecords
 
     public function getTitle(): string
     {
-        return 'Partner requests';
+        return 'Change requests';
     }
 
     public function getSubheading(): ?string
