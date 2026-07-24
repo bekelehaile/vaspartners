@@ -45,7 +45,7 @@ class UserResource extends Resource
                 ->required()
                 ->unique(ignoreRecord: true)
                 ->maxLength(64)
-                ->helperText('Used to sign in to admin (with phone or email). Temporary credentials are SMS’d on create.'),
+                ->helperText('Shown in SMS with temporary credentials on create. Sign-in uses phone number only.'),
             TextInput::make('email')
                 ->label('Email address')
                 ->email()
@@ -58,16 +58,22 @@ class UserResource extends Resource
                 ->unique(ignoreRecord: true)
                 ->maxLength(32)
                 ->placeholder('e.g. 0912345678')
-                ->helperText('Also used to sign in to admin.'),
+                ->helperText('Used to sign in to admin.'),
             Select::make('roles')
-                ->relationship('roles', 'name')
+                ->relationship(
+                    name: 'roles',
+                    titleAttribute: 'name',
+                    modifyQueryUsing: fn (Builder $query) => $query
+                        ->where('name', '!=', 'super_admin')
+                        ->orderBy('name'),
+                )
                 ->multiple()
                 ->preload()
                 ->searchable()
                 ->default(fn (): array => array_filter([
                     Role::findOrCreate('account_manager', 'web')->getKey(),
                 ]))
-                ->helperText('Default is account_manager (My Tickets).')
+                ->helperText('Default is account_manager (My Tickets). Super admin cannot be assigned here.')
                 ->columnSpanFull(),
             Select::make('manager_id')
                 ->label('Manager')

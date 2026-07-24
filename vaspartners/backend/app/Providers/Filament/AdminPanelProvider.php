@@ -29,11 +29,19 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login(\App\Filament\Pages\Auth\Login::class)
+            ->passwordReset(
+                \App\Filament\Pages\Auth\RequestPasswordReset::class,
+                \App\Filament\Pages\Auth\ResetPassword::class,
+            )
             ->colors([
-                'primary' => Color::Blue,
+                // Ethio telecom lemon / lime primary (aligned with portal --primary / #80CA28)
+                'primary' => Color::hex('#80CA28'),
             ])
             ->defaultThemeMode(ThemeMode::Light)
             ->brandName('VAS Partners Admin')
+            ->brandLogo(asset('brand/ethio_logo_full.png'))
+            ->brandLogoHeight('2.75rem')
+            ->favicon(asset('brand/etlogo.png'))
             ->globalSearch(false)
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')

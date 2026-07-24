@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Users\Pages;
 
 use App\Filament\Resources\Users\UserResource;
 use App\Services\SmsService;
+use BezhanSalleh\FilamentShield\Support\Utils;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Facades\Filament;
@@ -15,6 +16,28 @@ use STS\FilamentImpersonate\Actions\Impersonate;
 class EditUser extends EditRecord
 {
     protected static string $resource = UserResource::class;
+
+    protected bool $wasSuperAdmin = false;
+
+    protected function mutateFormDataBeforeFill(array $data): array
+    {
+        $this->wasSuperAdmin = $this->record->hasRole(Utils::getSuperAdminName());
+
+        return $data;
+    }
+
+    protected function afterSave(): void
+    {
+        // Role select intentionally hides super_admin; keep it if the user already had it.
+        if ($this->wasSuperAdmin) {
+            $this->record->assignRole(Utils::getSuperAdminName());
+        }
+
+        // Never allow assigning super_admin through the user form.
+        if (! $this->wasSuperAdmin && $this->record->hasRole(Utils::getSuperAdminName())) {
+            $this->record->removeRole(Utils::getSuperAdminName());
+        }
+    }
 
     protected function getHeaderActions(): array
     {
@@ -64,7 +87,8 @@ class EditUser extends EditRecord
             Impersonate::make()
                 ->record($this->getRecord())
                 ->redirectTo(filament()->getCurrentOrDefaultPanel()?->getUrl() ?? '/admin'),
-            DeleteAction::make(),
+            DeleteAction::make()
+                ->visible(fn (): bool => ! $this->record->hasRole(Utils::getSuperAdminName())),
         ];
     }
 }

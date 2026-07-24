@@ -31,6 +31,11 @@ class CreateUser extends CreateRecord
 
     protected function afterCreate(): void
     {
+        // Never allow assigning super_admin through the user form.
+        if ($this->record->hasRole('super_admin')) {
+            $this->record->removeRole('super_admin');
+        }
+
         if ($this->record->roles()->count() === 0) {
             $this->record->assignRole(
                 \Spatie\Permission\Models\Role::findOrCreate('account_manager', 'web')

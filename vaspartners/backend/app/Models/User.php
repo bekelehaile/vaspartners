@@ -2,8 +2,12 @@
 
 namespace App\Models;
 
+use App\Services\SmsService;
+use Filament\Facades\Filament;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
+use Illuminate\Auth\Passwords\CanResetPassword;
+use Illuminate\Contracts\Auth\CanResetPassword as CanResetPasswordContract;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -11,12 +15,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Log;
 use Spatie\Permission\Traits\HasRoles;
 
-class User extends Authenticatable implements FilamentUser
+class User extends Authenticatable implements CanResetPasswordContract, FilamentUser
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, HasRoles, Notifiable, SoftDeletes;
+    use CanResetPassword, HasFactory, HasRoles, Notifiable, SoftDeletes;
 
     protected $fillable = [
         'name',
@@ -72,6 +77,29 @@ class User extends Authenticatable implements FilamentUser
         }
 
         return $this->hasAnyRole(['super_admin', 'account_manager']);
+    }
+
+    /**
+     * Deliver password-reset links by SMS (admin staff use mobile numbers).
+     */
+    public function sendPasswordResetNotification(#[\SensitiveParameter] $token): void
+    {
+        $url = Filament::getResetPasswordUrl($token, $this);
+
+        if (! filled($this->phone)) {
+            Log::warning('Password reset skipped — user has no phone', [
+                'user_id' => $this->id,
+                'email' => $this->email,
+            ]);
+
+            return;
+        }
+
+        $message = "VAS Partners admin password reset.\n"
+            ."Open this link to set a new password:\n{$url}\n"
+            .'If you did not request this, ignore this message. Ethio telecom';
+
+        app(SmsService::class)->send($this->phone, $message);
     }
 
     /** Who may start impersonation (Filament Impersonate). */

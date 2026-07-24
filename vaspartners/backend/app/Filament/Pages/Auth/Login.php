@@ -2,8 +2,7 @@
 
 namespace App\Filament\Pages\Auth;
 
-use App\Models\User;
-use App\Services\SmsService;
+use App\Support\AdminLoginResolver;
 use Filament\Auth\Pages\Login as BaseLogin;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Component;
@@ -15,10 +14,10 @@ class Login extends BaseLogin
     protected function getEmailFormComponent(): Component
     {
         return TextInput::make('login')
-            ->label('Email, phone, or username')
-            ->placeholder('e.g. admin@demo.com, 0930011756, or admin')
+            ->label('Phone number')
+            ->tel()
             ->required()
-            ->autocomplete('username')
+            ->autocomplete('tel')
             ->autofocus();
     }
 
@@ -28,7 +27,7 @@ class Login extends BaseLogin
      */
     protected function getCredentialsFromFormData(#[SensitiveParameter] array $data): array
     {
-        $user = $this->resolveUserByLogin((string) ($data['login'] ?? ''));
+        $user = AdminLoginResolver::resolve((string) ($data['login'] ?? ''));
 
         return [
             'email' => $user?->email ?? '__invalid__',
@@ -41,35 +40,5 @@ class Login extends BaseLogin
         throw ValidationException::withMessages([
             'data.login' => __('filament-panels::auth/pages/login.messages.failed'),
         ]);
-    }
-
-    protected function resolveUserByLogin(string $login): ?User
-    {
-        $login = trim($login);
-        if ($login === '') {
-            return null;
-        }
-
-        $sms = app(SmsService::class);
-        $normalizedPhone = $sms->normalizePhone($login);
-        $candidates = array_values(array_unique(array_filter([
-            $login,
-            $normalizedPhone,
-            '0'.$normalizedPhone,
-            '251'.$normalizedPhone,
-            '+251'.$normalizedPhone,
-        ])));
-
-        return User::query()
-            ->where('is_active', true)
-            ->where(function ($query) use ($login, $candidates) {
-                $query->whereRaw('LOWER(username) = ?', [mb_strtolower($login)])
-                    ->orWhereRaw('LOWER(email) = ?', [mb_strtolower($login)]);
-
-                foreach ($candidates as $candidate) {
-                    $query->orWhere('phone', $candidate);
-                }
-            })
-            ->first();
     }
 }

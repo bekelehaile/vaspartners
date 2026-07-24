@@ -7,21 +7,26 @@ use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
-use Filament\Pages\SimplePage;
+use Filament\Pages\Page;
 use Filament\Schemas\Components\Actions;
-use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\EmbeddedSchema;
 use Filament\Schemas\Components\Form;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
+use Filament\Support\Icons\Heroicon;
 use Illuminate\Validation\Rules\Password;
 
 /**
  * @property-read Schema $form
  */
-class ForcePasswordChange extends SimplePage
+class ForcePasswordChange extends Page
 {
-    protected static bool $isDiscovered = false;
+    protected static string|\BackedEnum|null $navigationIcon = Heroicon::Key;
+
+    protected static ?string $navigationLabel = 'Change password';
+
+    protected static ?string $title = 'Change password';
 
     protected static ?string $slug = 'force-password-change';
 
@@ -34,10 +39,9 @@ class ForcePasswordChange extends SimplePage
 
     public function mount(): void
     {
-        abort_unless(Filament::auth()->check(), 403);
-
-        /** @var User $user */
+        /** @var User|null $user */
         $user = Filament::auth()->user();
+        abort_unless($user !== null, 403);
 
         if (! $user->must_change_password) {
             $this->redirect(Filament::getUrl());
@@ -46,11 +50,6 @@ class ForcePasswordChange extends SimplePage
         }
 
         $this->form->fill();
-    }
-
-    public function getTitle(): string
-    {
-        return 'Change password';
     }
 
     public function getHeading(): string
@@ -90,19 +89,22 @@ class ForcePasswordChange extends SimplePage
     {
         return $schema
             ->components([
-                Form::make([EmbeddedSchema::make('form')])
-                    ->id('form')
-                    ->livewireSubmitHandler('changePassword')
-                    ->footer([
-                        Actions::make([
-                            Action::make('changePassword')
-                                ->label('Update password')
-                                ->submit('changePassword'),
-                        ])
-                            ->alignment(Alignment::Full)
-                            ->fullWidth(true)
-                            ->key('form-actions'),
-                    ]),
+                Section::make()
+                    ->schema([
+                        Form::make([EmbeddedSchema::make('form')])
+                            ->id('form')
+                            ->livewireSubmitHandler('changePassword')
+                            ->footer([
+                                Actions::make([
+                                    Action::make('changePassword')
+                                        ->label('Update password')
+                                        ->submit('changePassword'),
+                                ])
+                                    ->alignment(Alignment::Start)
+                                    ->key('form-actions'),
+                            ]),
+                    ])
+                    ->columnSpanFull(),
             ]);
     }
 
@@ -132,5 +134,12 @@ class ForcePasswordChange extends SimplePage
             ->send();
 
         $this->redirect(Filament::getUrl());
+    }
+
+    public static function canAccess(): bool
+    {
+        $user = Filament::auth()->user();
+
+        return $user instanceof User && (bool) $user->must_change_password;
     }
 }
