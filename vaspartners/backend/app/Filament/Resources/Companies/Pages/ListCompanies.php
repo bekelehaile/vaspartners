@@ -27,6 +27,15 @@ class ListCompanies extends ListRecords
                 ->badge(fn (): int => $base()->where('approval_status', CompanyApprovalStatus::Approved)->count())
                 ->badgeColor('success')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('approval_status', CompanyApprovalStatus::Approved)),
+            'orphans' => Tab::make('Orphan (no owner)')
+                ->badge(fn (): int => $base()
+                    ->where('approval_status', CompanyApprovalStatus::Approved)
+                    ->whereDoesntHave('memberships', fn (Builder $q) => $q->where('role', 'owner'))
+                    ->count())
+                ->badgeColor('warning')
+                ->modifyQueryUsing(fn (Builder $query) => $query
+                    ->where('approval_status', CompanyApprovalStatus::Approved)
+                    ->whereDoesntHave('memberships', fn (Builder $q) => $q->where('role', 'owner'))),
             'rejected' => Tab::make('Rejected')
                 ->badge(fn (): int => $base()->where('approval_status', CompanyApprovalStatus::Rejected)->count())
                 ->badgeColor('danger')

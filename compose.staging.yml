@@ -101,6 +101,9 @@ services:
     volumes:
       - vaspartners-storage:/var/www/html/storage/app
       - vaspartners-logs:/var/www/html/storage/logs
+      # Read-only MVAS dump + attachments for: php artisan vas:seed-mvas-dump
+      - /data-disk/applications/mvasportal/mvasportal/storage/app:/mvas-storage:ro
+      - /data-disk/applications/mvasportal/dumps:/mvas-dumps:ro
     depends_on:
       postgres:
         condition: service_healthy

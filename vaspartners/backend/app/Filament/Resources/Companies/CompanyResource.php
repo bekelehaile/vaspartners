@@ -8,6 +8,7 @@ use App\Filament\Resources\Companies\Pages\ListCompanies;
 use App\Filament\Resources\Companies\Pages\ViewCompany;
 use App\Filament\Resources\Companies\RelationManagers\ChangeRequestsRelationManager;
 use App\Filament\Resources\Companies\RelationManagers\MembersRelationManager;
+use App\Filament\Resources\Companies\RelationManagers\ServiceRequestsRelationManager;
 use App\Filament\Resources\Companies\RelationManagers\SubscriptionsRelationManager;
 use App\Models\Company;
 use App\Services\CompanyMembershipService;
@@ -104,8 +105,12 @@ class CompanyResource extends Resource
                 TextEntry::make('owner_name')
                     ->label('Owner')
                     ->state(fn (Company $record): ?string => $record->ownerCustomer()?->name)
-                    ->placeholder('No owner')
+                    ->placeholder('No owner — Fayda phone claim or Assign owner')
                     ->color('success'),
+                TextEntry::make('legacy_mvas_client_id')
+                    ->label('Legacy MVAS client ID')
+                    ->placeholder('—')
+                    ->visible(fn (Company $record): bool => filled($record->legacy_mvas_client_id)),
                 TextEntry::make('members_count')
                     ->label('Total people')
                     ->state(fn (Company $record): int => $record->memberCount()),
@@ -205,6 +210,7 @@ class CompanyResource extends Resource
     {
         return [
             MembersRelationManager::class,
+            ServiceRequestsRelationManager::class,
             SubscriptionsRelationManager::class,
             ChangeRequestsRelationManager::class,
         ];

@@ -47,6 +47,7 @@ class Customer extends Authenticatable
         'company_email',
         'company_address',
         'current_company_id',
+        'legacy_mvas_client_id',
         'is_active',
         'is_banned',
         'profile_completed_at',

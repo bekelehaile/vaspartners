@@ -698,9 +698,9 @@ class CompanyMembershipService
     }
 
     /**
-     * After Fayda login: if the partner's phone (last 9 digits) matches exactly one
-     * migrated, approved, ownerless company phone, auto-claim that company as owner.
-     * Otherwise the partner must create/submit a company profile for admin approval.
+     * After Fayda login: claim exactly one ownerless approved company for this partner.
+     * Prefer legacy_mvas_client_id match (migrated dump), else unique phone last-9 match.
+     * Orphan / ambiguous companies stay ownerless for admin Assign owner.
      */
     public function tryAutoClaimMigratedCompanyByPhone(Customer $customer): ?Company
     {
@@ -708,43 +708,56 @@ class CompanyMembershipService
             return null;
         }
 
-        $last9 = app(SmsService::class)->normalizePhone((string) $customer->phone_number);
-        if ($last9 === '' || ! preg_match('/^\d{9}$/', $last9)) {
-            return null;
+        $company = null;
+
+        if (filled($customer->legacy_mvas_client_id)) {
+            $company = Company::query()
+                ->where('legacy_mvas_client_id', $customer->legacy_mvas_client_id)
+                ->where('is_active', true)
+                ->where('approval_status', CompanyApprovalStatus::Approved->value)
+                ->whereDoesntHave('memberships', function ($query) {
+                    $query->where('role', CompanyRole::Owner->value);
+                })
+                ->first();
         }
 
-        $candidates = Company::query()
-            ->where('is_active', true)
-            ->where('approval_status', CompanyApprovalStatus::Approved->value)
-            ->whereNotNull('phone')
-            ->where('phone', '!=', '')
-            ->whereRaw(
-                "RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9) = ?",
-                [$last9],
-            )
-            ->whereDoesntHave('memberships', function ($query) {
-                $query->where('role', CompanyRole::Owner->value);
-            })
-            ->limit(3)
-            ->get();
-
-        if ($candidates->count() !== 1) {
-            if ($candidates->count() > 1) {
-                Log::warning('Fayda auto-claim skipped — ambiguous company phone match', [
-                    'customer_id' => $customer->id,
-                    'phone_last9' => $last9,
-                    'company_ids' => $candidates->pluck('id')->all(),
-                ]);
+        if (! $company) {
+            $last9 = app(SmsService::class)->normalizePhone((string) $customer->phone_number);
+            if ($last9 === '' || ! preg_match('/^\d{9}$/', $last9)) {
+                return null;
             }
 
-            return null;
+            $candidates = Company::query()
+                ->where('is_active', true)
+                ->where('approval_status', CompanyApprovalStatus::Approved->value)
+                ->whereNotNull('phone')
+                ->where('phone', '!=', '')
+                ->whereRaw(
+                    "RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9) = ?",
+                    [$last9],
+                )
+                ->whereDoesntHave('memberships', function ($query) {
+                    $query->where('role', CompanyRole::Owner->value);
+                })
+                ->limit(3)
+                ->get();
+
+            if ($candidates->count() !== 1) {
+                if ($candidates->count() > 1) {
+                    Log::warning('Fayda auto-claim skipped — ambiguous company phone match', [
+                        'customer_id' => $customer->id,
+                        'phone_last9' => $last9,
+                        'company_ids' => $candidates->pluck('id')->all(),
+                    ]);
+                }
+
+                return null;
+            }
+
+            $company = $candidates->first();
         }
 
-        /** @var Company $company */
-        $company = $candidates->first();
-
         return DB::transaction(function () use ($customer, $company) {
-            // Re-check owner inside the transaction to avoid races.
             if ($company->hasOwner()) {
                 return null;
             }
@@ -757,13 +770,53 @@ class CompanyMembershipService
                 ])->save();
             }
 
-            Log::info('Fayda auto-claimed migrated company by phone match', [
+            Log::info('Fayda auto-claimed migrated company', [
                 'customer_id' => $customer->id,
                 'company_id' => $company->id,
+                'legacy_mvas_client_id' => $company->legacy_mvas_client_id,
                 'company_tin' => $company->tin,
             ]);
 
             return $company->fresh();
+        });
+    }
+
+    /**
+     * Admin verification: assign an owner to an orphan (ownerless) company.
+     */
+    public function adminAssignOwner(Company $company, Customer $customer, User $admin, ?string $note = null): Company
+    {
+        if ($company->hasOwner()) {
+            throw ValidationException::withMessages([
+                'owner' => 'This company already has an owner.',
+            ]);
+        }
+
+        if (! $customer->is_active || $customer->is_banned) {
+            throw ValidationException::withMessages([
+                'owner' => 'Cannot assign an inactive or banned partner as owner.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($company, $customer, $admin, $note) {
+            $this->linkCustomer($customer, $company, CompanyRole::Owner, switchTo: true);
+
+            $company->forceFill([
+                'created_by_customer_id' => $company->created_by_customer_id ?: $customer->id,
+                'approval_status' => CompanyApprovalStatus::Approved,
+                'is_active' => true,
+                'approved_by_user_id' => $admin->id,
+                'approved_at' => $company->approved_at ?? now(),
+                'approval_note' => trim((string) ($note ?: $company->approval_note ?: 'Owner assigned by admin after verification.')),
+            ])->save();
+
+            Log::info('Admin assigned owner to orphan company', [
+                'company_id' => $company->id,
+                'customer_id' => $customer->id,
+                'admin_id' => $admin->id,
+            ]);
+
+            return $company->fresh(['memberships.customer']);
         });
     }
 

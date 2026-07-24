@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\CompanyApprovalStatus;
 use App\Enums\CompanyRole;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -30,6 +31,7 @@ class Company extends Model
         'approved_at',
         'approval_note',
         'created_by_customer_id',
+        'legacy_mvas_client_id',
     ];
 
     protected function casts(): array
@@ -119,6 +121,38 @@ class Company extends Model
     public function subscriptions(): HasMany
     {
         return $this->hasMany(Subscription::class);
+    }
+
+    /**
+     * Service requests (tickets) for this company:
+     * - tickets on company subscriptions
+     * - tickets owned by current members
+     * - tickets owned by migrated customer with same legacy_mvas_client_id
+     */
+    public function serviceRequests(): Builder
+    {
+        $companyId = (int) $this->getKey();
+        $legacyClientId = $this->legacy_mvas_client_id;
+
+        return Ticket::query()
+            ->where(function (Builder $query) use ($companyId, $legacyClientId): void {
+                $query
+                    ->whereHas(
+                        'subscription',
+                        fn (Builder $q) => $q->where('company_id', $companyId),
+                    )
+                    ->orWhereHas(
+                        'customer.memberships',
+                        fn (Builder $q) => $q->where('company_id', $companyId),
+                    );
+
+                if ($legacyClientId !== null && $legacyClientId !== '') {
+                    $query->orWhereHas(
+                        'customer',
+                        fn (Builder $q) => $q->where('legacy_mvas_client_id', $legacyClientId),
+                    );
+                }
+            });
     }
 
     public function hasOwner(): bool

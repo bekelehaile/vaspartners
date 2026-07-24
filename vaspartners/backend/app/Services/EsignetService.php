@@ -158,7 +158,17 @@ class EsignetService
             $birthdate = date('Y-m-d', strtotime(str_replace('/', '-', $payload['birthdate'])));
         }
 
-        $customer = Customer::query()->where('sub', $sub)->first() ?? new Customer;
+        $customer = Customer::query()->where('sub', $sub)->first();
+
+        // Adopt migrated placeholder (mvas-client-*) so tickets stay with this identity.
+        if (! $customer) {
+            $customer = Customer::query()
+                ->where('phone_number', $phoneNumber)
+                ->where('sub', 'like', 'mvas-client-%')
+                ->first();
+        }
+
+        $customer ??= new Customer;
 
         $customer->syncFromFayda([
             'sub' => $sub,
@@ -176,8 +186,8 @@ class EsignetService
 
         $customer->forceFill(['is_active' => true])->save();
 
-        // Migrated companies: Fayda phone last-9 match → auto-claim as owner.
-        // No match → partner must submit company profile for admin approval.
+        // Phone (or legacy client id) matches one ownerless migrated company → claim as owner.
+        // No match → partner submits company, or admin Assign owner for orphan companies.
         try {
             app(CompanyMembershipService::class)->tryAutoClaimMigratedCompanyByPhone($customer->fresh());
         } catch (Throwable $e) {

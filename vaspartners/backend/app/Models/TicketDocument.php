@@ -13,6 +13,7 @@ class TicketDocument extends Model
     protected $fillable = [
         'ticket_id', 'document_type_id', 'disk', 'path', 'original_name', 'mime_type',
         'size_bytes', 'verification_status', 'remark', 'uploaded_by_customer_id',
+        'legacy_mvas_file_id',
     ];
 
     public function ticket(): BelongsTo { return $this->belongsTo(Ticket::class); }

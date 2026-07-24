@@ -15,7 +15,7 @@ class Ticket extends Model
     use HasUlids, SoftDeletes;
 
     protected $fillable = [
-        'public_id', 'tt_number', 'customer_id', 'service_id', 'requisition_id', 'subscription_id',
+        'public_id', 'tt_number', 'legacy_mvas_ticket_id', 'customer_id', 'service_id', 'requisition_id', 'subscription_id',
         'parent_ticket_id', 'category_id', 'priority_id', 'region_id', 'zone_id', 'woreda_id',
         'assigned_to_user_id', 'current_approver_user_id', 'status', 'document_review_status',
         'needs_reverification', 'building', 'location', 'description', 'assigned_at',

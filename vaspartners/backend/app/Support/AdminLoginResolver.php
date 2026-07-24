@@ -8,7 +8,7 @@ use App\Services\SmsService;
 final class AdminLoginResolver
 {
     /**
-     * Resolve an active admin user by phone number only.
+     * Resolve an active admin user by email or phone number.
      */
     public static function resolve(string $login): ?User
     {
@@ -17,10 +17,16 @@ final class AdminLoginResolver
             return null;
         }
 
+        if (filter_var($login, FILTER_VALIDATE_EMAIL)) {
+            return User::query()
+                ->where('is_active', true)
+                ->whereRaw('LOWER(email) = ?', [strtolower($login)])
+                ->first();
+        }
+
         $sms = app(SmsService::class);
         $normalizedPhone = $sms->normalizePhone($login);
 
-        // Reject clearly non-phone identifiers (email / username text).
         if ($normalizedPhone === '' || ! preg_match('/^\d{9,15}$/', $normalizedPhone)) {
             return null;
         }
