@@ -8,7 +8,7 @@ use App\Services\SmsService;
 final class AdminLoginResolver
 {
     /**
-     * Resolve an active admin user by email or phone number.
+     * Resolve an active admin user by email, phone number, or username.
      */
     public static function resolve(string $login): ?User
     {
@@ -27,27 +27,32 @@ final class AdminLoginResolver
         $sms = app(SmsService::class);
         $normalizedPhone = $sms->normalizePhone($login);
 
-        if ($normalizedPhone === '' || ! preg_match('/^\d{9,15}$/', $normalizedPhone)) {
-            return null;
+        $phoneCandidates = [];
+        if ($normalizedPhone !== '' && preg_match('/^\d{9,15}$/', $normalizedPhone)) {
+            $phoneCandidates = array_values(array_unique(array_filter([
+                $login,
+                $normalizedPhone,
+                '0'.$normalizedPhone,
+                '251'.$normalizedPhone,
+                '+251'.$normalizedPhone,
+            ])));
         }
-
-        $candidates = array_values(array_unique(array_filter([
-            $login,
-            $normalizedPhone,
-            '0'.$normalizedPhone,
-            '251'.$normalizedPhone,
-            '+251'.$normalizedPhone,
-        ])));
 
         return User::query()
             ->where('is_active', true)
-            ->where(function ($query) use ($candidates) {
-                foreach ($candidates as $i => $candidate) {
-                    if ($i === 0) {
-                        $query->where('phone', $candidate);
-                    } else {
-                        $query->orWhere('phone', $candidate);
-                    }
+            ->where(function ($query) use ($login, $phoneCandidates) {
+                $query->whereRaw('LOWER(username) = ?', [mb_strtolower($login)]);
+
+                if ($phoneCandidates !== []) {
+                    $query->orWhere(function ($phoneQuery) use ($phoneCandidates) {
+                        foreach ($phoneCandidates as $i => $candidate) {
+                            if ($i === 0) {
+                                $phoneQuery->where('phone', $candidate);
+                            } else {
+                                $phoneQuery->orWhere('phone', $candidate);
+                            }
+                        }
+                    });
                 }
             })
             ->first();

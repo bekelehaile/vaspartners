@@ -6,6 +6,7 @@ use App\Filament\Pages\Auth\ForcePasswordChange;
 use Closure;
 use Filament\Facades\Filament;
 use Illuminate\Http\Request;
+use STS\FilamentImpersonate\Facades\Impersonation;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnsureAdminPasswordChanged
@@ -14,7 +15,9 @@ class EnsureAdminPasswordChanged
     {
         $user = Filament::auth()->user();
 
-        if (! $user || ! ($user->must_change_password ?? false)) {
+        // Do not force a password change while impersonating — nearly all seeded
+        // staff have must_change_password=true, which would trap the session.
+        if (! $user || ! ($user->must_change_password ?? false) || Impersonation::isImpersonating()) {
             return $next($request);
         }
 

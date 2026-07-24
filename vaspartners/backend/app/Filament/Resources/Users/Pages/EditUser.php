@@ -86,7 +86,8 @@ class EditUser extends EditRecord
                 }),
             Impersonate::make()
                 ->record($this->getRecord())
-                ->redirectTo(filament()->getCurrentOrDefaultPanel()?->getUrl() ?? '/admin'),
+                ->redirectTo(filament()->getCurrentOrDefaultPanel()?->getUrl() ?? '/admin')
+                ->backTo(filament()->getCurrentOrDefaultPanel()?->getUrl() ?? '/admin'),
             DeleteAction::make()
                 ->visible(fn (): bool => ! $this->record->hasRole(Utils::getSuperAdminName())),
         ];

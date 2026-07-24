@@ -127,7 +127,8 @@ class UserResource extends Resource
             ->defaultSort('name')
             ->recordActions([
                 Impersonate::make()
-                    ->redirectTo(filament()->getCurrentOrDefaultPanel()?->getUrl() ?? '/admin'),
+                    ->redirectTo(filament()->getCurrentOrDefaultPanel()?->getUrl() ?? '/admin')
+                    ->backTo(filament()->getCurrentOrDefaultPanel()?->getUrl() ?? '/admin'),
                 \Filament\Actions\EditAction::make(),
             ]);
     }

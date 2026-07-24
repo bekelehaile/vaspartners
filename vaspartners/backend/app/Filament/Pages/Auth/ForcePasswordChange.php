@@ -138,6 +138,10 @@ class ForcePasswordChange extends Page
 
     public static function canAccess(): bool
     {
+        if (\STS\FilamentImpersonate\Facades\Impersonation::isImpersonating()) {
+            return false;
+        }
+
         $user = Filament::auth()->user();
 
         return $user instanceof User && (bool) $user->must_change_password;

@@ -74,7 +74,7 @@ class User extends Authenticatable implements CanResetPasswordContract, Filament
             return false;
         }
 
-        return $this->hasAnyRole(['super_admin', 'account_manager']);
+        return $this->hasAnyRole(['super_admin', 'admin', 'account_manager']);
     }
 
     /**

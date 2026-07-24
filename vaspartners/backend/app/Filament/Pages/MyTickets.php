@@ -51,13 +51,21 @@ class MyTickets extends Page implements HasActions, HasSchemas, HasTable
 
     public function getSubheading(): ?string
     {
-        return 'Service requests assigned to you as account manager.';
+        return 'Tickets assigned to you, and requests waiting for your approval.';
     }
 
     public static function getNavigationBadge(): ?string
     {
+        $userId = auth()->id();
+        if (! $userId) {
+            return null;
+        }
+
         $count = Ticket::query()
-            ->where('assigned_to_user_id', auth()->id())
+            ->where(function (Builder $q) use ($userId) {
+                $q->where('assigned_to_user_id', $userId)
+                    ->orWhere('current_approver_user_id', $userId);
+            })
             ->whereNotIn('status', [
                 TicketStatus::Closed->value,
                 TicketStatus::Completed->value,
@@ -76,13 +84,36 @@ class MyTickets extends Page implements HasActions, HasSchemas, HasTable
             ]);
     }
 
+    /**
+     * Tickets the current user owns as AM, or that are waiting on them to approve.
+     */
+    protected function baseQuery(): Builder
+    {
+        $userId = auth()->id();
+
+        return Ticket::query()->where(function (Builder $q) use ($userId) {
+            $q->where('assigned_to_user_id', $userId)
+                ->orWhere('current_approver_user_id', $userId);
+        });
+    }
+
     public function getTabs(): array
     {
-        $base = fn (): Builder => Ticket::query()->where('assigned_to_user_id', auth()->id());
+        $base = fn (): Builder => $this->baseQuery();
+        $userId = auth()->id();
 
         return [
             'all' => Tab::make('All')
                 ->badge(fn (): int => $base()->count()),
+            'approval' => Tab::make('My approval')
+                ->badge(fn (): int => Ticket::query()
+                    ->where('current_approver_user_id', $userId)
+                    ->whereNotIn('status', [TicketStatus::Completed, TicketStatus::Closed])
+                    ->count())
+                ->badgeColor('primary')
+                ->modifyQueryUsing(fn (Builder $query) => $query
+                    ->where('current_approver_user_id', $userId)
+                    ->whereNotIn('status', [TicketStatus::Completed, TicketStatus::Closed])),
             'in_progress' => Tab::make('In progress')
                 ->badge(fn (): int => $base()->where('status', TicketStatus::InProgress)->count())
                 ->badgeColor('info')
@@ -91,14 +122,18 @@ class MyTickets extends Page implements HasActions, HasSchemas, HasTable
                 ->badge(fn (): int => $base()->where('status', TicketStatus::Rejected)->count())
                 ->badgeColor('danger')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('status', TicketStatus::Rejected)),
-            'awaiting_approval' => Tab::make('In approval')
+            'with_approver' => Tab::make('With approver')
                 ->badge(fn (): int => $base()
+                    ->where('assigned_to_user_id', $userId)
                     ->whereNotNull('current_approver_user_id')
+                    ->where('current_approver_user_id', '!=', $userId)
                     ->whereNotIn('status', [TicketStatus::Completed, TicketStatus::Closed])
                     ->count())
-                ->badgeColor('primary')
+                ->badgeColor('warning')
                 ->modifyQueryUsing(fn (Builder $query) => $query
+                    ->where('assigned_to_user_id', $userId)
                     ->whereNotNull('current_approver_user_id')
+                    ->where('current_approver_user_id', '!=', $userId)
                     ->whereNotIn('status', [TicketStatus::Completed, TicketStatus::Closed])),
             'completed' => Tab::make('Completed')
                 ->badge(fn (): int => $base()->where('status', TicketStatus::Completed)->count())
@@ -114,9 +149,7 @@ class MyTickets extends Page implements HasActions, HasSchemas, HasTable
     {
         return TicketResource::table($table)
             ->query(function (): Builder {
-                $query = Ticket::query()
-                    ->where('assigned_to_user_id', auth()->id())
-                    ->latest('updated_at');
+                $query = $this->baseQuery()->latest('updated_at');
 
                 return $this->modifyQueryWithActiveTab($query);
             })

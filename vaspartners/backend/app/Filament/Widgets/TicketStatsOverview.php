@@ -58,7 +58,7 @@ class TicketStatsOverview extends StatsOverviewWidget
                 ->description('Waiting on you')
                 ->descriptionIcon(Heroicon::OutlinedCheckBadge)
                 ->color('primary')
-                ->url(TicketResource::getUrl('index').'?tab=approval'),
+                ->url(\App\Filament\Pages\MyTickets::getUrl().'?tab=approval'),
             Stat::make('Completed today', $completedToday)
                 ->description('Approved today')
                 ->descriptionIcon(Heroicon::OutlinedCheckCircle)
