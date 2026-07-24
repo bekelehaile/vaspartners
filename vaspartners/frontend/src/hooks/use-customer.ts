@@ -516,7 +516,7 @@ export function useCreateTicket() {
       return res.data;
     },
     onSuccess: (ticket) => {
-      queryClient.setQueryData(queryKeys.ticket(ticket.public_id), ticket);
+      queryClient.setQueryData(queryKeys.ticket(ticket.tt_number), ticket);
       void queryClient.invalidateQueries({ queryKey: queryKeys.customer.tickets });
       void queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions });
     },

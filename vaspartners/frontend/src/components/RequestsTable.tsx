@@ -57,7 +57,7 @@ export function RequestsTable({
       columnHelper.accessor("tt_number", {
         header: "Request number",
         cell: (info) => (
-          <Link href={`/portal/requests/${info.row.original.public_id}`} className="table-link">
+          <Link href={`/portal/requests/${info.row.original.tt_number}`} className="table-link">
             {info.getValue()}
           </Link>
         ),
@@ -90,7 +90,7 @@ export function RequestsTable({
         header: "",
         cell: (info) => (
           <Link
-            href={`/portal/requests/${info.row.original.public_id}`}
+            href={`/portal/requests/${info.row.original.tt_number}`}
             className="btn-ghost table-action"
           >
             View

@@ -64,7 +64,7 @@ class CompanyChangeRequestResource extends Resource
     {
         return $schema->components([
             Section::make('Request')->schema([
-                TextEntry::make('public_id')->label('Request ID'),
+                TextEntry::make('public_id')->label('Request number'),
                 TextEntry::make('type')
                     ->badge()
                     ->formatStateUsing(fn ($state) => $state instanceof CompanyChangeType ? $state->label() : (string) $state)
@@ -161,7 +161,7 @@ class CompanyChangeRequestResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('public_id')->label('ID')->searchable()->toggleable(),
+                TextColumn::make('public_id')->label('Request number')->searchable()->toggleable(),
                 TextColumn::make('type')
                     ->label('Request type')
                     ->badge()

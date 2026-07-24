@@ -43,8 +43,8 @@ export function TicketDocumentsPanel({
     serviceId,
     requisitionId
   );
-  const upload = useUploadTicketDocument(ticket.public_id);
-  const remove = useDeleteTicketDocument(ticket.public_id);
+  const upload = useUploadTicketDocument(ticket.tt_number);
+  const remove = useDeleteTicketDocument(ticket.tt_number);
   const [localError, setLocalError] = useState<string | null>(null);
 
   const locked = documentsLockedStatus(ticket.status, ticket.documents_locked);

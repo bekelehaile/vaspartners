@@ -10,8 +10,9 @@ import { useTicket } from "@/hooks/use-customer";
 import { statusCopy } from "@/lib/api";
 
 export default function RequestDetailPage() {
-  const params = useParams<{ public_id: string }>();
-  const { data: ticket, isLoading, isError, error } = useTicket(params.public_id);
+  const params = useParams<{ tt_number: string }>();
+  const requestNumber = decodeURIComponent(params.tt_number);
+  const { data: ticket, isLoading, isError, error } = useTicket(requestNumber);
 
   return (
     <>
@@ -66,7 +67,7 @@ export default function RequestDetailPage() {
             </section>
 
             <TicketChatPanel
-              publicId={ticket.public_id}
+              publicId={ticket.tt_number}
               chatLocked={!!ticket.chat_locked}
               maxKb={ticket.chat_attachment_max_kb ?? 2048}
               initialMessages={ticket.messages ?? []}

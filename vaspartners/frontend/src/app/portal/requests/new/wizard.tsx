@@ -150,7 +150,7 @@ export default function NewRequestWizard() {
         setUploadingDocs(true);
         try {
           for (const [documentTypeId, file] of entries) {
-            await uploadTicketDocumentFile(created.public_id, Number(documentTypeId), file);
+            await uploadTicketDocumentFile(created.tt_number, Number(documentTypeId), file);
           }
           setStagedFiles({});
         } catch (err) {
@@ -390,7 +390,7 @@ export default function NewRequestWizard() {
 
         {ticket ? (
           <UploadStep
-            publicId={ticket.public_id}
+            publicId={ticket.tt_number}
             ttNumber={ticket.tt_number}
             serviceId={String(ticket.service?.id ?? form.state.values.service_id)}
             requisitionId={String(
@@ -978,7 +978,7 @@ function UploadStep({
 
       <div className="form-actions">
         {canFinish ? (
-          <Link href={`/portal/requests/${publicId}`} className="btn-primary">
+          <Link href={`/portal/requests/${ttNumber}`} className="btn-primary">
             Finish and view request
           </Link>
         ) : (
@@ -991,7 +991,7 @@ function UploadStep({
             Finish and view request
           </button>
         )}
-        <Link href={`/portal/requests/${publicId}`} className="btn-ghost">
+        <Link href={`/portal/requests/${ttNumber}`} className="btn-ghost">
           Upload later
         </Link>
       </div>

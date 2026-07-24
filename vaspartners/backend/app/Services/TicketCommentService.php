@@ -214,7 +214,7 @@ class TicketCommentService
             'attachment_name' => $comment->attachment_original_name,
             'attachment_size_bytes' => $comment->attachment_size_bytes,
             'attachment_url' => filled($comment->attachment_path)
-                ? url("/api/v1/tickets/{$ticket->public_id}/comments/{$comment->id}/attachment")
+                ? url("/api/v1/tickets/{$ticket->tt_number}/comments/{$comment->id}/attachment")
                 : null,
             'created_at' => optional($comment->created_at)?->toIso8601String(),
         ];

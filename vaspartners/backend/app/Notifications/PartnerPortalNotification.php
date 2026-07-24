@@ -34,9 +34,11 @@ class PartnerPortalNotification extends Notification implements ShouldQueue
     public function toDatabase(object $notifiable): array
     {
         $url = $this->url
-            ?: ($this->ticketPublicId
-                ? '/portal/requests/'.$this->ticketPublicId
-                : '/portal');
+            ?: ($this->ttNumber
+                ? '/portal/requests/'.$this->ttNumber
+                : ($this->ticketPublicId
+                    ? '/portal/requests/'.$this->ticketPublicId
+                    : '/portal'));
 
         return [
             'title' => $this->title,

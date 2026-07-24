@@ -47,7 +47,23 @@ class Ticket extends Model
 
     public function getRouteKeyName(): string
     {
-        return 'public_id';
+        return 'tt_number';
+    }
+
+    /**
+     * Resolve by request number, with public_id fallback for older portal links.
+     */
+    public function resolveRouteBinding($value, $field = null)
+    {
+        $field ??= $this->getRouteKeyName();
+
+        return $this->where(function ($query) use ($value, $field): void {
+            $query->where($field, $value);
+
+            if ($field === 'tt_number') {
+                $query->orWhere('public_id', $value);
+            }
+        })->firstOrFail();
     }
 
     public function customerDocumentsAreLocked(): bool

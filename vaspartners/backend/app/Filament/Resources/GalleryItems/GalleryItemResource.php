@@ -56,7 +56,7 @@ class GalleryItemResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->defaultSort('created_at', 'desc')
+            ->defaultSort('sort_order')
             ->columns([
                 ImageColumn::make('image')->disk('public')->square(),
                 TextColumn::make('title')->searchable()->sortable(),

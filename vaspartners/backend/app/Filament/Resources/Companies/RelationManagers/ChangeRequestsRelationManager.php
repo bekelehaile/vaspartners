@@ -27,7 +27,7 @@ class ChangeRequestsRelationManager extends RelationManager
         return $table
             ->modifyQueryUsing(fn ($query) => $query->with(['customer', 'reviewer']))
             ->columns([
-                TextColumn::make('public_id')->label('ID')->searchable(),
+                TextColumn::make('public_id')->label('Request number')->searchable(),
                 TextColumn::make('type')
                     ->badge()
                     ->formatStateUsing(fn ($state) => $state instanceof CompanyChangeType ? $state->label() : (string) $state),

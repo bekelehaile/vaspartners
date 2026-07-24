@@ -113,15 +113,18 @@ class ServiceResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table->columns([
-            TextColumn::make('name')->searchable()->sortable(),
-            TextColumn::make('category.name'),
-            TextColumn::make('renewal_interval')->badge(),
-            IconColumn::make('is_subscription_based')->boolean()->label('Subs'),
-            IconColumn::make('is_active')->boolean(),
-        ])->recordActions([
-            \Filament\Actions\EditAction::make(),
-        ]);
+        return $table
+            ->defaultSort('sort_order')
+            ->columns([
+                TextColumn::make('sort_order')->label('#')->sortable(),
+                TextColumn::make('name')->searchable()->sortable(),
+                TextColumn::make('category.name'),
+                TextColumn::make('renewal_interval')->badge(),
+                IconColumn::make('is_subscription_based')->boolean()->label('Subs'),
+                IconColumn::make('is_active')->boolean(),
+            ])->recordActions([
+                \Filament\Actions\EditAction::make(),
+            ]);
     }
 
     public static function getRelations(): array
