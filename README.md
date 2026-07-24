@@ -83,18 +83,22 @@ Compose overrides DB/Redis hosts inside containers (`pgbouncer`, `redis`). Your 
 | Containers | `mvasportal-app`, `mvasportal-nginx` | `vaspartners-app`, `vaspartners-nginx`, … |
 | Public | `https://vaspartnersportal.ethiotelecom.et` (:443) | `https://vaspartnersportal.ethiotelecom.et:8443` |
 | Proxy | host nginx → `:30011` | Docker `vaspartners-nginx` (Tele wildcard cert) |
-| DB | external MySQL | **Postgres in Docker** (`vaspartners-postgres`) |
+| DB | external MySQL | **Postgres in Docker** (`vaspartners-postgres`) — no SQLite |
 
-Production `mvasportal` on :443 is left alone. Staging runs **everything** in containers (Postgres, PgBouncer, Redis, Laravel, queue, Next.js, nginx).
+Production `mvasportal` on :443 is left alone. Staging runs **everything** in containers (Postgres, PgBouncer, Redis, Laravel, queue, Next.js, nginx). Use this Postgres volume to rehearse migrating old portal data.
 
 ```bash
 # From /data-disk/applications/vaspartners
-cp .env.staging.example .env.staging   # or let deploy-staging.sh copy from vaspartners/backend/.env
+cp .env.staging.example .env.staging   # pgsql + redis; no sqlite
 # set FAYDA_* in .env.staging
 
 ./deploy-staging.sh
 ./down-staging.sh          # keep volumes
 ./down-staging.sh -v       # wipe staging Postgres volumes
+
+# Host DB access for dump/restore / migration scripts
+#   postgres:  127.0.0.1:35432  (user vas / secret, db vaspartners)
+#   pgbouncer: 127.0.0.1:36432
 ```
 
 | URL | |

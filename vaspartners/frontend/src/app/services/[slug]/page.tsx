@@ -77,13 +77,7 @@ export default function ServiceDetailPage() {
             </div>
 
             <div className="service-detail-copy">
-              <span className="section-label">
-                {service.category?.name || "VAS service"}
-              </span>
               <h1>{service.name}</h1>
-              {service.type ? (
-                <p className="service-detail-type">{service.type}</p>
-              ) : null}
 
               <div className="service-detail-body">
                 <h2>Description</h2>
@@ -101,20 +95,20 @@ export default function ServiceDetailPage() {
               </div>
 
               <div className="service-detail-actions">
-                <Link href="/#services" className="btn-secondary">
-                  Back
-                </Link>
                 {signedIn ? (
-                  <Link href={requestHref} className="btn-primary">
+                  <Link href={requestHref} className="btn-hero">
                     {canRequest
                       ? "Get started"
                       : "Complete company approval first"}
                   </Link>
                 ) : (
-                  <a className="btn-primary" href={faydaLoginUrl()}>
+                  <a className="btn-hero" href={faydaLoginUrl()}>
                     Get started
                   </a>
                 )}
+                <Link href="/#services" className="btn-hero-ghost">
+                  Back to services
+                </Link>
               </div>
             </div>
           </div>

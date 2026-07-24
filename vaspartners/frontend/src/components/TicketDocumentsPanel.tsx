@@ -144,7 +144,7 @@ export function TicketDocumentsPanel({
                   </small>
                   {uploaded ? (
                     <div className="doc-slot-actions">
-                      <small style={{ color: "var(--et-green)" }}>
+                      <small style={{ color: "var(--primary)" }}>
                         Uploaded: {uploaded.name}
                       </small>
                       {!locked && (
@@ -226,7 +226,7 @@ export function TicketDocumentsPanel({
         </div>
       )}
       {mode === "wizard" && !locked && requiredIds.length > 0 && missingRequired.length === 0 && (
-        <p className="muted" style={{ marginTop: "0.85rem", color: "var(--et-green)" }}>
+        <p className="muted" style={{ marginTop: "0.85rem", color: "var(--primary)" }}>
           All required documents are uploaded. You can finish now.
         </p>
       )}

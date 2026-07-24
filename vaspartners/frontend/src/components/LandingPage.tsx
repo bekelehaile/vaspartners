@@ -26,8 +26,8 @@ function LandingInner() {
               Manage Your <em>VAS Services</em> Online
             </h1>
             <p className="hero-lead">
-              Request Value Added Services, upload documents, and track every approval step — the
-              Ethio telecom way.
+              Request Value Added Services, upload documents, and track every approval step — the{" "}
+              <strong>Ethio telecom</strong> way.
             </p>
             {authError && (
               <p className="alert" style={{ marginBottom: "1rem", maxWidth: "28rem" }}>

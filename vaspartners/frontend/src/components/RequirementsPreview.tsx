@@ -122,7 +122,7 @@ export function RequirementsPreview({
               </small>
               {staged ? (
                 <div className="doc-slot-actions">
-                  <small style={{ color: "var(--et-green)" }}>
+                  <small style={{ color: "var(--primary)" }}>
                     Ready: {staged.name}
                   </small>
                   <button
