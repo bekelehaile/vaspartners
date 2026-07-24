@@ -33,6 +33,13 @@ class MessagesRelationManager extends RelationManager
         return false;
     }
 
+    public static function getBadge(Model $ownerRecord, string $pageClass): ?string
+    {
+        $count = $ownerRecord->comments()->where('is_public', true)->count();
+
+        return $count > 0 ? (string) $count : null;
+    }
+
     public function form(Schema $schema): Schema
     {
         $maxKb = app(TicketCommentService::class)->maxAttachmentKb();

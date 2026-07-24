@@ -33,7 +33,7 @@ class PartnerNotificationService
             $this->managementUsers(),
             'New VAS request',
             sprintf(
-                '%s submitted %s for %s.',
+                '%s submitted request number %s for %s.',
                 $ticket->customer?->company_name ?: $ticket->customer?->name ?: 'A partner',
                 $ticket->tt_number,
                 $ticket->service?->name ?: 'a service',
@@ -62,7 +62,7 @@ class PartnerNotificationService
                 $this->notifyStaffDatabase(
                     collect([$assignee]),
                     'Ticket assigned to you',
-                    sprintf('%s (%s) is ready for your review.', $ticket->tt_number, $ticket->service?->name ?: 'VAS'),
+                    sprintf('Request number %s (%s) is ready for your review.', $ticket->tt_number, $ticket->service?->name ?: 'VAS'),
                     $ticket,
                 );
             }
@@ -79,7 +79,7 @@ class PartnerNotificationService
         $this->notifyStaffDatabase(
             collect([$approver]),
             'Approval required',
-            sprintf('%s needs your decision (%s).', $ticket->tt_number, $ticket->service?->name ?: 'VAS'),
+            sprintf('Request number %s needs your decision (%s).', $ticket->tt_number, $ticket->service?->name ?: 'VAS'),
             $ticket,
         );
     }
@@ -108,7 +108,7 @@ class PartnerNotificationService
             $this->notifyStaffDatabase(
                 $recipients,
                 'Partner message',
-                sprintf('%s on %s: %s', $author->name ?: 'Partner', $ticket->tt_number, $preview),
+                sprintf('%s on request number %s: %s', $author->name ?: 'Partner', $ticket->tt_number, $preview),
                 $ticket,
             );
 

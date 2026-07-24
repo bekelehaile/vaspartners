@@ -28,7 +28,7 @@ return new class extends Migration
 
         Schema::create('subscriptions', function (Blueprint $table) {
             $table->id();
-            $table->ulid('public_id')->unique();
+            $table->string('public_id', 32)->unique();
             $table->foreignId('customer_id')->constrained()->cascadeOnDelete();
             $table->foreignId('service_id')->constrained()->restrictOnDelete();
             $table->string('status', 32)->default('active'); // active|pending_renewal|grace|expired|terminated

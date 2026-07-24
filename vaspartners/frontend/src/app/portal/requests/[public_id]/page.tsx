@@ -21,7 +21,7 @@ export default function RequestDetailPage() {
             ← My requests
           </Link>
         }
-        title={ticket?.tt_number || "Request"}
+        title={ticket ? `Request ${ticket.tt_number}` : "Request"}
         description={`${ticket?.service?.name || "Service"}${
           ticket?.requisition?.name ? ` · ${ticket.requisition.name}` : ""
         }`}

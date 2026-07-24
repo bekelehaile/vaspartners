@@ -57,7 +57,7 @@ class ServiceRequestsRelationManager extends RelationManager
                 'subscription',
             ]))
             ->columns([
-                TextColumn::make('tt_number')->label('Request ID')->searchable()->sortable(),
+                TextColumn::make('tt_number')->label('Request number')->searchable()->sortable(),
                 TextColumn::make('journey')
                     ->label('Journey')
                     ->state(fn (Ticket $record): string => $record->requisition?->creates_subscription

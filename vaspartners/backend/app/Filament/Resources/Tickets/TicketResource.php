@@ -5,6 +5,9 @@ namespace App\Filament\Resources\Tickets;
 use App\Enums\ApprovalAction;
 use App\Enums\DocumentReviewStatus;
 use App\Enums\TicketStatus;
+use App\Filament\Resources\Companies\CompanyResource;
+use App\Filament\Resources\Customers\CustomerResource;
+use App\Filament\Resources\Subscriptions\SubscriptionResource;
 use App\Filament\Resources\Tickets\Pages\ListTickets;
 use App\Filament\Resources\Tickets\Pages\ViewTicket;
 use App\Filament\Resources\Tickets\RelationManagers\ApprovalStepsRelationManager;
@@ -26,6 +29,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -56,48 +60,114 @@ class TicketResource extends Resource
     public static function infolist(Schema $schema): Schema
     {
         return $schema->components([
-            TextEntry::make('tt_number')->label('Request ID'),
-            TextEntry::make('status')
-                ->badge()
-                ->formatStateUsing(fn ($state): string => $state instanceof TicketStatus
-                    ? $state->label()
-                    : (TicketStatus::tryFrom((string) $state)?->label() ?? (string) $state))
-                ->color(fn ($state): string => match ($state instanceof TicketStatus ? $state : TicketStatus::tryFrom((string) $state)) {
-                    TicketStatus::Completed, TicketStatus::Closed => 'success',
-                    TicketStatus::Rejected => 'danger',
-                    TicketStatus::InProgress => 'info',
-                    TicketStatus::Open => 'warning',
-                    default => 'gray',
-                }),
-            TextEntry::make('attachments_badge')
-                ->label('Attachments')
-                ->badge()
-                ->state(function (Ticket $record): string {
-                    return $record->attachmentStatus()['label'];
-                })
-                ->color(fn (Ticket $record): string => match ($record->attachmentStatus()['state']) {
-                    'complete' => 'success',
-                    'incomplete' => 'danger',
-                    default => 'gray',
-                }),
-            TextEntry::make('missing_attachments')
-                ->label('Missing required docs')
-                ->state(function (Ticket $record): string {
-                    $names = $record->attachmentStatus()['missing_names'] ?? [];
+            Section::make('Request')->schema([
+                TextEntry::make('tt_number')->label('Request number'),
+                TextEntry::make('status')
+                    ->badge()
+                    ->formatStateUsing(fn ($state): string => $state instanceof TicketStatus
+                        ? $state->label()
+                        : (TicketStatus::tryFrom((string) $state)?->label() ?? (string) $state))
+                    ->color(fn ($state): string => match ($state instanceof TicketStatus ? $state : TicketStatus::tryFrom((string) $state)) {
+                        TicketStatus::Completed, TicketStatus::Closed => 'success',
+                        TicketStatus::Rejected => 'danger',
+                        TicketStatus::InProgress => 'info',
+                        TicketStatus::Open => 'warning',
+                        default => 'gray',
+                    }),
+                TextEntry::make('service.name')->label('Service')->placeholder('—'),
+                TextEntry::make('requisition.name')->label('Request type')->placeholder('—'),
+                TextEntry::make('category.name')->label('Category')->placeholder('—'),
+                TextEntry::make('priority.name')->label('Priority')->placeholder('—'),
+                TextEntry::make('description')
+                    ->label('Description')
+                    ->placeholder('—')
+                    ->columnSpanFull(),
+            ])->columns(2),
 
-                    return $names === [] ? 'None — all required docs on file' : implode(', ', $names);
-                })
-                ->color(fn (Ticket $record): string => ($record->attachmentStatus()['missing_count'] ?? 0) > 0 ? 'danger' : 'success')
-                ->columnSpanFull(),
-            TextEntry::make('document_review_status')->label('Document review')->badge(),
-            TextEntry::make('customer.name')->label('Customer'),
-            TextEntry::make('customer.phone_number')->label('Phone'),
-            TextEntry::make('service.name')->label('Service'),
-            TextEntry::make('requisition.name')->label('Request type'),
-            TextEntry::make('assignee.name')->label('Account manager'),
-            TextEntry::make('description')->columnSpanFull(),
-            TextEntry::make('created_at')->dateTime(),
-        ])->columns(2);
+            Section::make('Documents')->schema([
+                TextEntry::make('attachments_badge')
+                    ->label('Attachments')
+                    ->badge()
+                    ->state(fn (Ticket $record): string => $record->attachmentStatus()['label'])
+                    ->color(fn (Ticket $record): string => match ($record->attachmentStatus()['state']) {
+                        'complete' => 'success',
+                        'incomplete' => 'danger',
+                        default => 'gray',
+                    }),
+                TextEntry::make('document_review_status')
+                    ->label('Document review')
+                    ->badge()
+                    ->placeholder('—'),
+                TextEntry::make('missing_attachments')
+                    ->label('Missing required docs')
+                    ->state(function (Ticket $record): string {
+                        $names = $record->attachmentStatus()['missing_names'] ?? [];
+
+                        return $names === [] ? 'None — all required docs on file' : implode(', ', $names);
+                    })
+                    ->color(fn (Ticket $record): string => ($record->attachmentStatus()['missing_count'] ?? 0) > 0
+                        ? 'danger'
+                        : 'success')
+                    ->columnSpanFull(),
+            ])->columns(2),
+
+            Section::make('Partner & company')->schema([
+                TextEntry::make('customer.name')
+                    ->label('Customer')
+                    ->placeholder('—')
+                    ->url(fn (Ticket $record): ?string => $record->customer
+                        ? CustomerResource::getUrl('view', ['record' => $record->customer])
+                        : null),
+                TextEntry::make('customer.phone_number')->label('Phone')->placeholder('—'),
+                TextEntry::make('company_name')
+                    ->label('Company')
+                    ->placeholder('—')
+                    ->state(function (Ticket $record): ?string {
+                        return $record->subscription?->company?->name
+                            ?? $record->customer?->company?->name
+                            ?? $record->customer?->company_name;
+                    })
+                    ->url(function (Ticket $record): ?string {
+                        $company = $record->subscription?->company ?? $record->customer?->company;
+
+                        return $company ? CompanyResource::getUrl('view', ['record' => $company]) : null;
+                    }),
+                TextEntry::make('company_tin')
+                    ->label('TIN')
+                    ->placeholder('—')
+                    ->state(fn (Ticket $record): ?string => $record->subscription?->company?->tin
+                        ?? $record->customer?->company?->tin
+                        ?? $record->customer?->company_tin),
+            ])->columns(2),
+
+            Section::make('Assignment & timeline')->schema([
+                TextEntry::make('assignee.name')->label('Account manager')->placeholder('—'),
+                TextEntry::make('currentApprover.name')->label('Current approver')->placeholder('—'),
+                TextEntry::make('assigned_at')->dateTime()->placeholder('—'),
+                TextEntry::make('created_at')->label('Submitted')->dateTime()->placeholder('—'),
+                TextEntry::make('completed_at')->dateTime()->placeholder('—'),
+                TextEntry::make('closed_at')->dateTime()->placeholder('—'),
+                TextEntry::make('rejected_at')->dateTime()->placeholder('—'),
+                TextEntry::make('escalated_at')->dateTime()->placeholder('—'),
+            ])->columns(2),
+
+            Section::make('Related')->schema([
+                TextEntry::make('subscription.service.name')
+                    ->label('Subscription')
+                    ->placeholder('—')
+                    ->url(fn (Ticket $record): ?string => $record->subscription
+                        ? SubscriptionResource::getUrl('view', ['record' => $record->subscription])
+                        : null),
+                TextEntry::make('parentTicket.tt_number')
+                    ->label('Parent request')
+                    ->placeholder('—')
+                    ->url(fn (Ticket $record): ?string => $record->parentTicket
+                        ? static::getUrl('view', ['record' => $record->parentTicket])
+                        : null),
+                TextEntry::make('building')->label('Building')->placeholder('—'),
+                TextEntry::make('location')->label('Location')->placeholder('—'),
+            ])->columns(2),
+        ]);
     }
 
     public static function getRelations(): array
@@ -115,7 +185,7 @@ class TicketResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('tt_number')->searchable()->sortable(),
+                TextColumn::make('tt_number')->label('Request number')->searchable()->sortable(),
                 TextColumn::make('customer.name')->label('Customer')->toggleable(),
                 TextColumn::make('customer.phone_number')->label('Phone')->toggleable(),
                 TextColumn::make('service.name')->sortable(),

@@ -26,17 +26,16 @@ class SubscriptionsRelationManager extends RelationManager
         return $table
             ->defaultSort('created_at', 'desc')
             ->columns([
-                TextColumn::make('public_id')->label('ID')->searchable(),
-                TextColumn::make('service.name')->label('Service')->searchable(),
+                TextColumn::make('service.name')->label('Service')->searchable()->wrap(),
                 TextColumn::make('status')->badge(),
                 TextColumn::make('renewal_interval')->badge(),
-                TextColumn::make('current_period_end')->dateTime()->sortable(),
-                TextColumn::make('next_renewal_due_at')->dateTime(),
+                TextColumn::make('current_period_end')->dateTime()->sortable()->toggleable(),
+                TextColumn::make('next_renewal_due_at')->dateTime()->toggleable(),
             ])
             ->recordActions([
                 Action::make('open_subscription')
-                    ->label('Open subscription')
-                    ->icon('heroicon-o-arrow-top-right-on-square')
+                    ->label('View details')
+                    ->icon('heroicon-o-eye')
                     ->url(fn ($record) => SubscriptionResource::getUrl('view', ['record' => $record])),
                 Action::make('open_service')
                     ->label('Open service')

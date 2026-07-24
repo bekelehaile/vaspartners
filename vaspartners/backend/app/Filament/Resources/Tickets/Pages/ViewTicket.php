@@ -12,10 +12,56 @@ use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Resources\Pages\ViewRecord;
+use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Database\Eloquent\Model;
 
 class ViewTicket extends ViewRecord
 {
     protected static string $resource = TicketResource::class;
+
+    protected function resolveRecord(int|string $key): Model
+    {
+        return parent::resolveRecord($key)->loadMissing([
+            'customer.company',
+            'service',
+            'requisition',
+            'category',
+            'priority',
+            'assignee',
+            'currentApprover',
+            'subscription.company',
+            'subscription.service',
+            'parentTicket',
+        ]);
+    }
+
+    public function getTitle(): string|Htmlable
+    {
+        $record = $this->getRecord();
+
+        return $record->tt_number
+            ? 'Request '.$record->tt_number
+            : 'Request';
+    }
+
+    public function getSubheading(): ?string
+    {
+        $record = $this->getRecord();
+        $status = $record->status instanceof TicketStatus
+            ? $record->status->label()
+            : (string) $record->status;
+
+        $bits = array_filter([
+            $record->service?->name,
+            $record->requisition?->name,
+            $status,
+            $record->customer?->name,
+        ]);
+
+        return $bits !== []
+            ? implode(' · ', $bits)
+            : 'Details, messages, attachments, approvals, and status history.';
+    }
 
     protected function getHeaderActions(): array
     {

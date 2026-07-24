@@ -782,7 +782,7 @@ export default function NewRequestWizard() {
                               disabled={!!pending}
                               title={
                                 pending
-                                  ? `Already open: ${pending.tt_number}. Close it before submitting another.`
+                                  ? `Already open — request number ${pending.tt_number}. Close it before submitting another.`
                                   : undefined
                               }
                               onClick={() => {
@@ -802,7 +802,7 @@ export default function NewRequestWizard() {
                               <strong>{r.name}</strong>
                               <span>
                                 {pending
-                                  ? `In progress — ${pending.tt_number}. Open that request instead.`
+                                  ? `In progress — request number ${pending.tt_number}. Open that request instead.`
                                   : managingOneOff
                                     ? "Non-subscription request"
                                     : r.terminates_subscription

@@ -8,34 +8,15 @@ use App\Filament\Resources\Roles\Pages\ListRoles;
 use App\Filament\Resources\Roles\Pages\ViewRole;
 use BezhanSalleh\FilamentShield\Resources\Roles\RoleResource as ShieldRoleResource;
 use BezhanSalleh\FilamentShield\Support\Utils;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Override;
 
 /**
- * Hides the built-in super_admin role from the Roles UI so it cannot be selected or edited.
+ * Roles UI includes super_admin for now so permissions can be reviewed/edited.
+ * Delete stays blocked; hide from the list again later when ready.
  */
 class RoleResource extends ShieldRoleResource
 {
-    #[Override]
-    public static function getEloquentQuery(): Builder
-    {
-        return parent::getEloquentQuery()
-            ->where('name', '!=', Utils::getSuperAdminName());
-    }
-
-    #[Override]
-    public static function canView(Model $record): bool
-    {
-        return ! static::isSuperAdminRole($record) && parent::canView($record);
-    }
-
-    #[Override]
-    public static function canEdit(Model $record): bool
-    {
-        return ! static::isSuperAdminRole($record) && parent::canEdit($record);
-    }
-
     #[Override]
     public static function canDelete(Model $record): bool
     {

@@ -27,19 +27,19 @@ class SubscriptionsRelationManager extends RelationManager
             ->description('Subscriptions belong to this company and stay with it when ownership transfers.')
             ->modifyQueryUsing(fn ($query) => $query->with(['service', 'customer'])->latest('id'))
             ->columns([
-                TextColumn::make('public_id')->label('ID')->searchable(),
-                TextColumn::make('service.name')->label('Service')->searchable(),
+                TextColumn::make('service.name')->label('Service')->searchable()->wrap(),
                 TextColumn::make('status')
                     ->badge()
                     ->formatStateUsing(fn ($state) => $state instanceof SubscriptionStatus
                         ? $state->value
                         : (string) $state),
                 TextColumn::make('customer.name')->label('Activated by')->toggleable(),
-                TextColumn::make('current_period_end')->dateTime()->sortable(),
+                TextColumn::make('current_period_end')->dateTime()->sortable()->toggleable(),
                 TextColumn::make('next_renewal_due_at')->dateTime()->toggleable(),
             ])
             ->recordActions([
                 ViewAction::make()
+                    ->label('View details')
                     ->url(fn (Subscription $record): string => SubscriptionResource::getUrl('view', ['record' => $record])),
             ])
             ->headerActions([])

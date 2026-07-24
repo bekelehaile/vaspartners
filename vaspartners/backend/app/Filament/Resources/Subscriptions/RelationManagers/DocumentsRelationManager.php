@@ -1,15 +1,15 @@
 <?php
 
-namespace App\Filament\Resources\Tickets\RelationManagers;
+namespace App\Filament\Resources\Subscriptions\RelationManagers;
 
-use App\Models\Ticket;
+use App\Filament\Resources\Tickets\TicketResource;
 use App\Models\TicketDocument;
-use App\Services\TicketWorkflowService;
 use Filament\Actions\Action;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
 
 class DocumentsRelationManager extends RelationManager
@@ -18,55 +18,35 @@ class DocumentsRelationManager extends RelationManager
 
     protected static ?string $title = 'Attachments';
 
-    protected static ?string $recordTitleAttribute = 'original_name';
-
     public function isReadOnly(): bool
     {
         return true;
     }
 
-    public static function getBadge(\Illuminate\Database\Eloquent\Model $ownerRecord, string $pageClass): ?string
+    public static function getBadge(Model $ownerRecord, string $pageClass): ?string
     {
-        /** @var Ticket $ownerRecord */
-        $status = app(TicketWorkflowService::class)->attachmentStatus($ownerRecord);
+        $count = $ownerRecord->documents()->count();
 
-        return match ($status['state']) {
-            'complete' => 'Complete',
-            'incomplete' => (string) $status['missing_count'].' missing',
-            default => null,
-        };
-    }
-
-    public static function getBadgeColor(\Illuminate\Database\Eloquent\Model $ownerRecord, string $pageClass): ?string
-    {
-        /** @var Ticket $ownerRecord */
-        $status = app(TicketWorkflowService::class)->attachmentStatus($ownerRecord);
-
-        return match ($status['state']) {
-            'complete' => 'success',
-            'incomplete' => 'danger',
-            default => 'gray',
-        };
+        return $count > 0 ? (string) $count : null;
     }
 
     public function table(Table $table): Table
     {
-        /** @var Ticket $ticket */
-        $ticket = $this->getOwnerRecord();
-        $status = app(TicketWorkflowService::class)->attachmentStatus($ticket);
-        $description = match ($status['state']) {
-            'complete' => '✓ All required documents received ('.$status['uploaded_count'].'/'.$status['required_count'].'). Open or download below — deletion is not allowed.',
-            'incomplete' => '⚠ Missing required ('.$status['uploaded_count'].'/'.$status['required_count'].'): '.implode(', ', $status['missing_names']),
-            default => 'No hard-required documents for this request type. Optional uploads may still appear below.',
-        };
-
         return $table
-            ->description($description)
+            ->description('Customer uploads from all tickets on this subscription. Open a ticket for document review.')
+            ->modifyQueryUsing(fn ($query) => $query->with(['documentType', 'ticket'])->latest('ticket_documents.id'))
             ->columns([
+                TextColumn::make('ticket.tt_number')
+                    ->label('Request number')
+                    ->url(fn (TicketDocument $record): ?string => $record->ticket
+                        ? TicketResource::getUrl('view', ['record' => $record->ticket])
+                        : null)
+                    ->color('primary'),
                 TextColumn::make('documentType.name')
                     ->label('Document type')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->placeholder('—'),
                 IconColumn::make('file_ok')
                     ->label('On file')
                     ->boolean()
@@ -96,7 +76,6 @@ class DocumentsRelationManager extends RelationManager
                     ->sortable(),
             ])
             ->defaultSort('created_at', 'desc')
-            ->headerActions([])
             ->recordActions([
                 Action::make('open')
                     ->label('Open')
@@ -117,15 +96,11 @@ class DocumentsRelationManager extends RelationManager
                     )
                     ->visible(fn (TicketDocument $record): bool => $this->fileExists($record)),
             ])
+            ->headerActions([])
             ->toolbarActions([])
-            ->bulkActions([])
-            ->emptyStateHeading($status['state'] === 'incomplete' ? 'Required attachments missing' : 'No attachments uploaded yet')
-            ->emptyStateDescription(
-                $status['state'] === 'incomplete'
-                    ? 'Missing: '.implode(', ', $status['missing_names'])
-                    : 'When the customer uploads files, they will appear here for open/download only.'
-            )
-            ->paginated(false);
+            ->emptyStateHeading('No attachments yet')
+            ->emptyStateDescription('Files uploaded on linked service requests will appear here.')
+            ->paginated([25, 50, 100]);
     }
 
     protected function fileExists(TicketDocument $document): bool

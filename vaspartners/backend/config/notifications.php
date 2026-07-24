@@ -7,8 +7,8 @@ return [
     | Partner communications (Ethio telecom)
     |--------------------------------------------------------------------------
     |
-    | Placeholders: {customer_name}, {company_name}, {tt_number}, {service},
-    | {requisition}, {status}, {note}
+    | Placeholders: {customer_name}, {company_name}, {tt_number} (request number),
+    | {service}, {requisition}, {status}, {note}
     |
     | `templates`     — SMS (gateway). Keep concise.
     | `portal`        — In-app notification body (partner portal).
@@ -20,27 +20,27 @@ return [
     'templates' => [
 
         'ticket_submitted' => <<<'SMS'
-Dear {customer_name}, your VAS request {tt_number} for {service} ({requisition}) was submitted. Track it in the VAS Partners portal. — Ethio telecom
+Dear {customer_name}, your VAS request number {tt_number} for {service} ({requisition}) was submitted. Track it in the VAS Partners portal. — Ethio telecom
 SMS,
 
         'ticket_in_progress' => <<<'SMS'
-Dear {customer_name}, VAS request {tt_number} ({service}) is now in progress. Our team is reviewing your submission. — Ethio telecom
+Dear {customer_name}, VAS request number {tt_number} ({service}) is now in progress. Our team is reviewing your submission. — Ethio telecom
 SMS,
 
         'documents_need_attention' => <<<'SMS'
-Dear {customer_name}, documents for VAS request {tt_number} need your attention. Please update them in the portal. {note} — Ethio telecom
+Dear {customer_name}, documents for VAS request number {tt_number} need your attention. Please update them in the portal. {note} — Ethio telecom
 SMS,
 
         'ticket_completed' => <<<'SMS'
-Dear {customer_name}, VAS request {tt_number} for {service} has been completed. — Ethio telecom
+Dear {customer_name}, VAS request number {tt_number} for {service} has been completed. — Ethio telecom
 SMS,
 
         'ticket_rejected' => <<<'SMS'
-Dear {customer_name}, VAS request {tt_number} for {service} was not approved. {note} Please review in the portal. — Ethio telecom
+Dear {customer_name}, VAS request number {tt_number} for {service} was not approved. {note} Please review in the portal. — Ethio telecom
 SMS,
 
         'ticket_closed' => <<<'SMS'
-Dear {customer_name}, VAS request {tt_number} for {service} is now closed. Thank you for partnering with Ethio telecom.
+Dear {customer_name}, VAS request number {tt_number} for {service} is now closed. Thank you for partnering with Ethio telecom.
 SMS,
 
         'profile_completed' => <<<'SMS'
@@ -48,7 +48,7 @@ Dear {customer_name}, your company profile for {company_name} is complete. You c
 SMS,
 
         'ticket_message' => <<<'SMS'
-Dear {customer_name}, there is a new message on VAS request {tt_number}. Open the portal to reply. {note} — Ethio telecom
+Dear {customer_name}, there is a new message on VAS request number {tt_number}. Open the portal to reply. {note} — Ethio telecom
 SMS,
 
         'company_attach_approved' => <<<'SMS'
@@ -95,21 +95,21 @@ SMS,
 
     'portal' => [
 
-        'ticket_submitted' => 'We received your {requisition} for {service}. Reference {tt_number}.',
+        'ticket_submitted' => 'We received your {requisition} for {service}. Request number {tt_number}.',
 
-        'ticket_in_progress' => '{tt_number} for {service} is under review by our team.',
+        'ticket_in_progress' => 'Request number {tt_number} for {service} is under review by our team.',
 
-        'documents_need_attention' => 'Action needed on {tt_number}: please update the required documents in the portal.',
+        'documents_need_attention' => 'Action needed on request number {tt_number}: please update the required documents in the portal.',
 
-        'ticket_completed' => '{tt_number} for {service} has been approved and completed.',
+        'ticket_completed' => 'Request number {tt_number} for {service} has been approved and completed.',
 
-        'ticket_rejected' => '{tt_number} for {service} was not approved. Please review the request in the portal.',
+        'ticket_rejected' => 'Request number {tt_number} for {service} was not approved. Please review the request in the portal.',
 
-        'ticket_closed' => '{tt_number} for {service} is closed. Thank you for partnering with Ethio telecom.',
+        'ticket_closed' => 'Request number {tt_number} for {service} is closed. Thank you for partnering with Ethio telecom.',
 
         'profile_completed' => 'Your organisation profile for {company_name} is saved. You can submit service requests.',
 
-        'ticket_message' => 'New message on {tt_number}: {note}',
+        'ticket_message' => 'New message on request number {tt_number}: {note}',
 
         'company_attach_approved' => 'You were approved to join {company_name}.',
 

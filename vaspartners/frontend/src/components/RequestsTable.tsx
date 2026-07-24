@@ -55,7 +55,7 @@ export function RequestsTable({
   const columns = useMemo(
     () => [
       columnHelper.accessor("tt_number", {
-        header: "Request #",
+        header: "Request number",
         cell: (info) => (
           <Link href={`/portal/requests/${info.row.original.public_id}`} className="table-link">
             {info.getValue()}
@@ -137,7 +137,7 @@ export function RequestsTable({
               id="requests-search"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search by TT number, service, or notes…"
+              placeholder="Search by request number, service, or notes…"
             />
             <button type="submit" className="btn-ghost">
               Search

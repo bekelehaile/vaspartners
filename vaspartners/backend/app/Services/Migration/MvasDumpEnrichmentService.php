@@ -191,6 +191,10 @@ class MvasDumpEnrichmentService
                 'legacy_mvas_client_id' => $customer->legacy_mvas_client_id,
                 'legacy_mvas_service_id' => null,
             ]);
+            $subscription->forceFill([
+                'created_at' => $started,
+                'updated_at' => $started,
+            ])->saveQuietly();
 
             $ticket->forceFill(['subscription_id' => $subscription->id])->save();
             $aliveByKey[$key] = $subscription;

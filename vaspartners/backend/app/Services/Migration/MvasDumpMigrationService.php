@@ -17,6 +17,7 @@ use App\Models\Ticket;
 use App\Services\SmsService;
 use App\Support\Migration\MvasDumpClientReader;
 use App\Support\Migration\MvasDumpTableReader;
+use App\Support\TimestampPublicId;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
@@ -235,8 +236,7 @@ class MvasDumpMigrationService
                 $status = self::STATUS_MAP[$ticket['status_id']] ?? TicketStatus::Open;
                 $priorityId = $defaultPriorityId ? (int) $defaultPriorityId : null;
 
-                if (Ticket::query()->where('legacy_mvas_ticket_id', $ticket['id'])->exists()
-                    || Ticket::query()->where('tt_number', $ticket['tt_number'])->exists()) {
+                if (Ticket::query()->where('legacy_mvas_ticket_id', $ticket['id'])->exists()) {
                     $stats['tickets']['skipped']++;
 
                     continue;
@@ -257,8 +257,15 @@ class MvasDumpMigrationService
                     $status,
                     $priorityId,
                 ): void {
+                    $createdAt = $ticket['created_at'] ?? now();
+                    // Map old MVAS hex ids (e.g. 11B4BA6760) → YmdH + 2 random digits from created_at.
+                    $ttNumber = TimestampPublicId::generate(
+                        $createdAt,
+                        fn (string $number): bool => Ticket::query()->where('tt_number', $number)->exists(),
+                    );
+
                     $model = new Ticket([
-                        'tt_number' => $ticket['tt_number'],
+                        'tt_number' => $ttNumber,
                         'legacy_mvas_ticket_id' => $ticket['id'],
                         'customer_id' => $customerId,
                         'service_id' => $serviceId,
@@ -280,7 +287,7 @@ class MvasDumpMigrationService
                             ? ($ticket['updated_at'] ?? now())
                             : null,
                     ]);
-                    $model->created_at = $ticket['created_at'] ?? now();
+                    $model->created_at = $createdAt;
                     $model->updated_at = $ticket['updated_at'] ?? now();
                     $model->save();
                 });

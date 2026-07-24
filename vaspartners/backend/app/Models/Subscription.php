@@ -4,15 +4,16 @@ namespace App\Models;
 
 use App\Enums\RenewalInterval;
 use App\Enums\SubscriptionStatus;
-use Illuminate\Database\Eloquent\Concerns\HasUlids;
+use App\Support\TimestampPublicId;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Subscription extends Model
 {
-    use HasUlids, SoftDeletes;
+    use SoftDeletes;
 
     protected $fillable = [
         'public_id',
@@ -45,9 +46,18 @@ class Subscription extends Model
         ];
     }
 
-    public function uniqueIds(): array
+    protected static function booted(): void
     {
-        return ['public_id'];
+        static::creating(function (Subscription $subscription): void {
+            if (filled($subscription->public_id)) {
+                return;
+            }
+
+            $subscription->public_id = TimestampPublicId::generate(
+                $subscription->started_at ?? now(),
+                fn (string $id): bool => static::withTrashed()->where('public_id', $id)->exists(),
+            );
+        });
     }
 
     public function getRouteKeyName(): string
@@ -84,5 +94,23 @@ class Subscription extends Model
     public function tickets(): HasMany
     {
         return $this->hasMany(Ticket::class);
+    }
+
+    /** Partner/staff chat across all tickets on this subscription. */
+    public function comments(): HasManyThrough
+    {
+        return $this->hasManyThrough(TicketComment::class, Ticket::class);
+    }
+
+    /** Customer document uploads across all tickets on this subscription. */
+    public function documents(): HasManyThrough
+    {
+        return $this->hasManyThrough(TicketDocument::class, Ticket::class);
+    }
+
+    /** Ticket status change trail for this subscription. */
+    public function statusHistories(): HasManyThrough
+    {
+        return $this->hasManyThrough(TicketStatusHistory::class, Ticket::class);
     }
 }

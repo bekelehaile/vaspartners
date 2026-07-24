@@ -60,7 +60,7 @@ class SubscriptionLifecycleService
         if ($pending) {
             throw ValidationException::withMessages([
                 'service_id' => sprintf(
-                    'Your company already has an open %s request for %s (%s). Wait until it is closed before submitting another.',
+                    'Your company already has an open %s request for %s (request number %s). Wait until it is closed before submitting another.',
                     $requisition->name ?: 'service',
                     $service->name ?: 'this service',
                     $pending->tt_number,

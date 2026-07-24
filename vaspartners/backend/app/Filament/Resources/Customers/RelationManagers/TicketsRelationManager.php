@@ -25,7 +25,7 @@ class TicketsRelationManager extends RelationManager
         return $table
             ->defaultSort('created_at', 'desc')
             ->columns([
-                TextColumn::make('tt_number')->searchable()->sortable(),
+                TextColumn::make('tt_number')->label('Request number')->searchable()->sortable(),
                 TextColumn::make('service.name')->label('Service')->searchable(),
                 TextColumn::make('requisition.name')->label('Type'),
                 TextColumn::make('status')->badge(),
