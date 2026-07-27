@@ -466,6 +466,7 @@ export type CompanyMemberOption = {
   role?: string | null;
   is_active?: boolean;
   is_owner?: boolean;
+  awaiting_fayda?: boolean;
   permissions?: string[];
 };
 
@@ -482,6 +483,33 @@ export function useCompanyMembers(enabled: boolean) {
         members: res.data,
         permissionCatalog: res.permission_catalog ?? [],
       };
+    },
+  });
+}
+
+export function useCreateCompanyMember() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: {
+      name: string;
+      phone_number: string;
+      email?: string;
+      is_active?: boolean;
+    }) => {
+      const res = await api<{
+        data: CompanyMemberOption[];
+        member?: CompanyMemberOption;
+        message?: string;
+      }>("/profile/company/members", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      return res;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["company-members"] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.contact.me });
     },
   });
 }

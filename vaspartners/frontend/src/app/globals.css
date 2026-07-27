@@ -777,6 +777,30 @@ textarea {
   margin: 0;
 }
 
+.company-members-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.85rem 1.25rem 0;
+}
+
+.company-add-member {
+  margin: 0.85rem 1.25rem 0 !important;
+  border: 1px solid var(--et-line);
+  border-radius: 0.65rem !important;
+}
+
+.company-add-member-active {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+  margin: 0.35rem 0 0.85rem;
+  cursor: pointer;
+}
+
+.company-add-member-active input {
+  margin-top: 0.2rem;
+}
+
 .company-members-hint {
   margin: 0.85rem 1.25rem 1.15rem;
 }

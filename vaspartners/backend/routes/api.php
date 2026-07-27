@@ -27,6 +27,7 @@ Route::prefix('v1')->group(function () {
         Route::post('profile/company/detach', [ContactPortalController::class, 'requestDetachCompany']);
         Route::post('profile/company/switch', [ContactPortalController::class, 'switchCompany']);
         Route::get('profile/company/members', [ContactPortalController::class, 'companyMembers']);
+        Route::post('profile/company/members', [ContactPortalController::class, 'createCompanyMember']);
         Route::post('profile/company/members/{member}/enable', [ContactPortalController::class, 'enableCompanyMember']);
         Route::post('profile/company/members/{member}/disable', [ContactPortalController::class, 'disableCompanyMember']);
         Route::put('profile/company/members/{member}/permissions', [ContactPortalController::class, 'updateCompanyMemberPermissions']);

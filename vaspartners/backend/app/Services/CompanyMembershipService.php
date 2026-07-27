@@ -604,6 +604,7 @@ class CompanyMembershipService
                     'role' => $role,
                     'is_active' => (bool) $m->is_active,
                     'is_owner' => $role === CompanyRole::Owner->value,
+                    'awaiting_fayda' => $c ? $this->isPlaceholderContact($c) : false,
                     'permissions' => $this->effectivePermissionsForMembership($m),
                 ];
             })
@@ -1088,7 +1089,13 @@ class CompanyMembershipService
             ->first();
     }
 
-    public function linkContact(Contact $contact, Company $company, CompanyRole $role, bool $switchTo = true): void
+    public function linkContact(
+        Contact $contact,
+        Company $company,
+        CompanyRole $role,
+        bool $switchTo = true,
+        bool $isActive = true,
+    ): void
     {
         if ($role === CompanyRole::Owner) {
             $existingOwnerId = CompanyMembership::query()
@@ -1115,22 +1122,233 @@ class CompanyMembershipService
             ],
             [
                 'role' => $role->value,
-                'is_active' => true,
+                'is_active' => $isActive,
                 'permissions' => $role === CompanyRole::Owner
                     ? null
                     : CompanyMemberPermission::defaultsForMember(),
             ],
         );
 
-        if ($switchTo || ! $contact->current_company_id) {
+        if ($isActive && ($switchTo || ! $contact->current_company_id)) {
             $contact->forceFill([
                 'current_company_id' => $company->id,
                 'profile_completed_at' => now(),
             ]);
             $this->syncContactCompanyFields($contact, $company);
-        } else {
+        } elseif ($isActive) {
             $contact->forceFill(['profile_completed_at' => $contact->profile_completed_at ?? now()])->save();
+        } else {
+            // Keep inactive membership out of portal context.
+            if ((int) $contact->current_company_id === (int) $company->id) {
+                $this->switchToFallbackCompany($contact, exceptCompanyId: $company->id);
+            } else {
+                $contact->forceFill(['profile_completed_at' => $contact->profile_completed_at ?? now()])->save();
+            }
         }
+    }
+
+    /**
+     * Company owner pre-creates a member. When that person signs in with Fayda
+     * (same phone), identity syncs onto this contact. Portal access only works
+     * if this membership stays active.
+     *
+     * @param  array{name: string, phone_number: string, email?: string|null, is_active?: bool}  $data
+     * @return array{member: array<string, mixed>, contact: Contact}
+     */
+    public function createMemberByOwner(Contact $actor, array $data): array
+    {
+        $this->assertIsActiveOwner($actor);
+
+        $company = Company::query()->findOrFail((int) $actor->current_company_id);
+        if (! $company->isApproved()) {
+            throw ValidationException::withMessages([
+                'company' => 'Add members after admin approves this company profile.',
+            ]);
+        }
+
+        $name = trim((string) ($data['name'] ?? ''));
+        if ($name === '') {
+            throw ValidationException::withMessages([
+                'name' => 'Member name is required.',
+            ]);
+        }
+
+        $phone = app(SmsService::class)->normalizePhone((string) ($data['phone_number'] ?? ''));
+        if ($phone === '' || ! preg_match('/^\d{9}$/', $phone)) {
+            throw ValidationException::withMessages([
+                'phone_number' => 'Enter a valid Ethiopian mobile number (last 9 digits).',
+            ]);
+        }
+
+        $email = isset($data['email']) ? trim((string) $data['email']) : '';
+        $email = $email !== '' ? $email : null;
+        $isActive = array_key_exists('is_active', $data) ? (bool) $data['is_active'] : true;
+
+        $result = DB::transaction(function () use ($actor, $company, $name, $phone, $email, $isActive) {
+            $contact = Contact::query()->where('phone_number', $phone)->first();
+
+            if ($contact && (int) $contact->id === (int) $actor->id) {
+                throw ValidationException::withMessages([
+                    'phone_number' => 'You cannot add yourself as a member.',
+                ]);
+            }
+
+            if ($contact?->is_banned) {
+                throw ValidationException::withMessages([
+                    'phone_number' => 'This partner is banned and cannot be added.',
+                ]);
+            }
+
+            if ($contact && $this->membershipFor($contact, $company)) {
+                throw ValidationException::withMessages([
+                    'phone_number' => 'This phone number is already a member of this company.',
+                ]);
+            }
+
+            if (! $contact) {
+                $inviteSub = 'invite-phone-'.$phone;
+                $contact = new Contact;
+                $contact->syncFromFayda([
+                    'sub' => $inviteSub,
+                    'name' => $name,
+                    'phone_number' => $phone,
+                    'email' => $email,
+                    'identification_type' => '2',
+                    'identification_number' => $inviteSub,
+                ]);
+                $contact->forceFill([
+                    'is_active' => true,
+                    'is_banned' => false,
+                    'current_company_id' => null,
+                    'profile_completed_at' => null,
+                ])->save();
+            } else {
+                // Refresh display name/email on invite placeholders only.
+                if ($this->isPlaceholderContact($contact)) {
+                    $contact->syncFromFayda([
+                        'sub' => $contact->sub,
+                        'name' => $name,
+                        'phone_number' => $phone,
+                        'email' => $email ?? $contact->email,
+                        'identification_type' => $contact->identification_type ?: '2',
+                        'identification_number' => $contact->identification_number ?: (string) $contact->sub,
+                    ]);
+                }
+            }
+
+            $this->linkContact(
+                $contact->fresh(),
+                $company,
+                CompanyRole::Member,
+                switchTo: false,
+                isActive: $isActive,
+            );
+
+            Log::info('Owner created company member', [
+                'company_id' => $company->id,
+                'owner_id' => $actor->id,
+                'member_contact_id' => $contact->id,
+                'is_active' => $isActive,
+            ]);
+
+            return $contact->fresh(['company', 'memberships.company']);
+        });
+
+        $row = $this->listCurrentCompanyMembers($actor)
+            ->first(fn (array $m) => ($m['public_id'] ?? null) === $result->public_id);
+
+        return [
+            'contact' => $result,
+            'member' => $row ?? [
+                'public_id' => $result->public_id,
+                'name' => $result->name,
+                'phone_number' => $result->phone_number,
+                'email' => $result->email,
+                'role' => CompanyRole::Member->value,
+                'is_active' => $isActive,
+                'is_owner' => false,
+                'awaiting_fayda' => $this->isPlaceholderContact($result),
+                'permissions' => CompanyMemberPermission::defaultsForMember(),
+            ],
+        ];
+    }
+
+    /**
+     * Membership sync after Fayda login: keep inactive memberships inactive and out of context.
+     * Active memberships may become the portal company context.
+     */
+    public function trySyncMembershipsOnFaydaLogin(Contact $contact): void
+    {
+        $contact->loadMissing('memberships.company');
+
+        $memberships = $contact->memberships;
+        if ($memberships->isEmpty()) {
+            return;
+        }
+
+        $current = $memberships->first(
+            fn (CompanyMembership $m) => (int) $m->company_id === (int) $contact->current_company_id,
+        );
+
+        // Current context disabled → move off it (or clear).
+        if ($current && ! $current->is_active) {
+            $this->switchToFallbackCompany($contact, exceptCompanyId: (int) $current->company_id);
+
+            return;
+        }
+
+        // Already on an active membership — leave it.
+        if ($current && $current->is_active) {
+            $company = $current->company;
+            if ($company) {
+                $contact->forceFill(['profile_completed_at' => $contact->profile_completed_at ?? now()]);
+                $this->syncContactCompanyFields($contact->fresh(), $company);
+            }
+
+            return;
+        }
+
+        // No current company: prefer first active membership (owner first).
+        $active = $memberships
+            ->filter(fn (CompanyMembership $m) => $m->is_active)
+            ->sortBy(fn (CompanyMembership $m) => $m->isOwner() ? 0 : 1)
+            ->first();
+
+        if (! $active) {
+            // All memberships inactive — never auto-enable.
+            if ($contact->current_company_id) {
+                $contact->forceFill([
+                    'current_company_id' => null,
+                    'company_name' => null,
+                    'company_tin' => null,
+                    'company_phone' => null,
+                    'company_email' => null,
+                    'company_address' => null,
+                    'profile_completed_at' => null,
+                ])->save();
+            }
+
+            return;
+        }
+
+        $company = $active->company ?? Company::query()->find($active->company_id);
+        if (! $company) {
+            return;
+        }
+
+        $contact->forceFill([
+            'current_company_id' => $company->id,
+            'profile_completed_at' => now(),
+        ]);
+        $this->syncContactCompanyFields($contact, $company);
+    }
+
+    public function isPlaceholderContact(Contact $contact): bool
+    {
+        $sub = (string) $contact->sub;
+
+        return str_starts_with($sub, 'invite-')
+            || str_starts_with($sub, 'mvas-contact-');
     }
 
     /**
@@ -1140,7 +1358,12 @@ class CompanyMembershipService
      */
     public function tryAutoClaimMigratedCompanyByPhone(Contact $contact): ?Company
     {
-        if ($contact->memberships()->exists() || filled($contact->current_company_id)) {
+        // Already in an active company context, or already has an active membership.
+        if (filled($contact->current_company_id)) {
+            return null;
+        }
+
+        if ($contact->memberships()->where('is_active', true)->exists()) {
             return null;
         }
 

@@ -160,11 +160,14 @@ class EsignetService
 
         $contact = Contact::query()->where('sub', $sub)->first();
 
-        // Adopt migrated placeholder (mvas-contact-*) so tickets stay with this identity.
+        // Adopt invite / migrated placeholders so owner-created members and MVAS rows keep tickets.
         if (! $contact) {
             $contact = Contact::query()
                 ->where('phone_number', $phoneNumber)
-                ->where('sub', 'like', 'mvas-contact-%')
+                ->where(function ($q) {
+                    $q->where('sub', 'like', 'invite-%')
+                        ->orWhere('sub', 'like', 'mvas-contact-%');
+                })
                 ->first();
         }
 
@@ -186,10 +189,18 @@ class EsignetService
 
         $contact->forceFill(['is_active' => true])->save();
 
-        // Phone (or legacy client id) matches one ownerless migrated company → claim as owner.
-        // No match → partner submits company, or admin Assign owner for orphan companies.
+        $membership = app(CompanyMembershipService::class);
+
+        // 1) Membership sync — respect is_active (inactive stubs never become portal context).
         try {
-            app(CompanyMembershipService::class)->tryAutoClaimMigratedCompanyByPhone($contact->fresh());
+            $membership->trySyncMembershipsOnFaydaLogin($contact->fresh(['memberships.company']));
+        } catch (Throwable $e) {
+            report($e);
+        }
+
+        // 2) Owner sync — claim one ownerless migrated company only when still unlinked.
+        try {
+            $membership->tryAutoClaimMigratedCompanyByPhone($contact->fresh(['memberships.company']));
         } catch (Throwable $e) {
             // Never block Fayda login on claim failure; partner can complete profile manually.
             report($e);

@@ -596,6 +596,26 @@ class ContactPortalController extends Controller
         ]);
     }
 
+    public function createCompanyMember(Request $request, CompanyMembershipService $membership)
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'phone_number' => ['required', 'string', 'max:32'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'is_active' => ['sometimes', 'boolean'],
+        ]);
+
+        $result = $membership->createMemberByOwner($request->user(), $data);
+
+        return response()->json([
+            'data' => $membership->listCurrentCompanyMembers($request->user()),
+            'member' => $result['member'],
+            'message' => ($result['member']['awaiting_fayda'] ?? false)
+                ? 'Member added. They will sync when they sign in with Fayda using this phone number (only if access stays enabled).'
+                : 'Member added to this company.',
+        ], 201);
+    }
+
     public function enableCompanyMember(Request $request, string $member, CompanyMembershipService $membership)
     {
         $target = $membership->findCurrentCompanyMemberByPublicId($request->user(), $member);
