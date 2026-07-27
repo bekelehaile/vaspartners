@@ -26,7 +26,7 @@ export function StatusJourney({ status }: { status: Ticket["status"] }) {
       {status === "rejected" && (
         <li className="journey-step is-on is-current is-alert">
           <span className="journey-dot" />
-          <span className="journey-label">Needs attention</span>
+          <span className="journey-label">Rejected</span>
         </li>
       )}
     </ol>

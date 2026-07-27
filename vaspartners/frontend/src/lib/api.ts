@@ -236,17 +236,17 @@ export const statusCopy: Record<
   { label: string; hint: string; tone: string }
 > = {
   open: {
-    label: "Submitted",
-    hint: "Waiting for a supervisor to assign your request",
+    label: "Pending",
+    hint: "Waiting for Ethio telecom to assign and review your request",
     tone: "tone-open",
   },
   in_progress: {
     label: "In progress",
-    hint: "MVAS is handling this request. Documents are locked until it is sent back for updates.",
+    hint: "Ethio telecom is handling this request. Documents are locked until it is sent back for updates.",
     tone: "tone-progress",
   },
   completed: {
-    label: "Approved",
+    label: "Completed",
     hint: "Approval finished — this request is locked for changes.",
     tone: "tone-done",
   },
@@ -256,7 +256,7 @@ export const statusCopy: Record<
     tone: "tone-closed",
   },
   rejected: {
-    label: "Needs your update",
+    label: "Rejected",
     hint: "Update documents below, then wait for our team to re-check.",
     tone: "tone-alert",
   },

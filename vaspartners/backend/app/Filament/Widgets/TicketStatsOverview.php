@@ -55,7 +55,7 @@ class TicketStatsOverview extends StatsOverviewWidget
         $completedCount = $completedQuery->count();
 
         return [
-            Stat::make('Open', $open)
+            Stat::make('Pending', $open)
                 ->description($unassigned.' unassigned')
                 ->descriptionIcon(Heroicon::OutlinedInbox)
                 ->color('warning')
@@ -65,7 +65,7 @@ class TicketStatsOverview extends StatsOverviewWidget
                 ->descriptionIcon(Heroicon::OutlinedArrowPath)
                 ->color('info')
                 ->url(TicketResource::getUrl('index').'?tab=in_progress'),
-            Stat::make('Needs update', $rejected)
+            Stat::make('Rejected', $rejected)
                 ->description('Sent back to partner')
                 ->descriptionIcon(Heroicon::OutlinedExclamationTriangle)
                 ->color('danger')
