@@ -18,6 +18,16 @@ function membershipLabel(
   return bits.join(" · ");
 }
 
+function currentCompanyName(me: Contact): string | null {
+  const current = (me.memberships ?? []).find((m) => m.is_current && m.is_active !== false);
+  return (
+    current?.company_name ||
+    me.company_name ||
+    me.company?.name ||
+    null
+  );
+}
+
 export function CompanySwitcher({
   me,
   variant = "header",
@@ -32,6 +42,67 @@ export function CompanySwitcher({
   const switchable = memberships.filter(
     (m) => m.company_public_id && m.is_active !== false,
   );
+
+  const displayName = currentCompanyName(me);
+
+  if (variant === "header") {
+    if (!displayName && switchable.length === 0) {
+      return null;
+    }
+
+    const currentId =
+      switchable.find((m) => m.is_current)?.company_public_id ||
+      switchable[0]?.company_public_id ||
+      "";
+
+    const onChange = (companyPublicId: string) => {
+      if (!companyPublicId || companyPublicId === currentId) return;
+      void switchCompany.mutateAsync(companyPublicId);
+    };
+
+    return (
+      <div className="company-switcher company-switcher-header">
+        <p className="portal-logged-in-as">
+          <span className="portal-logged-in-label">Logged in as</span>
+          {switchable.length > 1 ? (
+            <select
+              id="company-switch-header"
+              className="company-switcher-select company-switcher-select-header"
+              value={currentId}
+              disabled={switchCompany.isPending}
+              aria-label="Switch company"
+              title="Switch active company"
+              onChange={(e) => onChange(e.target.value)}
+            >
+              {switchable.map((m) => (
+                <option key={m.company_public_id!} value={m.company_public_id!}>
+                  {m.company_name || "Company"}
+                  {m.role ? ` · ${m.role}` : ""}
+                  {m.approval_status && m.approval_status !== "approved"
+                    ? ` · ${m.approval_status}`
+                    : ""}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <strong className="portal-logged-in-company" title={displayName || undefined}>
+              {displayName || "Company"}
+            </strong>
+          )}
+        </p>
+        {switchCompany.isPending && (
+          <span className="muted company-switcher-hint">Switching…</span>
+        )}
+        {switchCompany.isError && (
+          <span className="alert company-switcher-error" role="alert">
+            {switchCompany.error instanceof Error
+              ? switchCompany.error.message
+              : "Could not switch company"}
+          </span>
+        )}
+      </div>
+    );
+  }
 
   if (switchable.length === 0) {
     return null;
@@ -48,18 +119,12 @@ export function CompanySwitcher({
   };
 
   return (
-    <div
-      className={
-        variant === "header"
-          ? "company-switcher company-switcher-header"
-          : "company-switcher company-switcher-page"
-      }
-    >
-      <label htmlFor={`company-switch-${variant}`} className="company-switcher-label">
-        {variant === "header" ? "Company" : "Active company"}
+    <div className="company-switcher company-switcher-page">
+      <label htmlFor="company-switch-page" className="company-switcher-label">
+        Active company
       </label>
       <select
-        id={`company-switch-${variant}`}
+        id="company-switch-page"
         className="company-switcher-select"
         value={currentId}
         disabled={switchCompany.isPending || switchable.length < 2}

@@ -554,6 +554,27 @@ export function useUpdateCompanyMemberPermissions() {
   });
 }
 
+export function useUpdateCompanyMemberPhone() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: { public_id: string; phone_number: string }) => {
+      const res = await api<{ data: CompanyMemberOption[]; message?: string }>(
+        `/profile/company/members/${encodeURIComponent(payload.public_id)}/phone`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ phone_number: payload.phone_number }),
+        },
+      );
+      return res;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["company-members"] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.contact.me });
+    },
+  });
+}
+
 export function useTransferOwnership() {
   const queryClient = useQueryClient();
 

@@ -66,6 +66,10 @@ export function RequestsTable({
         id: "service",
         header: "Service",
       }),
+      columnHelper.accessor((row) => row.contact?.name ?? "—", {
+        id: "submitted_by",
+        header: "Submitted by",
+      }),
       columnHelper.accessor((row) => row.requisition?.name ?? "—", {
         id: "requisition",
         header: "Request type",
@@ -224,7 +228,7 @@ export function RequestsTable({
                 <td colSpan={columns.length} className="data-table-empty">
                   {hasFilters
                     ? "No requests match your filters."
-                    : "No requests yet. Use New subscription or Manage service above to get started."}
+                    : "No company service requests yet. Use New subscription or Manage service above to get started."}
                 </td>
               </tr>
             ) : (

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Contacts;
 
 use App\Filament\Resources\Companies\CompanyResource;
+use App\Filament\Resources\Contacts\Pages\EditContact;
 use App\Filament\Resources\Contacts\Pages\ListContacts;
 use App\Filament\Resources\Contacts\Pages\ViewContact;
 use App\Filament\Resources\Contacts\RelationManagers\MembershipsRelationManager;
@@ -13,9 +14,14 @@ use App\Models\Contact;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -52,14 +58,85 @@ class ContactResource extends Resource
 
     public static function form(Schema $schema): Schema
     {
-        return $schema->components([]);
+        return $schema->components([
+            Section::make('Fayda identity')
+                ->description('Admins may correct these fields. The next Fayda sign-in can overwrite them from National ID. Fayda sub cannot be changed.')
+                ->schema([
+                    TextInput::make('public_id')
+                        ->label('Public ID')
+                        ->disabled()
+                        ->dehydrated(false),
+                    TextInput::make('sub')
+                        ->label('Fayda sub')
+                        ->disabled()
+                        ->dehydrated(false),
+                    TextInput::make('name')
+                        ->required()
+                        ->maxLength(255),
+                    TextInput::make('phone_number')
+                        ->label('Phone')
+                        ->tel()
+                        ->required()
+                        ->maxLength(32)
+                        ->unique(ignoreRecord: true)
+                        ->helperText('Saved as last 9 digits. Must be unique across contacts.')
+                        ->dehydrateStateUsing(
+                            fn (?string $state): ?string => \App\Support\PhoneNumber::normalizeNullable($state)
+                        ),
+                    TextInput::make('email')
+                        ->email()
+                        ->maxLength(255)
+                        ->unique(ignoreRecord: true)
+                        ->helperText('Must be unique across contacts when set.')
+                        ->dehydrateStateUsing(
+                            fn (?string $state): ?string => \App\Support\EmailAddress::normalize($state)
+                        ),
+                    TextInput::make('gender')->maxLength(64),
+                    TextInput::make('nationality')->maxLength(120),
+                    TextInput::make('identification_type')->label('ID type')->maxLength(120),
+                    TextInput::make('identification_number')->label('ID number')->maxLength(120),
+                    DatePicker::make('birthdate')->native(false),
+                    Textarea::make('address')
+                        ->rows(3)
+                        ->columnSpanFull()
+                        ->helperText('Optional free-text or JSON address from Fayda.')
+                        ->formatStateUsing(function ($state): ?string {
+                            if ($state === null || $state === '') {
+                                return null;
+                            }
+
+                            return is_array($state) ? json_encode($state, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) : (string) $state;
+                        })
+                        ->dehydrateStateUsing(function (?string $state): mixed {
+                            $state = trim((string) $state);
+                            if ($state === '') {
+                                return null;
+                            }
+                            $decoded = json_decode($state, true);
+
+                            return json_last_error() === JSON_ERROR_NONE ? $decoded : $state;
+                        }),
+                ])->columns(3),
+            Section::make('Status')
+                ->schema([
+                    Toggle::make('is_active')
+                        ->label('Active')
+                        ->helperText('Inactive contacts cannot use the partner portal.'),
+                    Toggle::make('is_banned')
+                        ->label('Banned')
+                        ->helperText('Banned contacts are blocked from signing in.'),
+                    TextInput::make('legacy_mvas_id')
+                        ->label('Legacy MVAS ID')
+                        ->maxLength(64),
+                ])->columns(3),
+        ]);
     }
 
     public static function infolist(Schema $schema): Schema
     {
         return $schema->components([
             Section::make('Fayda identity')
-                ->description('Verified by Fayda (National ID). These fields cannot be edited in admin or the partner portal — only Fayda login may refresh them.')
+                ->description('Verified by Fayda (National ID). Admins can edit these on the Edit page; Fayda login may refresh them again.')
                 ->schema([
                     TextEntry::make('public_id'),
                     TextEntry::make('sub')->label('Fayda sub'),
@@ -222,6 +299,7 @@ class ContactResource extends Resource
             ])
             ->recordActions([
                 ViewAction::make(),
+                EditAction::make(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -300,6 +378,7 @@ class ContactResource extends Resource
         return [
             'index' => ListContacts::route('/'),
             'view' => ViewContact::route('/{record}'),
+            'edit' => EditContact::route('/{record}/edit'),
         ];
     }
 
@@ -315,7 +394,7 @@ class ContactResource extends Resource
 
     public static function canEdit(Model $record): bool
     {
-        return false;
+        return true;
     }
 
     public static function canDelete(Model $record): bool

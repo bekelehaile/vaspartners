@@ -5,6 +5,10 @@ import Link from "next/link";
 import { useContact, useServices } from "@/hooks/use-contact";
 import { faydaLoginUrl } from "@/lib/api";
 import type { Service } from "@/lib/api";
+import {
+  contactCanCreateSubscriptions,
+  contactCanManageServices,
+} from "@/lib/company-permissions";
 import { ServiceRequirements } from "@/components/ServiceRequirements";
 import {
   formatServiceDescription,
@@ -31,7 +35,9 @@ export function ServicesCatalog({
   const { data: services = [], isLoading, isError, error } = useServices();
   const { data: me } = useContact();
   const signedIn = !!me;
-  const canRequest = !!me?.profile_completed;
+  const profileCompleted = !!me?.profile_completed;
+  const canSubscribe = profileCompleted && contactCanCreateSubscriptions(me);
+  const canManage = profileCompleted && contactCanManageServices(me);
 
   const rows = useMemo(() => sortServicesForLanding(services), [services]);
 
@@ -68,7 +74,10 @@ export function ServicesCatalog({
               service={service}
               index={index}
               signedIn={signedIn}
-              canRequest={canRequest}
+              canRequest={
+                service.is_subscription_based === false ? canManage : canSubscribe
+              }
+              profileCompleted={profileCompleted}
             />
           ))}
         </ul>
@@ -86,11 +95,13 @@ function PortalServiceCard({
   index,
   signedIn,
   canRequest,
+  profileCompleted,
 }: {
   service: Service;
   index: number;
   signedIn: boolean;
   canRequest: boolean;
+  profileCompleted: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const requisitions = service.requisitions ?? [];
@@ -136,7 +147,7 @@ function PortalServiceCard({
         </button>
         {signedIn ? (
           <Link href={requestHref} className="service-card-request">
-            {canRequest ? "Request" : "Company first"}
+            {canRequest ? "Request" : profileCompleted ? "View company" : "Company first"}
           </Link>
         ) : (
           <a className="service-card-request" href={faydaLoginUrl()}>

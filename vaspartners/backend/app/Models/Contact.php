@@ -170,6 +170,45 @@ class Contact extends Authenticatable
         }
     }
 
+    /**
+     * Admin / Filament updates — may correct Fayda identity fields (next Fayda login can overwrite them).
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    public function updateFromAdmin(array $attributes): void
+    {
+        $allowed = [
+            ...self::FAYDA_ATTRIBUTES,
+            'is_active',
+            'is_banned',
+            'legacy_mvas_id',
+            'company_name',
+            'company_tin',
+            'company_phone',
+            'company_email',
+            'company_address',
+            'current_company_id',
+            'profile_completed_at',
+        ];
+
+        $payload = array_intersect_key($attributes, array_flip($allowed));
+        // Fayda subject is the SSO key — never change via admin form.
+        unset($payload['sub']);
+
+        if ($payload === []) {
+            return;
+        }
+
+        $this->allowFaydaSync = true;
+
+        try {
+            $this->forceFill($payload);
+            $this->save();
+        } finally {
+            $this->allowFaydaSync = false;
+        }
+    }
+
     public function uniqueIds(): array
     {
         return ['public_id'];

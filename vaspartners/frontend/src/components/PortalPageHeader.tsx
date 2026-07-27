@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { ReactNode } from "react";
 import { useContact } from "@/hooks/use-contact";
+import {
+  contactCanCreateServiceRequests,
+  contactCanCreateSubscriptions,
+  contactCanManageServices,
+} from "@/lib/company-permissions";
 
 export function PortalPageHeader({
   kicker,
@@ -32,6 +37,11 @@ export function NewRequestButton({
 }: {
   className?: string;
 }) {
+  const { data: me } = useContact();
+  if (me && !contactCanCreateServiceRequests(me)) {
+    return null;
+  }
+
   return (
     <Link href="/portal/requests/new" className={className}>
       New service request
@@ -39,26 +49,28 @@ export function NewRequestButton({
   );
 }
 
-/** Dual CTAs for the two partner journeys. */
+/** Dual CTAs for the two partner journeys — gated separately. */
 export function JourneyLaunchActions() {
   const { data: me } = useContact();
-  const canCreate =
-    !me ||
-    me.company_role === "owner" ||
-    (me.company_permissions ?? []).includes("create_service_requests");
+  const canSubscribe = !me || contactCanCreateSubscriptions(me);
+  const canManage = !me || contactCanManageServices(me);
 
-  if (!canCreate) {
+  if (me && !canSubscribe && !canManage) {
     return null;
   }
 
   return (
     <div className="journey-launch">
-      <Link href="/portal/requests/new?intent=subscribe" className="btn-primary">
-        New subscription
-      </Link>
-      <Link href="/portal/requests/new?intent=manage" className="btn-ghost">
-        Manage service
-      </Link>
+      {canSubscribe && (
+        <Link href="/portal/requests/new?intent=subscribe" className="btn-primary">
+          New subscription
+        </Link>
+      )}
+      {canManage && (
+        <Link href="/portal/requests/new?intent=manage" className="btn-ghost">
+          Manage service
+        </Link>
+      )}
     </div>
   );
 }

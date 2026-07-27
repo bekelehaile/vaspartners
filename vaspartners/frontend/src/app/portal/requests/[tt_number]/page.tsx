@@ -25,7 +25,7 @@ export default function RequestDetailPage() {
         title={ticket ? `Request ${ticket.tt_number}` : "Request"}
         description={`${ticket?.service?.name || "Service"}${
           ticket?.requisition?.name ? ` · ${ticket.requisition.name}` : ""
-        }`}
+        }${ticket?.contact?.name ? ` · Submitted by ${ticket.contact.name}` : ""}`}
         actions={<JourneyLaunchActions />}
       />
 

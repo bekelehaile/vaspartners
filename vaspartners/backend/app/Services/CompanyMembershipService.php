@@ -11,6 +11,7 @@ use App\Models\Company;
 use App\Models\CompanyChangeRequest;
 use App\Models\CompanyMembership;
 use App\Models\Contact;
+use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -54,22 +55,53 @@ class CompanyMembershipService
 
         $tin = $this->normalizeCode($data['company_tin']);
         $this->assertUniqueTin($tin);
-        $this->assertUniqueCompanyPhone($phone);
-        $this->assertUniqueCompanyEmail($email !== '' ? $email : null);
 
-        return DB::transaction(function () use ($contact, $data, $tin, $phone, $email) {
+        $contact->loadMissing(['memberships', 'company']);
+        $creatingAdditional = $contact->memberships->isNotEmpty();
+
+        // First company inherits Fayda phone/email. Additional companies leave those
+        // blank so unique company phone/email does not block multi-company owners.
+        $companyPhone = $creatingAdditional ? null : $phone;
+        $companyEmail = $creatingAdditional
+            ? null
+            : ($email !== '' ? \App\Support\EmailAddress::normalize($email) : null);
+
+        if (! $creatingAdditional) {
+            $this->assertUniqueCompanyPhone($phone);
+            $this->assertUniqueCompanyEmail($companyEmail);
+        }
+
+        // Stay on an approved working company so the portal is not locked to a pending TIN.
+        $keepApprovedContext = $creatingAdditional
+            && (bool) $contact->current_company_id
+            && $contact->hasActiveCompanyMembership()
+            && $contact->company?->isApproved();
+
+        return DB::transaction(function () use (
+            $contact,
+            $data,
+            $tin,
+            $companyPhone,
+            $companyEmail,
+            $keepApprovedContext,
+        ) {
             $company = Company::query()->create([
                 'name' => trim($data['company_name']),
                 'tin' => $tin,
-                'phone' => $phone,
-                'email' => $email !== '' ? \App\Support\EmailAddress::normalize($email) : null,
+                'phone' => $companyPhone,
+                'email' => $companyEmail,
                 'address' => trim($data['company_address']),
                 'is_active' => false,
                 'approval_status' => CompanyApprovalStatus::Pending,
                 'created_by_contact_id' => $contact->id,
             ]);
 
-            $this->linkContact($contact, $company, CompanyRole::Owner, switchTo: true);
+            $this->linkContact(
+                $contact,
+                $company,
+                CompanyRole::Owner,
+                switchTo: ! $keepApprovedContext,
+            );
             $fresh = $contact->fresh(['company', 'memberships.company']);
             $this->notifications->companyProfileSubmitted($fresh);
 
@@ -633,6 +665,87 @@ class CompanyMembershipService
     }
 
     /**
+     * Owner corrects a non-owner member's phone (unique across contacts).
+     * Invite placeholders also refresh their invite Fayda sub so the new phone can sync.
+     */
+    public function updateMemberPhoneByOwner(Contact $actor, Contact $member, string $phoneNumber): Contact
+    {
+        $this->assertIsActiveOwner($actor);
+
+        $company = Company::query()->findOrFail((int) $actor->current_company_id);
+        if ((int) $member->id === (int) $actor->id) {
+            throw ValidationException::withMessages([
+                'phone_number' => 'You cannot change your own phone here. Update it via Fayda sign-in or ask an administrator.',
+            ]);
+        }
+
+        $membership = $this->membershipFor($member, $company);
+        if (! $membership) {
+            throw ValidationException::withMessages([
+                'member' => 'This partner is not a member of this company.',
+            ]);
+        }
+
+        if ($membership->isOwner()) {
+            throw ValidationException::withMessages([
+                'phone_number' => 'The company owner phone cannot be changed here.',
+            ]);
+        }
+
+        $phone = \App\Support\PhoneNumber::normalize($phoneNumber);
+        if ($phone === '' || ! \App\Support\PhoneNumber::isValidLocalMobile($phone)) {
+            throw ValidationException::withMessages([
+                'phone_number' => 'Enter a valid Ethiopian mobile number (last 9 digits).',
+            ]);
+        }
+
+        $current = \App\Support\PhoneNumber::normalize((string) $member->phone_number);
+        if ($phone === $current) {
+            return $member->fresh(['company', 'memberships.company']) ?? $member;
+        }
+
+        $conflict = Contact::query()
+            ->where('phone_number', $phone)
+            ->where('id', '!=', $member->id)
+            ->exists();
+        if ($conflict) {
+            throw ValidationException::withMessages([
+                'phone_number' => 'This phone already belongs to another partner. Add that partner to this company instead, or ask an administrator.',
+            ]);
+        }
+
+        if ($this->isPlaceholderContact($member)) {
+            $inviteSub = 'invite-phone-'.$phone;
+            $member->syncFromFayda([
+                'sub' => $inviteSub,
+                'name' => $member->name,
+                'phone_number' => $phone,
+                'email' => $member->email,
+                'gender' => $member->gender,
+                'nationality' => $member->nationality,
+                'identification_type' => $member->identification_type ?: '2',
+                'identification_number' => $inviteSub,
+                'birthdate' => $member->birthdate,
+                'address' => $member->address,
+            ]);
+        } else {
+            $member->updateFromAdmin([
+                'phone_number' => $phone,
+            ]);
+        }
+
+        Log::info('Owner updated company member phone', [
+            'company_id' => $company->id,
+            'owner_id' => $actor->id,
+            'member_contact_id' => $member->id,
+            'phone' => $phone,
+            'placeholder' => $this->isPlaceholderContact($member->fresh() ?? $member),
+        ]);
+
+        return $member->fresh(['company', 'memberships.company']) ?? $member;
+    }
+
+    /**
      * Owner grants portal permissions to a non-owner member.
      *
      * @param  list<string>  $permissions
@@ -656,8 +769,7 @@ class CompanyMembershipService
         }
 
         $allowed = CompanyMemberPermission::allValues();
-        $normalized = collect($permissions)
-            ->map(fn ($p) => (string) $p)
+        $normalized = collect(CompanyMemberPermission::normalizeStored($permissions))
             ->unique()
             ->filter(fn (string $p) => in_array($p, $allowed, true))
             ->values()
@@ -700,7 +812,8 @@ class CompanyMembershipService
         if (! $this->contactHasPermission($contact, $permission)) {
             throw ValidationException::withMessages([
                 'permission' => match ($permission) {
-                    CompanyMemberPermission::CreateServiceRequests => 'You do not have permission to create service requests. Ask your company owner to grant access.',
+                    CompanyMemberPermission::CreateSubscriptions => 'You do not have permission to start new VAS subscriptions. Ask your company owner to grant access.',
+                    CompanyMemberPermission::ManageServices => 'You do not have permission to manage services. Ask your company owner to grant access.',
                     CompanyMemberPermission::ManageMembershipRequests => 'You do not have permission to manage membership requests. Ask your company owner to grant access.',
                     CompanyMemberPermission::EditCompanyProfile => 'You do not have permission to edit the company profile. Ask your company owner to grant access.',
                 },
@@ -734,8 +847,7 @@ class CompanyMembershipService
 
         $allowed = CompanyMemberPermission::allValues();
 
-        return collect($stored)
-            ->map(fn ($p) => (string) $p)
+        return collect(CompanyMemberPermission::normalizeStored($stored))
             ->filter(fn (string $p) => in_array($p, $allowed, true))
             ->values()
             ->all();
@@ -1564,6 +1676,54 @@ class CompanyMembershipService
                 'company' => 'A valid company TIN is required before using VAS services.',
             ]);
         }
+    }
+
+    /**
+     * Contact ids linked to a company (active or inactive memberships).
+     *
+     * @return \Illuminate\Support\Collection<int, int>
+     */
+    public function companyContactIds(int $companyId): \Illuminate\Support\Collection
+    {
+        return CompanyMembership::query()
+            ->where('company_id', $companyId)
+            ->pluck('contact_id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+    }
+
+    /**
+     * Active company members may open any company service request (not only their own).
+     * Contacts without an active company still only see tickets they submitted.
+     */
+    public function contactCanAccessCompanyTicket(Contact $viewer, Ticket $ticket): bool
+    {
+        if ((int) $ticket->contact_id === (int) $viewer->id) {
+            return true;
+        }
+
+        if (! $viewer->current_company_id || ! $viewer->hasActiveCompanyMembership()) {
+            return false;
+        }
+
+        $companyId = (int) $viewer->current_company_id;
+
+        if ($this->companyContactIds($companyId)->contains((int) $ticket->contact_id)) {
+            return true;
+        }
+
+        $ticket->loadMissing('subscription:id,company_id');
+        if ($ticket->subscription && (int) $ticket->subscription->company_id === $companyId) {
+            return true;
+        }
+
+        return false;
+    }
+
+    public function assertCanAccessCompanyTicket(Contact $viewer, Ticket $ticket): void
+    {
+        abort_unless($this->contactCanAccessCompanyTicket($viewer, $ticket), 404);
     }
 
     public function transferOwnership(Company $company, Contact $newOwner, User $actor): Company

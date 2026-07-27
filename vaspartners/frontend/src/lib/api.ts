@@ -110,8 +110,11 @@ export type Subscription = {
   status: string;
   service_id?: number;
   service?: { id: number; name: string; slug: string; renewal_interval?: string | null };
+  started_at?: string | null;
+  current_period_start?: string | null;
   current_period_end?: string | null;
   next_renewal_due_at?: string | null;
+  terminated_at?: string | null;
 };
 
 export type FaqItem = {
@@ -152,6 +155,7 @@ export type Ticket = {
   description?: string | null;
   building?: string | null;
   location?: string | null;
+  contact?: { id?: number; public_id?: string; name?: string | null } | null;
   service?: { id: number; name: string };
   requisition?: { id: number; name: string };
   created_at: string;

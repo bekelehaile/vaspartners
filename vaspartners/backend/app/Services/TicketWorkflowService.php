@@ -222,17 +222,19 @@ class TicketWorkflowService
     public function createTicket(Contact $contact, array $data): Ticket
     {
         return DB::transaction(function () use ($contact, $data) {
+            $service = Service::query()->findOrFail($data['service_id']);
+            $requisition = Requisition::query()->findOrFail($data['requisition_id']);
+
             // Hard gate: no VAS service requests until the company TIN is admin-approved.
             if (empty($data['skip_open_limit'])) {
                 $this->membership->assertCanAccessCompany($contact);
                 $this->membership->assertHasPermission(
                     $contact,
-                    \App\Enums\CompanyMemberPermission::CreateServiceRequests,
+                    $requisition->creates_subscription
+                        ? \App\Enums\CompanyMemberPermission::CreateSubscriptions
+                        : \App\Enums\CompanyMemberPermission::ManageServices,
                 );
             }
-
-            $service = Service::query()->findOrFail($data['service_id']);
-            $requisition = Requisition::query()->findOrFail($data['requisition_id']);
 
             if (! $service->requisitions()->where('requisitions.id', $requisition->id)->exists()) {
                 throw ValidationException::withMessages([

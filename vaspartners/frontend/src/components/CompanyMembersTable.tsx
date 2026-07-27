@@ -6,6 +6,7 @@ import {
   useCreateCompanyMember,
   useSetCompanyMemberActive,
   useUpdateCompanyMemberPermissions,
+  useUpdateCompanyMemberPhone,
   useCompanyMembers,
   type CompanyMemberOption,
   type CompanyMemberPermissionOption,
@@ -82,6 +83,58 @@ function PermissionsEditor({
   );
 }
 
+function PhoneEditor({
+  member,
+  busy,
+  onSave,
+  onCancel,
+}: {
+  member: CompanyMemberOption;
+  busy: boolean;
+  onSave: (phone_number: string) => void;
+  onCancel: () => void;
+}) {
+  const [phone, setPhone] = useState(member.phone_number ?? "");
+
+  return (
+    <div className="company-member-permissions-editor">
+      <p className="muted" style={{ marginTop: 0 }}>
+        Change phone for <strong>{member.name || "this partner"}</strong>. Use the Fayda
+        mobile number (last 9 digits).
+        {member.awaiting_fayda
+          ? " They will sync when they sign in with this phone."
+          : " A later Fayda sign-in may overwrite this with National ID data."}
+      </p>
+      <div className="field">
+        <label htmlFor={`member-phone-${member.public_id}`}>
+          Phone <span aria-hidden="true">*</span>
+        </label>
+        <input
+          id={`member-phone-${member.public_id}`}
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="09xxxxxxxx"
+          disabled={busy}
+          required
+        />
+      </div>
+      <div className="company-request-actions">
+        <button
+          type="button"
+          className="btn-primary"
+          disabled={busy || phone.trim().length < 9}
+          onClick={() => onSave(phone.trim())}
+        >
+          Save phone
+        </button>
+        <button type="button" className="btn-ghost" disabled={busy} onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AddMemberForm({
   busy,
   onCreated,
@@ -98,7 +151,10 @@ function AddMemberForm({
 
   if (!open) {
     return (
-      <div className="company-members-toolbar">
+      <div className="data-table-toolbar">
+        <p className="muted" style={{ margin: 0 }}>
+          Add partners by phone. One person can belong to many companies.
+        </p>
         <button
           type="button"
           className="btn-primary"
@@ -112,98 +168,100 @@ function AddMemberForm({
   }
 
   return (
-    <div className="company-add-member panel" style={{ margin: "0 0 1rem", borderRadius: 0 }}>
-      <h3 style={{ marginTop: 0 }}>Add member</h3>
-      <p className="muted">
-        Create a member with their phone number. Phone and email identify one partner
-        globally; the same person can belong to multiple companies. If this phone already
-        exists, they are linked here as another membership. When they sign in with Fayda,
-        identity syncs; disabled access keeps them out of this company until you enable them.
-      </p>
-      <div className="field">
-        <label htmlFor="add-member-name">
-          Full name <span aria-hidden="true">*</span>
-        </label>
-        <input
-          id="add-member-name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-          disabled={create.isPending}
-        />
-      </div>
-      <div className="field">
-        <label htmlFor="add-member-phone">
-          Phone (Fayda) <span aria-hidden="true">*</span>
-        </label>
-        <input
-          id="add-member-phone"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="09xxxxxxxx"
-          required
-          disabled={create.isPending}
-        />
-      </div>
-      <div className="field">
-        <label htmlFor="add-member-email">Email (optional)</label>
-        <input
-          id="add-member-email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          disabled={create.isPending}
-        />
-      </div>
-      <label className="company-add-member-active">
-        <input
-          type="checkbox"
-          checked={isActive}
-          disabled={create.isPending}
-          onChange={(e) => setIsActive(e.target.checked)}
-        />
-        <span>Enable access now (required for Fayda sync into this company)</span>
-      </label>
-      {create.isError && (
-        <div className="alert">
-          {create.error instanceof Error
-            ? create.error.message
-            : "Could not add member"}
+    <div className="data-table-toolbar company-add-member-toolbar">
+      <div className="company-add-member">
+        <h3 style={{ marginTop: 0 }}>Add member</h3>
+        <p className="muted">
+          Create a member with their phone number. Phone and email identify one partner
+          globally; the same person can belong to multiple companies. If this phone already
+          exists, they are linked here as another membership. When they sign in with Fayda,
+          identity syncs; disabled access keeps them out of this company until you enable them.
+        </p>
+        <div className="field">
+          <label htmlFor="add-member-name">
+            Full name <span aria-hidden="true">*</span>
+          </label>
+          <input
+            id="add-member-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            disabled={create.isPending}
+          />
         </div>
-      )}
-      <div className="company-request-actions">
-        <button
-          type="button"
-          className="btn-primary"
-          disabled={create.isPending || name.trim().length < 2 || phone.trim().length < 9}
-          onClick={() => {
-            void create
-              .mutateAsync({
-                name: name.trim(),
-                phone_number: phone.trim(),
-                email: email.trim() || undefined,
-                is_active: isActive,
-              })
-              .then(() => {
-                setName("");
-                setPhone("");
-                setEmail("");
-                setIsActive(true);
-                setOpen(false);
-                onCreated();
-              });
-          }}
-        >
-          {create.isPending ? "Adding…" : "Save member"}
-        </button>
-        <button
-          type="button"
-          className="btn-ghost"
-          disabled={create.isPending}
-          onClick={() => setOpen(false)}
-        >
-          Cancel
-        </button>
+        <div className="field">
+          <label htmlFor="add-member-phone">
+            Phone (Fayda) <span aria-hidden="true">*</span>
+          </label>
+          <input
+            id="add-member-phone"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="09xxxxxxxx"
+            required
+            disabled={create.isPending}
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="add-member-email">Email (optional)</label>
+          <input
+            id="add-member-email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={create.isPending}
+          />
+        </div>
+        <label className="company-add-member-active">
+          <input
+            type="checkbox"
+            checked={isActive}
+            disabled={create.isPending}
+            onChange={(e) => setIsActive(e.target.checked)}
+          />
+          <span>Enable access now (required for Fayda sync into this company)</span>
+        </label>
+        {create.isError && (
+          <div className="alert">
+            {create.error instanceof Error
+              ? create.error.message
+              : "Could not add member"}
+          </div>
+        )}
+        <div className="company-request-actions">
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={create.isPending || name.trim().length < 2 || phone.trim().length < 9}
+            onClick={() => {
+              void create
+                .mutateAsync({
+                  name: name.trim(),
+                  phone_number: phone.trim(),
+                  email: email.trim() || undefined,
+                  is_active: isActive,
+                })
+                .then(() => {
+                  setName("");
+                  setPhone("");
+                  setEmail("");
+                  setIsActive(true);
+                  setOpen(false);
+                  onCreated();
+                });
+            }}
+          >
+            {create.isPending ? "Adding…" : "Save member"}
+          </button>
+          <button
+            type="button"
+            className="btn-ghost"
+            disabled={create.isPending}
+            onClick={() => setOpen(false)}
+          >
+            Cancel
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -312,7 +370,7 @@ export function CompanyMembersTable({ enabled }: { enabled: boolean }) {
   }
 
   return (
-    <div className="company-members-table-wrap">
+    <div className="data-table-card">
       {canManage && (
         <AddMemberForm
           busy={busy}
@@ -321,8 +379,22 @@ export function CompanyMembersTable({ enabled }: { enabled: boolean }) {
           }}
         />
       )}
+
+      {membersQuery.isError && (
+        <div className="alert" style={{ margin: "1rem 1.15rem 0" }}>
+          {membersQuery.error instanceof Error
+            ? membersQuery.error.message
+            : "Could not load members"}
+        </div>
+      )}
+      {error && (
+        <div className="alert" style={{ margin: "1rem 1.15rem 0" }}>
+          {error}
+        </div>
+      )}
+
       <div className="data-table-wrap">
-        <table className="data-table company-members-table">
+        <table className="data-table">
           <thead>
             <tr>
               <th>Name</th>
@@ -332,7 +404,7 @@ export function CompanyMembersTable({ enabled }: { enabled: boolean }) {
               <th>Access</th>
               <th>Fayda</th>
               <th>Permissions</th>
-              <th>Actions</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -518,29 +590,19 @@ export function CompanyMembersTable({ enabled }: { enabled: boolean }) {
         </table>
       </div>
 
-      {membersQuery.isError && (
-        <div className="alert" style={{ margin: "1rem" }}>
-          {membersQuery.error instanceof Error
-            ? membersQuery.error.message
-            : "Could not load members"}
-        </div>
-      )}
-      {error && (
-        <div className="alert" style={{ margin: "1rem" }}>
-          {error}
-        </div>
-      )}
-      {canManage ? (
-        <p className="muted company-members-hint">
-          One partner (unique phone/email) can be a member of many companies. Add by phone
-          to create or link them here; Fayda sign-in syncs identity, and only Enabled access
-          unlocks this company.
+      <div className="data-table-footer">
+        <p className="muted">
+          {membersQuery.isLoading
+            ? "Loading…"
+            : `${rows.length} member${rows.length === 1 ? "" : "s"}`}
+          {membersQuery.isFetching && !membersQuery.isLoading ? " · Updating…" : ""}
         </p>
-      ) : (
-        <p className="muted company-members-hint">
-          Member roster for this company. Partners may also belong to other companies.
+        <p className="muted" style={{ margin: 0, maxWidth: "36rem", textAlign: "right" }}>
+          {canManage
+            ? "One partner (unique phone/email) can belong to many companies. Only Enabled access unlocks this company."
+            : "Partners may also belong to other companies."}
         </p>
-      )}
+      </div>
     </div>
   );
 }

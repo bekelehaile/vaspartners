@@ -31,6 +31,7 @@ Route::prefix('v1')->group(function () {
         Route::post('profile/company/members/{member}/enable', [ContactPortalController::class, 'enableCompanyMember']);
         Route::post('profile/company/members/{member}/disable', [ContactPortalController::class, 'disableCompanyMember']);
         Route::put('profile/company/members/{member}/permissions', [ContactPortalController::class, 'updateCompanyMemberPermissions']);
+        Route::put('profile/company/members/{member}/phone', [ContactPortalController::class, 'updateCompanyMemberPhone']);
         Route::post('profile/company/transfer-ownership', [ContactPortalController::class, 'requestTransferOwnership']);
         Route::get('profile/company/membership-requests', [ContactPortalController::class, 'membershipRequests']);
         Route::get('profile/company/requests', [ContactPortalController::class, 'companyRequestsInbox']);

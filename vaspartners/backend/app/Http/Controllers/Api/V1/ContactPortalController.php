@@ -99,7 +99,7 @@ class ContactPortalController extends Controller
         return response()->json(['data' => $rows]);
     }
 
-    public function tickets(Request $request)
+    public function tickets(Request $request, CompanyMembershipService $membership)
     {
         $filters = $request->validate([
             'status' => ['nullable', 'string', 'in:open,in_progress,completed,closed,rejected'],
@@ -109,12 +109,26 @@ class ContactPortalController extends Controller
             'page' => ['nullable', 'integer', 'min:1'],
         ]);
 
+        /** @var \App\Models\Contact $contact */
+        $contact = $request->user();
+
         $query = Ticket::query()
             ->with([
                 'service:id,name',
                 'requisition:id,name',
-            ])
-            ->where('contact_id', $request->user()->id);
+                'contact:id,public_id,name',
+            ]);
+
+        if ($contact->current_company_id && $contact->hasActiveCompanyMembership()) {
+            $companyId = (int) $contact->current_company_id;
+            $companyContactIds = $membership->companyContactIds($companyId);
+            $query->where(function ($q) use ($companyContactIds, $companyId) {
+                $q->whereIn('contact_id', $companyContactIds)
+                    ->orWhereHas('subscription', fn ($sq) => $sq->where('company_id', $companyId));
+            });
+        } else {
+            $query->where('contact_id', $contact->id);
+        }
 
         if (! empty($filters['status'])) {
             $query->where('status', $filters['status']);
@@ -131,7 +145,8 @@ class ContactPortalController extends Controller
                     ->orWhere('description', 'ilike', "%{$search}%")
                     ->orWhere('building', 'ilike', "%{$search}%")
                     ->orWhereHas('service', fn ($sq) => $sq->where('name', 'ilike', "%{$search}%"))
-                    ->orWhereHas('requisition', fn ($rq) => $rq->where('name', 'ilike', "%{$search}%"));
+                    ->orWhereHas('requisition', fn ($rq) => $rq->where('name', 'ilike', "%{$search}%"))
+                    ->orWhereHas('contact', fn ($cq) => $cq->where('name', 'ilike', "%{$search}%"));
             });
         }
 
@@ -142,11 +157,11 @@ class ContactPortalController extends Controller
         return response()->json($tickets);
     }
 
-    public function showTicket(Request $request, Ticket $ticket, TicketCommentService $comments)
+    public function showTicket(Request $request, Ticket $ticket, TicketCommentService $comments, CompanyMembershipService $membership)
     {
-        abort_unless($ticket->contact_id === $request->user()->id, 404);
+        $membership->assertCanAccessCompanyTicket($request->user(), $ticket);
 
-        $ticket->load(['service', 'requisition', 'subscription', 'documents.documentType']);
+        $ticket->load(['service', 'requisition', 'subscription', 'documents.documentType', 'contact:id,public_id,name']);
 
         $payload = $ticket->toArray();
         $thread = $comments->paginateThread($ticket, $request->user(), null, null, 40);
@@ -165,9 +180,9 @@ class ContactPortalController extends Controller
         return response()->json(['data' => $payload]);
     }
 
-    public function ticketMessages(Request $request, Ticket $ticket, TicketCommentService $comments)
+    public function ticketMessages(Request $request, Ticket $ticket, TicketCommentService $comments, CompanyMembershipService $membership)
     {
-        abort_unless($ticket->contact_id === $request->user()->id, 404);
+        $membership->assertCanAccessCompanyTicket($request->user(), $ticket);
 
         $data = $request->validate([
             'before_id' => ['nullable', 'integer', 'min:1'],
@@ -265,9 +280,7 @@ class ContactPortalController extends Controller
             ->latest('id')
             ->paginate(100);
 
-        $companyContactIds = \App\Models\CompanyMembership::query()
-            ->where('company_id', $companyId)
-            ->pluck('contact_id');
+        $companyContactIds = $membership->companyContactIds($companyId);
 
         $pendingNewServiceIds = Ticket::query()
             ->whereIn('contact_id', $companyContactIds)
@@ -301,9 +314,9 @@ class ContactPortalController extends Controller
         ]);
     }
 
-    public function uploadDocument(Request $request, Ticket $ticket, TicketDocumentService $documents)
+    public function uploadDocument(Request $request, Ticket $ticket, TicketDocumentService $documents, CompanyMembershipService $membership)
     {
-        abort_unless($ticket->contact_id === $request->user()->id, 404);
+        $membership->assertCanAccessCompanyTicket($request->user(), $ticket);
 
         $data = $request->validate([
             'document_type_id' => ['required', 'integer', 'exists:document_types,id'],
@@ -329,8 +342,9 @@ class ContactPortalController extends Controller
         Ticket $ticket,
         TicketDocument $document,
         TicketDocumentService $documents,
+        CompanyMembershipService $membership,
     ) {
-        abort_unless($ticket->contact_id === $request->user()->id, 404);
+        $membership->assertCanAccessCompanyTicket($request->user(), $ticket);
 
         $documents->deleteForContact($ticket, $document, $request->user());
 
@@ -341,8 +355,9 @@ class ContactPortalController extends Controller
         Request $request,
         Ticket $ticket,
         TicketDocument $document,
+        CompanyMembershipService $membership,
     ): StreamedResponse {
-        abort_unless($ticket->contact_id === $request->user()->id, 404);
+        $membership->assertCanAccessCompanyTicket($request->user(), $ticket);
         abort_unless((int) $document->ticket_id === (int) $ticket->id, 404);
 
         $disk = $document->disk ?: 'local';
@@ -357,9 +372,9 @@ class ContactPortalController extends Controller
         );
     }
 
-    public function comment(Request $request, Ticket $ticket, TicketCommentService $comments, PartnerNotificationService $notifications)
+    public function comment(Request $request, Ticket $ticket, TicketCommentService $comments, PartnerNotificationService $notifications, CompanyMembershipService $membership)
     {
-        abort_unless($ticket->contact_id === $request->user()->id, 404);
+        $membership->assertCanAccessCompanyTicket($request->user(), $ticket);
 
         $data = $request->validate([
             'body' => ['nullable', 'string', 'max:5000'],
@@ -385,8 +400,9 @@ class ContactPortalController extends Controller
         Ticket $ticket,
         TicketComment $comment,
         TicketCommentService $comments,
+        CompanyMembershipService $membership,
     ): StreamedResponse {
-        abort_unless($ticket->contact_id === $request->user()->id, 404);
+        $membership->assertCanAccessCompanyTicket($request->user(), $ticket);
         abort_unless((int) $comment->ticket_id === (int) $ticket->id, 404);
         abort_unless($comment->is_public, 404);
         abort_unless($comments->attachmentExists($comment), 404);
@@ -663,6 +679,25 @@ class ContactPortalController extends Controller
         return response()->json([
             'data' => $membership->listCurrentCompanyMembers($request->user()),
             'message' => 'Member permissions updated.',
+        ]);
+    }
+
+    public function updateCompanyMemberPhone(Request $request, string $member, CompanyMembershipService $membership)
+    {
+        $data = $request->validate([
+            'phone_number' => ['required', 'string', 'max:32'],
+        ]);
+
+        $target = $membership->findCurrentCompanyMemberByPublicId($request->user(), $member);
+        $membership->updateMemberPhoneByOwner(
+            $request->user(),
+            $target,
+            $data['phone_number'],
+        );
+
+        return response()->json([
+            'data' => $membership->listCurrentCompanyMembers($request->user()),
+            'message' => 'Member phone updated.',
         ]);
     }
 

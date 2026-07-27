@@ -6,19 +6,19 @@ import Link from "next/link";
 import { CompanyProfileForm } from "@/components/CompanyProfileForm";
 import { CompanyMembersTable } from "@/components/CompanyMembersTable";
 import { FaydaIdentityPanel } from "@/components/FaydaIdentityPanel";
+import { JoinCompanyPanel } from "@/components/JoinCompanyPanel";
 import { PortalPageHeader } from "@/components/PortalPageHeader";
 import {
-  useAttachCompany,
   useCompanyMembers,
   useContact,
   useDetachCompany,
-  useLookupCompany,
   useTransferOwnership,
 } from "@/hooks/use-contact";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { queryKeys } from "@/lib/query-keys";
 
 type CompanyTab = "identity" | "profile" | "members" | "ownership";
+type OrgAction = "create" | "attach" | null;
 
 const HASH_TO_TAB: Record<string, CompanyTab> = {
   "fayda-identity": "identity",
@@ -39,7 +39,7 @@ function tabFromHash(): CompanyTab | null {
 export default function CompanyProfilePage() {
   const queryClient = useQueryClient();
   const { data: me } = useContact();
-  const [creatingAnother, setCreatingAnother] = useState(false);
+  const [orgAction, setOrgAction] = useState<OrgAction>(null);
   const [tab, setTab] = useState<CompanyTab>("identity");
   const membershipDisabled =
     !!me?.company_id && me?.company_membership_active === false;
@@ -52,11 +52,6 @@ export default function CompanyProfilePage() {
   const canEditCompany = !!me?.company_can_edit;
   const pending = me?.pending_company_request;
   const [mode, setMode] = useState<"create" | "attach">("create");
-  const [tin, setTin] = useState("");
-  const [note, setNote] = useState("");
-  const [lookupTin, setLookupTin] = useState("");
-  const lookup = useLookupCompany(lookupTin);
-  const attach = useAttachCompany();
   const detach = useDetachCompany();
   const transfer = useTransferOwnership();
   const canViewMembers =
@@ -67,6 +62,8 @@ export default function CompanyProfilePage() {
   const [transferTarget, setTransferTarget] = useState("");
   const [transferNote, setTransferNote] = useState("");
   const [transferLetter, setTransferLetter] = useState<File | null>(null);
+  const hasMemberships = (me?.memberships?.length ?? 0) > 0;
+  const canAddOrganisation = hasMemberships && !membershipDisabled && !pending;
 
   const tabs = useMemo(() => {
     const items: { id: CompanyTab; label: string }[] = [
@@ -154,7 +151,7 @@ export default function CompanyProfilePage() {
                 ? `Admin feedback: ${me?.company?.approval_note || "Please complete the required company information and resubmit."}`
                 : "You are the company owner. An administrator must approve this unique TIN before you can request VAS services."
               : isLinked
-                ? `Manage Fayda identity, company profile, and members for ${me?.company_name || me?.company?.name || "this organisation"} using the tabs below.`
+                ? `Manage Fayda identity, company profile, and members for ${me?.company_name || me?.company?.name || "this organisation"} using the tabs below. You can also create your own company or request membership in another organisation.`
                 : pending
                   ? `Your ${pending.type} request for ${pending.company?.name || "a company"} is waiting for ${waitingFor} approval. VAS services stay locked until the company TIN is approved.`
                   : `Hello${me?.name ? `, ${me.name.split(" ")[0]}` : ""}. Create a new company with a unique TIN for admin approval, or request to join an existing approved company. You cannot use VAS services until that TIN is approved.`
@@ -162,7 +159,7 @@ export default function CompanyProfilePage() {
       />
 
       <div className="section company-section section-flush">
-        {(me?.memberships?.length ?? 0) > 0 && !membershipDisabled && (
+        {hasMemberships && !membershipDisabled && (
           <div className="panel">
             <h2>Your companies</h2>
             <p className="muted">
@@ -170,23 +167,48 @@ export default function CompanyProfilePage() {
               that company. You can own some companies and be a member of others.
             </p>
             {me && <CompanySwitcher me={me} variant="page" showHint />}
-            {isLinked && (
-              <button
-                type="button"
-                className="btn-ghost"
-                style={{ marginTop: "1rem" }}
-                onClick={() => setCreatingAnother((v) => !v)}
-              >
-                {creatingAnother ? "Cancel" : "Create another company"}
-              </button>
+            {canAddOrganisation && (
+              <div className="company-org-actions">
+                <button
+                  type="button"
+                  className={orgAction === "create" ? "btn-primary" : "btn-ghost"}
+                  onClick={() =>
+                    setOrgAction((v) => (v === "create" ? null : "create"))
+                  }
+                >
+                  {orgAction === "create" ? "Cancel" : "Create my company"}
+                </button>
+                <button
+                  type="button"
+                  className={orgAction === "attach" ? "btn-primary" : "btn-ghost"}
+                  onClick={() =>
+                    setOrgAction((v) => (v === "attach" ? null : "attach"))
+                  }
+                >
+                  {orgAction === "attach" ? "Cancel" : "Request membership"}
+                </button>
+              </div>
             )}
-            {creatingAnother && (
+            {orgAction === "create" && (
               <div style={{ marginTop: "1rem" }}>
+                <p className="muted">
+                  Register a new company TIN as owner. Your existing memberships stay in
+                  place; you can switch after admin approval.
+                </p>
                 <CompanyProfileForm
                   key="create-another"
                   me={me}
                   createNew
                   redirectTo="/portal/company"
+                />
+              </div>
+            )}
+            {orgAction === "attach" && (
+              <div style={{ marginTop: "1rem" }}>
+                <JoinCompanyPanel
+                  embedded
+                  title="Request membership in another company"
+                  description="Enter an approved company TIN. The owner must approve your join request. You keep membership in your other companies."
                 />
               </div>
             )}
@@ -241,86 +263,7 @@ export default function CompanyProfilePage() {
                 redirectTo="/portal/company"
               />
             ) : (
-              <div className="panel">
-                <h2>Join an existing company</h2>
-                <p className="muted">
-                  Enter the company TIN for an admin-approved company. The company owner
-                  must approve your membership before you join.
-                </p>
-                <div className="field">
-                  <label htmlFor="attach-tin">
-                    Company TIN <span aria-hidden="true">*</span>
-                  </label>
-                  <input
-                    id="attach-tin"
-                    value={tin}
-                    onChange={(e) => setTin(e.target.value)}
-                    placeholder="Registered TIN"
-                    required
-                    aria-required="true"
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="attach-note">Note to owner (optional)</label>
-                  <textarea
-                    id="attach-note"
-                    rows={3}
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    placeholder="Your role or reason for joining…"
-                  />
-                </div>
-                <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-                  <button
-                    type="button"
-                    className="btn-ghost"
-                    disabled={tin.trim().length < 5 || lookup.isFetching}
-                    onClick={() => {
-                      setLookupTin(tin.trim());
-                    }}
-                  >
-                    {lookup.isFetching ? "Looking up…" : "Lookup company"}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-primary"
-                    disabled={attach.isPending || tin.trim().length < 5}
-                    onClick={() =>
-                      void attach
-                        .mutateAsync({
-                          company_tin: tin.trim(),
-                          note,
-                        })
-                        .then(() => {
-                          void queryClient.invalidateQueries({
-                            queryKey: queryKeys.contact.me,
-                          });
-                        })
-                    }
-                  >
-                    {attach.isPending ? "Submitting…" : "Request membership"}
-                  </button>
-                </div>
-                {lookupTin && lookup.data && (
-                  <p style={{ marginTop: "1rem" }}>
-                    Found: <strong>{lookup.data.name}</strong> (TIN {lookup.data.tin})
-                  </p>
-                )}
-                {lookupTin && lookup.isError && (
-                  <div className="alert" style={{ marginTop: "1rem" }}>
-                    {lookup.error instanceof Error
-                      ? lookup.error.message
-                      : "Company not found"}
-                  </div>
-                )}
-                {attach.isError && (
-                  <div className="alert" style={{ marginTop: "1rem" }}>
-                    {attach.error instanceof Error
-                      ? attach.error.message
-                      : "Could not submit membership request"}
-                  </div>
-                )}
-              </div>
+              <JoinCompanyPanel />
             )}
           </>
         )}
@@ -458,23 +401,21 @@ export default function CompanyProfilePage() {
 
             {tab === "members" && canViewMembers && (
               <div
-                className="panel panel-flush"
                 role="tabpanel"
                 id="company-panel-members"
                 aria-labelledby="company-tab-members"
               >
-                <div id="company-members-panel">
-                  <div style={{ padding: "1.25rem 1.25rem 0.85rem" }}>
-                    <h2 style={{ marginTop: 0, marginBottom: "0.35rem" }}>
-                      Company members
-                    </h2>
-                    <p className="muted" style={{ marginBottom: 0 }}>
-                      Tabular roster of partners linked to this company. Use the Actions
-                      list on each row
-                      {isOwner
-                        ? " to enable or disable access and grant permissions."
-                        : " to view Fayda identity details."}
-                    </p>
+                <div id="company-members-panel" className="section section-flush">
+                  <div className="portal-hero portal-page-header" style={{ paddingBottom: "1rem" }}>
+                    <div className="portal-page-header-copy">
+                      <h2 style={{ margin: 0 }}>Company members</h2>
+                      <p className="muted" style={{ marginBottom: 0 }}>
+                        Roster of partners linked to this company. Use Actions on each row
+                        {isOwner
+                          ? " to enable or disable access and grant permissions."
+                          : " to view Fayda identity details."}
+                      </p>
+                    </div>
                   </div>
                   <CompanyMembersTable enabled={canViewMembers} />
                 </div>

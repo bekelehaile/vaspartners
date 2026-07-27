@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ReactNode, useState } from "react";
+import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { NotificationBell } from "@/components/NotificationBell";
 import { PortalSettingsMenu } from "@/components/PortalSettingsMenu";
 import { Contact, clearToken, faydaLoginUrl } from "@/lib/api";
@@ -34,6 +35,7 @@ const publicNav = [
 
 const portalNav = [
   { href: "/portal", label: "Service requests" },
+  { href: "/portal/subscriptions", label: "Subscriptions" },
   { href: "/portal/company-requests", label: "Company requests" },
   { href: "/portal/membership-requests", label: "Membership requests" },
   { href: "/portal/services", label: "Services" },
@@ -78,6 +80,7 @@ export function SiteShell({
                   </Link>
                 ))}
                 <div className="portal-header-actions">
+                  <CompanySwitcher me={me} variant="header" />
                   <PortalSettingsMenu />
                   {me.profile_completed && <NotificationBell />}
                   {onLogout && (
@@ -134,6 +137,7 @@ export function SiteShell({
                     </Link>
                   ))}
                   <div className="portal-header-actions portal-header-actions-mobile">
+                    <CompanySwitcher me={me} variant="header" />
                     <PortalSettingsMenu onNavigate={() => setOpen(false)} />
                     {me.profile_completed && <NotificationBell />}
                     {onLogout && (

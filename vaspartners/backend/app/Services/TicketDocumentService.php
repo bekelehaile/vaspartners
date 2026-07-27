@@ -52,7 +52,7 @@ class TicketDocumentService
 
     public function storeForContact(Ticket $ticket, Contact $contact, int $documentTypeId, UploadedFile $file): TicketDocument
     {
-        abort_unless($ticket->contact_id === $contact->id, 404);
+        // Caller must authorize company/ticket access (portal allows any active company member).
         $this->assertContactCanMutateDocuments($ticket);
 
         $documentType = $this->resolveAllowedDocumentType($ticket, $documentTypeId);
@@ -86,7 +86,7 @@ class TicketDocumentService
 
     public function deleteForContact(Ticket $ticket, TicketDocument $document, Contact $contact): void
     {
-        abort_unless($ticket->contact_id === $contact->id, 404);
+        // Caller must authorize company/ticket access (portal allows any active company member).
         abort_unless($document->ticket_id === $ticket->id, 404);
         $this->assertContactCanMutateDocuments($ticket);
 

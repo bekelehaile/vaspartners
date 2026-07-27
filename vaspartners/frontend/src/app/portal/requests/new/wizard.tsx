@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { PortalPageHeader } from "@/components/PortalPageHeader";
 import {
+  useContact,
   useCreateTicket,
   useDocumentRequirements,
   useServices,
@@ -14,6 +15,7 @@ import {
   uploadTicketDocumentFile,
 } from "@/hooks/use-contact";
 import type { Service, Subscription, Ticket } from "@/lib/api";
+import { contactCanCreateSubscriptions, contactCanManageServices } from "@/lib/company-permissions";
 import { documentsLockedStatus } from "@/lib/document-upload";
 import { ticketCreateSchema } from "@/lib/schemas/ticket";
 import { TicketDocumentsPanel } from "@/components/TicketDocumentsPanel";
@@ -72,15 +74,20 @@ function stepLabels(intent: Intent): string[] {
 export default function NewRequestWizard() {
   const params = useSearchParams();
   const presetService = params.get("service") || "";
+  const presetSubscription = params.get("subscription_id") || "";
   const presetIntentParam = params.get("intent");
   const presetIntent: Intent | "" =
     presetIntentParam === "subscribe" || presetIntentParam === "manage"
       ? presetIntentParam
       : "";
 
+  const { data: me, isLoading: meLoading } = useContact();
   const { data: services = [], isLoading: servicesLoading } = useServices();
   const { data: subscriptionData, isLoading: subsLoading } = useSubscriptions();
   const createTicket = useCreateTicket();
+  const canSubscribe = !me || contactCanCreateSubscriptions(me);
+  const canManageJourney = !me || contactCanManageServices(me);
+  const canCreate = canSubscribe || canManageJourney;
   const subscriptions = subscriptionData?.items ?? [];
   const pendingNewServiceIds = useMemo(
     () => new Set(subscriptionData?.pendingNewServiceIds ?? []),
@@ -320,7 +327,17 @@ export default function NewRequestWizard() {
     }
 
     if (presetIntent === "manage") {
-      if (presetService) {
+      if (presetSubscription) {
+        const sub = aliveSubs.find((s) => String(s.id) === presetSubscription);
+        if (sub) {
+          form.setFieldValue("subscription_id", String(sub.id));
+          form.setFieldValue(
+            "service_id",
+            String(sub.service?.id ?? sub.service_id ?? "")
+          );
+          setStep(1);
+        }
+      } else if (presetService) {
         const oneOff = manageOneOffServices.find((s) => String(s.id) === presetService);
         if (oneOff) {
           form.setFieldValue("service_id", String(oneOff.id));
@@ -363,6 +380,7 @@ export default function NewRequestWizard() {
   }, [
     presetIntent,
     presetService,
+    presetSubscription,
     ticket,
     servicesLoading,
     subsLoading,
@@ -427,6 +445,57 @@ export default function NewRequestWizard() {
         }
       />
 
+      {!meLoading && me && !canCreate ? (
+        <div className="section section-flush">
+          <div className="panel">
+            <p className="muted" style={{ marginBottom: 0 }}>
+              You do not have permission to start subscriptions or manage services for this
+              company. Ask the company owner to grant <strong>New VAS subscriptions</strong>{" "}
+              and/or <strong>Manage service</strong>, or open existing company requests from
+              the Service requests list.
+            </p>
+            <p style={{ marginTop: "1rem", marginBottom: 0 }}>
+              <Link href="/portal" className="btn-primary">
+                View company requests
+              </Link>{" "}
+              <Link href="/portal/subscriptions" className="btn-ghost">
+                View subscriptions
+              </Link>
+            </p>
+          </div>
+        </div>
+      ) : !meLoading &&
+        me &&
+        ((intent === "subscribe" && !canSubscribe) ||
+          (intent === "manage" && !canManageJourney)) ? (
+        <div className="section section-flush">
+          <div className="panel">
+            <p className="muted" style={{ marginBottom: 0 }}>
+              {intent === "subscribe" ? (
+                <>
+                  You do not have permission for <strong>New VAS subscriptions</strong>. Ask
+                  your company owner to grant it, or use Manage service if you have that
+                  access.
+                </>
+              ) : (
+                <>
+                  You do not have permission to <strong>Manage service</strong>. Ask your
+                  company owner to grant it, or start a new subscription if you have that
+                  access.
+                </>
+              )}
+            </p>
+            <p style={{ marginTop: "1rem", marginBottom: 0 }}>
+              <Link href="/portal/requests/new" className="btn-primary">
+                Choose another journey
+              </Link>{" "}
+              <Link href="/portal" className="btn-ghost">
+                Back to requests
+              </Link>
+            </p>
+          </div>
+        </div>
+      ) : (
       <div className="section section-flush form-section">
         {createTicket.isError && !isApproverMissingError(createTicket.error) && (
           <div className="alert" role="alert">
@@ -497,51 +566,55 @@ export default function NewRequestWizard() {
                   </p>
                 </div>
                 <div className="intent-grid">
-                  <button
-                    type="button"
-                    className="intent-card intent-card-subscribe"
-                    onClick={() => chooseIntent("subscribe")}
-                  >
-                    <span className="intent-kicker">Journey A</span>
-                    <strong>New subscription</strong>
-                    <p>
-                      First-time activation. You will only see services you can still
-                      subscribe to.
-                    </p>
-                    <span className="intent-cta">Continue →</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="intent-card intent-card-manage"
-                    onClick={() => chooseIntent("manage")}
-                    disabled={!subsLoading && !servicesLoading && !canManage}
-                  >
-                    <span className="intent-kicker">Journey B</span>
-                    <strong>Manage service</strong>
-                    <p>
-                      Changes on an active subscription, or requests for services that
-                      do not require a subscription.
-                    </p>
-                    {!subsLoading && !servicesLoading && !canManage ? (
-                      <span className="intent-cta muted">Nothing available to manage yet</span>
-                    ) : (
-                      <span className="intent-cta">
-                        {[
-                          aliveSubs.length
-                            ? `${aliveSubs.length} subscription${aliveSubs.length === 1 ? "" : "s"}`
-                            : null,
-                          manageOneOffServices.length
-                            ? `${manageOneOffServices.length} non-subscription`
-                            : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ") || "Continue"}
-                        {" · Continue →"}
-                      </span>
-                    )}
-                  </button>
+                  {canSubscribe && (
+                    <button
+                      type="button"
+                      className="intent-card intent-card-subscribe"
+                      onClick={() => chooseIntent("subscribe")}
+                    >
+                      <span className="intent-kicker">Journey A</span>
+                      <strong>New subscription</strong>
+                      <p>
+                        First-time activation. You will only see services you can still
+                        subscribe to.
+                      </p>
+                      <span className="intent-cta">Continue →</span>
+                    </button>
+                  )}
+                  {canManageJourney && (
+                    <button
+                      type="button"
+                      className="intent-card intent-card-manage"
+                      onClick={() => chooseIntent("manage")}
+                      disabled={!subsLoading && !servicesLoading && !canManage}
+                    >
+                      <span className="intent-kicker">Journey B</span>
+                      <strong>Manage service</strong>
+                      <p>
+                        Changes on an active subscription, or requests for services that
+                        do not require a subscription.
+                      </p>
+                      {!subsLoading && !servicesLoading && !canManage ? (
+                        <span className="intent-cta muted">Nothing available to manage yet</span>
+                      ) : (
+                        <span className="intent-cta">
+                          {[
+                            aliveSubs.length
+                              ? `${aliveSubs.length} subscription${aliveSubs.length === 1 ? "" : "s"}`
+                              : null,
+                            manageOneOffServices.length
+                              ? `${manageOneOffServices.length} non-subscription`
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ") || "Continue"}
+                          {" · Continue →"}
+                        </span>
+                      )}
+                    </button>
+                  )}
                 </div>
-                {!subsLoading && !servicesLoading && !canManage && (
+                {canSubscribe && !subsLoading && !servicesLoading && !canManage && (
                   <p className="journey-hint muted">
                     Tip: start with <strong>New subscription</strong> for subscription-based
                     products. Non-subscription services appear here under Manage.
@@ -1065,6 +1138,7 @@ export default function NewRequestWizard() {
           </div>
         )}
       </div>
+      )}
     </>
   );
 }
