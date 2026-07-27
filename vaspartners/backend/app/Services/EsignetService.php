@@ -142,9 +142,8 @@ class EsignetService
             return ['status' => 'error', 'message' => 'Missing phone number from Fayda.'];
         }
 
-        $digits = preg_replace('/\D/', '', (string) $rawPhone);
-        $phoneNumber = substr($digits, -9);
-        if (strlen($phoneNumber) < 9) {
+        $phoneNumber = \App\Support\PhoneNumber::normalize($rawPhone);
+        if (strlen($phoneNumber) < 9 || ! \App\Support\PhoneNumber::isValidLocalMobile($phoneNumber)) {
             return ['status' => 'error', 'message' => 'Invalid phone number from Fayda.'];
         }
 

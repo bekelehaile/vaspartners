@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Jobs\SendSmsJob;
+use App\Support\PhoneNumber;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -77,15 +78,14 @@ class SmsService
         );
     }
 
-    public function normalizePhone(string|int $phone): string
+    public function normalizePhone(string|int|null $phone): string
     {
-        $digits = preg_replace('/\D/', '', (string) $phone) ?? '';
-
-        return substr($digits, -9);
+        return PhoneNumber::normalize($phone);
     }
 
-    public function ensurePhoneIsLocal(string|int $phone): bool
+    public function ensurePhoneIsLocal(string|int|null $phone): bool
     {
-        return (bool) preg_match('/^(\+251|251|0)?(9|7)\d{8}$/', (string) $phone);
+        return PhoneNumber::isValidLocalMobile($phone)
+            || (bool) preg_match('/^(\+251|251|0)?(9|7)\d{8}$/', trim((string) $phone));
     }
 }

@@ -342,12 +342,12 @@ class TicketWorkflowService
             return false;
         }
 
-        $digits = preg_replace('/\D+/', '', (string) $contact->phone_number) ?? '';
+        $digits = \App\Support\PhoneNumber::normalize((string) $contact->phone_number);
         if ($digits === '') {
             return false;
         }
 
-        return in_array(substr($digits, -9), $exempt, true);
+        return in_array($digits, $exempt, true);
     }
 
     public function assign(Ticket $ticket, User $assigner, User $assignee, ?int $priorityId = null, ?string $note = null): Ticket

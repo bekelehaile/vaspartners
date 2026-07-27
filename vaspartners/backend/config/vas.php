@@ -7,11 +7,7 @@ return [
     'max_open_tickets' => (int) env('MAX_OPEN_TICKETS', 1),
     // Comma-separated last-9 phone digits that may exceed max_open_tickets (test accounts).
     'open_ticket_limit_exempt_phones' => array_values(array_filter(array_map(
-        static function (string $phone): string {
-            $digits = preg_replace('/\D+/', '', $phone) ?? '';
-
-            return $digits === '' ? '' : substr($digits, -9);
-        },
+        static fn (string $phone): string => \App\Support\PhoneNumber::normalize($phone),
         explode(',', (string) env('OPEN_TICKET_LIMIT_EXEMPT_PHONES', '')),
     ))),
     // Default when a subscription-based service has no interval set yet

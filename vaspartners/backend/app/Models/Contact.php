@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\CompanyRole;
+use App\Support\PhoneNumber;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -80,6 +81,20 @@ class Contact extends Authenticatable
     protected static function booted(): void
     {
         static::saving(function (Contact $contact): void {
+            if (array_key_exists('phone_number', $contact->getAttributes())
+                || $contact->isDirty('phone_number')) {
+                $contact->attributes['phone_number'] = PhoneNumber::normalizeNullable(
+                    $contact->attributes['phone_number'] ?? null,
+                );
+            }
+
+            if (array_key_exists('company_phone', $contact->getAttributes())
+                || $contact->isDirty('company_phone')) {
+                $contact->attributes['company_phone'] = PhoneNumber::normalizeNullable(
+                    $contact->attributes['company_phone'] ?? null,
+                );
+            }
+
             if ($contact->allowFaydaSync) {
                 return;
             }
@@ -97,6 +112,16 @@ class Contact extends Authenticatable
                 $contact->setAttribute($attribute, $contact->getOriginal($attribute));
             }
         });
+    }
+
+    public function setPhoneNumberAttribute(mixed $value): void
+    {
+        $this->attributes['phone_number'] = PhoneNumber::normalizeNullable($value);
+    }
+
+    public function setCompanyPhoneAttribute(mixed $value): void
+    {
+        $this->attributes['company_phone'] = PhoneNumber::normalizeNullable($value);
     }
 
     /**

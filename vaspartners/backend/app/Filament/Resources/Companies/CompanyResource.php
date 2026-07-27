@@ -73,7 +73,11 @@ class CompanyResource extends Resource
                 ->unique(ignoreRecord: true)
                 ->maxLength(64)
                 ->helperText('Must be unique across all companies. Partners cannot use services until this profile is approved.'),
-            TextInput::make('phone')->tel()->maxLength(32),
+            TextInput::make('phone')
+                ->tel()
+                ->maxLength(32)
+                ->helperText('Saved as last 9 digits.')
+                ->dehydrateStateUsing(fn (?string $state): ?string => \App\Support\PhoneNumber::normalizeNullable($state)),
             TextInput::make('email')->email()->maxLength(255),
             Textarea::make('address')->rows(3)->columnSpanFull(),
             Toggle::make('is_active')

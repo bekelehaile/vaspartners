@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\CompanyApprovalStatus;
 use App\Enums\CompanyRole;
+use App\Support\PhoneNumber;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
@@ -44,9 +45,22 @@ class Company extends Model
 
     protected static function booted(): void
     {
+        static::saving(function (Company $company): void {
+            if (array_key_exists('phone', $company->getAttributes()) || $company->isDirty('phone')) {
+                $company->attributes['phone'] = PhoneNumber::normalizeNullable(
+                    $company->attributes['phone'] ?? null,
+                );
+            }
+        });
+
         static::deleting(function (): bool {
             return false;
         });
+    }
+
+    public function setPhoneAttribute(mixed $value): void
+    {
+        $this->attributes['phone'] = PhoneNumber::normalizeNullable($value);
     }
 
     public function uniqueIds(): array

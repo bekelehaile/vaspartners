@@ -44,9 +44,9 @@ class CompanyMembershipService
             ]);
         }
 
-        $phone = trim((string) $contact->phone_number);
+        $phone = \App\Support\PhoneNumber::normalize((string) $contact->phone_number);
         $email = trim((string) $contact->email);
-        if ($phone === '') {
+        if ($phone === '' || ! \App\Support\PhoneNumber::isValidLocalMobile($phone)) {
             throw ValidationException::withMessages([
                 'company' => 'Your Fayda phone number is required to create a company. Sign in again with Fayda.',
             ]);
@@ -110,9 +110,9 @@ class CompanyMembershipService
             ]);
         }
 
-        $phone = trim((string) $contact->phone_number);
+        $phone = \App\Support\PhoneNumber::normalize((string) $contact->phone_number);
         $email = trim((string) $contact->email);
-        if ($phone === '') {
+        if ($phone === '' || ! \App\Support\PhoneNumber::isValidLocalMobile($phone)) {
             throw ValidationException::withMessages([
                 'company' => 'Your Fayda phone number is required to update a company. Sign in again with Fayda.',
             ]);
@@ -1173,8 +1173,8 @@ class CompanyMembershipService
             ]);
         }
 
-        $phone = app(SmsService::class)->normalizePhone((string) ($data['phone_number'] ?? ''));
-        if ($phone === '' || ! preg_match('/^\d{9}$/', $phone)) {
+        $phone = \App\Support\PhoneNumber::normalize((string) ($data['phone_number'] ?? ''));
+        if ($phone === '' || ! \App\Support\PhoneNumber::isValidLocalMobile($phone)) {
             throw ValidationException::withMessages([
                 'phone_number' => 'Enter a valid Ethiopian mobile number (last 9 digits).',
             ]);
@@ -1381,8 +1381,8 @@ class CompanyMembershipService
         }
 
         if (! $company) {
-            $last9 = app(SmsService::class)->normalizePhone((string) $contact->phone_number);
-            if ($last9 === '' || ! preg_match('/^\d{9}$/', $last9)) {
+            $last9 = \App\Support\PhoneNumber::normalize((string) $contact->phone_number);
+            if ($last9 === '' || ! \App\Support\PhoneNumber::isValidLocalMobile($last9)) {
                 return null;
             }
 

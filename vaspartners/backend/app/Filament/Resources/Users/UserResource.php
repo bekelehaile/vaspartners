@@ -58,7 +58,8 @@ class UserResource extends Resource
                 ->unique(ignoreRecord: true)
                 ->maxLength(32)
                 ->placeholder('e.g. 0912345678')
-                ->helperText('Used to sign in to admin.'),
+                ->helperText('Saved as last 9 digits (e.g. 912345678). Used to sign in to admin.')
+                ->dehydrateStateUsing(fn (?string $state): ?string => \App\Support\PhoneNumber::normalizeNullable($state)),
             Select::make('roles')
                 ->relationship(
                     name: 'roles',
