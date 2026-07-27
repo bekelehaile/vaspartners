@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\ContactPortalController;
 use App\Http\Controllers\Api\V1\FaydaAuthController;
+use App\Http\Controllers\Api\V1\FeedbackController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\WebsiteContentController;
 use Illuminate\Support\Facades\Route;
@@ -53,5 +54,8 @@ Route::prefix('v1')->group(function () {
         Route::post('tickets/{ticket}/comments', [ContactPortalController::class, 'comment']);
         Route::get('tickets/{ticket}/comments/{comment}/attachment', [ContactPortalController::class, 'downloadCommentAttachment']);
         Route::get('subscriptions', [ContactPortalController::class, 'subscriptions']);
+
+        Route::get('feedback', [FeedbackController::class, 'index']);
+        Route::post('feedback', [FeedbackController::class, 'store']);
     });
 });

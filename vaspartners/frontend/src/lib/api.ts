@@ -278,3 +278,26 @@ export const statusCopy: Record<
     tone: "tone-alert",
   },
 };
+
+export type PartnerFeedback = {
+  public_id: string;
+  year: number;
+  quarter: number;
+  label: string;
+  rating: number;
+  description: string;
+  company?: { public_id: string; name: string; tin?: string | null } | null;
+  submitted_at?: string | null;
+  created_at?: string | null;
+};
+
+export type FeedbackInbox = {
+  current: {
+    year: number;
+    quarter: number;
+    label: string;
+    feedback: PartnerFeedback | null;
+    can_submit: boolean;
+  };
+  items: PartnerFeedback[];
+};

@@ -8,7 +8,9 @@ import {
   Contact,
   DocumentRequirement,
   FaqItem,
+  FeedbackInbox,
   GalleryItem,
+  PartnerFeedback,
   Service,
   Subscription,
   Ticket,
@@ -948,4 +950,32 @@ export function useLogout() {
     queryClient.clear();
     router.replace("/");
   };
+}
+
+export function useFeedback() {
+  return useQuery({
+    queryKey: queryKeys.feedback,
+    enabled: !!getToken(),
+    queryFn: async () => {
+      const res = await api<{ data: FeedbackInbox }>("/feedback");
+      return res.data;
+    },
+  });
+}
+
+export function useSubmitFeedback() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (values: { rating: number; description: string }) => {
+      const res = await api<{ data: PartnerFeedback; message?: string }>("/feedback", {
+        method: "POST",
+        body: JSON.stringify(values),
+      });
+      return res;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.feedback });
+    },
+  });
 }

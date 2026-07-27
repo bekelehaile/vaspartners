@@ -7,6 +7,7 @@ import {
   Building2Icon,
   ClipboardListIcon,
   FileTextIcon,
+  MessageSquareIcon,
   PackageIcon,
   UserPlusIcon,
   UserRoundIcon,
@@ -40,6 +41,12 @@ const workspaceNav: NavItem[] = [
     label: "Subscriptions",
     icon: PackageIcon,
     match: (path) => path.startsWith("/portal/subscriptions"),
+  },
+  {
+    href: "/portal/feedback",
+    label: "Feedback",
+    icon: MessageSquareIcon,
+    match: (path) => path.startsWith("/portal/feedback"),
   },
 ];
 

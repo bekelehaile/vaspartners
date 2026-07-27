@@ -320,6 +320,11 @@ class Contact extends Authenticatable
         return $this->hasMany(CompanyChangeRequest::class);
     }
 
+    public function feedback(): HasMany
+    {
+        return $this->hasMany(Feedback::class);
+    }
+
     public function tickets(): HasMany
     {
         return $this->hasMany(Ticket::class);

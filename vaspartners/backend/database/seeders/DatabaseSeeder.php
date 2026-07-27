@@ -59,6 +59,7 @@ class DatabaseSeeder extends Seeder
         $this->call(BulkMessagePermissionsSeeder::class);
         $this->call(CompanyPermissionsSeeder::class);
         $this->call(TicketPermissionsSeeder::class);
+        $this->call(FeedbackPermissionsSeeder::class);
         $this->call(CatalogSeeder::class);
         $this->call(OptionalDocumentIfAnySeeder::class);
         $this->call(MvasStaffUsersSeeder::class);

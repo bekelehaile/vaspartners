@@ -56,7 +56,7 @@ function formatSubmitted(value?: string | null) {
 }
 
 export function RequestsTable({
-  initialPerPage = 15,
+  initialPerPage = 25,
   compact = false,
 }: {
   initialPerPage?: number;
@@ -344,7 +344,7 @@ export function RequestsTable({
         </Table>
       </CardContent>
 
-      {!compact && items.length > 0 && (
+      {!compact && items.length > 0 && total >= 10 && (
         <CardFooter className="justify-between gap-3 border-t bg-muted/30 py-3">
           <p className="text-sm text-muted-foreground">
             {`Page ${currentPage} of ${lastPage} · ${total} request${total === 1 ? "" : "s"}`}
