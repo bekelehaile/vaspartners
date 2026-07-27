@@ -249,14 +249,13 @@ export function useCompleteCompanyProfile() {
   });
 }
 
-export function useLookupCompany(tin: string, licenseNumber: string) {
+export function useLookupCompany(tin: string) {
   return useQuery({
-    queryKey: ["company-lookup", tin, licenseNumber],
-    enabled: tin.trim().length >= 5 && licenseNumber.trim().length >= 3,
+    queryKey: ["company-lookup", tin],
+    enabled: tin.trim().length >= 5,
     queryFn: async () => {
       const params = new URLSearchParams({
         tin: tin.trim(),
-        license_number: licenseNumber.trim(),
       });
       const res = await api<{
         data: { public_id: string; name: string; tin: string; license_number: string };
@@ -273,7 +272,6 @@ export function useAttachCompany() {
   return useMutation({
     mutationFn: async (payload: {
       company_tin: string;
-      company_license_number: string;
       note?: string;
     }) => {
       const res = await api<{ data: Contact }>("/profile/company/attach", {

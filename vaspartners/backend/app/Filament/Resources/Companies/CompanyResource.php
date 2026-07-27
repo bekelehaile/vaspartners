@@ -123,10 +123,10 @@ class CompanyResource extends Resource
                     ->state(fn (Company $record): ?string => $record->ownerContact()?->name)
                     ->placeholder('—')
                     ->color('success'),
-                TextEntry::make('legacy_mvas_client_id')
-                    ->label('Legacy MVAS client ID')
+                TextEntry::make('legacy_mvas_id')
+                    ->label('Legacy MVAS ID')
                     ->placeholder('—')
-                    ->visible(fn (Company $record): bool => filled($record->legacy_mvas_client_id)),
+                    ->visible(fn (Company $record): bool => filled($record->legacy_mvas_id)),
                 TextEntry::make('members_count')
                     ->label('Total people')
                     ->state(fn (Company $record): int => $record->memberCount()),

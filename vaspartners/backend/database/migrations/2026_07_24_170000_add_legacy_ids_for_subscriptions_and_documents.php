@@ -15,7 +15,7 @@ return new class extends Migration
         });
 
         Schema::table('subscriptions', function (Blueprint $table) {
-            $table->unsignedBigInteger('legacy_mvas_client_id')->nullable()->index();
+            $table->unsignedBigInteger('legacy_mvas_id')->nullable()->index();
             $table->unsignedBigInteger('legacy_mvas_service_id')->nullable()->index();
         });
     }
@@ -23,7 +23,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('subscriptions', function (Blueprint $table) {
-            $table->dropColumn(['legacy_mvas_client_id', 'legacy_mvas_service_id']);
+            $table->dropColumn(['legacy_mvas_id', 'legacy_mvas_service_id']);
         });
 
         Schema::table('ticket_documents', function (Blueprint $table) {

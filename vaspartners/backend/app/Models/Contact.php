@@ -48,7 +48,7 @@ class Contact extends Authenticatable
         'company_email',
         'company_address',
         'current_company_id',
-        'legacy_mvas_client_id',
+        'legacy_mvas_id',
         'is_active',
         'is_banned',
         'profile_completed_at',
@@ -186,8 +186,7 @@ class Contact extends Authenticatable
 
         return $this->profile_completed_at !== null
             && filled($this->company_name)
-            && filled($this->company_tin)
-            && filled($this->company_license_number);
+            && filled($this->company_tin);
     }
 
     /** Current company (portal tenant context). */

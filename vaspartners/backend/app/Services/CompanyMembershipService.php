@@ -31,8 +31,9 @@ class CompanyMembershipService
 
     /**
      * Create a company profile as owner — stays pending until admin verifies required info.
+     * Phone/email come from the partner's Fayda identity; license is derived from TIN.
      *
-     * @param  array{company_name: string, company_tin: string, company_license_number: string, company_phone: string, company_email: string, company_address: string}  $data
+     * @param  array{company_name: string, company_tin: string, company_address: string}  $data
      */
     public function createCompanyForContact(Contact $contact, array $data): Contact
     {
@@ -42,17 +43,25 @@ class CompanyMembershipService
             ]);
         }
 
+        $phone = trim((string) $contact->phone_number);
+        $email = trim((string) $contact->email);
+        if ($phone === '') {
+            throw ValidationException::withMessages([
+                'company' => 'Your Fayda phone number is required to create a company. Sign in again with Fayda.',
+            ]);
+        }
+
         $tin = $this->normalizeCode($data['company_tin']);
-        $license = $this->normalizeCode($data['company_license_number']);
+        $license = $this->licenseFromTin($tin);
         $this->assertUniqueIdentity($tin, $license);
 
-        return DB::transaction(function () use ($contact, $data, $tin, $license) {
+        return DB::transaction(function () use ($contact, $data, $tin, $license, $phone, $email) {
             $company = Company::query()->create([
                 'name' => trim($data['company_name']),
                 'tin' => $tin,
                 'license_number' => $license,
-                'phone' => trim($data['company_phone']),
-                'email' => trim($data['company_email']),
+                'phone' => $phone,
+                'email' => $email !== '' ? $email : null,
                 'address' => trim($data['company_address']),
                 'is_active' => false,
                 'approval_status' => CompanyApprovalStatus::Pending,
@@ -71,7 +80,7 @@ class CompanyMembershipService
      * Owner may edit company details only while awaiting (or after) admin rejection.
      * Once approved, only admin can update or remove company data in Filament.
      *
-     * @param  array{company_name: string, company_tin: string, company_license_number: string, company_phone: string, company_email: string, company_address: string}  $data
+     * @param  array{company_name: string, company_tin: string, company_address: string}  $data
      */
     public function updateOwnCompany(Contact $contact, array $data): Contact
     {
@@ -102,17 +111,25 @@ class CompanyMembershipService
             ]);
         }
 
+        $phone = trim((string) $contact->phone_number);
+        $email = trim((string) $contact->email);
+        if ($phone === '') {
+            throw ValidationException::withMessages([
+                'company' => 'Your Fayda phone number is required to update a company. Sign in again with Fayda.',
+            ]);
+        }
+
         $tin = $this->normalizeCode($data['company_tin']);
-        $license = $this->normalizeCode($data['company_license_number']);
+        $license = $this->licenseFromTin($tin);
         $this->assertUniqueIdentity($tin, $license, $company->id);
 
-        return DB::transaction(function () use ($contact, $company, $data, $tin, $license) {
+        return DB::transaction(function () use ($contact, $company, $data, $tin, $license, $phone, $email) {
             $company->fill([
                 'name' => trim($data['company_name']),
                 'tin' => $tin,
                 'license_number' => $license,
-                'phone' => trim($data['company_phone']),
-                'email' => trim($data['company_email']),
+                'phone' => $phone,
+                'email' => $email !== '' ? $email : null,
                 'address' => trim($data['company_address']),
                 'approval_status' => CompanyApprovalStatus::Pending,
                 'approval_note' => null,
@@ -203,17 +220,15 @@ class CompanyMembershipService
         return $fresh;
     }
 
-    public function lookupByIdentity(string $tin, string $licenseNumber): ?Company
+    public function lookupByIdentity(string $tin): ?Company
     {
         $tin = $this->normalizeCode($tin);
-        $license = $this->normalizeCode($licenseNumber);
-        if ($tin === '' || $license === '') {
+        if ($tin === '') {
             return null;
         }
 
         return Company::query()
             ->where('tin', $tin)
-            ->where('license_number', $license)
             ->where('is_active', true)
             ->where('approval_status', CompanyApprovalStatus::Approved)
             ->first();
@@ -222,18 +237,12 @@ class CompanyMembershipService
     /** @deprecated Use lookupByIdentity */
     public function lookupByTin(string $tin): ?Company
     {
-        $tin = $this->normalizeCode($tin);
-        if ($tin === '') {
-            return null;
-        }
-
-        return Company::query()->where('tin', $tin)->where('is_active', true)->first();
+        return $this->lookupByIdentity($tin);
     }
 
     public function requestAttach(
         Contact $contact,
         string $tin,
-        string $licenseNumber,
         ?string $note = null,
     ): CompanyChangeRequest {
         if ($this->pendingRequestFor($contact)) {
@@ -242,10 +251,10 @@ class CompanyMembershipService
             ]);
         }
 
-        $company = $this->lookupByIdentity($tin, $licenseNumber);
+        $company = $this->lookupByIdentity($tin);
         if (! $company) {
             throw ValidationException::withMessages([
-                'company_tin' => 'No active company found for this TIN and license number. Create a new company instead.',
+                'company_tin' => 'No active approved company found for this TIN. Create a new company instead.',
             ]);
         }
 
@@ -743,7 +752,7 @@ class CompanyMembershipService
             && $direction === 'to_review'
             && $status === CompanyChangeStatus::Pending->value
             && $type === CompanyChangeType::Attach->value
-            && $this->customerOwnsCompany($viewer, (int) $request->company_id);
+            && $this->contactOwnsCompany($viewer, (int) $request->company_id);
 
         $canCancel = $viewer
             && $direction === 'submitted'
@@ -824,7 +833,7 @@ class CompanyMembershipService
         ];
     }
 
-    protected function customerOwnsCompany(Contact $contact, int $companyId): bool
+    protected function contactOwnsCompany(Contact $contact, int $companyId): bool
     {
         return CompanyMembership::query()
             ->where('contact_id', $contact->id)
@@ -836,7 +845,7 @@ class CompanyMembershipService
 
     protected function assertOwnerMayReview(Contact $owner, CompanyChangeRequest $request): void
     {
-        if (! $this->customerOwnsCompany($owner, (int) $request->company_id)) {
+        if (! $this->contactOwnsCompany($owner, (int) $request->company_id)) {
             throw ValidationException::withMessages([
                 'status' => 'Only the company owner can decide this membership request.',
             ]);
@@ -929,7 +938,7 @@ class CompanyMembershipService
 
     /**
      * After Fayda login: claim exactly one ownerless approved company for this partner.
-     * Prefer legacy_mvas_client_id match (migrated dump), else unique phone last-9 match.
+     * Prefer legacy_mvas_id match (migrated dump), else unique phone last-9 match.
      * Orphan / ambiguous companies stay ownerless for admin Assign owner.
      */
     public function tryAutoClaimMigratedCompanyByPhone(Contact $contact): ?Company
@@ -940,9 +949,9 @@ class CompanyMembershipService
 
         $company = null;
 
-        if (filled($contact->legacy_mvas_client_id)) {
+        if (filled($contact->legacy_mvas_id)) {
             $company = Company::query()
-                ->where('legacy_mvas_client_id', $contact->legacy_mvas_client_id)
+                ->where('legacy_mvas_id', $contact->legacy_mvas_id)
                 ->where('is_active', true)
                 ->where('approval_status', CompanyApprovalStatus::Approved->value)
                 ->whereDoesntHave('memberships', function ($query) {
@@ -1003,7 +1012,7 @@ class CompanyMembershipService
             Log::info('Fayda auto-claimed migrated company', [
                 'contact_id' => $contact->id,
                 'company_id' => $company->id,
-                'legacy_mvas_client_id' => $company->legacy_mvas_client_id,
+                'legacy_mvas_id' => $company->legacy_mvas_id,
                 'company_tin' => $company->tin,
             ]);
 
@@ -1413,15 +1422,21 @@ class CompanyMembershipService
 
         if ($tinQuery->exists()) {
             throw ValidationException::withMessages([
-                'company_tin' => 'This TIN is already registered to another company. TINs are unique — use “Join existing company” with the matching license number, or contact an administrator.',
+                'company_tin' => 'This TIN is already registered to another company. TINs are unique — use “Join existing company”, or contact an administrator.',
             ]);
         }
 
         if ($licenseQuery->exists()) {
             throw ValidationException::withMessages([
-                'company_license_number' => 'This license number is already registered to another company. Use “Join existing company” with the matching TIN, or contact an administrator.',
+                'company_tin' => 'This TIN cannot be registered (identity conflict). Contact an administrator.',
             ]);
         }
+    }
+
+    /** Portal no longer collects license — keep DB unique/not-null via TIN-derived value. */
+    protected function licenseFromTin(string $tin): string
+    {
+        return $this->normalizeCode('TIN-'.$tin);
     }
 
     /** @return array{disk: string, path: string, original_name: string, size: int} */

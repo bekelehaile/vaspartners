@@ -41,6 +41,7 @@ class FinalApproversRelationManager extends RelationManager
                 \Filament\Actions\CreateAction::make(),
             ])
             ->recordActions([
+                \Filament\Actions\EditAction::make(),
                 \Filament\Actions\DeleteAction::make(),
             ]);
     }

@@ -33,11 +33,9 @@ export default function CompanyProfilePage() {
   const pending = me?.pending_company_request;
   const [mode, setMode] = useState<"create" | "attach">("create");
   const [tin, setTin] = useState("");
-  const [license, setLicense] = useState("");
   const [note, setNote] = useState("");
   const [lookupTin, setLookupTin] = useState("");
-  const [lookupLicense, setLookupLicense] = useState("");
-  const lookup = useLookupCompany(lookupTin, lookupLicense);
+  const lookup = useLookupCompany(lookupTin);
   const attach = useAttachCompany();
   const detach = useDetachCompany();
   const transfer = useTransferOwnership();
@@ -92,7 +90,7 @@ export default function CompanyProfilePage() {
                 ? `Three sections: your Fayda identity, the company profile for ${me?.company_name || me?.company?.name || "this organisation"}, and members whose details come from Fayda.`
                 : pending
                   ? `Your ${pending.type} request for ${pending.company?.name || "a company"} is waiting for ${waitingFor} approval. VAS services stay locked until the company TIN is approved.`
-                  : `Hello${me?.name ? `, ${me.name.split(" ")[0]}` : ""}. Create a new company with a unique TIN + license for admin approval, or request to join an existing approved company. You cannot use VAS services until that TIN is approved.`
+                  : `Hello${me?.name ? `, ${me.name.split(" ")[0]}` : ""}. Create a new company with a unique TIN for admin approval, or request to join an existing approved company. You cannot use VAS services until that TIN is approved.`
         }
       />
 
@@ -179,25 +177,20 @@ export default function CompanyProfilePage() {
               <div className="panel">
                 <h2>Join an existing company</h2>
                 <p className="muted">
-                  Enter the company TIN and license number for an admin-approved company. The
-                  company owner must approve your membership before you join.
+                  Enter the company TIN for an admin-approved company. The company owner
+                  must approve your membership before you join.
                 </p>
                 <div className="field">
-                  <label htmlFor="attach-tin">Company TIN</label>
+                  <label htmlFor="attach-tin">
+                    Company TIN <span aria-hidden="true">*</span>
+                  </label>
                   <input
                     id="attach-tin"
                     value={tin}
                     onChange={(e) => setTin(e.target.value)}
                     placeholder="Registered TIN"
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="attach-license">License number</label>
-                  <input
-                    id="attach-license"
-                    value={license}
-                    onChange={(e) => setLicense(e.target.value)}
-                    placeholder="Business / trade license number"
+                    required
+                    aria-required="true"
                   />
                 </div>
                 <div className="field">
@@ -214,14 +207,9 @@ export default function CompanyProfilePage() {
                   <button
                     type="button"
                     className="btn-ghost"
-                    disabled={
-                      tin.trim().length < 5 ||
-                      license.trim().length < 3 ||
-                      lookup.isFetching
-                    }
+                    disabled={tin.trim().length < 5 || lookup.isFetching}
                     onClick={() => {
                       setLookupTin(tin.trim());
-                      setLookupLicense(license.trim());
                     }}
                   >
                     {lookup.isFetching ? "Looking up…" : "Lookup company"}
@@ -229,16 +217,11 @@ export default function CompanyProfilePage() {
                   <button
                     type="button"
                     className="btn-primary"
-                    disabled={
-                      attach.isPending ||
-                      tin.trim().length < 5 ||
-                      license.trim().length < 3
-                    }
+                    disabled={attach.isPending || tin.trim().length < 5}
                     onClick={() =>
                       void attach
                         .mutateAsync({
                           company_tin: tin.trim(),
-                          company_license_number: license.trim(),
                           note,
                         })
                         .then(() => {
@@ -251,13 +234,12 @@ export default function CompanyProfilePage() {
                     {attach.isPending ? "Submitting…" : "Request membership"}
                   </button>
                 </div>
-                {lookupTin && lookupLicense && lookup.data && (
+                {lookupTin && lookup.data && (
                   <p style={{ marginTop: "1rem" }}>
-                    Found: <strong>{lookup.data.name}</strong> (TIN {lookup.data.tin} ·
-                    License {lookup.data.license_number})
+                    Found: <strong>{lookup.data.name}</strong> (TIN {lookup.data.tin})
                   </p>
                 )}
-                {lookupTin && lookupLicense && lookup.isError && (
+                {lookupTin && lookup.isError && (
                   <div className="alert" style={{ marginTop: "1rem" }}>
                     {lookup.error instanceof Error
                       ? lookup.error.message
@@ -339,22 +321,8 @@ export default function CompanyProfilePage() {
                     <dd>{me?.company_tin || me?.company?.tin || "—"}</dd>
                   </div>
                   <div>
-                    <dt>License number</dt>
-                    <dd>
-                      {me?.company_license_number || me?.company?.license_number || "—"}
-                    </dd>
-                  </div>
-                  <div>
                     <dt>Approval</dt>
                     <dd>{me?.company?.approval_status || "approved"}</dd>
-                  </div>
-                  <div>
-                    <dt>Company phone</dt>
-                    <dd>{me?.company_phone || me?.company?.phone || "—"}</dd>
-                  </div>
-                  <div>
-                    <dt>Company email</dt>
-                    <dd>{me?.company_email || me?.company?.email || "—"}</dd>
                   </div>
                   <div style={{ gridColumn: "1 / -1" }}>
                     <dt>Address</dt>

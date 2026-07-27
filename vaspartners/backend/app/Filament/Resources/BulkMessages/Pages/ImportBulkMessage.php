@@ -38,12 +38,14 @@ class ImportBulkMessage extends Page
 
     public function mount(): void
     {
-        $this->form->fill();
+        $this->form->fill([
+            'message' => BulkMessageService::DEFAULT_MESSAGE,
+        ]);
     }
 
     public function getSubheading(): ?string
     {
-        return 'Special-case list: upload phones (CSV/Excel). Matching runs on the queue; company details come from the database. For event SMS by service/type, use Companies.';
+        return 'Upload phones + revenue fields (CSV/Excel). Company is matched by phone; SMS uses the template placeholders below.';
     }
 
     protected function getHeaderActions(): array
@@ -72,22 +74,23 @@ class ImportBulkMessage extends Page
         return $schema
             ->components([
                 Section::make('Message')
-                    ->description('This SMS is sent to each matched company mobile number.')
+                    ->description('Template format: Dear {company_name}, your {period}, {service_type} revenue with Service ID {service_id} is ETB {amount}. Please provide the request letter with amount and ref number. Thank You Ethio Telecom')
                     ->schema([
                         TextInput::make('title')
                             ->label('Title')
                             ->required()
                             ->maxLength(160)
-                            ->placeholder('e.g. July partner announcement'),
+                            ->placeholder('e.g. June 2026 revenue collection'),
                         Textarea::make('message')
                             ->label('SMS body')
                             ->required()
                             ->rows(6)
                             ->maxLength(640)
-                            ->helperText('Max 640 characters.'),
+                            ->default(BulkMessageService::DEFAULT_MESSAGE)
+                            ->helperText('Placeholders: {company_name} {period} {service_type} {service_id} {amount}. Sample: Dear Teleport Technology PLC, your June 2026, API revenue with Service ID 1000000002 is ETB 10,000. Please provide the request letter with amount and ref number. Thank You Ethio Telecom'),
                     ]),
                 Section::make('Import recipients')
-                    ->description('One column is enough: phone (last 9 digits). Name and TIN are filled from the matched company.')
+                    ->description('Columns: phone (required), period, service_type, service_id, amount. Company name/TIN come from the matched company.')
                     ->schema([
                         FileUpload::make('spreadsheet')
                             ->label('Excel / CSV file')
@@ -101,7 +104,7 @@ class ImportBulkMessage extends Page
                             ->directory('bulk-messages/imports')
                             ->visibility('private')
                             ->required()
-                            ->helperText('Download the template if needed — only the phone column is used.'),
+                            ->helperText('Download the template for the expected headers.'),
                     ]),
             ])
             ->statePath('data');

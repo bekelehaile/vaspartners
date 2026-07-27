@@ -23,6 +23,9 @@ use Throwable;
 
 class BulkMessageService
 {
+    /** Default revenue-collection SMS body (placeholders filled per spreadsheet row). */
+    public const DEFAULT_MESSAGE = 'Dear {company_name}, your {period}, {service_type} revenue with Service ID {service_id} is ETB {amount}. Please provide the request letter with amount and ref number. Thank You Ethio Telecom';
+
     public function __construct(
         private readonly SmsService $sms,
     ) {}
@@ -30,8 +33,14 @@ class BulkMessageService
     /**
      * Create a campaign from an Excel/CSV upload and build recipient rows.
      *
-     * Spreadsheet needs a phone column only (header: phone / mobile / company_phone).
-     * Company name, TIN, and send number are loaded from the matched company record.
+     * Spreadsheet columns:
+     * - phone (required) — last 9 digits; company matched from DB
+     * - period — e.g. June 2026
+     * - service_type — e.g. API
+     * - service_id
+     * - amount — e.g. 10,000
+     *
+     * Message may use {company_name}, {period}, {service_type}, {service_id}, {amount}.
      */
     public function createFromUpload(User $actor, string $title, string $message, UploadedFile $file): BulkMessage
     {
@@ -294,8 +303,10 @@ class BulkMessageService
 
         $recipient->forceFill(['attempts' => $recipient->attempts + 1])->save();
 
+        $body = $this->renderMessage($campaign->message, $recipient);
+
         try {
-            $ok = $this->sms->sendNow($phone, $campaign->message);
+            $ok = $this->sms->sendNow($phone, $body);
             if (! $ok) {
                 $recipient->forceFill([
                     'status' => BulkMessageRecipientStatus::Failed,
@@ -344,7 +355,29 @@ class BulkMessageService
             return (string) file_get_contents($path);
         }
 
-        return "phone\n930011756\n911223344\n912345678\n";
+        return "phone,period,service_type,service_id,amount\n911223344,June 2026,API,1000000002,\"10,000\"\n";
+    }
+
+    /**
+     * Fill {placeholders} from recipient company + spreadsheet variables.
+     */
+    public function renderMessage(string $template, BulkMessageRecipient $recipient): string
+    {
+        $vars = is_array($recipient->variables) ? $recipient->variables : [];
+        $placeholders = [
+            'company_name' => (string) ($recipient->company_name ?: ($vars['company_name'] ?? 'Partner')),
+            'period' => (string) ($vars['period'] ?? ''),
+            'service_type' => (string) ($vars['service_type'] ?? ''),
+            'service_id' => (string) ($vars['service_id'] ?? ''),
+            'amount' => (string) ($vars['amount'] ?? ''),
+        ];
+
+        $body = $template;
+        foreach ($placeholders as $key => $value) {
+            $body = str_replace('{'.$key.'}', $value, $body);
+        }
+
+        return trim(preg_replace('/[ \t]+/', ' ', $body) ?? $body);
     }
 
     /**
@@ -409,6 +442,11 @@ class BulkMessageService
             $key = Str::of($label)->lower()->replaceMatches('/[^a-z0-9]+/', '_')->trim('_')->toString();
             $alias = match ($key) {
                 'phone', 'mobile', 'msisdn', 'company_phone', 'tel', 'telephone' => 'phone',
+                'period', 'month', 'month_year', 'mm_yy', 'billing_period' => 'period',
+                'service_type', 'service', 'type' => 'service_type',
+                'service_id', 'serviceid', 'sid' => 'service_id',
+                'amount', 'revenue', 'etb', 'revenue_amount' => 'amount',
+                'company_name', 'company', 'name' => 'company_name',
                 default => null,
             };
             if ($alias !== null && ! isset($map[$alias])) {
@@ -428,11 +466,18 @@ class BulkMessageService
     /**
      * @param  array<string, int>  $headers
      * @param  list<string>  $values
-     * @return array{phone:?string}
+     * @return array{phone:?string, period:?string, service_type:?string, service_id:?string, amount:?string, company_name:?string}
      */
     protected function mapAssoc(array $headers, array $values): array
     {
-        $out = ['phone' => null];
+        $out = [
+            'phone' => null,
+            'period' => null,
+            'service_type' => null,
+            'service_id' => null,
+            'amount' => null,
+            'company_name' => null,
+        ];
         foreach ($headers as $field => $index) {
             $out[$field] = $values[$index] ?? null;
         }
@@ -456,15 +501,20 @@ class BulkMessageService
 
     /**
      * Match company by phone (last 9 digits). Name, TIN, and send number come from DB.
+     * Spreadsheet period / service_type / service_id / amount are stored for message placeholders.
      *
-     * @param  array{phone:?string}  $row
-     * @param  array<string, true>  $seenPhones
+     * @param  array{phone:?string, period:?string, service_type:?string, service_id:?string, amount:?string, company_name:?string}  $row
+     * @param  array<string, true>  $seenKeys
      * @return array<string, mixed>|null
      */
-    protected function mapRowToRecipient(BulkMessage $campaign, array $row, int $rowNumber, array &$seenPhones): ?array
+    protected function mapRowToRecipient(BulkMessage $campaign, array $row, int $rowNumber, array &$seenKeys): ?array
     {
         $phoneRaw = filled($row['phone'] ?? null) ? trim((string) $row['phone']) : null;
         $normalizedFromFile = $phoneRaw !== null ? $this->sms->normalizePhone($phoneRaw) : '';
+        $variables = $this->rowVariables($row);
+        $dedupeKey = $normalizedFromFile.'|'
+            .($variables['service_id'] ?? '').'|'
+            .($variables['period'] ?? '');
 
         if ($normalizedFromFile === '' || strlen($normalizedFromFile) !== 9) {
             return [
@@ -472,28 +522,30 @@ class BulkMessageService
                 'company_id' => null,
                 'phone_raw' => $phoneRaw,
                 'phone_normalized' => $normalizedFromFile ?: null,
-                'company_name' => null,
+                'company_name' => $variables['company_name'] ?? null,
                 'company_tin' => null,
+                'variables' => $variables,
                 'row_number' => $rowNumber,
                 'status' => BulkMessageRecipientStatus::Skipped,
                 'error' => 'Invalid phone (need last 9 digits: 9xxxxxxxx / 7xxxxxxxx).',
             ];
         }
 
-        if (isset($seenPhones[$normalizedFromFile])) {
+        if (isset($seenKeys[$dedupeKey])) {
             return [
                 'campaign_id' => $campaign->id,
                 'company_id' => null,
                 'phone_raw' => $phoneRaw,
                 'phone_normalized' => $normalizedFromFile,
-                'company_name' => null,
+                'company_name' => $variables['company_name'] ?? null,
                 'company_tin' => null,
+                'variables' => $variables,
                 'row_number' => $rowNumber,
                 'status' => BulkMessageRecipientStatus::Skipped,
-                'error' => 'Duplicate phone in this upload.',
+                'error' => 'Duplicate phone + service + period in this upload.',
             ];
         }
-        $seenPhones[$normalizedFromFile] = true;
+        $seenKeys[$dedupeKey] = true;
 
         if (! preg_match('/^(9|7)\d{8}$/', $normalizedFromFile) || ! $this->sms->ensurePhoneIsLocal($normalizedFromFile)) {
             return [
@@ -501,8 +553,9 @@ class BulkMessageService
                 'company_id' => null,
                 'phone_raw' => $phoneRaw,
                 'phone_normalized' => $normalizedFromFile,
-                'company_name' => null,
+                'company_name' => $variables['company_name'] ?? null,
                 'company_tin' => null,
+                'variables' => $variables,
                 'row_number' => $rowNumber,
                 'status' => BulkMessageRecipientStatus::Skipped,
                 'error' => 'Phone is not a local Ethio telecom mobile.',
@@ -516,8 +569,9 @@ class BulkMessageService
                 'company_id' => null,
                 'phone_raw' => $phoneRaw,
                 'phone_normalized' => $normalizedFromFile,
-                'company_name' => null,
+                'company_name' => $variables['company_name'] ?? null,
                 'company_tin' => null,
+                'variables' => $variables,
                 'row_number' => $rowNumber,
                 'status' => BulkMessageRecipientStatus::Skipped,
                 'error' => 'No company matched for this phone.',
@@ -538,6 +592,7 @@ class BulkMessageService
                 'phone_normalized' => $sendPhone ?: null,
                 'company_name' => $company->name,
                 'company_tin' => $company->tin,
+                'variables' => $variables,
                 'row_number' => $rowNumber,
                 'status' => BulkMessageRecipientStatus::Skipped,
                 'error' => 'Matched company has no usable mobile on file.',
@@ -551,10 +606,28 @@ class BulkMessageService
             'phone_normalized' => $sendPhone,
             'company_name' => $company->name,
             'company_tin' => $company->tin,
+            'variables' => $variables,
             'row_number' => $rowNumber,
             'status' => BulkMessageRecipientStatus::Pending,
             'error' => null,
         ];
+    }
+
+    /**
+     * @param  array{phone:?string, period:?string, service_type:?string, service_id:?string, amount:?string, company_name:?string}  $row
+     * @return array<string, string>
+     */
+    protected function rowVariables(array $row): array
+    {
+        $out = [];
+        foreach (['period', 'service_type', 'service_id', 'amount', 'company_name'] as $key) {
+            $value = trim((string) ($row[$key] ?? ''));
+            if ($value !== '') {
+                $out[$key] = $value;
+            }
+        }
+
+        return $out;
     }
 
     protected function findCompanyByLastNine(string $lastNine): ?Company

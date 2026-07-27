@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\Api\V1\ClientPortalController;
+use App\Http\Controllers\Api\V1\ContactPortalController;
 use App\Http\Controllers\Api\V1\FaydaAuthController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\WebsiteContentController;
@@ -10,8 +10,8 @@ Route::prefix('v1')->group(function () {
     Route::get('auth/fayda/redirect', [FaydaAuthController::class, 'redirect']);
     Route::get('auth/fayda/callback', [FaydaAuthController::class, 'callback']);
 
-    Route::get('services', [ClientPortalController::class, 'services']);
-    Route::get('document-requirements', [ClientPortalController::class, 'documentRequirements']);
+    Route::get('services', [ContactPortalController::class, 'services']);
+    Route::get('document-requirements', [ContactPortalController::class, 'documentRequirements']);
     Route::get('faqs', [WebsiteContentController::class, 'faqs']);
     Route::get('blog-posts', [WebsiteContentController::class, 'blogPosts']);
     Route::get('blog-posts/{slug}', [WebsiteContentController::class, 'blogPost']);
@@ -20,31 +20,31 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('auth/me', [FaydaAuthController::class, 'me']);
         Route::post('auth/logout', [FaydaAuthController::class, 'logout']);
-        Route::post('profile/company', [ClientPortalController::class, 'completeCompanyProfile']);
-        Route::get('profile/company/lookup', [ClientPortalController::class, 'lookupCompany']);
-        Route::post('profile/company/attach', [ClientPortalController::class, 'requestAttachCompany']);
-        Route::post('profile/company/detach', [ClientPortalController::class, 'requestDetachCompany']);
-        Route::post('profile/company/switch', [ClientPortalController::class, 'switchCompany']);
-        Route::get('profile/company/members', [ClientPortalController::class, 'companyMembers']);
-        Route::post('profile/company/transfer-ownership', [ClientPortalController::class, 'requestTransferOwnership']);
-        Route::get('profile/company/membership-requests', [ClientPortalController::class, 'membershipRequests']);
-        Route::get('profile/company/requests', [ClientPortalController::class, 'companyRequestsInbox']);
-        Route::post('profile/company/requests/{changeRequest}/cancel', [ClientPortalController::class, 'cancelCompanyRequest']);
-        Route::post('profile/company/membership-requests/{changeRequest}/approve', [ClientPortalController::class, 'approveMembershipRequest']);
-        Route::post('profile/company/membership-requests/{changeRequest}/reject', [ClientPortalController::class, 'rejectMembershipRequest']);
+        Route::post('profile/company', [ContactPortalController::class, 'completeCompanyProfile']);
+        Route::get('profile/company/lookup', [ContactPortalController::class, 'lookupCompany']);
+        Route::post('profile/company/attach', [ContactPortalController::class, 'requestAttachCompany']);
+        Route::post('profile/company/detach', [ContactPortalController::class, 'requestDetachCompany']);
+        Route::post('profile/company/switch', [ContactPortalController::class, 'switchCompany']);
+        Route::get('profile/company/members', [ContactPortalController::class, 'companyMembers']);
+        Route::post('profile/company/transfer-ownership', [ContactPortalController::class, 'requestTransferOwnership']);
+        Route::get('profile/company/membership-requests', [ContactPortalController::class, 'membershipRequests']);
+        Route::get('profile/company/requests', [ContactPortalController::class, 'companyRequestsInbox']);
+        Route::post('profile/company/requests/{changeRequest}/cancel', [ContactPortalController::class, 'cancelCompanyRequest']);
+        Route::post('profile/company/membership-requests/{changeRequest}/approve', [ContactPortalController::class, 'approveMembershipRequest']);
+        Route::post('profile/company/membership-requests/{changeRequest}/reject', [ContactPortalController::class, 'rejectMembershipRequest']);
 
         Route::get('notifications', [NotificationController::class, 'index']);
         Route::post('notifications/read-all', [NotificationController::class, 'markAllRead']);
         Route::post('notifications/{id}/read', [NotificationController::class, 'markRead']);
 
-        Route::get('tickets', [ClientPortalController::class, 'tickets']);
-        Route::post('tickets', [ClientPortalController::class, 'storeTicket']);
-        Route::get('tickets/{ticket}', [ClientPortalController::class, 'showTicket']);
-        Route::get('tickets/{ticket}/messages', [ClientPortalController::class, 'ticketMessages']);
-        Route::post('tickets/{ticket}/documents', [ClientPortalController::class, 'uploadDocument']);
-        Route::delete('tickets/{ticket}/documents/{document}', [ClientPortalController::class, 'deleteDocument']);
-        Route::post('tickets/{ticket}/comments', [ClientPortalController::class, 'comment']);
-        Route::get('tickets/{ticket}/comments/{comment}/attachment', [ClientPortalController::class, 'downloadCommentAttachment']);
-        Route::get('subscriptions', [ClientPortalController::class, 'subscriptions']);
+        Route::get('tickets', [ContactPortalController::class, 'tickets']);
+        Route::post('tickets', [ContactPortalController::class, 'storeTicket']);
+        Route::get('tickets/{ticket}', [ContactPortalController::class, 'showTicket']);
+        Route::get('tickets/{ticket}/messages', [ContactPortalController::class, 'ticketMessages']);
+        Route::post('tickets/{ticket}/documents', [ContactPortalController::class, 'uploadDocument']);
+        Route::delete('tickets/{ticket}/documents/{document}', [ContactPortalController::class, 'deleteDocument']);
+        Route::post('tickets/{ticket}/comments', [ContactPortalController::class, 'comment']);
+        Route::get('tickets/{ticket}/comments/{comment}/attachment', [ContactPortalController::class, 'downloadCommentAttachment']);
+        Route::get('subscriptions', [ContactPortalController::class, 'subscriptions']);
     });
 });

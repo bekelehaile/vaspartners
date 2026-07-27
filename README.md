@@ -14,15 +14,15 @@ Layout (same as `mvasportal`):
 
 | Layer | Stack | Path |
 |-------|--------|------|
-| Customer portal | Next.js 15 | `vaspartners/frontend/` |
+| Partner portal | Next.js 15 | `vaspartners/frontend/` |
 | API + admin | Laravel 12 + Filament 5 + Sanctum | `vaspartners/backend/` |
-| Partner auth | Fayda (eSignet) — same pattern as fixedservices; creates `customers` on sign-in | `vaspartners/backend/app/Services/EsignetService.php` |
+| Partner auth | Fayda (eSignet) — same pattern as fixedservices; creates `contacts` on sign-in | `vaspartners/backend/app/Services/EsignetService.php` |
 | Staff auth | Filament login (`/admin`) | Filament Shield RBAC |
 
 ## Workflow (unchanged)
 
 ```
-Customer creates ticket (open)
+Contact creates ticket (open)
   → Supervisor assigns AM (in_progress)
   → AM verifies documents
   → Approver chain via manager_id until final approver

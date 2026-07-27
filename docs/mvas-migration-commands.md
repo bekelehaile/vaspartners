@@ -7,7 +7,7 @@ Repeatable migration from old **mvasportal** (MySQL `.dump` + attachment files) 
 | Command | Purpose |
 |---|---|
 | `vas:clear-mvas-migration` | Wipe previous migrated rows (safe to re-run import) |
-| `vas:migrate-mvas-dump` | Optional clear → seed companies/customers/tickets → enrich subs/approvers/attachments |
+| `vas:migrate-mvas-dump` | Optional clear → seed companies/contacts/tickets → enrich subs/approvers/attachments |
 
 Host helper:
 
@@ -74,14 +74,14 @@ docker exec vaspartners-app php artisan vas:clear-mvas-migration --force
 | `--keep-approvers` | Keep final approvers |
 | `--keep-files` | Keep attachment files on disk |
 
-Clears legacy-tagged: documents (+ files), tickets, subscriptions, memberships, customers, companies, approvers (default).
+Clears legacy-tagged: documents (+ files), tickets, subscriptions, memberships, contacts, companies, approvers (default).
 
 ## What is imported
 
 | Source | Target | Notes |
 |---|---|---|
 | `clients` | `companies` | Approved, **ownerless**; TIN `MVAS-{id}` |
-| `clients` | `customers` | `sub` = `mvas-client-{id}`; no company profile until claim |
+| `clients` (MVAS dump) | `contacts` + `companies` | `sub` = `mvas-contact-{id}`; no company profile until claim |
 | `tickets` | `tickets` | Status + catalog mapped |
 | Completed new-subscription tickets | `subscriptions` | Manage tickets linked via `subscription_id` |
 | `service_approvers` | `service_final_approvers` | Staff by email |

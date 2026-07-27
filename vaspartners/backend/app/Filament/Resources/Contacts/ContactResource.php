@@ -134,7 +134,7 @@ class ContactResource extends Resource
                     ->label('Banned')
                     ->onColor('danger')
                     ->offColor('gray'),
-                TextColumn::make('legacy_mvas_client_id')
+                TextColumn::make('legacy_mvas_id')
                     ->label('Legacy ID')
                     ->placeholder('—')
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -179,7 +179,7 @@ class ContactResource extends Resource
                     ->placeholder('Any')
                     ->trueLabel('Completed')
                     ->falseLabel('Incomplete'),
-                TernaryFilter::make('legacy_mvas_client_id')
+                TernaryFilter::make('legacy_mvas_id')
                     ->label('Legacy MVAS')
                     ->nullable()
                     ->placeholder('Any')

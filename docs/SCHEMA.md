@@ -12,8 +12,8 @@ Same **business workflow** as legacy MVAS; **new normalized schema** built for g
 | Status buried on ticket only | Append-only `ticket_status_histories` |
 | Silent assignment overwrite | `ticket_assignments` history |
 | Approval flags on ticket row | `ticket_approval_steps` audit trail |
-| Integer PKs only in APIs | ULID `public_id` on customers & tickets |
-| Separate signup form | Fayda sign-in creates/refreshes `customers` (fixedservices pattern) |
+| Integer PKs only in APIs | ULID `public_id` on contacts & tickets |
+| Separate signup form | Fayda sign-in creates/refreshes `contacts` (fixedservices pattern) |
 | MySQL-centric soft-delete soup | Clear FKs, indexes for queue queries, soft deletes where needed |
 | Hard-coded request types | Configurable `requisitions` + behavior flags |
 | One-shot tickets only | `subscriptions` with yearly / bi-yearly renewal until terminate |
@@ -21,7 +21,7 @@ Same **business workflow** as legacy MVAS; **new normalized schema** built for g
 ## Workflow (unchanged)
 
 ```
-Customer creates → open
+Contact creates → open
 Supervisor assigns AM → in_progress
 AM verifies documents → current_approver = AM.manager (if docs required)
 Approver approve → escalate via manager_id until final approver → completed
@@ -73,7 +73,7 @@ Tickets may reference `subscription_id` / `parent_ticket_id`.
 
 ### Identity
 - `users` — staff (Filament); `manager_id` hierarchy; `is_management` for supervisor notify scope
-- `customers` — Fayda `sub` + verified userinfo on sign-in; **company details** completed afterwards (`profile_completed_at`)
+- `contacts` — Fayda `sub` + verified userinfo on sign-in; **company details** completed afterwards (`profile_completed_at`)
 - Spatie `roles` / `permissions` (Filament Shield)
 
 ### Catalog
@@ -96,7 +96,7 @@ Tickets may reference `subscription_id` / `parent_ticket_id`.
 - Recent: `(status, assigned_to_user_id)` where status=`open` and assignee null
 - My tickets: `(assigned_to_user_id, current_approver_user_id, status)`
 - Approval: `(current_approver_user_id, status)`
-- Customer list: `(customer_id, status, created_at)`
+- Customer list: `(contact_id, status, created_at)`
 - Renewals due: `(status, current_period_end)` on `subscriptions`
 
 ## Admin configuration (Filament)
@@ -104,5 +104,5 @@ Tickets may reference `subscription_id` / `parent_ticket_id`.
 - **Catalog → Services** — enable request types, renewal interval, doc matrix, final approvers
 - **Catalog → Request types** — behaviors for new / renew / terminate / custom
 - **Catalog → Document types** — reusable doc catalog
-- **Partners → Customers** — Fayda identity + company profile; relation managers for tickets, subscriptions, services
+- **Partners → Contacts** — Fayda identity + company profile; relation managers for tickets, subscriptions, services
 - **Partners → Subscriptions** — read-only lifecycle view

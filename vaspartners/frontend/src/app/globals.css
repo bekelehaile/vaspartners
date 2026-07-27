@@ -171,8 +171,8 @@ textarea {
   }
 }
 
-.topnav a:not(.btn-login),
-.topnav button.link-nav {
+.topnav > a:not(.btn-login),
+.topnav > button.link-nav {
   background: none;
   border: 0;
   padding: 0;
@@ -183,8 +183,8 @@ textarea {
   transition: color 0.2s ease;
 }
 
-.topnav a:not(.btn-login):hover,
-.topnav button.link-nav:hover {
+.topnav > a:not(.btn-login):hover,
+.topnav > button.link-nav:hover {
   color: var(--primary);
 }
 
@@ -362,61 +362,88 @@ textarea {
   position: relative;
 }
 
-.portal-settings-btn {
+.portal-settings-btn,
+.portal-signout-btn,
+.notif-bell-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  height: 2.25rem;
-  padding: 0 0.75rem;
-  border: 1px solid var(--et-line);
-  border-radius: 0.5rem;
+  justify-content: center;
+  gap: 0.45rem;
+  height: 2.35rem;
+  border: 1px solid color-mix(in oklab, var(--et-line) 88%, #9ca3af);
+  border-radius: 0.55rem;
   background: #fff;
   color: #374151;
   font: inherit;
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  transition: border-color 0.2s ease, color 0.2s ease;
+  transition:
+    border-color 0.18s ease,
+    color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease;
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.04);
 }
 
-.portal-settings-btn:hover,
-.portal-settings-btn[aria-expanded="true"] {
-  border-color: var(--primary);
-  color: var(--primary);
+.portal-settings-btn {
+  padding: 0 0.85rem;
 }
 
 .portal-signout-btn {
-  display: inline-flex;
-  align-items: center;
-  height: 2.25rem;
-  padding: 0 0.75rem;
-  border: 1px solid var(--et-line);
-  border-radius: 0.5rem;
-  background: #fff;
-  color: #374151;
-  font: inherit;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: border-color 0.2s ease, color 0.2s ease;
+  padding: 0 0.85rem;
+}
+
+.notif-bell-btn {
+  width: 2.35rem;
+  padding: 0;
+}
+
+.portal-settings-btn:hover,
+.portal-settings-btn[aria-expanded="true"],
+.notif-bell-btn:hover,
+.notif-bell-btn[aria-expanded="true"] {
+  border-color: color-mix(in oklab, var(--primary) 45%, var(--et-line));
+  color: color-mix(in oklab, var(--primary) 72%, #14532d);
+  background: color-mix(in oklab, var(--primary) 8%, white);
+  box-shadow: 0 1px 3px color-mix(in oklab, var(--primary) 18%, transparent);
 }
 
 .portal-signout-btn:hover {
-  border-color: var(--et-red, #dc2626);
-  color: var(--et-red, #dc2626);
+  border-color: color-mix(in oklab, var(--et-red) 35%, var(--et-line));
+  color: var(--et-red);
+  background: color-mix(in oklab, var(--et-red) 6%, white);
+}
+
+.portal-settings-menu,
+.notif-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.45rem);
+  z-index: 70;
+  background: #fff;
+  border: 1px solid color-mix(in oklab, var(--et-line) 85%, #9ca3af);
+  border-radius: 0.85rem;
+  box-shadow:
+    0 4px 6px -1px rgba(15, 23, 42, 0.06),
+    0 18px 40px -12px rgba(15, 23, 42, 0.18);
+  overflow: hidden;
+  animation: detail-in 0.18s ease both;
 }
 
 .portal-settings-menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 0.4rem);
-  z-index: 40;
-  min-width: 11.5rem;
-  padding: 0.35rem;
-  background: #fff;
-  border: 1px solid var(--et-line);
-  border-radius: 0.6rem;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+  min-width: 15.5rem;
+  padding: 0.4rem;
+}
+
+.portal-settings-menu-label {
+  margin: 0;
+  padding: 0.45rem 0.7rem 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--et-muted);
 }
 
 .portal-settings-menu a,
@@ -424,28 +451,177 @@ textarea {
   display: block;
   width: 100%;
   text-align: left;
-  padding: 0.55rem 0.7rem;
-  border: 0;
-  border-radius: 0.4rem;
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  border: 0 !important;
+  border-radius: 0.55rem;
   background: transparent;
   color: var(--et-ink);
   font: inherit;
   font-size: 0.9rem;
-  font-weight: 500;
+  font-weight: 600;
+  line-height: 1.3;
   cursor: pointer;
   text-decoration: none;
+  box-shadow: none;
 }
 
 .portal-settings-menu a:hover,
-.portal-settings-menu button:hover {
-  background: #f3f4f6;
-  color: var(--primary);
+.portal-settings-menu button:hover,
+.portal-settings-menu a:focus-visible,
+.portal-settings-menu button:focus-visible {
+  background: color-mix(in oklab, var(--primary) 10%, white);
+  color: color-mix(in oklab, var(--primary) 70%, #14532d);
+  outline: none;
 }
 
 .portal-settings-divider {
   height: 1px;
-  margin: 0.3rem 0.4rem;
+  margin: 0.35rem 0.45rem;
   background: var(--et-line);
+  border: 0;
+}
+
+.notif-bell {
+  position: relative;
+}
+
+.notif-badge {
+  position: absolute;
+  top: -0.3rem;
+  right: -0.3rem;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--et-red);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.notif-panel {
+  width: min(24.5rem, calc(100vw - 1.5rem));
+}
+
+.notif-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.1rem 0.95rem;
+  border-bottom: 1px solid var(--et-line);
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--primary) 6%, white) 0%,
+    #fff 100%
+  );
+}
+
+.notif-panel-head strong {
+  display: block;
+  color: var(--et-ink);
+  font-size: 0.98rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.notif-panel-sub {
+  margin: 0.2rem 0 0;
+  color: var(--et-muted);
+  font-size: 0.78rem;
+  line-height: 1.3;
+}
+
+.notif-mark-all {
+  flex-shrink: 0;
+  margin-top: 0.05rem;
+  border: 1px solid color-mix(in oklab, var(--primary) 28%, var(--et-line));
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--primary) 8%, white);
+  color: color-mix(in oklab, var(--primary) 70%, #14532d);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 650;
+  cursor: pointer;
+  padding: 0.3rem 0.65rem;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.notif-mark-all:hover {
+  background: color-mix(in oklab, var(--primary) 14%, white);
+  border-color: color-mix(in oklab, var(--primary) 45%, var(--et-line));
+  text-decoration: none;
+}
+
+.notif-mark-all:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.notif-panel-body {
+  max-height: 24rem;
+  overflow: auto;
+  background: #fff;
+}
+
+.notif-empty {
+  margin: 0;
+  padding: 1.25rem 1rem;
+  font-size: 0.9rem;
+}
+
+.notif-empty-state {
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  text-align: center;
+  padding: 2rem 1.25rem;
+}
+
+.notif-empty-state p {
+  margin: 0.35rem 0 0;
+  font-weight: 600;
+  color: var(--et-ink);
+  font-size: 0.92rem;
+}
+
+.notif-empty-state .muted {
+  font-size: 0.8rem;
+  max-width: 16rem;
+  line-height: 1.4;
+}
+
+.notif-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.75rem;
+  padding: 0.95rem 1.1rem;
+  border: 0 !important;
+  border-bottom: 1px solid var(--et-line) !important;
+  border-radius: 0;
+  background: #fff;
+  box-shadow: none;
+  transition: background 0.15s ease;
+  text-decoration: none;
+  color: inherit;
+}
+
+.notif-item:last-child {
+  border-bottom: 0 !important;
+}
+
+.notif-item:hover {
+  background: color-mix(in oklab, var(--primary) 5%, white);
+}
+
+.notif-item.is-unread {
+  background: color-mix(in oklab, var(--primary) 7%, white);
 }
 
 .settings-block {
@@ -538,164 +714,6 @@ textarea {
 
 .company-profile-dl {
   margin-top: 0.25rem;
-}
-
-.notif-bell {
-  position: relative;
-}
-
-.notif-bell-btn {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  border: 1px solid var(--et-line);
-  border-radius: 0.5rem;
-  background: #fff;
-  color: #374151;
-  cursor: pointer;
-  transition: border-color 0.2s ease, color 0.2s ease;
-}
-
-.notif-bell-btn:hover {
-  border-color: var(--primary);
-  color: var(--primary);
-}
-
-.notif-badge {
-  position: absolute;
-  top: -0.35rem;
-  right: -0.35rem;
-  min-width: 1.15rem;
-  height: 1.15rem;
-  padding: 0 0.3rem;
-  border-radius: 999px;
-  background: var(--et-red);
-  color: #fff;
-  font-size: 0.65rem;
-  font-weight: 700;
-  display: grid;
-  place-items: center;
-  line-height: 1;
-}
-
-.notif-panel {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 0.5rem);
-  width: min(24rem, calc(100vw - 1.5rem));
-  background: #fff;
-  border: 1px solid var(--et-line);
-  border-radius: 0.85rem;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
-  z-index: 60;
-  overflow: hidden;
-  animation: detail-in 0.2s ease both;
-}
-
-.notif-panel-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 1rem 1.1rem 0.9rem;
-  border-bottom: 1px solid var(--et-line);
-  background: linear-gradient(180deg, #fafafa 0%, #fff 100%);
-}
-
-.notif-panel-head strong {
-  display: block;
-  color: var(--et-ink);
-  font-size: 0.98rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.notif-panel-sub {
-  margin: 0.2rem 0 0;
-  color: var(--et-muted);
-  font-size: 0.78rem;
-  line-height: 1.3;
-}
-
-.notif-mark-all {
-  flex-shrink: 0;
-  margin-top: 0.1rem;
-  border: 0;
-  background: none;
-  color: var(--primary);
-  font: inherit;
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 0;
-}
-
-.notif-mark-all:hover {
-  text-decoration: underline;
-}
-
-.notif-mark-all:disabled {
-  opacity: 0.55;
-  cursor: default;
-  text-decoration: none;
-}
-
-.notif-panel-body {
-  max-height: 24rem;
-  overflow: auto;
-}
-
-.notif-empty {
-  margin: 0;
-  padding: 1.25rem 1rem;
-  font-size: 0.9rem;
-}
-
-.notif-empty-state {
-  display: grid;
-  justify-items: center;
-  gap: 0.35rem;
-  text-align: center;
-  padding: 2rem 1.25rem;
-}
-
-.notif-empty-state p {
-  margin: 0.35rem 0 0;
-  font-weight: 600;
-  color: var(--et-ink);
-  font-size: 0.92rem;
-}
-
-.notif-empty-state .muted {
-  font-size: 0.8rem;
-  max-width: 16rem;
-  line-height: 1.4;
-}
-
-.notif-item {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.75rem;
-  padding: 0.9rem 1.1rem;
-  border-bottom: 1px solid var(--et-line);
-  transition: background 0.15s ease;
-  text-decoration: none;
-  color: inherit;
-}
-
-.notif-item:last-child {
-  border-bottom: 0;
-}
-
-.notif-item:hover {
-  background: color-mix(in oklab, var(--primary) 5%, white);
-}
-
-.notif-item.is-unread {
-  background: color-mix(in oklab, var(--primary) 7%, white);
 }
 
 .notif-icon {
@@ -880,8 +898,8 @@ textarea {
   box-shadow: none;
 }
 
-.mobile-sheet a,
-.mobile-sheet button.sheet-link {
+.mobile-sheet-card > a,
+.mobile-sheet-card > button.sheet-link {
   background: none;
   border: 0;
   text-align: left;
@@ -893,13 +911,13 @@ textarea {
   border-radius: 0.75rem;
 }
 
-.mobile-sheet a:hover,
-.mobile-sheet button.sheet-link:hover {
+.mobile-sheet-card > a:hover,
+.mobile-sheet-card > button.sheet-link:hover {
   color: var(--primary);
 }
 
-.mobile-sheet a.btn-login,
-.mobile-sheet a.btn-login:hover {
+.mobile-sheet-card > a.btn-login,
+.mobile-sheet-card > a.btn-login:hover {
   display: inline-flex;
   color: #fff !important;
   background: var(--primary);

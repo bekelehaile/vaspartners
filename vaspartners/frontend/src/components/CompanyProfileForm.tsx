@@ -31,9 +31,6 @@ function fromContact(me?: Contact | null, createNew = false): CompanyProfileValu
   return {
     company_name: me.company_name ?? "",
     company_tin: me.company_tin ?? "",
-    company_license_number: me.company_license_number ?? me.company?.license_number ?? "",
-    company_phone: me.company_phone ?? "",
-    company_email: me.company_email ?? "",
     company_address: me.company_address ?? "",
   };
 }
@@ -151,7 +148,7 @@ export function CompanyProfileForm({
         <p className="muted">
           {isUpdate
             ? "Update your company details and resubmit for admin approval. After approval, only administrators can change company records."
-            : "Fayda verified your national ID. Submit organisation details for admin approval. You become the company owner once approved."}
+            : "Fayda verified your national ID. Submit organisation details for admin approval. Phone and email come from your Fayda identity. You become the company owner once approved."}
         </p>
       </div>
 
@@ -159,7 +156,7 @@ export function CompanyProfileForm({
         <FaydaIdentityPanel
           id="fayda-identity"
           title="Your Fayda identity"
-          description="Personal details from National ID (Fayda) — not company data. Contact Fayda if anything is wrong."
+          description="Personal details from National ID (Fayda) — phone and email here are used as company contact. Contact Fayda if anything is wrong."
           person={me}
           badge={
             me.company_role === "owner" ? (
@@ -179,98 +176,51 @@ export function CompanyProfileForm({
 
       <form.Subscribe selector={(s) => s.submissionAttempts}>
         {(submissionAttempts) => (
-          <>
-            <section id="company-info" className="settings-block">
-              <div className="settings-block-head">
-                <h3>Company profile</h3>
-                <p className="muted">
-                  Organisation TIN, license, and address — separate from your Fayda identity.
-                </p>
-              </div>
-              <div className="form-grid">
-                <form.Field name="company_name">
-                  {(field) => (
-                    <CompanyField
-                      field={field}
-                      label="Company / organisation name"
-                      submissionAttempts={submissionAttempts}
-                      placeholder="e.g. Sunrise Media PLC"
-                      autoComplete="organization"
-                    />
-                  )}
-                </form.Field>
+          <section id="company-info" className="settings-block">
+            <div className="settings-block-head">
+              <h3>Company profile</h3>
+              <p className="muted">
+                Organisation name, TIN, and address — separate from your Fayda identity.
+              </p>
+            </div>
+            <div className="form-grid">
+              <form.Field name="company_name">
+                {(field) => (
+                  <CompanyField
+                    field={field}
+                    label="Company / organisation name"
+                    submissionAttempts={submissionAttempts}
+                    placeholder="e.g. Sunrise Media PLC"
+                    autoComplete="organization"
+                  />
+                )}
+              </form.Field>
 
-                <form.Field name="company_tin">
-                  {(field) => (
-                    <CompanyField
-                      field={field}
-                      label="TIN"
-                      submissionAttempts={submissionAttempts}
-                      placeholder="Tax identification number"
-                    />
-                  )}
-                </form.Field>
+              <form.Field name="company_tin">
+                {(field) => (
+                  <CompanyField
+                    field={field}
+                    label="TIN"
+                    submissionAttempts={submissionAttempts}
+                    placeholder="Tax identification number"
+                  />
+                )}
+              </form.Field>
 
-                <form.Field name="company_license_number">
-                  {(field) => (
-                    <CompanyField
-                      field={field}
-                      label="License number"
-                      submissionAttempts={submissionAttempts}
-                      placeholder="Business / trade license number"
-                    />
-                  )}
-                </form.Field>
-
-                <form.Field name="company_address">
-                  {(field) => (
-                    <CompanyField
-                      field={field}
-                      label="Company address"
-                      submissionAttempts={submissionAttempts}
-                      as="textarea"
-                      placeholder="City, sub-city, woreda / street"
-                      autoComplete="street-address"
-                    />
-                  )}
-                </form.Field>
-              </div>
-            </section>
-
-            <section id="contact-info" className="settings-block">
-              <div className="settings-block-head">
-                <h3>Company contact</h3>
-                <p className="muted">Organisation phone and email (not your Fayda personal identity).</p>
-              </div>
-              <div className="form-grid">
-                <form.Field name="company_phone">
-                  {(field) => (
-                    <CompanyField
-                      field={field}
-                      label="Company phone"
-                      submissionAttempts={submissionAttempts}
-                      type="tel"
-                      placeholder="e.g. +251 11 xxx xxxx"
-                      autoComplete="tel"
-                    />
-                  )}
-                </form.Field>
-
-                <form.Field name="company_email">
-                  {(field) => (
-                    <CompanyField
-                      field={field}
-                      label="Company email"
-                      submissionAttempts={submissionAttempts}
-                      type="email"
-                      placeholder="ops@company.et"
-                      autoComplete="email"
-                    />
-                  )}
-                </form.Field>
-              </div>
-            </section>
-          </>
+              <form.Field name="company_address">
+                {(field) => (
+                  <CompanyField
+                    field={field}
+                    label="Company address"
+                    submissionAttempts={submissionAttempts}
+                    as="textarea"
+                    placeholder="City, sub-city, woreda / street"
+                    autoComplete="street-address"
+                  />
+                )}
+              </form.Field>
+            </div>
+          </section>
         )}
       </form.Subscribe>
 

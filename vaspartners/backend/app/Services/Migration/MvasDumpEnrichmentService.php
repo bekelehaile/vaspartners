@@ -114,14 +114,14 @@ class MvasDumpEnrichmentService
 
         foreach ($activationTickets as $ticket) {
             $contact = Contact::query()->find($ticket->contact_id);
-            if (! $contact?->legacy_mvas_client_id) {
+            if (! $contact?->legacy_mvas_id) {
                 $stats['subscriptions']['skipped']++;
 
                 continue;
             }
 
             $company = Company::query()
-                ->where('legacy_mvas_client_id', $contact->legacy_mvas_client_id)
+                ->where('legacy_mvas_id', $contact->legacy_mvas_id)
                 ->first();
             if (! $company) {
                 $stats['subscriptions']['skipped']++;
@@ -188,7 +188,7 @@ class MvasDumpEnrichmentService
                 'current_period_end' => $periodEnd,
                 'next_renewal_due_at' => $periodEnd,
                 'activated_by_ticket_id' => $ticket->id,
-                'legacy_mvas_client_id' => $contact->legacy_mvas_client_id,
+                'legacy_mvas_id' => $contact->legacy_mvas_id,
                 'legacy_mvas_service_id' => null,
             ]);
             $subscription->forceFill([
@@ -211,11 +211,11 @@ class MvasDumpEnrichmentService
 
         foreach ($manageTickets as $ticket) {
             $contact = Contact::query()->find($ticket->contact_id);
-            if (! $contact?->legacy_mvas_client_id) {
+            if (! $contact?->legacy_mvas_id) {
                 continue;
             }
             $company = Company::query()
-                ->where('legacy_mvas_client_id', $contact->legacy_mvas_client_id)
+                ->where('legacy_mvas_id', $contact->legacy_mvas_id)
                 ->first();
             if (! $company) {
                 continue;
@@ -251,11 +251,11 @@ class MvasDumpEnrichmentService
 
             foreach ($termTickets as $ticket) {
                 $contact = Contact::query()->find($ticket->contact_id);
-                if (! $contact?->legacy_mvas_client_id) {
+                if (! $contact?->legacy_mvas_id) {
                     continue;
                 }
                 $company = Company::query()
-                    ->where('legacy_mvas_client_id', $contact->legacy_mvas_client_id)
+                    ->where('legacy_mvas_id', $contact->legacy_mvas_id)
                     ->first();
                 if (! $company) {
                     continue;

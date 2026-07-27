@@ -160,11 +160,11 @@ class EsignetService
 
         $contact = Contact::query()->where('sub', $sub)->first();
 
-        // Adopt migrated placeholder (mvas-client-*) so tickets stay with this identity.
+        // Adopt migrated placeholder (mvas-contact-*) so tickets stay with this identity.
         if (! $contact) {
             $contact = Contact::query()
                 ->where('phone_number', $phoneNumber)
-                ->where('sub', 'like', 'mvas-client-%')
+                ->where('sub', 'like', 'mvas-contact-%')
                 ->first();
         }
 

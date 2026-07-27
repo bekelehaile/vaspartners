@@ -305,6 +305,10 @@ class TicketWorkflowService
             return;
         }
 
+        if ($this->isExemptFromOpenTicketLimit($contact)) {
+            return;
+        }
+
         $maxOpen = (int) config('vas.max_open_tickets', 1);
         $companyId = (int) $contact->company_id;
         $openCount = Ticket::query()
@@ -322,6 +326,21 @@ class TicketWorkflowService
                 'ticket' => "Your company already has the maximum of {$maxOpen} open subscription request(s). You can still submit manage requests for other services.",
             ]);
         }
+    }
+
+    protected function isExemptFromOpenTicketLimit(Contact $contact): bool
+    {
+        $exempt = config('vas.open_ticket_limit_exempt_phones', []);
+        if (! is_array($exempt) || $exempt === []) {
+            return false;
+        }
+
+        $digits = preg_replace('/\D+/', '', (string) $contact->phone_number) ?? '';
+        if ($digits === '') {
+            return false;
+        }
+
+        return in_array(substr($digits, -9), $exempt, true);
     }
 
     public function assign(Ticket $ticket, User $assigner, User $assignee, ?int $priorityId = null, ?string $note = null): Ticket

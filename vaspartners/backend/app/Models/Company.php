@@ -31,7 +31,7 @@ class Company extends Model
         'approved_at',
         'approval_note',
         'created_by_contact_id',
-        'legacy_mvas_client_id',
+        'legacy_mvas_id',
     ];
 
     protected function casts(): array
@@ -127,15 +127,15 @@ class Company extends Model
      * Service requests (tickets) for this company:
      * - tickets on company subscriptions
      * - tickets owned by current members
-     * - tickets owned by migrated contact with same legacy_mvas_client_id
+     * - tickets owned by migrated contact with same legacy_mvas_id
      */
     public function serviceRequests(): Builder
     {
         $companyId = (int) $this->getKey();
-        $legacyClientId = $this->legacy_mvas_client_id;
+        $legacyMvasId = $this->legacy_mvas_id;
 
         return Ticket::query()
-            ->where(function (Builder $query) use ($companyId, $legacyClientId): void {
+            ->where(function (Builder $query) use ($companyId, $legacyMvasId): void {
                 $query
                     ->whereHas(
                         'subscription',
@@ -146,10 +146,10 @@ class Company extends Model
                         fn (Builder $q) => $q->where('company_id', $companyId),
                     );
 
-                if ($legacyClientId !== null && $legacyClientId !== '') {
+                if ($legacyMvasId !== null && $legacyMvasId !== '') {
                     $query->orWhereHas(
                         'contact',
-                        fn (Builder $q) => $q->where('legacy_mvas_client_id', $legacyClientId),
+                        fn (Builder $q) => $q->where('legacy_mvas_id', $legacyMvasId),
                     );
                 }
             });

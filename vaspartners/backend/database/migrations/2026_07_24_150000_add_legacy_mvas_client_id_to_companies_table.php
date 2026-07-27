@@ -9,7 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('companies', function (Blueprint $table) {
-            $table->unsignedBigInteger('legacy_mvas_client_id')
+            $table->unsignedBigInteger('legacy_mvas_id')
                 ->nullable()
                 ->unique()
                 ->after('created_by_contact_id');
@@ -19,8 +19,8 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('companies', function (Blueprint $table) {
-            $table->dropUnique(['legacy_mvas_client_id']);
-            $table->dropColumn('legacy_mvas_client_id');
+            $table->dropUnique(['legacy_mvas_id']);
+            $table->dropColumn('legacy_mvas_id');
         });
     }
 };

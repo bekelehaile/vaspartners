@@ -45,8 +45,8 @@ class MvasDumpClearService
             'dry_run' => $dryRun,
         ];
 
-        $companyIds = Company::query()->whereNotNull('legacy_mvas_client_id')->pluck('id');
-        $contactIds = Contact::query()->whereNotNull('legacy_mvas_client_id')->pluck('id');
+        $companyIds = Company::query()->whereNotNull('legacy_mvas_id')->pluck('id');
+        $contactIds = Contact::query()->whereNotNull('legacy_mvas_id')->pluck('id');
         $ticketIds = Ticket::withTrashed()
             ->whereNotNull('legacy_mvas_ticket_id')
             ->pluck('id');
@@ -98,7 +98,7 @@ class MvasDumpClearService
             $stats['tickets'] = $ticketIds->count();
             $stats['subscriptions'] = Subscription::withTrashed()
                 ->where(function ($q) use ($companyIds, $contactIds) {
-                    $q->whereNotNull('legacy_mvas_client_id');
+                    $q->whereNotNull('legacy_mvas_id');
                     if ($companyIds->isNotEmpty()) {
                         $q->orWhereIn('company_id', $companyIds);
                     }
@@ -147,7 +147,7 @@ class MvasDumpClearService
             // Subscriptions may point at tickets as activated_by / terminated_by.
             $subscriptionIds = Subscription::withTrashed()
                 ->where(function ($q) use ($companyIds, $contactIds) {
-                    $q->whereNotNull('legacy_mvas_client_id');
+                    $q->whereNotNull('legacy_mvas_id');
                     if ($companyIds->isNotEmpty()) {
                         $q->orWhereIn('company_id', $companyIds);
                     }

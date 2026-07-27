@@ -34,6 +34,10 @@ class RecipientsRelationManager extends RelationManager
                         : null),
                 TextColumn::make('company_tin')->label('TIN')->toggleable(),
                 TextColumn::make('phone_normalized')->label('Phone (last 9)')->searchable(),
+                TextColumn::make('variables.period')->label('Period')->toggleable(),
+                TextColumn::make('variables.service_type')->label('Service')->toggleable(),
+                TextColumn::make('variables.service_id')->label('Service ID')->toggleable(),
+                TextColumn::make('variables.amount')->label('Amount')->toggleable(),
                 TextColumn::make('status')
                     ->badge()
                     ->formatStateUsing(fn ($state) => $state instanceof BulkMessageRecipientStatus ? $state->label() : (string) $state)

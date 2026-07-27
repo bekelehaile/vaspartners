@@ -72,6 +72,7 @@ export function PortalSettingsMenu({
 
       {open && (
         <div className="portal-settings-menu" id={menuId} role="menu">
+          <p className="portal-settings-menu-label">Account</p>
           <Link
             href="/portal/company#fayda-identity"
             role="menuitem"
@@ -86,12 +87,14 @@ export function PortalSettingsMenu({
           >
             Company profile
           </Link>
+          <div className="portal-settings-divider" role="separator" />
+          <p className="portal-settings-menu-label">Organisation</p>
           <Link
             href="/portal/company#company-requests"
             role="menuitem"
             onClick={close}
           >
-            Company &amp; membership requests
+            Change requests
           </Link>
           <Link
             href="/portal/company#company-members-panel"

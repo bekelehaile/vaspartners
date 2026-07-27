@@ -94,7 +94,7 @@ class CatalogSeeder extends Seeder
                 continue;
             }
 
-            $service = Service::query()->updateOrCreate(
+            $service = Service::withTrashed()->updateOrCreate(
                 ['slug' => $row['slug']],
                 [
                     'category_id' => $categoryId,
@@ -104,8 +104,12 @@ class CatalogSeeder extends Seeder
                     'is_active' => (bool) ($row['is_active'] ?? true),
                     'is_subscription_based' => true,
                     'sort_order' => (int) ($row['sort_order'] ?? 0),
+                    'deleted_at' => null,
                 ]
             );
+            if ($service->trashed()) {
+                $service->restore();
+            }
             $serviceMap[(int) $row['legacy_id']] = $service->id;
         }
 

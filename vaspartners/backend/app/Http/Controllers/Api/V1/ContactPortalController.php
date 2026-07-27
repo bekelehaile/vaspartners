@@ -18,7 +18,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
-class ClientPortalController extends Controller
+class ContactPortalController extends Controller
 {
     public function services()
     {
@@ -341,9 +341,6 @@ class ClientPortalController extends Controller
         $data = $request->validate([
             'company_name' => ['required', 'string', 'min:2', 'max:255'],
             'company_tin' => ['required', 'string', 'min:5', 'max:64'],
-            'company_license_number' => ['required', 'string', 'min:3', 'max:64'],
-            'company_phone' => ['required', 'string', 'min:9', 'max:32'],
-            'company_email' => ['required', 'email', 'max:255'],
             'company_address' => ['required', 'string', 'min:5', 'max:2000'],
             'create_new' => ['sometimes', 'boolean'],
         ]);
@@ -362,12 +359,11 @@ class ClientPortalController extends Controller
     {
         $data = $request->validate([
             'tin' => ['required', 'string', 'min:5', 'max:64'],
-            'license_number' => ['required', 'string', 'min:3', 'max:64'],
         ]);
 
-        $company = $membership->lookupByIdentity($data['tin'], $data['license_number']);
+        $company = $membership->lookupByIdentity($data['tin']);
         if (! $company) {
-            return response()->json(['message' => 'No company found for this TIN and license number.', 'data' => null], 404);
+            return response()->json(['message' => 'No approved company found for this TIN.', 'data' => null], 404);
         }
 
         return response()->json([
@@ -384,14 +380,12 @@ class ClientPortalController extends Controller
     {
         $data = $request->validate([
             'company_tin' => ['required', 'string', 'min:5', 'max:64'],
-            'company_license_number' => ['required', 'string', 'min:3', 'max:64'],
             'note' => ['nullable', 'string', 'max:2000'],
         ]);
 
         $change = $membership->requestAttach(
             $request->user(),
             $data['company_tin'],
-            $data['company_license_number'],
             $data['note'] ?? null,
         );
 

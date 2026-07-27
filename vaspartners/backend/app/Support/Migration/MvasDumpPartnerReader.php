@@ -5,9 +5,10 @@ namespace App\Support\Migration;
 use Generator;
 
 /**
- * Streams partner rows from an MVAS MySQL `.dump` file (INSERT INTO `clients`).
+ * Streams legacy MVAS `clients` dump rows (source table name) into partner maps
+ * that become Company + Contact records.
  */
-final class MvasDumpClientReader
+final class MvasDumpPartnerReader
 {
     public function __construct(
         private readonly MvasDumpTableReader $tables,
@@ -22,7 +23,7 @@ final class MvasDumpClientReader
      *   mobile: ?string,
      *   phone: string,
      *   is_banned: bool,
-     *   is_verified_client: bool,
+     *   is_verified_partner: bool,
      *   is_active: bool,
      *   deleted_at: ?string,
      *   address: ?string,
@@ -32,10 +33,10 @@ final class MvasDumpClientReader
      *   country: ?string
      * }>
      */
-    public function clients(string $dumpPath): Generator
+    public function partners(string $dumpPath): Generator
     {
         foreach ($this->tables->rows($dumpPath, 'clients') as $row) {
-            $mapped = $this->mapClientRow($row);
+            $mapped = $this->mapPartnerRow($row);
             if ($mapped !== null) {
                 yield $mapped;
             }
@@ -46,7 +47,7 @@ final class MvasDumpClientReader
      * @param  list<string|null>  $row
      * @return array<string, mixed>|null
      */
-    private function mapClientRow(array $row): ?array
+    private function mapPartnerRow(array $row): ?array
     {
         // CREATE TABLE `clients` column order in mvas_*.dump
         if (count($row) < 29) {
@@ -64,7 +65,7 @@ final class MvasDumpClientReader
             'mobile' => $row[4],
             'phone' => $phone,
             'is_banned' => (string) $row[6] === '1',
-            'is_verified_client' => (string) $row[7] === '1',
+            'is_verified_partner' => (string) $row[7] === '1',
             'is_active' => (string) $row[12] === '1',
             'deleted_at' => $row[15],
             'address' => $row[16],

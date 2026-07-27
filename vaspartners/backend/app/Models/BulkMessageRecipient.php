@@ -17,6 +17,7 @@ class BulkMessageRecipient extends Model
         'phone_normalized',
         'company_name',
         'company_tin',
+        'variables',
         'row_number',
         'status',
         'error',
@@ -28,6 +29,7 @@ class BulkMessageRecipient extends Model
     {
         return [
             'status' => BulkMessageRecipientStatus::class,
+            'variables' => 'array',
             'sent_at' => 'datetime',
         ];
     }

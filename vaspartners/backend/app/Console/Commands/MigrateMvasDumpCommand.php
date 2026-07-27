@@ -26,11 +26,11 @@ class MigrateMvasDumpCommand extends Command
         {--fresh : Clear previous migrated data before import}
         {--force : Required with --fresh}
         {--keep-approvers : When clearing, keep service_final_approvers}
-        {--company-limit= : Max clients to import}
+        {--company-limit= : Max legacy partners to import}
         {--ticket-limit= : Max tickets to import}
         {--attachment-limit= : Max attachments to import}
-        {--ids= : Comma-separated legacy clients.id allowlist}
-        {--only-verified : Only verified clients}
+        {--ids= : Comma-separated legacy MVAS clients.id allowlist}
+        {--only-verified : Only verified legacy partners}
         {--include-ethio-telecom : Include ethio telecom company rows}
         {--skip-attachments : Skip attachment copy}
         {--skip-approvers : Skip final-approver import}
@@ -105,7 +105,7 @@ class MigrateMvasDumpCommand extends Command
             'dry_run' => $dryRun,
             'only_verified' => (bool) $this->option('only-verified'),
             'include_ethio_telecom' => (bool) $this->option('include-ethio-telecom'),
-            'client_ids' => $ids,
+            'legacy_ids' => $ids,
             'link_memberships' => (bool) $this->option('link-memberships'),
         ]);
 

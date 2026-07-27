@@ -29,7 +29,7 @@ class Subscription extends Model
         'activated_by_ticket_id',
         'terminated_by_ticket_id',
         'terminated_at',
-        'legacy_mvas_client_id',
+        'legacy_mvas_id',
         'legacy_mvas_service_id',
     ];
 
