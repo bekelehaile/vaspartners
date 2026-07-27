@@ -31,7 +31,7 @@ class CompanyMembershipService
 
     /**
      * Create a company profile as owner — stays pending until admin verifies required info.
-     * Phone/email come from the partner's Fayda identity; license is derived from TIN.
+     * Phone/email come from the partner's Fayda identity. TIN uniquely identifies the company.
      *
      * @param  array{company_name: string, company_tin: string, company_address: string}  $data
      */
@@ -52,14 +52,12 @@ class CompanyMembershipService
         }
 
         $tin = $this->normalizeCode($data['company_tin']);
-        $license = $this->licenseFromTin($tin);
-        $this->assertUniqueIdentity($tin, $license);
+        $this->assertUniqueTin($tin);
 
-        return DB::transaction(function () use ($contact, $data, $tin, $license, $phone, $email) {
+        return DB::transaction(function () use ($contact, $data, $tin, $phone, $email) {
             $company = Company::query()->create([
                 'name' => trim($data['company_name']),
                 'tin' => $tin,
-                'license_number' => $license,
                 'phone' => $phone,
                 'email' => $email !== '' ? $email : null,
                 'address' => trim($data['company_address']),
@@ -120,14 +118,12 @@ class CompanyMembershipService
         }
 
         $tin = $this->normalizeCode($data['company_tin']);
-        $license = $this->licenseFromTin($tin);
-        $this->assertUniqueIdentity($tin, $license, $company->id);
+        $this->assertUniqueTin($tin, $company->id);
 
-        return DB::transaction(function () use ($contact, $company, $data, $tin, $license, $phone, $email) {
+        return DB::transaction(function () use ($contact, $company, $data, $tin, $phone, $email) {
             $company->fill([
                 'name' => trim($data['company_name']),
                 'tin' => $tin,
-                'license_number' => $license,
                 'phone' => $phone,
                 'email' => $email !== '' ? $email : null,
                 'address' => trim($data['company_address']),
@@ -159,7 +155,6 @@ class CompanyMembershipService
         $required = [
             'name' => $company->name,
             'tin' => $company->tin,
-            'license_number' => $company->license_number,
             'phone' => $company->phone,
             'email' => $company->email,
             'address' => $company->address,
@@ -781,7 +776,6 @@ class CompanyMembershipService
                 'public_id' => $request->company->public_id,
                 'name' => $request->company->name,
                 'tin' => $request->company->tin,
-                'license_number' => $request->company->license_number,
             ] : null,
             'applicant' => $request->contact ? [
                 'public_id' => $request->contact->public_id,
@@ -826,7 +820,6 @@ class CompanyMembershipService
                 'public_id' => $company->public_id,
                 'name' => $company->name,
                 'tin' => $company->tin,
-                'license_number' => $company->license_number,
             ],
             'applicant' => null,
             'target_contact' => null,
@@ -1194,7 +1187,6 @@ class CompanyMembershipService
         $contact->forceFill([
             'company_name' => $company->name,
             'company_tin' => $company->tin,
-            'company_license_number' => $company->license_number,
             'company_phone' => $company->phone,
             'company_email' => $company->email,
             'company_address' => $company->address,
@@ -1260,7 +1252,6 @@ class CompanyMembershipService
             'public_id' => $company->public_id,
             'name' => $company->name,
             'tin' => $company->tin,
-            'license_number' => $company->license_number,
             'phone' => $company->phone,
             'email' => $company->email,
             'address' => $company->address,
@@ -1286,7 +1277,6 @@ class CompanyMembershipService
                     'company_public_id' => $c?->public_id,
                     'company_name' => $c?->name,
                     'company_tin' => $c?->tin,
-                    'company_license_number' => $c?->license_number,
                     'role' => $role,
                     'is_active' => (bool) $m->is_active,
                     'is_current' => (int) $m->company_id === (int) $contact->current_company_id,
@@ -1301,7 +1291,6 @@ class CompanyMembershipService
         if ($membershipActive === false) {
             $data['company_name'] = null;
             $data['company_tin'] = null;
-            $data['company_license_number'] = null;
             $data['company_phone'] = null;
             $data['company_email'] = null;
             $data['company_address'] = null;
@@ -1316,7 +1305,6 @@ class CompanyMembershipService
                 'public_id' => $pending->company->public_id,
                 'name' => $pending->company->name,
                 'tin' => $pending->company->tin,
-                'license_number' => $pending->company->license_number,
             ] : null,
             'target_contact' => $pending->targetContact ? [
                 'public_id' => $pending->targetContact->public_id,
@@ -1376,7 +1364,6 @@ class CompanyMembershipService
             'current_company_id' => null,
             'company_name' => null,
             'company_tin' => null,
-            'company_license_number' => null,
             'company_phone' => null,
             'company_email' => null,
             'company_address' => null,
@@ -1411,13 +1398,11 @@ class CompanyMembershipService
         return $this->normalizeCode($tin);
     }
 
-    protected function assertUniqueIdentity(string $tin, string $license, ?int $ignoreCompanyId = null): void
+    protected function assertUniqueTin(string $tin, ?int $ignoreCompanyId = null): void
     {
         $tinQuery = Company::query()->where('tin', $tin);
-        $licenseQuery = Company::query()->where('license_number', $license);
         if ($ignoreCompanyId) {
             $tinQuery->where('id', '!=', $ignoreCompanyId);
-            $licenseQuery->where('id', '!=', $ignoreCompanyId);
         }
 
         if ($tinQuery->exists()) {
@@ -1425,18 +1410,6 @@ class CompanyMembershipService
                 'company_tin' => 'This TIN is already registered to another company. TINs are unique — use “Join existing company”, or contact an administrator.',
             ]);
         }
-
-        if ($licenseQuery->exists()) {
-            throw ValidationException::withMessages([
-                'company_tin' => 'This TIN cannot be registered (identity conflict). Contact an administrator.',
-            ]);
-        }
-    }
-
-    /** Portal no longer collects license — keep DB unique/not-null via TIN-derived value. */
-    protected function licenseFromTin(string $tin): string
-    {
-        return $this->normalizeCode('TIN-'.$tin);
     }
 
     /** @return array{disk: string, path: string, original_name: string, size: int} */

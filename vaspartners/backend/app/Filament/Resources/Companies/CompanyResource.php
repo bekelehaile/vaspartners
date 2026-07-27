@@ -73,11 +73,6 @@ class CompanyResource extends Resource
                 ->unique(ignoreRecord: true)
                 ->maxLength(64)
                 ->helperText('Must be unique across all companies. Partners cannot use services until this profile is approved.'),
-            TextInput::make('license_number')
-                ->label('License number')
-                ->required()
-                ->unique(ignoreRecord: true)
-                ->maxLength(64),
             TextInput::make('phone')->tel()->maxLength(32),
             TextInput::make('email')->email()->maxLength(255),
             Textarea::make('address')->rows(3)->columnSpanFull(),
@@ -94,7 +89,6 @@ class CompanyResource extends Resource
                 TextEntry::make('public_id')->label('ID'),
                 TextEntry::make('name'),
                 TextEntry::make('tin')->label('TIN'),
-                TextEntry::make('license_number')->label('License number'),
                 TextEntry::make('phone')->placeholder('—'),
                 TextEntry::make('email')->placeholder('—'),
                 TextEntry::make('approval_status')
@@ -160,7 +154,6 @@ class CompanyResource extends Resource
                         );
                     }),
                 TextColumn::make('tin')->label('TIN')->searchable()->sortable(),
-                TextColumn::make('license_number')->label('License')->searchable()->sortable(),
                 TextColumn::make('phone')->label('Phone')->toggleable()->placeholder('—'),
                 TextColumn::make('owner_name')
                     ->label('Owner')

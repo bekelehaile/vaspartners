@@ -43,6 +43,7 @@ Route::prefix('v1')->group(function () {
         Route::get('tickets/{ticket}', [ContactPortalController::class, 'showTicket']);
         Route::get('tickets/{ticket}/messages', [ContactPortalController::class, 'ticketMessages']);
         Route::post('tickets/{ticket}/documents', [ContactPortalController::class, 'uploadDocument']);
+        Route::get('tickets/{ticket}/documents/{document}/download', [ContactPortalController::class, 'downloadDocument']);
         Route::delete('tickets/{ticket}/documents/{document}', [ContactPortalController::class, 'deleteDocument']);
         Route::post('tickets/{ticket}/comments', [ContactPortalController::class, 'comment']);
         Route::get('tickets/{ticket}/comments/{comment}/attachment', [ContactPortalController::class, 'downloadCommentAttachment']);

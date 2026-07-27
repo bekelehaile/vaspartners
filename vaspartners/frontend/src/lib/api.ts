@@ -15,7 +15,6 @@ export type Contact = {
   company_role?: string | null;
   company_name?: string | null;
   company_tin?: string | null;
-  company_license_number?: string | null;
   company_phone?: string | null;
   company_email?: string | null;
   company_address?: string | null;
@@ -23,7 +22,6 @@ export type Contact = {
     public_id: string;
     name: string;
     tin: string;
-    license_number?: string | null;
     phone?: string | null;
     email?: string | null;
     address?: string | null;
@@ -36,7 +34,6 @@ export type Contact = {
     company_public_id?: string | null;
     company_name?: string | null;
     company_tin?: string | null;
-    company_license_number?: string | null;
     role?: string | null;
     is_active?: boolean;
     is_current?: boolean;
@@ -57,7 +54,6 @@ export type Contact = {
       public_id: string;
       name: string;
       tin: string;
-      license_number?: string | null;
     } | null;
     target_contact?: {
       public_id: string;
@@ -169,6 +165,7 @@ export type Ticket = {
     id: number;
     document_type_id?: number;
     original_name: string;
+    download_url?: string | null;
     document_type?: { id?: number; name: string; accepted_mimes?: string; max_size_kb?: number };
   }[];
 };

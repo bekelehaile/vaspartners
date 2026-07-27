@@ -354,7 +354,6 @@ class MvasDumpMigrationService
         $company = Company::query()->create([
             'name' => $companyName,
             'tin' => 'MVAS-'.$partner['id'],
-            'license_number' => 'MVAS-LIC-'.$partner['id'],
             'phone' => $phone !== '' ? $phone : null,
             'email' => $partner['email'] ?: null,
             'address' => $addressParts !== [] ? implode(', ', $addressParts) : null,
@@ -438,7 +437,6 @@ class MvasDumpMigrationService
             'is_banned' => (bool) $partner['is_banned'],
             'company_name' => null,
             'company_tin' => null,
-            'company_license_number' => null,
             'company_phone' => null,
             'company_email' => null,
             'company_address' => null,

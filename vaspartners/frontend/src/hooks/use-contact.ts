@@ -268,7 +268,7 @@ export function useLookupCompany(tin: string) {
         tin: tin.trim(),
       });
       const res = await api<{
-        data: { public_id: string; name: string; tin: string; license_number: string };
+        data: { public_id: string; name: string; tin: string };
       }>(`/profile/company/lookup?${params.toString()}`);
       return res.data;
     },
@@ -331,7 +331,6 @@ export type CompanyRequestCard = {
     public_id?: string | null;
     name?: string | null;
     tin?: string | null;
-    license_number?: string | null;
   } | null;
   applicant?: {
     public_id?: string | null;

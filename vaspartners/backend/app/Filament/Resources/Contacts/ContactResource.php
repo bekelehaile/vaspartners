@@ -84,7 +84,6 @@ class ContactResource extends Resource
                             ? CompanyResource::getUrl('view', ['record' => $record->company])
                             : null),
                     TextEntry::make('company.tin')->label('TIN')->placeholder('—'),
-                    TextEntry::make('company.license_number')->label('License')->placeholder('—'),
                     TextEntry::make('company_role')->label('Role')->placeholder('—'),
                     TextEntry::make('company_phone')->placeholder('—'),
                     TextEntry::make('company_email')->placeholder('—'),

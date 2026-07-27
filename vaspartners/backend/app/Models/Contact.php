@@ -43,7 +43,6 @@ class Contact extends Authenticatable
     protected $fillable = [
         'company_name',
         'company_tin',
-        'company_license_number',
         'company_phone',
         'company_email',
         'company_address',

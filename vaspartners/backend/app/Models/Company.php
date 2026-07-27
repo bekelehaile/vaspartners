@@ -21,7 +21,6 @@ class Company extends Model
         'public_id',
         'name',
         'tin',
-        'license_number',
         'phone',
         'email',
         'address',
@@ -211,10 +210,5 @@ class Company extends Model
     public function setTinAttribute(?string $value): void
     {
         $this->attributes['tin'] = self::normalizeIdentityCode($value) ?? '';
-    }
-
-    public function setLicenseNumberAttribute(?string $value): void
-    {
-        $this->attributes['license_number'] = self::normalizeIdentityCode($value);
     }
 }

@@ -156,6 +156,11 @@ class ContactPortalController extends Controller
         $payload['chat_attachment_max_kb'] = $comments->maxAttachmentKb();
         $payload['documents_locked'] = $ticket->status->locksContactDocuments();
         $payload['contact_can_edit'] = $ticket->status->allowsContactEdits();
+        $payload['documents'] = collect($payload['documents'] ?? [])->map(function (array $doc) use ($ticket) {
+            $doc['download_url'] = url("/api/v1/tickets/{$ticket->tt_number}/documents/{$doc['id']}/download");
+
+            return $doc;
+        })->values()->all();
 
         return response()->json(['data' => $payload]);
     }
@@ -332,6 +337,26 @@ class ContactPortalController extends Controller
         return response()->json(['message' => 'Document removed.']);
     }
 
+    public function downloadDocument(
+        Request $request,
+        Ticket $ticket,
+        TicketDocument $document,
+    ): StreamedResponse {
+        abort_unless($ticket->contact_id === $request->user()->id, 404);
+        abort_unless((int) $document->ticket_id === (int) $ticket->id, 404);
+
+        $disk = $document->disk ?: 'local';
+        abort_unless(
+            filled($document->path) && Storage::disk($disk)->exists($document->path),
+            404,
+        );
+
+        return Storage::disk($disk)->download(
+            $document->path,
+            $document->original_name ?: basename((string) $document->path),
+        );
+    }
+
     public function comment(Request $request, Ticket $ticket, TicketCommentService $comments, PartnerNotificationService $notifications)
     {
         abort_unless($ticket->contact_id === $request->user()->id, 404);
@@ -417,7 +442,6 @@ class ContactPortalController extends Controller
                 'public_id' => $company->public_id,
                 'name' => $company->name,
                 'tin' => $company->tin,
-                'license_number' => $company->license_number,
             ],
         ]);
     }
