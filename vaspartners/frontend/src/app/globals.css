@@ -630,6 +630,269 @@ textarea {
   scroll-margin-top: 5.5rem;
 }
 
+.panel[id] {
+  scroll-margin-top: 5.5rem;
+}
+
+.org-requests-nav {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin: 0 0 1.25rem;
+}
+
+.org-requests-nav a {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--et-line);
+  border-radius: 0.65rem;
+  text-decoration: none;
+  color: inherit;
+  background: color-mix(in oklab, white 92%, var(--et-line));
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.org-requests-nav a:hover {
+  border-color: color-mix(in oklab, var(--primary) 45%, var(--et-line));
+}
+
+.org-requests-nav a.is-active {
+  border-color: var(--primary);
+  background: color-mix(in oklab, var(--primary) 8%, white);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--primary) 35%, transparent);
+}
+
+.org-requests-nav-label {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.org-requests-nav-hint {
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+@media (max-width: 640px) {
+  .org-requests-nav {
+    grid-template-columns: 1fr;
+  }
+}
+
+.company-member-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.company-members-table-wrap {
+  border-top: 1px solid var(--et-line);
+}
+
+.company-members-table th:last-child,
+.company-members-table td:last-child {
+  width: 8.5rem;
+  white-space: nowrap;
+}
+
+.member-actions-menu {
+  position: relative;
+  display: inline-block;
+}
+
+.member-actions-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--et-line);
+  border-radius: 0.45rem;
+  background: #fff;
+  color: var(--et-ink);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.member-actions-trigger:hover:not(:disabled) {
+  border-color: color-mix(in oklab, var(--primary) 40%, var(--et-line));
+  color: var(--primary);
+}
+
+.member-actions-trigger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.member-actions-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.3rem);
+  z-index: 20;
+  min-width: 11.5rem;
+  margin: 0;
+  padding: 0.35rem 0;
+  list-style: none;
+  background: #fff;
+  border: 1px solid var(--et-line);
+  border-radius: 0.55rem;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+}
+
+.member-actions-list button {
+  display: block;
+  width: 100%;
+  padding: 0.55rem 0.85rem;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--et-ink);
+  cursor: pointer;
+}
+
+.member-actions-list button:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--primary) 8%, white);
+}
+
+.member-actions-list button.is-danger {
+  color: var(--et-red);
+}
+
+.member-actions-list button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.company-member-expand-row td {
+  background: color-mix(in oklab, var(--et-line) 28%, white);
+  padding-top: 0.85rem;
+  padding-bottom: 0.85rem;
+}
+
+.company-member-details-dl {
+  margin: 0;
+}
+
+.company-members-hint {
+  margin: 0.85rem 1.25rem 1.15rem;
+}
+
+.company-member-perm-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.9rem;
+}
+
+.company-member-permissions-editor {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--et-line);
+  border-radius: 0.5rem;
+  background: color-mix(in oklab, var(--et-surface, #fff) 92%, var(--et-line));
+}
+
+.company-member-permission-list {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.company-member-permission-list label {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  cursor: pointer;
+}
+
+.company-member-permission-list label span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.company-member-permission-list input {
+  margin-top: 0.2rem;
+}
+
+.data-table tbody tr.is-editing td {
+  background: color-mix(in oklab, var(--primary) 6%, transparent);
+}
+
+.company-requests-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.company-request-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.company-request-card {
+  border-top: 1px solid color-mix(in oklab, var(--et-ink) 12%, white);
+  padding-top: 1rem;
+  margin-top: 0.85rem;
+}
+
+.company-request-card:first-child {
+  border-top: 0;
+  padding-top: 0;
+  margin-top: 0.35rem;
+}
+
+.company-request-card-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0 0 0.4rem;
+}
+
+.company-request-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.company-request-status.is-pending {
+  background: color-mix(in oklab, #d97706 18%, white);
+  color: #92400e;
+}
+
+.company-request-status.is-approved {
+  background: color-mix(in oklab, #16a34a 16%, white);
+  color: #166534;
+}
+
+.company-request-status.is-rejected {
+  background: color-mix(in oklab, var(--et-red) 14%, white);
+  color: var(--et-red);
+}
+
+.company-request-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.65rem;
+}
+
 .settings-block-head {
   margin-bottom: 0.85rem;
 }
@@ -702,14 +965,51 @@ textarea {
   gap: 1.25rem;
 }
 
-.company-members-list {
+.company-workspace {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: 1rem;
 }
 
-.company-members-list .fayda-readonly {
-  margin: 0;
+.company-workspace-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.35rem;
+  border: 1px solid var(--et-line);
+  border-radius: 0.75rem;
+  background: color-mix(in oklab, white 90%, var(--et-line));
+}
+
+.company-workspace-tabs button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #4b5563;
+  font: inherit;
+  font-weight: 550;
+  font-size: 0.95rem;
+  padding: 0.65rem 0.95rem;
+  border-radius: 0.55rem;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.company-workspace-tabs button:hover {
+  color: var(--et-ink);
+  background: color-mix(in oklab, white 70%, transparent);
+}
+
+.company-workspace-tabs button.is-active {
+  background: #fff;
+  color: var(--primary);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.company-ownership-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
 }
 
 .company-profile-dl {

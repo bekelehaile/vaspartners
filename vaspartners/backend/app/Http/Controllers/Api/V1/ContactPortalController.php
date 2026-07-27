@@ -592,6 +592,49 @@ class ContactPortalController extends Controller
     {
         return response()->json([
             'data' => $membership->listCurrentCompanyMembers($request->user()),
+            'permission_catalog' => \App\Enums\CompanyMemberPermission::catalog(),
+        ]);
+    }
+
+    public function enableCompanyMember(Request $request, string $member, CompanyMembershipService $membership)
+    {
+        $target = $membership->findCurrentCompanyMemberByPublicId($request->user(), $member);
+        $membership->setMembershipActiveByOwner($request->user(), $target, true);
+
+        return response()->json([
+            'data' => $membership->listCurrentCompanyMembers($request->user()),
+            'message' => 'Member access enabled.',
+        ]);
+    }
+
+    public function disableCompanyMember(Request $request, string $member, CompanyMembershipService $membership)
+    {
+        $target = $membership->findCurrentCompanyMemberByPublicId($request->user(), $member);
+        $membership->setMembershipActiveByOwner($request->user(), $target, false);
+
+        return response()->json([
+            'data' => $membership->listCurrentCompanyMembers($request->user()),
+            'message' => 'Member access disabled.',
+        ]);
+    }
+
+    public function updateCompanyMemberPermissions(Request $request, string $member, CompanyMembershipService $membership)
+    {
+        $data = $request->validate([
+            'permissions' => ['present', 'array'],
+            'permissions.*' => ['string', 'max:64'],
+        ]);
+
+        $target = $membership->findCurrentCompanyMemberByPublicId($request->user(), $member);
+        $membership->updateMemberPermissionsByOwner(
+            $request->user(),
+            $target,
+            $data['permissions'],
+        );
+
+        return response()->json([
+            'data' => $membership->listCurrentCompanyMembers($request->user()),
+            'message' => 'Member permissions updated.',
         ]);
     }
 

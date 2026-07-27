@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ReactNode } from "react";
+import { useContact } from "@/hooks/use-contact";
 
 export function PortalPageHeader({
   kicker,
@@ -40,6 +41,16 @@ export function NewRequestButton({
 
 /** Dual CTAs for the two partner journeys. */
 export function JourneyLaunchActions() {
+  const { data: me } = useContact();
+  const canCreate =
+    !me ||
+    me.company_role === "owner" ||
+    (me.company_permissions ?? []).includes("create_service_requests");
+
+  if (!canCreate) {
+    return null;
+  }
+
   return (
     <div className="journey-launch">
       <Link href="/portal/requests/new?intent=subscribe" className="btn-primary">

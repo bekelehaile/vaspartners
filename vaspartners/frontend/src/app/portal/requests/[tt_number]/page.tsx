@@ -19,7 +19,7 @@ export default function RequestDetailPage() {
       <PortalPageHeader
         kicker={
           <Link href="/portal" className="linkish">
-            ← My requests
+            ← Service requests
           </Link>
         }
         title={ticket ? `Request ${ticket.tt_number}` : "Request"}

@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   useCancelCompanyRequest,
   useCompanyRequestsInbox,
@@ -8,16 +7,16 @@ import {
   type CompanyRequestCard,
 } from "@/hooks/use-contact";
 
-function typeLabel(type: string): string {
+function typeLabel(type: string, mode: "mine" | "membership"): string {
   switch (type) {
     case "attach":
-      return "Join company";
+      return mode === "membership" ? "Incoming join request" : "Your join request";
     case "detach":
       return "Leave company";
     case "transfer_ownership":
       return "Transfer ownership";
     case "company_profile":
-      return "Company profile";
+      return "Company profile approval";
     default:
       return type;
   }
@@ -41,7 +40,7 @@ function awaitingLabel(awaiting?: string | null): string | null {
     case "company_owner":
       return "Waiting for company owner";
     case "admin":
-      return "Waiting for admin";
+      return "Waiting for Ethio telecom admin";
     default:
       return null;
   }
@@ -52,59 +51,66 @@ function RequestCard({
   onDecide,
   onCancel,
   busy,
+  mode,
 }: {
   row: CompanyRequestCard;
   onDecide?: (publicId: string, decision: "approve" | "reject") => void;
   onCancel?: (publicId: string) => void;
   busy: boolean;
+  mode: "mine" | "membership";
 }) {
   const wait = awaitingLabel(row.awaiting);
 
   return (
-    <div
-      style={{
-        borderTop: "1px solid color-mix(in oklab, var(--et-ink) 12%, white)",
-        paddingTop: "1rem",
-        marginTop: "1rem",
-      }}
-    >
-      <p style={{ margin: "0 0 0.35rem" }}>
-        <strong>{typeLabel(row.type)}</strong>
-        {" · "}
-        <span className="muted">{statusLabel(row.status)}</span>
-        {row.company?.name ? ` · ${row.company.name}` : ""}
+    <article className="company-request-card">
+      <p className="company-request-card-title">
+        <strong>{typeLabel(row.type, mode)}</strong>
+        <span className={`company-request-status is-${row.status}`}>
+          {statusLabel(row.status)}
+        </span>
       </p>
-      {row.direction === "to_review" && row.applicant?.name && (
+      {row.company?.name && (
+        <p className="muted" style={{ margin: "0 0 0.35rem" }}>
+          Company: <strong>{row.company.name}</strong>
+          {row.company.tin ? ` · TIN ${row.company.tin}` : ""}
+        </p>
+      )}
+      {mode === "membership" && row.applicant?.name && (
         <p style={{ margin: "0 0 0.35rem" }}>
-          Applicant: <strong>{row.applicant.name}</strong>
+          Partner asking to join: <strong>{row.applicant.name}</strong>
           {row.applicant.phone_number ? ` · ${row.applicant.phone_number}` : ""}
+          {row.applicant.email ? ` · ${row.applicant.email}` : ""}
         </p>
       )}
       {row.target_contact?.name && (
         <p className="muted" style={{ margin: "0 0 0.35rem" }}>
-          New owner: {row.target_contact.name}
+          Proposed new owner: {row.target_contact.name}
         </p>
       )}
-      {wait && <p className="muted">{wait}</p>}
-      {row.contact_note && <p className="muted">Note: {row.contact_note}</p>}
+      {mode === "mine" && wait && <p className="muted">{wait}</p>}
+      {row.contact_note && (
+        <p className="muted">
+          {mode === "membership" ? "Their note" : "Your note"}: {row.contact_note}
+        </p>
+      )}
       {row.decision_note && (
         <p className="muted">Decision note: {row.decision_note}</p>
       )}
       {row.decided_by && row.decided_by !== "—" && row.status !== "pending" && (
         <p className="muted">Decided by: {row.decided_by}</p>
       )}
-      <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-        {row.can_approve && onDecide && (
+      <div className="company-request-actions">
+        {mode === "membership" && row.can_approve && onDecide && (
           <button
             type="button"
             className="btn-primary"
             disabled={busy}
             onClick={() => onDecide(row.public_id, "approve")}
           >
-            Approve
+            Approve membership
           </button>
         )}
-        {row.can_reject && onDecide && (
+        {mode === "membership" && row.can_reject && onDecide && (
           <button
             type="button"
             className="btn-ghost"
@@ -114,115 +120,138 @@ function RequestCard({
             Reject
           </button>
         )}
-        {row.can_cancel && onCancel && row.kind === "membership_change" && (
-          <button
-            type="button"
-            className="btn-ghost"
-            disabled={busy}
-            onClick={() => onCancel(row.public_id)}
-          >
-            Cancel request
-          </button>
-        )}
+        {mode === "mine" &&
+          row.can_cancel &&
+          onCancel &&
+          row.kind === "membership_change" && (
+            <button
+              type="button"
+              className="btn-ghost"
+              disabled={busy}
+              onClick={() => onCancel(row.public_id)}
+            >
+              Cancel my request
+            </button>
+          )}
       </div>
-    </div>
+    </article>
   );
 }
 
-/** Shared membership / company request inbox for partners (submitters + owners). */
-export function CompanyRequestsInbox({ enabled }: { enabled: boolean }) {
-  const [tab, setTab] = useState<"submitted" | "to_review">("submitted");
+/** Requests the partner submitted (join, leave, transfer, company profile). */
+export function MyCompanyRequestsPanel({ enabled }: { enabled: boolean }) {
   const inbox = useCompanyRequestsInbox(enabled);
-  const decide = useDecideMembershipRequest();
   const cancel = useCancelCompanyRequest();
-
   const submitted = inbox.data?.submitted ?? [];
-  const toReview = inbox.data?.to_review ?? [];
-  const summary = inbox.data?.summary;
-  const busy = decide.isPending || cancel.isPending;
+  const busy = cancel.isPending;
 
   if (!enabled) {
     return null;
   }
 
   return (
-    <div className="panel" id="company-requests">
-      <h2>Company &amp; membership requests</h2>
-      <p className="muted">
-        Track requests you submitted (join, transfer, company profile) and review
-        membership joins for companies you own. Admins decide company profile and
-        ownership transfers in the admin portal.
-      </p>
+    <section className="panel" aria-labelledby="my-company-requests-heading">
+      <h2 id="my-company-requests-heading" className="sr-only">
+        Your company requests
+      </h2>
 
-      <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", marginBottom: "1rem" }}>
-        <button
-          type="button"
-          className={tab === "submitted" ? "btn-primary" : "btn-ghost"}
-          onClick={() => setTab("submitted")}
-        >
-          My requests
-          {summary?.submitted_pending
-            ? ` (${summary.submitted_pending} pending)`
-            : ""}
-        </button>
-        <button
-          type="button"
-          className={tab === "to_review" ? "btn-primary" : "btn-ghost"}
-          onClick={() => setTab("to_review")}
-        >
-          To review
-          {summary?.to_review_pending
-            ? ` (${summary.to_review_pending})`
-            : ""}
-        </button>
-      </div>
-
-      {inbox.isLoading && <p className="muted">Loading requests…</p>}
+      {inbox.isLoading && <p className="muted">Loading your requests…</p>}
       {inbox.isError && (
         <div className="alert">
           {inbox.error instanceof Error
             ? inbox.error.message
-            : "Could not load requests"}
+            : "Could not load your requests"}
         </div>
       )}
 
-      {tab === "submitted" && !inbox.isLoading && submitted.length === 0 && (
+      {!inbox.isLoading && submitted.length === 0 && (
         <p className="muted" style={{ marginBottom: 0 }}>
-          You have not submitted any company or membership requests yet.
-        </p>
-      )}
-      {tab === "to_review" && !inbox.isLoading && toReview.length === 0 && (
-        <p className="muted" style={{ marginBottom: 0 }}>
-          No membership join requests waiting for your approval.
+          You have not submitted any company requests yet. Join or create a company from
+          Settings, then track those submissions here — not under Membership requests.
         </p>
       )}
 
-      {(tab === "submitted" ? submitted : toReview).map((row) => (
-        <RequestCard
-          key={`${row.kind}-${row.public_id}`}
-          row={row}
-          busy={busy}
-          onDecide={
-            tab === "to_review"
-              ? (publicId, decision) =>
-                  void decide.mutateAsync({ public_id: publicId, decision })
-              : undefined
-          }
-          onCancel={
-            tab === "submitted"
-              ? (publicId) => void cancel.mutateAsync(publicId)
-              : undefined
-          }
-        />
-      ))}
+      <div className="company-request-list">
+        {submitted.map((row) => (
+          <RequestCard
+            key={`mine-${row.kind}-${row.public_id}`}
+            row={row}
+            mode="mine"
+            busy={busy}
+            onCancel={(publicId) => void cancel.mutateAsync(publicId)}
+          />
+        ))}
+      </div>
 
-      {(decide.isError || cancel.isError) && (
+      {cancel.isError && (
         <div className="alert" style={{ marginTop: "1rem" }}>
-          {(decide.error || cancel.error) instanceof Error
-            ? ((decide.error || cancel.error) as Error).message
-            : "Could not update request"}
+          {cancel.error instanceof Error
+            ? cancel.error.message
+            : "Could not cancel request"}
         </div>
       )}
-    </div>
+    </section>
+  );
+}
+
+/** Join requests for companies the partner owns. */
+export function MembershipRequestsPanel({ enabled }: { enabled: boolean }) {
+  const inbox = useCompanyRequestsInbox(enabled);
+  const decide = useDecideMembershipRequest();
+  const toReview = inbox.data?.to_review ?? [];
+  const summary = inbox.data?.summary;
+  const busy = decide.isPending;
+  const pendingCount = summary?.to_review_pending ?? 0;
+
+  if (!enabled) {
+    return null;
+  }
+
+  return (
+    <section className="panel" aria-labelledby="membership-requests-list-heading">
+      <h2 id="membership-requests-list-heading" className="sr-only">
+        Membership requests
+        {pendingCount > 0 ? ` (${pendingCount} waiting)` : ""}
+      </h2>
+
+      {inbox.isLoading && <p className="muted">Loading membership requests…</p>}
+      {inbox.isError && (
+        <div className="alert">
+          {inbox.error instanceof Error
+            ? inbox.error.message
+            : "Could not load membership requests"}
+        </div>
+      )}
+
+      {!inbox.isLoading && toReview.length === 0 && (
+        <p className="muted" style={{ marginBottom: 0 }}>
+          No partners are waiting for your approval. Only company owners (or members
+          granted approval rights) see incoming join requests here. Your own submissions
+          stay under Company requests.
+        </p>
+      )}
+
+      <div className="company-request-list">
+        {toReview.map((row) => (
+          <RequestCard
+            key={`membership-${row.kind}-${row.public_id}`}
+            row={row}
+            mode="membership"
+            busy={busy}
+            onDecide={(publicId, decision) =>
+              void decide.mutateAsync({ public_id: publicId, decision })
+            }
+          />
+        ))}
+      </div>
+
+      {decide.isError && (
+        <div className="alert" style={{ marginTop: "1rem" }}>
+          {decide.error instanceof Error
+            ? decide.error.message
+            : "Could not update membership request"}
+        </div>
+      )}
+    </section>
   );
 }

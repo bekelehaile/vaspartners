@@ -13,6 +13,7 @@ class CompanyMembership extends Model
         'company_id',
         'role',
         'is_active',
+        'permissions',
     ];
 
     protected function casts(): array
@@ -20,6 +21,7 @@ class CompanyMembership extends Model
         return [
             'role' => CompanyRole::class,
             'is_active' => 'boolean',
+            'permissions' => 'array',
         ];
     }
 

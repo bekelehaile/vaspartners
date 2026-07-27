@@ -55,6 +55,18 @@ export function PortalSettingsMenu({
     onNavigate?.();
   };
 
+  const go = (href: string) => {
+    close();
+    // Switch company-page tabs via hash even on same-route navigations.
+    if (typeof window !== "undefined" && href.includes("#")) {
+      const [path, hash] = href.split("#");
+      if (window.location.pathname === path) {
+        window.location.hash = hash;
+        window.dispatchEvent(new HashChangeEvent("hashchange"));
+      }
+    }
+  };
+
   return (
     <div className="portal-settings" ref={rootRef}>
       <button
@@ -76,30 +88,23 @@ export function PortalSettingsMenu({
           <Link
             href="/portal/company#fayda-identity"
             role="menuitem"
-            onClick={close}
+            onClick={() => go("/portal/company#fayda-identity")}
           >
             Fayda identity
           </Link>
           <Link
             href="/portal/company#company-info"
             role="menuitem"
-            onClick={close}
+            onClick={() => go("/portal/company#company-info")}
           >
             Company profile
           </Link>
           <div className="portal-settings-divider" role="separator" />
           <p className="portal-settings-menu-label">Organisation</p>
           <Link
-            href="/portal/company#company-requests"
-            role="menuitem"
-            onClick={close}
-          >
-            Change requests
-          </Link>
-          <Link
             href="/portal/company#company-members-panel"
             role="menuitem"
-            onClick={close}
+            onClick={() => go("/portal/company#company-members-panel")}
           >
             Company members
           </Link>

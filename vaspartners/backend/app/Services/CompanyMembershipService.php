@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\CompanyApprovalStatus;
 use App\Enums\CompanyChangeStatus;
 use App\Enums\CompanyChangeType;
+use App\Enums\CompanyMemberPermission;
 use App\Enums\CompanyRole;
 use App\Models\Company;
 use App\Models\CompanyChangeRequest;
@@ -91,15 +92,15 @@ class CompanyMembershipService
             throw ValidationException::withMessages(['company' => 'Company not found.']);
         }
 
-        if ($this->roleOf($contact) !== CompanyRole::Owner) {
+        if (! $this->contactHasPermission($contact, CompanyMemberPermission::EditCompanyProfile)) {
             throw ValidationException::withMessages([
-                'company' => 'Only the company owner can update organisation details.',
+                'company' => 'You do not have permission to update organisation details. Ask your company owner to grant access.',
             ]);
         }
 
         if (! $contact->hasActiveCompanyMembership()) {
             throw ValidationException::withMessages([
-                'company' => 'Your membership for this company is disabled. Contact an administrator.',
+                'company' => 'Your membership for this company is disabled. Contact your company owner or an administrator.',
             ]);
         }
 
@@ -568,7 +569,17 @@ class CompanyMembershipService
      */
     public function listCurrentCompanyMembers(Contact $viewer)
     {
-        $this->assertCanAccessCompany($viewer);
+        if (! $viewer->current_company_id) {
+            throw ValidationException::withMessages([
+                'company' => 'Link a company before viewing members.',
+            ]);
+        }
+
+        if (! $viewer->hasActiveCompanyMembership()) {
+            throw ValidationException::withMessages([
+                'company' => 'Your membership for this company is disabled. Contact an administrator.',
+            ]);
+        }
 
         return CompanyMembership::query()
             ->with('contact')
@@ -593,9 +604,136 @@ class CompanyMembershipService
                     'role' => $role,
                     'is_active' => (bool) $m->is_active,
                     'is_owner' => $role === CompanyRole::Owner->value,
+                    'permissions' => $this->effectivePermissionsForMembership($m),
                 ];
             })
             ->values();
+    }
+
+    /**
+     * Owner enables or disables a member of the current company.
+     */
+    public function setMembershipActiveByOwner(Contact $actor, Contact $member, bool $active): Contact
+    {
+        $this->assertIsActiveOwner($actor);
+
+        $company = Company::query()->findOrFail((int) $actor->current_company_id);
+        if ((int) $member->id === (int) $actor->id) {
+            throw ValidationException::withMessages([
+                'member' => 'You cannot change your own access. Transfer ownership first if needed.',
+            ]);
+        }
+
+        return $this->setMembershipActive($company, $member, $active, $actor);
+    }
+
+    /**
+     * Owner grants portal permissions to a non-owner member.
+     *
+     * @param  list<string>  $permissions
+     */
+    public function updateMemberPermissionsByOwner(Contact $actor, Contact $member, array $permissions): Contact
+    {
+        $this->assertIsActiveOwner($actor);
+
+        $company = Company::query()->findOrFail((int) $actor->current_company_id);
+        $membership = $this->membershipFor($member, $company);
+        if (! $membership) {
+            throw ValidationException::withMessages([
+                'member' => 'This partner is not a member of this company.',
+            ]);
+        }
+
+        if ($membership->isOwner()) {
+            throw ValidationException::withMessages([
+                'permissions' => 'Company owners always have full permissions.',
+            ]);
+        }
+
+        $allowed = CompanyMemberPermission::allValues();
+        $normalized = collect($permissions)
+            ->map(fn ($p) => (string) $p)
+            ->unique()
+            ->filter(fn (string $p) => in_array($p, $allowed, true))
+            ->values()
+            ->all();
+
+        $membership->forceFill(['permissions' => $normalized])->save();
+
+        return $member->fresh(['company', 'memberships.company']);
+    }
+
+    public function findCurrentCompanyMemberByPublicId(Contact $viewer, string $publicId): Contact
+    {
+        if (! $viewer->current_company_id) {
+            throw ValidationException::withMessages([
+                'company' => 'Link a company before managing members.',
+            ]);
+        }
+
+        $member = Contact::query()->where('public_id', $publicId)->first();
+        if (! $member) {
+            throw ValidationException::withMessages([
+                'member' => 'Member not found.',
+            ]);
+        }
+
+        $membership = $this->membershipFor($member, Company::query()->findOrFail((int) $viewer->current_company_id));
+        if (! $membership) {
+            throw ValidationException::withMessages([
+                'member' => 'This partner is not a member of this company.',
+            ]);
+        }
+
+        return $member;
+    }
+
+    public function assertHasPermission(Contact $contact, CompanyMemberPermission $permission): void
+    {
+        $this->assertCanAccessCompany($contact);
+
+        if (! $this->contactHasPermission($contact, $permission)) {
+            throw ValidationException::withMessages([
+                'permission' => match ($permission) {
+                    CompanyMemberPermission::CreateServiceRequests => 'You do not have permission to create service requests. Ask your company owner to grant access.',
+                    CompanyMemberPermission::ManageMembershipRequests => 'You do not have permission to manage membership requests. Ask your company owner to grant access.',
+                    CompanyMemberPermission::EditCompanyProfile => 'You do not have permission to edit the company profile. Ask your company owner to grant access.',
+                },
+            ]);
+        }
+    }
+
+    public function contactHasPermission(Contact $contact, CompanyMemberPermission $permission): bool
+    {
+        $membership = $contact->membershipForCurrentCompany();
+        if (! $membership || ! $membership->is_active) {
+            return false;
+        }
+
+        return in_array($permission->value, $this->effectivePermissionsForMembership($membership), true);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function effectivePermissionsForMembership(CompanyMembership $membership): array
+    {
+        if ($membership->isOwner()) {
+            return CompanyMemberPermission::allValues();
+        }
+
+        $stored = $membership->permissions;
+        if (! is_array($stored)) {
+            return CompanyMemberPermission::defaultsForMember();
+        }
+
+        $allowed = CompanyMemberPermission::allValues();
+
+        return collect($stored)
+            ->map(fn ($p) => (string) $p)
+            ->filter(fn (string $p) => in_array($p, $allowed, true))
+            ->values()
+            ->all();
     }
 
     /**
@@ -605,7 +743,7 @@ class CompanyMembershipService
      */
     public function pendingMembershipRequestsForOwner(Contact $owner)
     {
-        $this->assertIsActiveOwner($owner);
+        $this->assertCanManageMembershipRequests($owner);
 
         return CompanyChangeRequest::query()
             ->with(['contact', 'company'])
@@ -623,6 +761,21 @@ class CompanyMembershipService
      */
     public function companyRequestsInbox(Contact $contact): array
     {
+        $reviewCompanyIds = CompanyMembership::query()
+            ->where('contact_id', $contact->id)
+            ->where('is_active', true)
+            ->get()
+            ->filter(function (CompanyMembership $m) {
+                return $m->isOwner()
+                    || in_array(
+                        CompanyMemberPermission::ManageMembershipRequests->value,
+                        $this->effectivePermissionsForMembership($m),
+                        true,
+                    );
+            })
+            ->pluck('company_id')
+            ->values();
+
         $ownedCompanyIds = CompanyMembership::query()
             ->where('contact_id', $contact->id)
             ->where('role', CompanyRole::Owner->value)
@@ -661,10 +814,10 @@ class CompanyMembershipService
         });
 
         $toReview = [];
-        if ($ownedCompanyIds->isNotEmpty()) {
+        if ($reviewCompanyIds->isNotEmpty()) {
             $toReview = CompanyChangeRequest::query()
                 ->with(['contact', 'company', 'targetContact', 'reviewer', 'contactReviewer'])
-                ->whereIn('company_id', $ownedCompanyIds)
+                ->whereIn('company_id', $reviewCompanyIds)
                 ->where('type', CompanyChangeType::Attach)
                 ->where('status', CompanyChangeStatus::Pending)
                 ->latest('id')
@@ -747,7 +900,7 @@ class CompanyMembershipService
             && $direction === 'to_review'
             && $status === CompanyChangeStatus::Pending->value
             && $type === CompanyChangeType::Attach->value
-            && $this->contactOwnsCompany($viewer, (int) $request->company_id);
+            && $this->viewerCanDecideMembershipForCompany($viewer, (int) $request->company_id);
 
         $canCancel = $viewer
             && $direction === 'submitted'
@@ -836,11 +989,37 @@ class CompanyMembershipService
             ->exists();
     }
 
-    protected function assertOwnerMayReview(Contact $owner, CompanyChangeRequest $request): void
+    protected function viewerCanDecideMembershipForCompany(Contact $viewer, int $companyId): bool
     {
-        if (! $this->contactOwnsCompany($owner, (int) $request->company_id)) {
+        $membership = CompanyMembership::query()
+            ->where('contact_id', $viewer->id)
+            ->where('company_id', $companyId)
+            ->where('is_active', true)
+            ->first();
+
+        if (! $membership) {
+            return false;
+        }
+
+        return in_array(
+            CompanyMemberPermission::ManageMembershipRequests->value,
+            $this->effectivePermissionsForMembership($membership),
+            true,
+        );
+    }
+
+    protected function assertOwnerMayReview(Contact $actor, CompanyChangeRequest $request): void
+    {
+        if ((int) $actor->current_company_id !== (int) $request->company_id
+            || ! $actor->hasActiveCompanyMembership()) {
             throw ValidationException::withMessages([
-                'status' => 'Only the company owner can decide this membership request.',
+                'status' => 'Switch to this company with an active membership before deciding requests.',
+            ]);
+        }
+
+        if (! $this->contactHasPermission($actor, CompanyMemberPermission::ManageMembershipRequests)) {
+            throw ValidationException::withMessages([
+                'status' => 'Only the company owner (or a member granted membership approval) can decide this request.',
             ]);
         }
 
@@ -859,7 +1038,7 @@ class CompanyMembershipService
     {
         if ($this->roleOf($contact) !== CompanyRole::Owner || ! $contact->current_company_id) {
             throw ValidationException::withMessages([
-                'company' => 'Only the company owner can manage membership requests.',
+                'company' => 'Only the company owner can manage members.',
             ]);
         }
 
@@ -872,7 +1051,29 @@ class CompanyMembershipService
         $contact->loadMissing('company');
         if (! $contact->company?->isApproved()) {
             throw ValidationException::withMessages([
+                'company' => 'Member management is available after admin approves your company profile.',
+            ]);
+        }
+    }
+
+    protected function assertCanManageMembershipRequests(Contact $contact): void
+    {
+        if (! $contact->current_company_id || ! $contact->hasActiveCompanyMembership()) {
+            throw ValidationException::withMessages([
+                'company' => 'Your membership for this company is disabled.',
+            ]);
+        }
+
+        $contact->loadMissing('company');
+        if (! $contact->company?->isApproved()) {
+            throw ValidationException::withMessages([
                 'company' => 'Membership requests are available after admin approves your company profile.',
+            ]);
+        }
+
+        if (! $this->contactHasPermission($contact, CompanyMemberPermission::ManageMembershipRequests)) {
+            throw ValidationException::withMessages([
+                'company' => 'Only the company owner (or a member granted membership approval) can manage membership requests.',
             ]);
         }
     }
@@ -915,6 +1116,9 @@ class CompanyMembershipService
             [
                 'role' => $role->value,
                 'is_active' => true,
+                'permissions' => $role === CompanyRole::Owner
+                    ? null
+                    : CompanyMemberPermission::defaultsForMember(),
             ],
         );
 
@@ -1052,7 +1256,7 @@ class CompanyMembershipService
         });
     }
 
-    public function setMembershipActive(Company $company, Contact $member, bool $active, User $actor): Contact
+    public function setMembershipActive(Company $company, Contact $member, bool $active, User|Contact|null $actor = null): Contact
     {
         $membership = $this->membershipFor($member, $company);
         if (! $membership) {
@@ -1094,7 +1298,7 @@ class CompanyMembershipService
 
         if (! $contact->hasActiveCompanyMembership()) {
             throw ValidationException::withMessages([
-                'company' => 'Your membership for this company is disabled. Contact an administrator.',
+                'company' => 'Your membership for this company is disabled. Contact your company owner or an administrator.',
             ]);
         }
 
@@ -1229,15 +1433,25 @@ class CompanyMembershipService
             ? CompanyMembership::query()->where('company_id', $contact->current_company_id)->count()
             : 0;
         $isOwner = $this->roleOf($contact) === CompanyRole::Owner;
-        $canEditCompany = $isOwner
-            && $membershipActive
+        $currentMembership = $contact->membershipForCurrentCompany();
+        $permissions = $currentMembership && $membershipActive
+            ? $this->effectivePermissionsForMembership($currentMembership)
+            : [];
+        $canEditCompany = $membershipActive
             && $company
-            && ! $companyApproved;
+            && ! $companyApproved
+            && in_array(CompanyMemberPermission::EditCompanyProfile->value, $permissions, true);
         $canDetach = (bool) $contact->current_company_id
             && $membershipActive
             && $companyApproved
             && ! $isOwner;
-        $pendingMembershipCount = ($isOwner && $membershipActive && $companyApproved && $contact->current_company_id)
+        $canManageMembers = $isOwner && $membershipActive && $companyApproved;
+        $pendingMembershipCount = (
+            $membershipActive
+            && $companyApproved
+            && $contact->current_company_id
+            && in_array(CompanyMemberPermission::ManageMembershipRequests->value, $permissions, true)
+        )
             ? CompanyChangeRequest::query()
                 ->where('company_id', $contact->current_company_id)
                 ->where('type', CompanyChangeType::Attach)
@@ -1264,6 +1478,9 @@ class CompanyMembershipService
         $data['company_membership_active'] = $membershipActive;
         $data['company_can_detach'] = $canDetach;
         $data['company_can_edit'] = $canEditCompany;
+        $data['company_can_manage_members'] = $canManageMembers;
+        $data['company_permissions'] = $permissions;
+        $data['company_permission_catalog'] = CompanyMemberPermission::catalog();
         // Owner must transfer ownership (admin-approved) before they can leave.
         $data['company_needs_ownership_transfer'] = $isOwner && $membershipActive && (bool) $contact->current_company_id;
         $data['pending_membership_requests_count'] = $pendingMembershipCount;

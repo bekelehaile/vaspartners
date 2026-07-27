@@ -447,6 +447,12 @@ export function useDetachCompany() {
   });
 }
 
+export type CompanyMemberPermissionOption = {
+  key: string;
+  label: string;
+  description: string;
+};
+
 export type CompanyMemberOption = {
   public_id?: string | null;
   name?: string | null;
@@ -460,6 +466,7 @@ export type CompanyMemberOption = {
   role?: string | null;
   is_active?: boolean;
   is_owner?: boolean;
+  permissions?: string[];
 };
 
 export function useCompanyMembers(enabled: boolean) {
@@ -467,8 +474,54 @@ export function useCompanyMembers(enabled: boolean) {
     queryKey: ["company-members"],
     enabled,
     queryFn: async () => {
-      const res = await api<{ data: CompanyMemberOption[] }>("/profile/company/members");
-      return res.data;
+      const res = await api<{
+        data: CompanyMemberOption[];
+        permission_catalog?: CompanyMemberPermissionOption[];
+      }>("/profile/company/members");
+      return {
+        members: res.data,
+        permissionCatalog: res.permission_catalog ?? [],
+      };
+    },
+  });
+}
+
+export function useSetCompanyMemberActive() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: { public_id: string; active: boolean }) => {
+      const action = payload.active ? "enable" : "disable";
+      const res = await api<{ data: CompanyMemberOption[]; message?: string }>(
+        `/profile/company/members/${encodeURIComponent(payload.public_id)}/${action}`,
+        { method: "POST" },
+      );
+      return res;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["company-members"] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.contact.me });
+    },
+  });
+}
+
+export function useUpdateCompanyMemberPermissions() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: { public_id: string; permissions: string[] }) => {
+      const res = await api<{ data: CompanyMemberOption[]; message?: string }>(
+        `/profile/company/members/${encodeURIComponent(payload.public_id)}/permissions`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ permissions: payload.permissions }),
+        },
+      );
+      return res;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["company-members"] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.contact.me });
     },
   });
 }

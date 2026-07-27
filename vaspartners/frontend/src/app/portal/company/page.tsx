@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { CompanyProfileForm } from "@/components/CompanyProfileForm";
-import { CompanyRequestsInbox } from "@/components/CompanyRequestsInbox";
+import { CompanyMembersTable } from "@/components/CompanyMembersTable";
 import { FaydaIdentityPanel } from "@/components/FaydaIdentityPanel";
 import { PortalPageHeader } from "@/components/PortalPageHeader";
 import {
@@ -17,10 +18,29 @@ import {
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { queryKeys } from "@/lib/query-keys";
 
+type CompanyTab = "identity" | "profile" | "members" | "ownership";
+
+const HASH_TO_TAB: Record<string, CompanyTab> = {
+  "fayda-identity": "identity",
+  "fayda-identity-panel": "identity",
+  "company-info": "profile",
+  "company-profile-panel": "profile",
+  "company-members-panel": "members",
+  "transfer-ownership": "ownership",
+  "leave-company": "ownership",
+};
+
+function tabFromHash(): CompanyTab | null {
+  if (typeof window === "undefined") return null;
+  const hash = window.location.hash.replace(/^#/, "").trim();
+  return hash ? (HASH_TO_TAB[hash] ?? null) : null;
+}
+
 export default function CompanyProfilePage() {
   const queryClient = useQueryClient();
   const { data: me } = useContact();
   const [creatingAnother, setCreatingAnother] = useState(false);
+  const [tab, setTab] = useState<CompanyTab>("identity");
   const membershipDisabled =
     !!me?.company_id && me?.company_membership_active === false;
   const awaitingApproval =
@@ -39,14 +59,61 @@ export default function CompanyProfilePage() {
   const attach = useAttachCompany();
   const detach = useDetachCompany();
   const transfer = useTransferOwnership();
-  const companyMembers = useCompanyMembers(!!isLinked && !pending);
+  const canViewMembers =
+    !membershipDisabled && !!me?.company_id && !pending;
+  const showWorkspace = !pending && (isLinked || awaitingApproval);
+  const companyMembers = useCompanyMembers(canViewMembers && showWorkspace);
   const [detachNote, setDetachNote] = useState("");
   const [transferTarget, setTransferTarget] = useState("");
   const [transferNote, setTransferNote] = useState("");
   const [transferLetter, setTransferLetter] = useState<File | null>(null);
 
-  const showRequestsInbox =
-    !membershipDisabled && (!!pending || isLinked || awaitingApproval || !!me);
+  const tabs = useMemo(() => {
+    const items: { id: CompanyTab; label: string }[] = [
+      { id: "identity", label: "Fayda identity" },
+      { id: "profile", label: "Company profile" },
+    ];
+    if (canViewMembers) {
+      items.push({ id: "members", label: "Members" });
+    }
+    if (isLinked) {
+      items.push({ id: "ownership", label: isOwner ? "Ownership" : "Leave company" });
+    }
+    return items;
+  }, [canViewMembers, isLinked, isOwner]);
+
+  useEffect(() => {
+    const applyHash = () => {
+      const fromHash = tabFromHash();
+      if (fromHash && tabs.some((t) => t.id === fromHash)) {
+        setTab(fromHash);
+      }
+    };
+    applyHash();
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
+  }, [tabs, me?.public_id, showWorkspace]);
+
+  useEffect(() => {
+    if (!tabs.some((t) => t.id === tab)) {
+      setTab(tabs[0]?.id ?? "identity");
+    }
+  }, [tabs, tab]);
+
+  const selectTab = (next: CompanyTab) => {
+    setTab(next);
+    const hash =
+      next === "identity"
+        ? "fayda-identity"
+        : next === "profile"
+          ? "company-info"
+          : next === "members"
+            ? "company-members-panel"
+            : "leave-company";
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", `#${hash}`);
+    }
+  };
 
   const waitingFor =
     pending?.type === "attach"
@@ -55,7 +122,7 @@ export default function CompanyProfilePage() {
         ? "admin"
         : "admin";
 
-  const transferCandidates = (companyMembers.data ?? []).filter(
+  const transferCandidates = (companyMembers.data?.members ?? []).filter(
     (m) => m.role !== "owner" && m.is_active !== false && m.public_id,
   );
 
@@ -81,13 +148,13 @@ export default function CompanyProfilePage() {
         }
         description={
           membershipDisabled
-            ? "Your access to this company has been disabled by an administrator."
+            ? "Your access to this company has been disabled. Ask your company owner or an administrator to re-enable it."
             : awaitingApproval
               ? me?.company?.approval_status === "rejected"
                 ? `Admin feedback: ${me?.company?.approval_note || "Please complete the required company information and resubmit."}`
                 : "You are the company owner. An administrator must approve this unique TIN before you can request VAS services."
               : isLinked
-                ? `Three sections: your Fayda identity, the company profile for ${me?.company_name || me?.company?.name || "this organisation"}, and members whose details come from Fayda.`
+                ? `Manage Fayda identity, company profile, and members for ${me?.company_name || me?.company?.name || "this organisation"} using the tabs below.`
                 : pending
                   ? `Your ${pending.type} request for ${pending.company?.name || "a company"} is waiting for ${waitingFor} approval. VAS services stay locked until the company TIN is approved.`
                   : `Hello${me?.name ? `, ${me.name.split(" ")[0]}` : ""}. Create a new company with a unique TIN for admin approval, or request to join an existing approved company. You cannot use VAS services until that TIN is approved.`
@@ -102,9 +169,7 @@ export default function CompanyProfilePage() {
               Pick the active company from the list. Subscriptions and service requests use
               that company. You can own some companies and be a member of others.
             </p>
-            {me && (
-              <CompanySwitcher me={me} variant="page" showHint />
-            )}
+            {me && <CompanySwitcher me={me} variant="page" showHint />}
             {isLinked && (
               <button
                 type="button"
@@ -142,11 +207,13 @@ export default function CompanyProfilePage() {
           <div className="alert" style={{ marginBottom: "1rem" }}>
             Your {pending.type.replaceAll("_", " ")} request
             {pending.company?.name ? ` for ${pending.company.name}` : ""} is waiting for{" "}
-            {waitingFor}. Track it in <strong>Company &amp; membership requests</strong> below.
+            {waitingFor}. Track it under{" "}
+            <Link href="/portal/company-requests">
+              <strong>Company requests</strong>
+            </Link>
+            .
           </div>
         )}
-
-        {showRequestsInbox && <CompanyRequestsInbox enabled />}
 
         {!membershipDisabled && !pending && !isLinked && !awaitingApproval && (
           <>
@@ -258,288 +325,335 @@ export default function CompanyProfilePage() {
           </>
         )}
 
-        {!pending && awaitingApproval && (
-          <div className="panel">
-            <h2>Organisation details</h2>
-            <div className="alert" role="status" style={{ marginBottom: "1rem" }}>
-              VAS services are locked until an administrator approves this company TIN.
-              Each TIN can only be registered once.
-            </div>
-            <p className="muted">
-              {canEditCompany
-                ? "You can update your company details while waiting for admin approval. Resubmitting sends the profile back for review."
-                : "Waiting for admin."}
-            </p>
-            {canEditCompany ? (
-              <CompanyProfileForm
-                key={`${me?.public_id ?? "company"}-pending`}
-                me={me}
-                redirectTo="/portal/company"
-              />
-            ) : null}
-          </div>
-        )}
-
-        {!pending && isLinked && (
-          <div className="company-portal-stack">
-            <div className="panel" id="fayda-identity-panel">
-              <h2>1. Fayda identity</h2>
-              <p className="muted">
-                Your personal National ID details from Fayda
-                {me?.company_role === "owner" ? " (you are the company owner)" : ""}.
-                This is not company registration data.
-              </p>
-              <FaydaIdentityPanel
-                id="fayda-identity"
-                title="Your Fayda identity"
-                description="Read-only. Contact Fayda support if anything is wrong."
-                person={me ?? {}}
-                badge={
-                  me?.company_role === "owner" ? (
-                    <span className="service-meta">Owner</span>
-                  ) : (
-                    <span className="service-meta">Member</span>
-                  )
-                }
-              />
+        {showWorkspace && (
+          <div className="company-workspace">
+            <div
+              className="company-workspace-tabs"
+              role="tablist"
+              aria-label="Company and identity"
+            >
+              {tabs.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="tab"
+                  id={`company-tab-${item.id}`}
+                  aria-selected={tab === item.id}
+                  aria-controls={`company-panel-${item.id}`}
+                  className={tab === item.id ? "is-active" : undefined}
+                  onClick={() => selectTab(item.id)}
+                >
+                  {item.label}
+                </button>
+              ))}
             </div>
 
-            <div className="panel" id="company-profile-panel">
-              <h2>2. Company profile</h2>
-              <p className="muted">
-                Organisation registration for this TIN. After approval, only administrators
-                can change these records.
-              </p>
-              <section id="company-info" className="settings-block">
-                <dl className="fayda-dl company-profile-dl">
-                  <div>
-                    <dt>Company name</dt>
-                    <dd>{me?.company_name || me?.company?.name || "—"}</dd>
-                  </div>
-                  <div>
-                    <dt>TIN</dt>
-                    <dd>{me?.company_tin || me?.company?.tin || "—"}</dd>
-                  </div>
-                  <div>
-                    <dt>Approval</dt>
-                    <dd>{me?.company?.approval_status || "approved"}</dd>
-                  </div>
-                  <div style={{ gridColumn: "1 / -1" }}>
-                    <dt>Address</dt>
-                    <dd>{me?.company_address || me?.company?.address || "—"}</dd>
-                  </div>
-                </dl>
-              </section>
-            </div>
-
-            <div className="panel" id="company-members-panel">
-              <h2>3. Company members</h2>
-              <p className="muted">
-                Partners linked to this company. Names and ID details come from each
-                person’s Fayda sign-in.
-              </p>
-              {companyMembers.isLoading && (
-                <p className="muted">Loading members…</p>
-              )}
-              {companyMembers.isError && (
-                <div className="alert">
-                  {companyMembers.error instanceof Error
-                    ? companyMembers.error.message
-                    : "Could not load members"}
-                </div>
-              )}
-              <div className="company-members-list">
-                {(companyMembers.data ?? []).map((member, index) => (
+            {tab === "identity" && (
+              <div
+                className="panel"
+                role="tabpanel"
+                id="company-panel-identity"
+                aria-labelledby="company-tab-identity"
+              >
+                <div id="fayda-identity-panel">
+                  <h2>Fayda identity</h2>
+                  <p className="muted">
+                    Your personal National ID details from Fayda
+                    {me?.company_role === "owner" ? " (you are the company owner)" : ""}.
+                    This is not company registration data.
+                  </p>
                   <FaydaIdentityPanel
-                    key={member.public_id || `member-${index}`}
-                    id={
-                      member.public_id
-                        ? `member-${member.public_id}`
-                        : undefined
-                    }
-                    title={member.name || "Partner"}
-                    description="Fayda identity for this membership."
-                    person={member}
+                    id="fayda-identity"
+                    title="Your Fayda identity"
+                    description="Read-only. Contact Fayda support if anything is wrong."
+                    person={me ?? {}}
                     badge={
-                      <>
-                        <span className="service-meta">
-                          {member.role === "owner" ? "Owner" : "Member"}
-                        </span>
-                        {member.is_active === false ? (
-                          <span className="service-meta">Access disabled</span>
-                        ) : null}
-                        {member.public_id && me?.public_id === member.public_id ? (
-                          <span className="service-meta">You</span>
-                        ) : null}
-                      </>
+                      me?.company_role === "owner" ? (
+                        <span className="service-meta">Owner</span>
+                      ) : (
+                        <span className="service-meta">Member</span>
+                      )
                     }
                   />
-                ))}
-              </div>
-              {!companyMembers.isLoading &&
-                (companyMembers.data?.length ?? 0) === 0 && (
-                  <p className="muted" style={{ marginBottom: 0 }}>
-                    No members found for this company yet.
-                  </p>
-                )}
-            </div>
-
-            {isOwner && (
-              <div className="panel" id="transfer-ownership">
-                <h2>Transfer ownership</h2>
-                <p className="muted">
-                  Required before you can leave. Choose an active member as the new owner and
-                  upload a signed letter (PDF). An administrator must approve the transfer.
-                  Track the transfer under <strong>Company &amp; membership requests</strong> above.
-                </p>
-                {companyMembers.isLoading && (
-                  <p className="muted">Loading members…</p>
-                )}
-                {!companyMembers.isLoading && transferCandidates.length === 0 && (
-                  <p className="muted" style={{ marginBottom: 0 }}>
-                    No other active members yet. Approve a membership request first, then
-                    transfer ownership.
-                  </p>
-                )}
-                {transferCandidates.length > 0 && (
-                  <>
-                    <div className="field">
-                      <label htmlFor="transfer-target">New owner</label>
-                      <select
-                        id="transfer-target"
-                        value={transferTarget}
-                        onChange={(e) => setTransferTarget(e.target.value)}
-                      >
-                        <option value="">Select a member…</option>
-                        {transferCandidates.map((m) => (
-                          <option key={m.public_id!} value={m.public_id!}>
-                            {m.name || "Partner"}
-                            {m.phone_number ? ` · ${m.phone_number}` : ""}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="field">
-                      <label htmlFor="transfer-letter">Letter (PDF, required)</label>
-                      <input
-                        id="transfer-letter"
-                        type="file"
-                        accept="application/pdf,.pdf"
-                        onChange={(e) =>
-                          setTransferLetter(e.target.files?.[0] ?? null)
-                        }
-                      />
-                    </div>
-                    <div className="field">
-                      <label htmlFor="transfer-note">Note (optional)</label>
-                      <textarea
-                        id="transfer-note"
-                        rows={3}
-                        value={transferNote}
-                        onChange={(e) => setTransferNote(e.target.value)}
-                      />
-                    </div>
-                    {transfer.isError && (
-                      <div className="alert">
-                        {transfer.error instanceof Error
-                          ? transfer.error.message
-                          : "Could not submit transfer"}
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      className="btn-primary"
-                      disabled={
-                        transfer.isPending ||
-                        !transferTarget ||
-                        !transferLetter
-                      }
-                      onClick={() => {
-                        if (!transferLetter) return;
-                        void transfer
-                          .mutateAsync({
-                            target_contact: transferTarget,
-                            letter: transferLetter,
-                            note: transferNote,
-                          })
-                          .then(() => {
-                            setTransferTarget("");
-                            setTransferNote("");
-                            setTransferLetter(null);
-                          });
-                      }}
-                    >
-                      {transfer.isPending
-                        ? "Submitting…"
-                        : "Submit transfer request"}
-                    </button>
-                  </>
-                )}
+                </div>
               </div>
             )}
 
-            <div className="panel" id="leave-company">
-              <h2>Leave this company</h2>
-              {me?.company_role === "owner" || me?.company_needs_ownership_transfer ? (
-                <div className="alert" role="status">
-                  As the company owner you cannot leave yet. Transfer ownership to another
-                  active member first (upload a letter PDF; an administrator must approve).
-                  After the transfer, you become a member and can leave normally.
-                  {transferCandidates.length === 0 ? (
+            {tab === "profile" && (
+              <div
+                className="panel"
+                role="tabpanel"
+                id="company-panel-profile"
+                aria-labelledby="company-tab-profile"
+              >
+                <div id="company-profile-panel">
+                  <h2>Company profile</h2>
+                  {awaitingApproval ? (
                     <>
-                      {" "}
-                      If no other members exist yet, approve a membership request first, then
-                      submit the transfer.
+                      <div className="alert" role="status" style={{ marginBottom: "1rem" }}>
+                        VAS services are locked until an administrator approves this company
+                        TIN. Each TIN can only be registered once.
+                      </div>
+                      <p className="muted">
+                        {canEditCompany
+                          ? "You can update your company details while waiting for admin approval. Resubmitting sends the profile back for review."
+                          : "Waiting for admin."}
+                      </p>
+                      <section id="company-info" className="settings-block">
+                        {canEditCompany ? (
+                          <CompanyProfileForm
+                            key={`${me?.public_id ?? "company"}-pending`}
+                            me={me}
+                            redirectTo="/portal/company"
+                          />
+                        ) : (
+                          <dl className="fayda-dl company-profile-dl">
+                            <div>
+                              <dt>Company name</dt>
+                              <dd>{me?.company_name || me?.company?.name || "—"}</dd>
+                            </div>
+                            <div>
+                              <dt>TIN</dt>
+                              <dd>{me?.company_tin || me?.company?.tin || "—"}</dd>
+                            </div>
+                            <div>
+                              <dt>Approval</dt>
+                              <dd>{me?.company?.approval_status || "pending"}</dd>
+                            </div>
+                          </dl>
+                        )}
+                      </section>
                     </>
-                  ) : null}
-                </div>
-              ) : (
-                <>
-                  <p className="muted">
-                    Leaving is personal and immediate — no admin approval. Joining another company
-                    still needs that company owner’s approval. Your other company memberships stay.
-                  </p>
-                  <div className="field">
-                    <label htmlFor="detach-note">Note (optional)</label>
-                    <textarea
-                      id="detach-note"
-                      rows={3}
-                      value={detachNote}
-                      onChange={(e) => setDetachNote(e.target.value)}
-                    />
-                  </div>
-                  {detach.isError && (
-                    <div className="alert">
-                      {detach.error instanceof Error
-                        ? detach.error.message
-                        : "Could not leave company"}
-                    </div>
+                  ) : (
+                    <>
+                      <p className="muted">
+                        Organisation registration for this TIN. After approval, only
+                        administrators can change these records.
+                      </p>
+                      <section id="company-info" className="settings-block">
+                        <dl className="fayda-dl company-profile-dl">
+                          <div>
+                            <dt>Company name</dt>
+                            <dd>{me?.company_name || me?.company?.name || "—"}</dd>
+                          </div>
+                          <div>
+                            <dt>TIN</dt>
+                            <dd>{me?.company_tin || me?.company?.tin || "—"}</dd>
+                          </div>
+                          <div>
+                            <dt>Approval</dt>
+                            <dd>{me?.company?.approval_status || "approved"}</dd>
+                          </div>
+                          <div style={{ gridColumn: "1 / -1" }}>
+                            <dt>Address</dt>
+                            <dd>{me?.company_address || me?.company?.address || "—"}</dd>
+                          </div>
+                        </dl>
+                      </section>
+                    </>
                   )}
-                  <button
-                    type="button"
-                    className="btn-primary"
-                    disabled={detach.isPending || me?.company_can_detach === false}
-                    onClick={() => {
-                      if (
-                        !window.confirm(
-                          "Leave this company now? You can request to join again later.",
-                        )
-                      ) {
-                        return;
-                      }
-                      void detach.mutateAsync({ note: detachNote }).then(() => {
-                        setDetachNote("");
-                        void queryClient.invalidateQueries({
-                          queryKey: queryKeys.contact.me,
-                        });
-                      });
-                    }}
-                  >
-                    {detach.isPending ? "Leaving…" : "Leave company"}
-                  </button>
-                </>
-              )}
-            </div>
+                </div>
+              </div>
+            )}
+
+            {tab === "members" && canViewMembers && (
+              <div
+                className="panel panel-flush"
+                role="tabpanel"
+                id="company-panel-members"
+                aria-labelledby="company-tab-members"
+              >
+                <div id="company-members-panel">
+                  <div style={{ padding: "1.25rem 1.25rem 0.85rem" }}>
+                    <h2 style={{ marginTop: 0, marginBottom: "0.35rem" }}>
+                      Company members
+                    </h2>
+                    <p className="muted" style={{ marginBottom: 0 }}>
+                      Tabular roster of partners linked to this company. Use the Actions
+                      list on each row
+                      {isOwner
+                        ? " to enable or disable access and grant permissions."
+                        : " to view Fayda identity details."}
+                    </p>
+                  </div>
+                  <CompanyMembersTable enabled={canViewMembers} />
+                </div>
+              </div>
+            )}
+
+            {tab === "ownership" && isLinked && (
+              <div
+                className="company-ownership-stack"
+                role="tabpanel"
+                id="company-panel-ownership"
+                aria-labelledby="company-tab-ownership"
+              >
+                {isOwner && (
+                  <div className="panel" id="transfer-ownership">
+                    <h2>Transfer ownership</h2>
+                    <p className="muted">
+                      Required before you can leave. Choose an active member as the new
+                      owner and upload a signed letter (PDF). An administrator must approve
+                      the transfer. Track the transfer under{" "}
+                      <Link href="/portal/company-requests">
+                        <strong>Company requests</strong>
+                      </Link>
+                      .
+                    </p>
+                    {companyMembers.isLoading && (
+                      <p className="muted">Loading members…</p>
+                    )}
+                    {!companyMembers.isLoading && transferCandidates.length === 0 && (
+                      <p className="muted" style={{ marginBottom: 0 }}>
+                        No other active members yet. Approve a{" "}
+                        <Link href="/portal/membership-requests">membership request</Link>{" "}
+                        first, then transfer ownership.
+                      </p>
+                    )}
+                    {transferCandidates.length > 0 && (
+                      <>
+                        <div className="field">
+                          <label htmlFor="transfer-target">New owner</label>
+                          <select
+                            id="transfer-target"
+                            value={transferTarget}
+                            onChange={(e) => setTransferTarget(e.target.value)}
+                          >
+                            <option value="">Select a member…</option>
+                            {transferCandidates.map((m) => (
+                              <option key={m.public_id!} value={m.public_id!}>
+                                {m.name || "Partner"}
+                                {m.phone_number ? ` · ${m.phone_number}` : ""}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="field">
+                          <label htmlFor="transfer-letter">Letter (PDF, required)</label>
+                          <input
+                            id="transfer-letter"
+                            type="file"
+                            accept="application/pdf,.pdf"
+                            onChange={(e) =>
+                              setTransferLetter(e.target.files?.[0] ?? null)
+                            }
+                          />
+                        </div>
+                        <div className="field">
+                          <label htmlFor="transfer-note">Note (optional)</label>
+                          <textarea
+                            id="transfer-note"
+                            rows={3}
+                            value={transferNote}
+                            onChange={(e) => setTransferNote(e.target.value)}
+                          />
+                        </div>
+                        {transfer.isError && (
+                          <div className="alert">
+                            {transfer.error instanceof Error
+                              ? transfer.error.message
+                              : "Could not submit transfer"}
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          disabled={
+                            transfer.isPending || !transferTarget || !transferLetter
+                          }
+                          onClick={() => {
+                            if (!transferLetter) return;
+                            void transfer
+                              .mutateAsync({
+                                target_contact: transferTarget,
+                                letter: transferLetter,
+                                note: transferNote,
+                              })
+                              .then(() => {
+                                setTransferTarget("");
+                                setTransferNote("");
+                                setTransferLetter(null);
+                              });
+                          }}
+                        >
+                          {transfer.isPending
+                            ? "Submitting…"
+                            : "Submit transfer request"}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                <div className="panel" id="leave-company">
+                  <h2>Leave this company</h2>
+                  {me?.company_role === "owner" ||
+                  me?.company_needs_ownership_transfer ? (
+                    <div className="alert" role="status">
+                      As the company owner you cannot leave yet. Transfer ownership to
+                      another active member first (upload a letter PDF; an administrator
+                      must approve). After the transfer, you become a member and can leave
+                      normally.
+                      {transferCandidates.length === 0 ? (
+                        <>
+                          {" "}
+                          If no other members exist yet, approve a membership request first,
+                          then submit the transfer.
+                        </>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <>
+                      <p className="muted">
+                        Leaving is personal and immediate — no admin approval. Joining
+                        another company still needs that company owner’s approval. Your
+                        other company memberships stay.
+                      </p>
+                      <div className="field">
+                        <label htmlFor="detach-note">Note (optional)</label>
+                        <textarea
+                          id="detach-note"
+                          rows={3}
+                          value={detachNote}
+                          onChange={(e) => setDetachNote(e.target.value)}
+                        />
+                      </div>
+                      {detach.isError && (
+                        <div className="alert">
+                          {detach.error instanceof Error
+                            ? detach.error.message
+                            : "Could not leave company"}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        disabled={
+                          detach.isPending || me?.company_can_detach === false
+                        }
+                        onClick={() => {
+                          if (
+                            !window.confirm(
+                              "Leave this company now? You can request to join again later.",
+                            )
+                          ) {
+                            return;
+                          }
+                          void detach.mutateAsync({ note: detachNote }).then(() => {
+                            setDetachNote("");
+                            void queryClient.invalidateQueries({
+                              queryKey: queryKeys.contact.me,
+                            });
+                          });
+                        }}
+                      >
+                        {detach.isPending ? "Leaving…" : "Leave company"}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

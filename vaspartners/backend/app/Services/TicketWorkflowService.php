@@ -225,6 +225,10 @@ class TicketWorkflowService
             // Hard gate: no VAS service requests until the company TIN is admin-approved.
             if (empty($data['skip_open_limit'])) {
                 $this->membership->assertCanAccessCompany($contact);
+                $this->membership->assertHasPermission(
+                    $contact,
+                    \App\Enums\CompanyMemberPermission::CreateServiceRequests,
+                );
             }
 
             $service = Service::query()->findOrFail($data['service_id']);

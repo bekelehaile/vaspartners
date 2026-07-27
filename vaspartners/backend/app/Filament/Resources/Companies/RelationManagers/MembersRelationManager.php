@@ -29,7 +29,7 @@ class MembersRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->description('Ownership transfers are requested by the company owner (with a letter PDF) and approved under Company change requests. Admins enable or disable member access here.')
+            ->description('Company owners can enable/disable members and grant permissions in the partner portal. Admins can also toggle access here. Ownership transfers are requested by the owner (with a letter PDF) and approved under Company change requests.')
             ->modifyQueryUsing(fn ($query) => $query->with('contact')->orderByRaw("CASE WHEN role = 'owner' THEN 0 ELSE 1 END")->orderBy('id'))
             ->columns([
                 TextColumn::make('contact.name')->searchable()->sortable(),

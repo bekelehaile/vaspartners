@@ -44,6 +44,13 @@ export type Contact = {
   company_needs_ownership_transfer?: boolean;
   company_membership_active?: boolean | null;
   company_can_edit?: boolean;
+  company_can_manage_members?: boolean;
+  company_permissions?: string[];
+  company_permission_catalog?: Array<{
+    key: string;
+    label: string;
+    description: string;
+  }>;
   pending_membership_requests_count?: number;
   pending_company_request?: {
     public_id: string;
