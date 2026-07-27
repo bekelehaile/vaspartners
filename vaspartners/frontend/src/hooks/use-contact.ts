@@ -1,7 +1,6 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   BlogPost,
@@ -16,7 +15,7 @@ import {
   Ticket,
   TicketMessage,
   api,
-  clearToken,
+  clearClientSession,
   getToken,
 } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
@@ -937,18 +936,27 @@ export function useMarkAllNotificationsRead() {
 }
 
 export function useLogout() {
-  const router = useRouter();
   const queryClient = useQueryClient();
 
   return async () => {
     try {
       await api("/auth/logout", { method: "POST" });
     } catch {
+      /* still clear local session */
+    }
+
+    try {
+      await queryClient.cancelQueries();
+    } catch {
       /* ignore */
     }
-    clearToken();
     queryClient.clear();
-    router.replace("/");
+    clearClientSession();
+
+    // Full navigation drops in-memory React / Next soft cache for the session.
+    if (typeof window !== "undefined") {
+      window.location.assign("/");
+    }
   };
 }
 

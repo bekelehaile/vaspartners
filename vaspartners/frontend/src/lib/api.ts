@@ -216,8 +216,35 @@ export function setToken(token: string) {
 }
 
 export function clearToken() {
+  if (typeof window === "undefined") return;
   localStorage.removeItem("vas_token");
 }
+
+/** Drop portal auth + any client-side session leftovers (token, storage). */
+export function clearClientSession() {
+  if (typeof window === "undefined") return;
+  clearToken();
+  try {
+    sessionStorage.clear();
+  } catch {
+    /* ignore */
+  }
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith("vas_") || key.startsWith("REACT_QUERY"))) {
+        keys.push(key);
+      }
+    }
+    keys.forEach((key) => localStorage.removeItem(key));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** @deprecated Prefer clearClientSession */
+export const clearClientAuth = clearClientSession;
 
 export function faydaLoginUrl() {
   return `${API}/auth/fayda/redirect`;
@@ -232,9 +259,12 @@ export async function api<T = unknown>(path: string, init: RequestInit = {}): Pr
   const t = getToken();
   if (t) headers.set("Authorization", `Bearer ${t}`);
 
-  const res = await fetch(`${API}${path}`, { ...init, headers });
+  const res = await fetch(`${API}${path}`, { ...init, headers, cache: "no-store" });
   if (res.status === 401) {
-    clearToken();
+    clearClientSession();
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("vas:unauthorized"));
+    }
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));

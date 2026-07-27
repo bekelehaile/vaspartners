@@ -6,7 +6,7 @@ import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { NotificationBell } from "@/components/NotificationBell";
 import { PortalSettingsMenu } from "@/components/PortalSettingsMenu";
 import { PortalSidebar } from "@/components/PortalSidebar";
-import { Contact, clearToken, faydaLoginUrl } from "@/lib/api";
+import { Contact, clearClientSession, faydaLoginUrl } from "@/lib/api";
 
 function LogInIcon() {
   return (
@@ -323,5 +323,5 @@ export function SiteShell({
 }
 
 export function clearSession() {
-  clearToken();
+  clearClientSession();
 }

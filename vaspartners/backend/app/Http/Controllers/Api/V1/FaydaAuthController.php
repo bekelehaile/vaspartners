@@ -74,7 +74,10 @@ class FaydaAuthController extends Controller
 
     public function logout(Request $request)
     {
-        $request->user()->currentAccessToken()?->delete();
+        $user = $request->user();
+
+        // Revoke every portal token so the session cannot be reused.
+        $user->tokens()->delete();
 
         return response()->json(['message' => 'Logged out']);
     }
