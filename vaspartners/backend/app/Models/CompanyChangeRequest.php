@@ -4,14 +4,14 @@ namespace App\Models;
 
 use App\Enums\CompanyChangeStatus;
 use App\Enums\CompanyChangeType;
-use Illuminate\Database\Eloquent\Concerns\HasUlids;
+use App\Support\TimestampPublicId;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class CompanyChangeRequest extends Model
 {
-    use HasUlids, SoftDeletes;
+    use SoftDeletes;
 
     protected $fillable = [
         'public_id',
@@ -46,9 +46,18 @@ class CompanyChangeRequest extends Model
         ];
     }
 
-    public function uniqueIds(): array
+    protected static function booted(): void
     {
-        return ['public_id'];
+        static::creating(function (CompanyChangeRequest $request): void {
+            if (filled($request->public_id)) {
+                return;
+            }
+
+            $request->public_id = TimestampPublicId::generate(
+                $request->created_at ?? now(),
+                fn (string $id): bool => static::withTrashed()->where('public_id', $id)->exists(),
+            );
+        });
     }
 
     public function getRouteKeyName(): string
