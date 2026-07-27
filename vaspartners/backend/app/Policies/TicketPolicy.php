@@ -83,6 +83,16 @@ class TicketPolicy
         return $user->can('Reorder:Ticket');
     }
 
+    public function sendSms(User $user, Ticket $ticket): bool
+    {
+        return $user->canSendTicketSms();
+    }
+
+    public function sendSmsAny(User $user): bool
+    {
+        return $user->canBulkSendTicketSms();
+    }
+
     protected function isAssignedOrApprover(User $user, Ticket $ticket): bool
     {
         return (int) $ticket->assigned_to_user_id === (int) $user->id

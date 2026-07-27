@@ -65,6 +65,47 @@ class User extends Authenticatable implements CanResetPasswordContract, Filament
     }
 
     /**
+     * Operational group IDs this staff member is scoped to.
+     * Empty collection = no group restriction from category_user.
+     *
+     * @return \Illuminate\Support\Collection<int, int>
+     */
+    public function scopedCategoryIds()
+    {
+        return $this->categories()
+            ->whereIn('categories.key', [Category::KEY_GROUP_1, Category::KEY_GROUP_2])
+            ->pluck('categories.id')
+            ->map(fn ($id) => (int) $id)
+            ->values();
+    }
+
+    public function hasCategoryScope(): bool
+    {
+        return $this->scopedCategoryIds()->isNotEmpty();
+    }
+
+    /**
+     * Active account managers eligible to handle a ticket in the given group.
+     * Users with no group scope remain eligible for any group.
+     *
+     * @return \Illuminate\Support\Collection<int, string>
+     */
+    public static function assignableManagersForCategory(?int $categoryId)
+    {
+        return self::query()
+            ->where('is_active', true)
+            ->where('is_management', false)
+            ->when($categoryId, function ($q) use ($categoryId) {
+                $q->where(function ($inner) use ($categoryId) {
+                    $inner->whereDoesntHave('categories')
+                        ->orWhereHas('categories', fn ($c) => $c->where('categories.id', $categoryId));
+                });
+            })
+            ->orderBy('name')
+            ->pluck('name', 'id');
+    }
+
+    /**
      * Filament denies panel access in non-local envs unless FilamentUser is implemented.
      * Staging/production would otherwise 403 after a successful login.
      */
@@ -120,5 +161,17 @@ class User extends Authenticatable implements CanResetPasswordContract, Filament
     public function canBulkSendCompanySms(): bool
     {
         return $this->hasRole('super_admin') || $this->can('SendSmsAny:Company');
+    }
+
+    /** Individual ticket SMS to the partner contact. Super admin always allowed. */
+    public function canSendTicketSms(): bool
+    {
+        return $this->hasRole('super_admin') || $this->can('SendSms:Ticket');
+    }
+
+    /** Bulk / filtered ticket SMS. Super admin always allowed. */
+    public function canBulkSendTicketSms(): bool
+    {
+        return $this->hasRole('super_admin') || $this->can('SendSmsAny:Ticket');
     }
 }

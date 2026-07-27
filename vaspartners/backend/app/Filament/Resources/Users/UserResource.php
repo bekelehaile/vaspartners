@@ -86,11 +86,18 @@ class UserResource extends Resource
                 ->preload()
                 ->nullable(),
             Select::make('categories')
-                ->label('Category scope')
-                ->relationship('categories', 'name')
+                ->label('Group scope')
+                ->relationship(
+                    name: 'categories',
+                    titleAttribute: 'name',
+                    modifyQueryUsing: fn (Builder $query) => $query
+                        ->whereIn('key', [\App\Models\Category::KEY_GROUP_1, \App\Models\Category::KEY_GROUP_2])
+                        ->orderBy('sort_order'),
+                )
                 ->multiple()
                 ->preload()
                 ->searchable()
+                ->helperText('Limit this user to tickets in these groups. Leave empty for no group filter (role rules still apply).')
                 ->columnSpanFull(),
             Toggle::make('is_management')
                 ->label('Management / supervisor')

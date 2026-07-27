@@ -20,11 +20,16 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ContactPortalController extends Controller
 {
-    public function services()
+    public function services(Request $request)
     {
+        $groupId = $request->integer('group_id') ?: null;
+
         $services = Service::query()
             ->with([
-                'category:id,name,slug',
+                'category:id,name,slug,key',
+                'categories' => fn ($q) => $q
+                    ->operationalGroups()
+                    ->select(['categories.id', 'categories.name', 'categories.slug', 'categories.key', 'categories.sort_order']),
                 'requisitions' => fn ($q) => $q
                     ->where('requisitions.is_active', true)
                     ->orderBy('requisitions.sort_order')
@@ -40,11 +45,26 @@ class ContactPortalController extends Controller
                         'requisitions.sort_order',
                     ]),
             ])
+            ->when($groupId, function ($q) use ($groupId) {
+                $q->where(function ($inner) use ($groupId) {
+                    $inner->where('category_id', $groupId)
+                        ->orWhereHas('categories', fn ($c) => $c->where('categories.id', $groupId));
+                });
+            })
             ->where('is_active', true)
             ->orderBy('sort_order')
             ->get(['id', 'category_id', 'name', 'slug', 'description', 'type', 'is_subscription_based', 'renewal_interval', 'renewal_lead_days', 'sort_order']);
 
         return response()->json(['data' => $services]);
+    }
+
+    public function groups()
+    {
+        $groups = \App\Models\Category::query()
+            ->operationalGroups()
+            ->get(['id', 'key', 'name', 'slug', 'sort_order']);
+
+        return response()->json(['data' => $groups]);
     }
 
     public function documentRequirements(Request $request)
@@ -167,6 +187,7 @@ class ContactPortalController extends Controller
             'service_id' => ['required', 'exists:services,id'],
             'requisition_id' => ['required', 'exists:requisitions,id'],
             'subscription_id' => ['nullable', 'exists:subscriptions,id'],
+            'category_id' => ['nullable', 'integer', 'exists:categories,id'],
             'region_id' => ['nullable', 'exists:regions,id'],
             'zone_id' => ['nullable', 'exists:zones,id'],
             'woreda_id' => ['nullable', 'exists:woredas,id'],
@@ -175,8 +196,33 @@ class ContactPortalController extends Controller
             'description' => ['required', 'string', 'min:1'],
         ]);
 
-        $service = Service::query()->findOrFail($data['service_id']);
-        $data['category_id'] = $service->category_id;
+        $service = Service::query()->with('categories')->findOrFail($data['service_id']);
+        $groupIds = $service->categories
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+        if ($groupIds->isEmpty() && $service->category_id) {
+            $groupIds = collect([(int) $service->category_id]);
+        }
+
+        $requestedGroupId = isset($data['category_id']) ? (int) $data['category_id'] : null;
+        if ($requestedGroupId) {
+            if ($groupIds->isNotEmpty() && ! $groupIds->contains($requestedGroupId)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'category_id' => 'Selected group is not enabled for this service.',
+                ]);
+            }
+            $data['category_id'] = $requestedGroupId;
+        } elseif ($groupIds->count() === 1) {
+            $data['category_id'] = $groupIds->first();
+        } elseif ($groupIds->count() > 1) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'category_id' => 'Select a group for this request (this service belongs to more than one group).',
+            ]);
+        } else {
+            $data['category_id'] = $service->category_id;
+        }
 
         $ticket = $workflow->createTicket($request->user(), $data);
 

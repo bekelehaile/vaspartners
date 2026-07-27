@@ -5,6 +5,7 @@ export const ticketCreateSchema = z.object({
   service_id: z.string().min(1, "Select a service"),
   requisition_id: z.string().min(1, "Select a request type"),
   subscription_id: z.string(),
+  category_id: z.string().optional().default(""),
   description: z
     .string()
     .trim()

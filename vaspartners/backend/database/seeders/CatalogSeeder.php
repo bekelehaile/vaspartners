@@ -27,16 +27,47 @@ class CatalogSeeder extends Seeder
 
         $categoryMap = [];
         foreach ($data['categories'] as $row) {
-            $category = Category::query()->updateOrCreate(
-                ['slug' => $row['slug']],
+            $key = $row['key'] ?? match ($row['slug'] ?? '') {
+                'group-1', 'vas-sales-group' => Category::KEY_GROUP_1,
+                'group-2', 'advanced-vas-sales-group', 'fintech' => Category::KEY_GROUP_2,
+                default => null,
+            };
+
+            $category = Category::withTrashed()->updateOrCreate(
+                $key ? ['key' => $key] : ['slug' => $row['slug']],
                 [
+                    'key' => $key,
                     'name' => $row['name'],
-                    'description' => null,
+                    'slug' => $row['slug'],
+                    'description' => $row['description'] ?? null,
                     'is_active' => (bool) ($row['is_active'] ?? true),
                     'sort_order' => (int) ($row['sort_order'] ?? 0),
+                    'deleted_at' => null,
                 ]
             );
+            if ($category->trashed()) {
+                $category->restore();
+            }
             $categoryMap[(int) $row['legacy_id']] = $category->id;
+        }
+
+        // Ensure operational groups always exist even if JSON omits them.
+        foreach (
+            [
+                Category::KEY_GROUP_1 => ['name' => 'Group 1', 'slug' => 'group-1', 'sort_order' => 1],
+                Category::KEY_GROUP_2 => ['name' => 'Group 2', 'slug' => 'group-2', 'sort_order' => 2],
+            ] as $key => $defaults
+        ) {
+            Category::withTrashed()->updateOrCreate(
+                ['key' => $key],
+                [
+                    'name' => Category::query()->where('key', $key)->value('name') ?: $defaults['name'],
+                    'slug' => $defaults['slug'],
+                    'is_active' => true,
+                    'sort_order' => $defaults['sort_order'],
+                    'deleted_at' => null,
+                ]
+            );
         }
 
         $priorityRows = $data['priorities'] ?? [];
@@ -110,6 +141,16 @@ class CatalogSeeder extends Seeder
             if ($service->trashed()) {
                 $service->restore();
             }
+            $extraGroupIds = collect($row['legacy_category_ids'] ?? [$row['legacy_category_id']])
+                ->map(fn ($legacyId) => $categoryMap[(int) $legacyId] ?? null)
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+            if ($extraGroupIds === []) {
+                $extraGroupIds = [$categoryId];
+            }
+            $service->syncGroups($extraGroupIds);
             $serviceMap[(int) $row['legacy_id']] = $service->id;
         }
 

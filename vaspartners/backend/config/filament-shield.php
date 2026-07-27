@@ -181,6 +181,11 @@ return [
                 'sendSms',
                 'sendSmsAny',
             ],
+            // Ticket contact SMS (individual + bulk/filtered)
+            \App\Filament\Resources\Tickets\TicketResource::class => [
+                'sendSms',
+                'sendSmsAny',
+            ],
         ],
         'exclude' => [
             //

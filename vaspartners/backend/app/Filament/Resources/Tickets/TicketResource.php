@@ -18,6 +18,7 @@ use App\Filament\Resources\Tickets\RelationManagers\StatusHistoryRelationManager
 use App\Models\Priority;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Services\SmsService;
 use App\Services\TicketWorkflowService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
@@ -76,7 +77,7 @@ class TicketResource extends Resource
                     }),
                 TextEntry::make('service.name')->label('Service')->placeholder('—'),
                 TextEntry::make('requisition.name')->label('Request type')->placeholder('—'),
-                TextEntry::make('category.name')->label('Category')->placeholder('—'),
+                TextEntry::make('category.name')->label('Group')->placeholder('—'),
                 TextEntry::make('priority.name')->label('Priority')->placeholder('—'),
                 TextEntry::make('description')
                     ->label('Description')
@@ -189,6 +190,7 @@ class TicketResource extends Resource
                 TextColumn::make('contact.name')->label('Contact')->toggleable(),
                 TextColumn::make('contact.phone_number')->label('Phone')->toggleable(),
                 TextColumn::make('service.name')->sortable(),
+                TextColumn::make('category.name')->label('Group')->toggleable(),
                 TextColumn::make('requisition.name')->label('Type')->toggleable(),
                 TextColumn::make('status')->badge(),
                 TextColumn::make('attachments')
@@ -218,6 +220,15 @@ class TicketResource extends Resource
                 SelectFilter::make('status')->options(collect(TicketStatus::cases())->mapWithKeys(
                     fn (TicketStatus $s) => [$s->value => $s->label()]
                 )),
+                SelectFilter::make('category_id')
+                    ->label('Group')
+                    ->relationship(
+                        name: 'category',
+                        titleAttribute: 'name',
+                        modifyQueryUsing: fn (Builder $query) => $query
+                            ->whereIn('key', [\App\Models\Category::KEY_GROUP_1, \App\Models\Category::KEY_GROUP_2])
+                            ->orderBy('sort_order'),
+                    ),
                 SelectFilter::make('attachments')
                     ->label('Attachments')
                     ->options([
@@ -275,6 +286,28 @@ class TicketResource extends Resource
             ->recordActions([
                 ViewAction::make()
                     ->url(fn (Ticket $record): string => static::getUrl('view', ['record' => $record])),
+                Action::make('send_sms')
+                    ->label('Send SMS')
+                    ->icon('heroicon-o-chat-bubble-left-ellipsis')
+                    ->color('primary')
+                    ->visible(fn (Ticket $record): bool => (bool) auth()->user()?->canSendTicketSms()
+                        && filled(static::ticketSmsPhone($record)))
+                    ->form([
+                        Textarea::make('message')
+                            ->label('SMS message')
+                            ->required()
+                            ->rows(5)
+                            ->maxLength(640)
+                            ->helperText(fn (Ticket $record): string => 'Ad-hoc SMS to contact '
+                                .($record->contact?->phone_number ?: '—')
+                                .' for request '.$record->tt_number
+                                .'. Max 640 characters.'),
+                    ])
+                    ->requiresConfirmation()
+                    ->modalHeading(fn (Ticket $record): string => 'Send SMS for '.$record->tt_number)
+                    ->action(function (Ticket $record, array $data, SmsService $sms): void {
+                        static::dispatchTicketSms($record, (string) $data['message'], $sms);
+                    }),
                 Action::make('assign_to_me')
                     ->label('Assign to me')
                     ->icon('heroicon-o-user-plus')
@@ -302,11 +335,9 @@ class TicketResource extends Resource
                     ->form([
                         Select::make('assigned_to_user_id')
                             ->label('Account manager')
-                            ->options(fn () => User::query()
-                                ->where('is_active', true)
-                                ->where('is_management', false)
-                                ->orderBy('name')
-                                ->pluck('name', 'id'))
+                            ->options(fn (Ticket $record) => User::assignableManagersForCategory(
+                                $record->category_id ? (int) $record->category_id : null
+                            ))
                             ->required()
                             ->searchable()
                             ->preload(),
@@ -339,12 +370,24 @@ class TicketResource extends Resource
                         Textarea::make('note'),
                     ])
                     ->action(function (Ticket $record, array $data, TicketWorkflowService $workflow) {
-                        $workflow->reviewDocuments(
-                            $record,
-                            auth()->user(),
-                            DocumentReviewStatus::from($data['result']),
-                            $data['note'] ?? null,
-                        );
+                        try {
+                            $workflow->reviewDocuments(
+                                $record,
+                                auth()->user(),
+                                DocumentReviewStatus::from($data['result']),
+                                $data['note'] ?? null,
+                            );
+                        } catch (\Illuminate\Validation\ValidationException $e) {
+                            $message = collect($e->errors())->flatten()->first() ?: $e->getMessage();
+                            Notification::make()
+                                ->title('Next approver is not found')
+                                ->body((string) $message)
+                                ->danger()
+                                ->persistent()
+                                ->send();
+
+                            throw $e;
+                        }
                     }),
                 Action::make('approve')
                     ->label('Approve')
@@ -358,12 +401,28 @@ class TicketResource extends Resource
                     ])
                     ->requiresConfirmation()
                     ->action(function (Ticket $record, array $data, TicketWorkflowService $workflow) {
-                        $workflow->decide(
-                            $record,
-                            auth()->user(),
-                            ApprovalAction::Approved,
-                            $data['note'] ?? null,
-                        );
+                        try {
+                            $workflow->decide(
+                                $record,
+                                auth()->user(),
+                                ApprovalAction::Approved,
+                                $data['note'] ?? null,
+                            );
+                        } catch (\Illuminate\Validation\ValidationException $e) {
+                            $message = collect($e->errors())->flatten()->first() ?: $e->getMessage();
+                            Notification::make()
+                                ->title(
+                                    str_contains(strtolower((string) $message), 'approver')
+                                        ? 'Next approver is not found'
+                                        : 'Approval failed'
+                                )
+                                ->body((string) $message)
+                                ->danger()
+                                ->persistent()
+                                ->send();
+
+                            throw $e;
+                        }
                     }),
                 Action::make('reject')
                     ->label('Reject')
@@ -397,6 +456,39 @@ class TicketResource extends Resource
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    BulkAction::make('send_sms')
+                        ->label('Send SMS to selected')
+                        ->icon('heroicon-o-chat-bubble-left-ellipsis')
+                        ->color('primary')
+                        ->visible(fn (): bool => (bool) auth()->user()?->canBulkSendTicketSms())
+                        ->form([
+                            Textarea::make('message')
+                                ->label('SMS message')
+                                ->required()
+                                ->rows(5)
+                                ->maxLength(640)
+                                ->helperText('Ad-hoc SMS to each selected ticket contact. Max 640 characters.'),
+                        ])
+                        ->requiresConfirmation()
+                        ->modalHeading('Send SMS to selected tickets')
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (Collection $records, array $data, SmsService $sms): void {
+                            $result = static::queueSmsToTickets(
+                                $records,
+                                (string) ($data['message'] ?? ''),
+                                $sms,
+                            );
+
+                            Notification::make()
+                                ->title($result['queued'] > 0
+                                    ? "Queued SMS for {$result['queued']} ticket(s)"
+                                    : 'No SMS queued')
+                                ->body($result['skipped'] > 0
+                                    ? "{$result['skipped']} skipped (missing or invalid contact phone)."
+                                    : null)
+                                ->color($result['queued'] > 0 ? 'success' : 'warning')
+                                ->send();
+                        }),
                     BulkAction::make('assign')
                         ->label('Assign AM')
                         ->icon('heroicon-o-user-plus')
@@ -468,6 +560,79 @@ class TicketResource extends Resource
             ]);
     }
 
+    public static function ticketSmsPhone(Ticket $ticket): ?string
+    {
+        $ticket->loadMissing('contact');
+        $phone = $ticket->contact?->phone_number;
+
+        return filled($phone) ? (string) $phone : null;
+    }
+
+    /**
+     * @param  Builder<Ticket>|Collection<int, Ticket>|iterable<Ticket>  $tickets
+     * @return array{queued:int, skipped:int}
+     */
+    public static function queueSmsToTickets(Builder|iterable $tickets, string $message, SmsService $sms): array
+    {
+        $message = trim($message);
+        $queued = 0;
+        $skipped = 0;
+
+        if ($message === '') {
+            return ['queued' => 0, 'skipped' => 0];
+        }
+
+        $iterator = $tickets instanceof Builder
+            ? $tickets->with('contact')->cursor()
+            : $tickets;
+
+        foreach ($iterator as $ticket) {
+            if (! $ticket instanceof Ticket) {
+                continue;
+            }
+
+            if (! auth()->user()?->canSendTicketSms() && ! auth()->user()?->canBulkSendTicketSms()) {
+                $skipped++;
+
+                continue;
+            }
+
+            $phone = static::ticketSmsPhone($ticket);
+            if (! filled($phone) || ! $sms->ensurePhoneIsLocal($phone)) {
+                $skipped++;
+
+                continue;
+            }
+
+            $sms->send($phone, $message);
+            $queued++;
+        }
+
+        return ['queued' => $queued, 'skipped' => $skipped];
+    }
+
+    public static function dispatchTicketSms(Ticket $ticket, string $message, SmsService $sms): void
+    {
+        $result = static::queueSmsToTickets([$ticket], $message, $sms);
+        $phone = static::ticketSmsPhone($ticket);
+
+        if ($result['queued'] < 1) {
+            Notification::make()
+                ->title('Cannot send SMS')
+                ->body('Ticket contact has no usable local mobile number on file.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        Notification::make()
+            ->title('SMS queued')
+            ->body('Message queued for '.$phone.' ('.$ticket->tt_number.')')
+            ->success()
+            ->send();
+    }
+
     public static function getPages(): array
     {
         return [
@@ -481,11 +646,30 @@ class TicketResource extends Resource
         $query = parent::getEloquentQuery();
         $user = auth()->user();
 
-        if (! $user || $user->hasRole('super_admin') || $user->can('ViewAny:Ticket')) {
+        if (! $user) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        if ($user->hasRole('super_admin')) {
             return $query;
         }
 
-        // Account managers: only tickets assigned to them or awaiting their approval
+        $scopeIds = $user->scopedCategoryIds();
+
+        // Staff with group scope: tickets in those groups, plus anything assigned to them.
+        if ($scopeIds->isNotEmpty()) {
+            return $query->where(function (Builder $q) use ($user, $scopeIds) {
+                $q->whereIn('category_id', $scopeIds->all())
+                    ->orWhere('assigned_to_user_id', $user->id)
+                    ->orWhere('current_approver_user_id', $user->id);
+            });
+        }
+
+        if ($user->can('ViewAny:Ticket')) {
+            return $query;
+        }
+
+        // Account managers without group scope: only assigned / awaiting approval.
         return $query->where(function (Builder $q) use ($user) {
             $q->where('assigned_to_user_id', $user->id)
                 ->orWhere('current_approver_user_id', $user->id);

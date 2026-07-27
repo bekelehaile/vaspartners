@@ -11,6 +11,7 @@ Route::prefix('v1')->group(function () {
     Route::get('auth/fayda/callback', [FaydaAuthController::class, 'callback']);
 
     Route::get('services', [ContactPortalController::class, 'services']);
+    Route::get('groups', [ContactPortalController::class, 'groups']);
     Route::get('document-requirements', [ContactPortalController::class, 'documentRequirements']);
     Route::get('faqs', [WebsiteContentController::class, 'faqs']);
     Route::get('blog-posts', [WebsiteContentController::class, 'blogPosts']);

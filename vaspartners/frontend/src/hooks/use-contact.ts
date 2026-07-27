@@ -86,6 +86,16 @@ export function useServices() {
   });
 }
 
+export function useGroups() {
+  return useQuery({
+    queryKey: [...queryKeys.catalog.services, "groups"] as const,
+    queryFn: async () => {
+      const res = await api<{ data: import("@/lib/api").ServiceGroup[] }>("/groups");
+      return res.data ?? [];
+    },
+  });
+}
+
 export function useSubscriptions(options?: { enabled?: boolean }) {
   const enabled = options?.enabled ?? true;
   return useQuery({
@@ -505,6 +515,9 @@ export function useCreateTicket() {
       };
       if (values.subscription_id) {
         payload.subscription_id = Number(values.subscription_id);
+      }
+      if (values.category_id) {
+        payload.category_id = Number(values.category_id);
       }
 
       const res = await api<{ data: Ticket }>("/tickets", {

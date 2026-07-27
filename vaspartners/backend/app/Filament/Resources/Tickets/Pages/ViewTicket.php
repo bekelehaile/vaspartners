@@ -11,6 +11,7 @@ use App\Services\TicketWorkflowService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Model;
@@ -80,12 +81,24 @@ class ViewTicket extends ViewRecord
                     Textarea::make('note'),
                 ])
                 ->action(function (Ticket $record, array $data, TicketWorkflowService $workflow) {
-                    $workflow->reviewDocuments(
-                        $record,
-                        auth()->user(),
-                        DocumentReviewStatus::from($data['result']),
-                        $data['note'] ?? null,
-                    );
+                    try {
+                        $workflow->reviewDocuments(
+                            $record,
+                            auth()->user(),
+                            DocumentReviewStatus::from($data['result']),
+                            $data['note'] ?? null,
+                        );
+                    } catch (\Illuminate\Validation\ValidationException $e) {
+                        $message = collect($e->errors())->flatten()->first() ?: $e->getMessage();
+                        Notification::make()
+                            ->title('Next approver is not found')
+                            ->body((string) $message)
+                            ->danger()
+                            ->persistent()
+                            ->send();
+
+                        throw $e;
+                    }
                 }),
             Action::make('approve')
                 ->label('Approve')
@@ -99,12 +112,28 @@ class ViewTicket extends ViewRecord
                 ])
                 ->requiresConfirmation()
                 ->action(function (Ticket $record, array $data, TicketWorkflowService $workflow) {
-                    $workflow->decide(
-                        $record,
-                        auth()->user(),
-                        ApprovalAction::Approved,
-                        $data['note'] ?? null,
-                    );
+                    try {
+                        $workflow->decide(
+                            $record,
+                            auth()->user(),
+                            ApprovalAction::Approved,
+                            $data['note'] ?? null,
+                        );
+                    } catch (\Illuminate\Validation\ValidationException $e) {
+                        $message = collect($e->errors())->flatten()->first() ?: $e->getMessage();
+                        Notification::make()
+                            ->title(
+                                str_contains(strtolower((string) $message), 'approver')
+                                    ? 'Next approver is not found'
+                                    : 'Approval failed'
+                            )
+                            ->body((string) $message)
+                            ->danger()
+                            ->persistent()
+                            ->send();
+
+                        throw $e;
+                    }
                 }),
             Action::make('reject')
                 ->label('Reject')

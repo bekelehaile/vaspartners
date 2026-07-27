@@ -49,6 +49,42 @@ class Service extends Model
         return $this->belongsTo(Category::class);
     }
 
+    /** Operational groups (Group 1 / Group 2) — one or both. */
+    public function categories(): BelongsToMany
+    {
+        return $this->belongsToMany(Category::class)->withTimestamps();
+    }
+
+    /**
+     * Keep category_id aligned with the first assigned group (sort order).
+     *
+     * @param  list<int|string>  $categoryIds
+     */
+    public function syncGroups(array $categoryIds): void
+    {
+        $ids = collect($categoryIds)
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $validIds = Category::query()
+            ->operationalGroups()
+            ->whereIn('id', $ids)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->pluck('id')
+            ->all();
+
+        $this->categories()->sync($validIds);
+
+        $primary = $validIds[0] ?? null;
+        if ($primary && (int) $this->category_id !== (int) $primary) {
+            $this->forceFill(['category_id' => $primary])->saveQuietly();
+        }
+    }
+
     public function renewalRequisition(): BelongsTo
     {
         return $this->belongsTo(Requisition::class, 'renewal_requisition_id');

@@ -240,6 +240,9 @@ class TicketWorkflowService
 
             $this->subscriptions->assertTicketAllowed($contact, $data, $requisition, $service);
 
+            // Same path for new / maintain / renew / terminate: final approver must exist.
+            $this->assertFinalApproverConfigured((int) $service->id, (int) $requisition->id);
+
             $subscriptionId = $data['subscription_id'] ?? null;
             if (! $subscriptionId && ($requisition->requires_active_subscription || $requisition->renews_subscription || $requisition->terminates_subscription)) {
                 $subscriptionId = \App\Models\Subscription::query()
@@ -413,7 +416,8 @@ class TicketWorkflowService
                 return $ticket->fresh(['contact', 'service', 'requisition']);
             }
 
-            // Passed — resume handling / start approval chain
+            // Passed — start the same approval chain for every requisition type
+            // (new subscription, maintenance, renew, terminate), whether or not docs were required.
             if ($ticket->status === TicketStatus::Rejected) {
                 $this->transition(
                     $ticket,
@@ -423,25 +427,14 @@ class TicketWorkflowService
                 );
             }
 
-            if (! $this->hasRequiredDocuments($ticket->service_id, $ticket->requisition_id)) {
-                // No docs required — AM can move toward close without approval chain.
-                $ticket->current_approver_user_id = null;
-                $ticket->save();
+            $this->assertFinalApproverConfigured((int) $ticket->service_id, (int) $ticket->requisition_id);
+            $nextApprover = $this->resolveNextApprover($reviewer, $ticket);
 
-                return $ticket->fresh();
-            }
-
-            if (! $reviewer->manager_id) {
-                throw ValidationException::withMessages([
-                    'manager' => 'Account manager must have a manager configured for the approval chain.',
-                ]);
-            }
-
-            $ticket->current_approver_user_id = $reviewer->manager_id;
+            $ticket->current_approver_user_id = $nextApprover->id;
             $ticket->save();
 
             $fresh = $ticket->fresh(['contact', 'service', 'requisition']);
-            $approverId = $reviewer->manager_id;
+            $approverId = $nextApprover->id;
             DB::afterCommit(function () use ($fresh, $approverId) {
                 $approver = User::query()->find($approverId);
                 if ($approver) {
@@ -477,10 +470,8 @@ class TicketWorkflowService
                     $nextStatus = TicketStatus::Completed;
                     $ticket->current_approver_user_id = null;
                 } else {
-                    $escalatedTo = $approver->manager_id;
-                    if (! $escalatedTo) {
-                        throw ValidationException::withMessages(['manager' => 'Non-final approver must have a manager.']);
-                    }
+                    $next = $this->resolveNextApprover($approver, $ticket);
+                    $escalatedTo = $next->id;
                     $ticket->current_approver_user_id = $escalatedTo;
                     $nextStatus = TicketStatus::InProgress;
                 }
@@ -500,10 +491,8 @@ class TicketWorkflowService
                     $nextStatus = TicketStatus::Completed;
                     $ticket->current_approver_user_id = null;
                 } else {
-                    $escalatedTo = $approver->manager_id;
-                    if (! $escalatedTo) {
-                        throw ValidationException::withMessages(['manager' => 'Non-final approver must have a manager.']);
-                    }
+                    $next = $this->resolveNextApprover($approver, $ticket);
+                    $escalatedTo = $next->id;
                     $ticket->current_approver_user_id = $escalatedTo;
                     $nextStatus = TicketStatus::InProgress;
                 }
@@ -557,9 +546,8 @@ class TicketWorkflowService
                 throw ValidationException::withMessages(['ticket' => 'Ticket cannot be closed from its current status.']);
             }
 
-            // If docs required, must be completed first (unless no-doc path already in progress without approver)
-            if ($this->hasRequiredDocuments($ticket->service_id, $ticket->requisition_id)
-                && $ticket->status !== TicketStatus::Completed) {
+            // All request types go through the approval chain before close.
+            if ($ticket->status !== TicketStatus::Completed) {
                 throw ValidationException::withMessages(['ticket' => 'Complete approval before closing.']);
             }
 
@@ -578,6 +566,63 @@ class TicketWorkflowService
             ->where('requisition_id', $ticket->requisition_id)
             ->where('user_id', $user->id)
             ->exists();
+    }
+
+    /**
+     * Every service + request type (including maintenance) must have a final approver.
+     */
+    public function assertFinalApproverConfigured(int $serviceId, int $requisitionId): void
+    {
+        $exists = ServiceFinalApprover::query()
+            ->where('service_id', $serviceId)
+            ->where('requisition_id', $requisitionId)
+            ->whereHas('user', fn ($q) => $q->where('is_active', true))
+            ->exists();
+
+        if (! $exists) {
+            throw ValidationException::withMessages([
+                'approver' => 'Next approver is not found. Configure a final approver for this service and request type before continuing.',
+            ]);
+        }
+    }
+
+    /**
+     * Resolve the next active manager in the approval chain.
+     */
+    public function resolveNextApprover(User $from, Ticket $ticket): User
+    {
+        $managerId = $from->manager_id;
+        if (! $managerId) {
+            throw ValidationException::withMessages([
+                'approver' => 'Next approver is not found. The current reviewer has no manager configured for the approval chain.',
+            ]);
+        }
+
+        $next = User::query()
+            ->whereKey($managerId)
+            ->where('is_active', true)
+            ->first();
+
+        if (! $next) {
+            throw ValidationException::withMessages([
+                'approver' => 'Next approver is not found. The configured manager is missing or inactive.',
+            ]);
+        }
+
+        // Guard against broken hierarchy loops before a final approver is reached.
+        if ($this->isFinalApprover($ticket, $next)) {
+            return $next;
+        }
+
+        // If this next person is not final and also has no further manager, fail early
+        // unless they themselves are somehow final (already handled).
+        if (! $next->manager_id && ! $this->isFinalApprover($ticket, $next)) {
+            throw ValidationException::withMessages([
+                'approver' => 'Next approver is not found. Approval cannot reach a final approver for this service and request type.',
+            ]);
+        }
+
+        return $next;
     }
 
     /**

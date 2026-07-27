@@ -28,6 +28,17 @@ type Intent = "subscribe" | "manage";
 
 const ALIVE_STATUSES = new Set(["active", "pending_renewal", "grace"]);
 
+function serviceGroups(service?: Service | null): NonNullable<Service["categories"]> {
+  if (!service) return [];
+  if (service.categories?.length) return service.categories;
+  return service.category ? [service.category] : [];
+}
+
+function groupsLabel(service?: Service | null): string {
+  const names = serviceGroups(service).map((g) => g.name).filter(Boolean);
+  return names.length ? names.join(", ") : "";
+}
+
 function isAliveSubscription(sub: Subscription): boolean {
   return ALIVE_STATUSES.has(String(sub.status || "").toLowerCase());
 }
@@ -131,6 +142,10 @@ export default function NewRequestWizard() {
   const [stagedFiles, setStagedFiles] = useState<StagedAttachments>({});
   const [attachError, setAttachError] = useState<string | null>(null);
   const [uploadingDocs, setUploadingDocs] = useState(false);
+  const [approverPopup, setApproverPopup] = useState<string | null>(null);
+
+  const isApproverMissingError = (err: unknown): boolean =>
+    err instanceof Error && /approver is not found/i.test(err.message);
 
   const form = useForm({
     defaultValues: {
@@ -138,12 +153,22 @@ export default function NewRequestWizard() {
       service_id: presetService,
       requisition_id: "",
       subscription_id: "",
+      category_id: "",
       description: "",
     },
     onSubmit: async ({ value }) => {
       setAttachError(null);
+      setApproverPopup(null);
       const parsed = ticketCreateSchema.parse(value);
-      const created = await createTicket.mutateAsync(parsed);
+      let created: Ticket;
+      try {
+        created = await createTicket.mutateAsync(parsed);
+      } catch (err) {
+        if (isApproverMissingError(err) && err instanceof Error) {
+          setApproverPopup(err.message);
+        }
+        throw err;
+      }
 
       const entries = Object.entries(stagedFiles);
       if (entries.length) {
@@ -174,6 +199,7 @@ export default function NewRequestWizard() {
   const subscriptionId = values.subscription_id;
   const requisitionId = values.requisition_id;
   const description = values.description;
+  const categoryId = values.category_id;
 
   const selectedSubscribe = subscribeServices.find((s) => String(s.id) === String(serviceId));
   const selectedSub = aliveSubs.find((s) => String(s.id) === String(subscriptionId));
@@ -183,6 +209,9 @@ export default function NewRequestWizard() {
   const selectedManage =
     services.find((s) => s.id === manageServiceId) ||
     manageOneOffServices.find((s) => String(s.id) === String(serviceId));
+  const activeService = intent === "manage" ? selectedManage : selectedSubscribe;
+  const availableGroups = serviceGroups(activeService);
+  const needsGroupPick = availableGroups.length > 1;
   const managingOneOff = !!selectedManage && selectedManage.is_subscription_based === false;
   const starterTypes = selectedSubscribe ? starterRequisitions(selectedSubscribe) : [];
   const manageTypes = selectedManage ? manageRequisitions(selectedManage) : [];
@@ -198,6 +227,24 @@ export default function NewRequestWizard() {
     (!!confirmServiceId && !!requisitionId
       ? confirmDocsFetched && !confirmDocsLoading
       : true) && requiredAttachmentsReady(confirmRequirements, stagedFiles);
+
+  // Keep category_id aligned with the selected service's groups.
+  useEffect(() => {
+    if (!activeService) {
+      if (categoryId) form.setFieldValue("category_id", "");
+      return;
+    }
+    const groups = serviceGroups(activeService);
+    if (groups.length === 1) {
+      const only = String(groups[0].id);
+      if (categoryId !== only) form.setFieldValue("category_id", only);
+      return;
+    }
+    if (groups.length > 1 && categoryId && !groups.some((g) => String(g.id) === String(categoryId))) {
+      form.setFieldValue("category_id", "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync group pick
+  }, [activeService?.id, categoryId, intent, serviceId, subscriptionId]);
 
   // Clear staged files when the request type / service changes
   useEffect(() => {
@@ -334,6 +381,7 @@ export default function NewRequestWizard() {
     );
     form.setFieldValue("requisition_id", "");
     form.setFieldValue("subscription_id", "");
+    form.setFieldValue("category_id", "");
     form.setFieldValue("description", "");
     setStagedFiles({});
     setAttachError(null);
@@ -345,6 +393,7 @@ export default function NewRequestWizard() {
     form.setFieldValue("service_id", "");
     form.setFieldValue("requisition_id", "");
     form.setFieldValue("subscription_id", "");
+    form.setFieldValue("category_id", "");
     form.setFieldValue("description", "");
     setStagedFiles({});
     setAttachError(null);
@@ -379,14 +428,53 @@ export default function NewRequestWizard() {
       />
 
       <div className="section section-flush form-section">
-        {createTicket.isError && (
-          <div className="alert">
+        {createTicket.isError && !isApproverMissingError(createTicket.error) && (
+          <div className="alert" role="alert">
             {createTicket.error instanceof Error
               ? createTicket.error.message
               : "Could not create request"}
           </div>
         )}
         {attachError && <div className="alert">{attachError}</div>}
+
+        {approverPopup && (
+          <div
+            className="portal-modal-backdrop"
+            role="presentation"
+            onClick={() => {
+              setApproverPopup(null);
+              createTicket.reset();
+            }}
+          >
+            <div
+              className="portal-modal"
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="approver-missing-title"
+              aria-describedby="approver-missing-desc"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 id="approver-missing-title">Next approver is not found</h2>
+              <p id="approver-missing-desc">{approverPopup}</p>
+              <p className="portal-modal-hint">
+                Ask an administrator to set a final approver for this service and
+                request type (for example SMS Premium → Maintenance), then try again.
+              </p>
+              <div className="portal-modal-actions">
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => {
+                    setApproverPopup(null);
+                    createTicket.reset();
+                  }}
+                >
+                  OK
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {ticket ? (
           <UploadStep
@@ -553,7 +641,7 @@ export default function NewRequestWizard() {
                                 {s.renewal_interval === "bi_yearly"
                                   ? "Bi-yearly renewal"
                                   : "Yearly renewal"}
-                                {s.category?.name ? ` · ${s.category.name}` : ""}
+                                {groupsLabel(s) ? ` · ${groupsLabel(s)}` : ""}
                               </span>
                             </button>
                           );
@@ -590,7 +678,41 @@ export default function NewRequestWizard() {
                             ?.name || "New subscription"}
                         </dd>
                       </div>
+                      {availableGroups.length > 0 && (
+                        <div>
+                          <dt>Group</dt>
+                          <dd>{groupsLabel(selectedSubscribe) || "—"}</dd>
+                        </div>
+                      )}
                     </dl>
+                    {needsGroupPick && (
+                      <form.Field name="category_id">
+                        {(field) => (
+                          <div className="field field-span">
+                            <label>
+                              Handling group <span className="req">*</span>
+                            </label>
+                            <div className="journey-option-list" role="listbox" aria-label="Handling group">
+                              {availableGroups.map((g) => (
+                                <button
+                                  key={g.id}
+                                  type="button"
+                                  role="option"
+                                  aria-selected={String(field.state.value) === String(g.id)}
+                                  className={`journey-option${
+                                    String(field.state.value) === String(g.id) ? " is-selected" : ""
+                                  }`}
+                                  onClick={() => field.handleChange(String(g.id))}
+                                >
+                                  <strong>{g.name}</strong>
+                                  <span>Route this request to {g.name}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </form.Field>
+                    )}
                     <form.Field name="description">
                       {(field) => (
                         <div className="field field-span">
@@ -624,6 +746,7 @@ export default function NewRequestWizard() {
                           !serviceId ||
                           !requisitionId ||
                           !description.trim() ||
+                          (needsGroupPick && !categoryId) ||
                           !attachmentsReady
                         }
                       >
@@ -734,7 +857,7 @@ export default function NewRequestWizard() {
                               <strong>{s.name}</strong>
                               <span>
                                 No subscription required
-                                {s.category?.name ? ` · ${s.category.name}` : ""}
+                                {groupsLabel(s) ? ` · ${groupsLabel(s)}` : ""}
                               </span>
                             </button>
                           );
@@ -846,7 +969,41 @@ export default function NewRequestWizard() {
                             ?.name || "—"}
                         </dd>
                       </div>
+                      {availableGroups.length > 0 && (
+                        <div>
+                          <dt>Group</dt>
+                          <dd>{groupsLabel(selectedManage) || "—"}</dd>
+                        </div>
+                      )}
                     </dl>
+                    {needsGroupPick && (
+                      <form.Field name="category_id">
+                        {(field) => (
+                          <div className="field field-span">
+                            <label>
+                              Handling group <span className="req">*</span>
+                            </label>
+                            <div className="journey-option-list" role="listbox" aria-label="Handling group">
+                              {availableGroups.map((g) => (
+                                <button
+                                  key={g.id}
+                                  type="button"
+                                  role="option"
+                                  aria-selected={String(field.state.value) === String(g.id)}
+                                  className={`journey-option${
+                                    String(field.state.value) === String(g.id) ? " is-selected" : ""
+                                  }`}
+                                  onClick={() => field.handleChange(String(g.id))}
+                                >
+                                  <strong>{g.name}</strong>
+                                  <span>Route this request to {g.name}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </form.Field>
+                    )}
                     <form.Field name="description">
                       {(field) => (
                         <div className="field field-span">
@@ -885,6 +1042,7 @@ export default function NewRequestWizard() {
                           !requisitionId ||
                           (!managingOneOff && !subscriptionId) ||
                           !description.trim() ||
+                          (needsGroupPick && !categoryId) ||
                           !attachmentsReady
                         }
                       >

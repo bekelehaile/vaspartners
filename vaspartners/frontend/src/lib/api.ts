@@ -71,6 +71,13 @@ export type Contact = {
   profile_completed?: boolean;
 };
 
+export type ServiceGroup = {
+  id: number;
+  name: string;
+  slug: string;
+  key?: string;
+};
+
 export type Service = {
   id: number;
   name: string;
@@ -79,7 +86,9 @@ export type Service = {
   type?: string | null;
   is_subscription_based?: boolean;
   renewal_interval?: string | null;
-  category?: { id: number; name: string; slug: string };
+  category_id?: number;
+  category?: ServiceGroup;
+  categories?: ServiceGroup[];
   requisitions?: {
     id: number;
     name: string;

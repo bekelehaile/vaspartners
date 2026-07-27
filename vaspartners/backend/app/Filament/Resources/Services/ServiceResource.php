@@ -39,11 +39,18 @@ class ServiceResource extends Resource
     {
         return $schema->components([
             Section::make('Service')->schema([
-                Select::make('category_id')
-                    ->relationship('category', 'name')
+                Select::make('group_ids')
+                    ->label('Groups')
+                    ->options(fn (): array => \App\Models\Category::query()
+                        ->operationalGroups()
+                        ->pluck('name', 'id')
+                        ->all())
+                    ->multiple()
                     ->required()
+                    ->minItems(1)
                     ->searchable()
-                    ->preload(),
+                    ->preload()
+                    ->helperText('Assign Group 1, Group 2, or both. Display names are editable under Catalog → Groups.'),
                 TextInput::make('name')->required()->live(onBlur: true)
                     ->afterStateUpdated(function ($state, callable $set, ?Service $record): void {
                         if ($record) {
@@ -118,7 +125,10 @@ class ServiceResource extends Resource
             ->columns([
                 TextColumn::make('sort_order')->label('#')->sortable(),
                 TextColumn::make('name')->searchable()->sortable(),
-                TextColumn::make('category.name'),
+                TextColumn::make('categories.name')
+                    ->label('Groups')
+                    ->badge()
+                    ->separator(','),
                 TextColumn::make('renewal_interval')->badge(),
                 IconColumn::make('is_subscription_based')->boolean()->label('Subs'),
                 IconColumn::make('is_active')->boolean(),

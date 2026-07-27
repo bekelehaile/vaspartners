@@ -2,52 +2,21 @@
   "categories": [
     {
       "legacy_id": 18,
-      "name": "VAS sales Group",
-      "slug": "vas-sales-group",
+      "key": "group_1",
+      "name": "Group 1",
+      "slug": "group-1",
+      "description": "Operational service group. Rename as needed (e.g. Team 1).",
       "is_active": true,
       "sort_order": 1
     },
     {
-      "legacy_id": 19,
-      "name": "Advanced VAS sales Group",
-      "slug": "advanced-vas-sales-group",
+      "legacy_id": 23,
+      "key": "group_2",
+      "name": "Group 2",
+      "slug": "group-2",
+      "description": "Operational service group. Rename as needed (e.g. Team 2).",
       "is_active": true,
       "sort_order": 2
-    },
-    {
-      "legacy_id": 20,
-      "name": "Startup Partner",
-      "slug": "startup-partner",
-      "is_active": true,
-      "sort_order": 3
-    },
-    {
-      "legacy_id": 21,
-      "name": "Other Service",
-      "slug": "other-service",
-      "is_active": true,
-      "sort_order": 4
-    },
-    {
-      "legacy_id": 22,
-      "name": "Enterprise Solution",
-      "slug": "enterprise-solution",
-      "is_active": true,
-      "sort_order": 5
-    },
-    {
-      "legacy_id": 23,
-      "name": "FinTech",
-      "slug": "fintech",
-      "is_active": true,
-      "sort_order": 6
-    },
-    {
-      "legacy_id": 24,
-      "name": "Marketing",
-      "slug": "marketing",
-      "is_active": true,
-      "sort_order": 7
     }
   ],
   "services": [
@@ -66,7 +35,7 @@
       "legacy_category_id": 18,
       "name": "SMS Premium",
       "slug": "sms-premium",
-      "description": "SMS Premium rnSMS Premium service: - means a revenue sharing model where VASP(Value added ervice provider) in collaboration with ethio telecom provides/receives various information’s and messages with its customers. rn Legal requirement to get SMS Premium rn1) Trade registration rn2) Trade license rn3) TIN and VAT certificate rn4) House rent agreement rn5) Renewed or new VAS (Value Added Service) license given by ECA(Ethiopia communication autority) located on bole medahniyalem, robel plaza rn6) Request letter rn7) Well-developed business proposal rn8) Layer 3 VPN minimum 1mbps rn9) Agreement document will be signed rn10) Software and database are required from customer side rn11) You can set usage fee from 1 birr up-to 15 birr per SMS.",
+      "description": "SMS Premium rnSMS Premium service: - means a revenue sharing model where VASP(Value added ervice provider) in collaboration with ethio telecom provides/receives various information\u2019s and messages with its customers. rn Legal requirement to get SMS Premium rn1) Trade registration rn2) Trade license rn3) TIN and VAT certificate rn4) House rent agreement rn5) Renewed or new VAS (Value Added Service) license given by ECA(Ethiopia communication autority) located on bole medahniyalem, robel plaza rn6) Request letter rn7) Well-developed business proposal rn8) Layer 3 VPN minimum 1mbps rn9) Agreement document will be signed rn10) Software and database are required from customer side rn11) You can set usage fee from 1 birr up-to 15 birr per SMS.",
       "is_active": true,
       "type": "Digital and VAS Service",
       "sort_order": 2
@@ -76,7 +45,7 @@
       "legacy_category_id": 18,
       "name": "SMS Non-Premium",
       "slug": "sms-non-premium",
-      "description": "SMS Non-Premium rnNon-premium value added service: - means a non- revenue sharing mode VAS with default/normal tariff, where VASP(Value added ervice provider) in collaboration with ethio telecom provides/receives various information’s and messages with its customers in order to enhance the efficiency of its service. rn Legal requirement to get SMS Non-Premium rn1) Trade registration rn2) Trade license rn3) TIN and VAT certificate rn4) House rent agreement rn5) Request letter rn6) Well-developed business proposal",
+      "description": "SMS Non-Premium rnNon-premium value added service: - means a non- revenue sharing mode VAS with default/normal tariff, where VASP(Value added ervice provider) in collaboration with ethio telecom provides/receives various information\u2019s and messages with its customers in order to enhance the efficiency of its service. rn Legal requirement to get SMS Non-Premium rn1) Trade registration rn2) Trade license rn3) TIN and VAT certificate rn4) House rent agreement rn5) Request letter rn6) Well-developed business proposal",
       "is_active": true,
       "type": "Digital and VAS Service",
       "sort_order": 3
@@ -146,7 +115,7 @@
       "legacy_category_id": 18,
       "name": "Corporate CRBT",
       "slug": "corporate-crbt",
-      "description": "Corporate CRBT rnCorporate Ring Back Tone: - designed to enable company’s paly corporate messages or advertisements (Jungles) on staff phone for callers while the callers wait for the calls to be pickedrn Legal requirement to get Corporate CRBT rn1) Trade registration rn2) Trade license rn3) TIN and VAT certificate rn4) Renewed or new VAS (Value Added Service) license given by ECA(Ethiopia communication autority) located on bole medahniyalem, robel plaza rn5) House rent agreement rn6) Request letter rn7) Well-developed Business proposal rn8) Agreement document with the employees to upload the tone on their service number",
+      "description": "Corporate CRBT rnCorporate Ring Back Tone: - designed to enable company\u2019s paly corporate messages or advertisements (Jungles) on staff phone for callers while the callers wait for the calls to be pickedrn Legal requirement to get Corporate CRBT rn1) Trade registration rn2) Trade license rn3) TIN and VAT certificate rn4) Renewed or new VAS (Value Added Service) license given by ECA(Ethiopia communication autority) located on bole medahniyalem, robel plaza rn5) House rent agreement rn6) Request letter rn7) Well-developed Business proposal rn8) Agreement document with the employees to upload the tone on their service number",
       "is_active": true,
       "type": "Digital and VAS Service",
       "sort_order": 10
@@ -2137,19 +2106,19 @@
     },
     {
       "question": "What is Digital Content",
-      "answer": "Digital content “refers to Album, Movie series, music, games, audio, video, image, books, text, picture or mobile applications provided for sales over the partners technology platform.",
+      "answer": "Digital content \u201crefers to Album, Movie series, music, games, audio, video, image, books, text, picture or mobile applications provided for sales over the partners technology platform.",
       "is_active": true,
       "sort_order": 15
     },
     {
       "question": "What is collocation",
-      "answer": "Colocation service”: is a kind of hosting service that enables the partner to host its infrastructure in a well secured datacenters equipped with commercial power, generator backup power, and full UPS protected & filtered power with enterprise grade networking, cooling and fire suppression system facilities.",
+      "answer": "Colocation service\u201d: is a kind of hosting service that enables the partner to host its infrastructure in\u00a0a well secured datacenters equipped with commercial power, generator backup power, and full UPS protected & filtered power with enterprise grade networking, cooling and fire suppression system facilities.",
       "is_active": true,
       "sort_order": 16
     },
     {
-      "question": "Facility” or “Data Centre",
-      "answer": "Facility” or “Data Centre shall mean the ethio’s physical location or data centre in which Equipment storage space will be made available to Customer for installation and use of Equipment.",
+      "question": "Facility\u201d or \u201cData Centre",
+      "answer": "Facility\u201d or \u201cData Centre shall mean the ethio\u2019s physical location or data centre in which Equipment storage space will be made available to Customer for installation and use of Equipment.",
       "is_active": true,
       "sort_order": 17
     },
@@ -2161,7 +2130,7 @@
     },
     {
       "question": "What is Space",
-      "answer": "Space shall mean the Equipment storage space (“Space”) in which storage devices such as racks, cabinets, and cages shall reside, and which will be made available to Customer.",
+      "answer": "Space shall mean the Equipment storage space (\u201cSpace\u201d) in which storage devices such as racks, cabinets, and cages shall reside, and which will be made available to Customer.",
       "is_active": true,
       "sort_order": 19
     },
