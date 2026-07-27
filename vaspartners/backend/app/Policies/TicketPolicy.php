@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\TicketStatus;
 use App\Models\Ticket;
 use App\Models\User;
 
@@ -45,7 +46,12 @@ class TicketPolicy
 
     public function delete(User $user, Ticket $ticket): bool
     {
-        return $user->can('Delete:Ticket');
+        if (! $user->can('Delete:Ticket')) {
+            return false;
+        }
+
+        // Only pending (open) tickets may be deleted.
+        return $ticket->status === TicketStatus::Open;
     }
 
     public function deleteAny(User $user): bool

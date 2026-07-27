@@ -7,8 +7,10 @@ use App\Enums\DocumentReviewStatus;
 use App\Enums\TicketStatus;
 use App\Filament\Resources\Tickets\TicketResource;
 use App\Models\Ticket;
+use App\Services\SmsService;
 use App\Services\TicketWorkflowService;
 use Filament\Actions\Action;
+use Filament\Actions\DeleteAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
@@ -67,6 +69,28 @@ class ViewTicket extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('send_sms')
+                ->label('Send SMS')
+                ->icon('heroicon-o-chat-bubble-left-ellipsis')
+                ->color('primary')
+                ->visible(fn (Ticket $record): bool => (bool) auth()->user()?->canSendTicketSms()
+                    && filled(TicketResource::ticketSmsPhone($record)))
+                ->form([
+                    Textarea::make('message')
+                        ->label('SMS message')
+                        ->required()
+                        ->rows(5)
+                        ->maxLength(640)
+                        ->helperText(fn (Ticket $record): string => 'Ad-hoc SMS to contact '
+                            .($record->contact?->phone_number ?: '—')
+                            .' for request '.$record->tt_number
+                            .'. Max 640 characters.'),
+                ])
+                ->requiresConfirmation()
+                ->modalHeading(fn (Ticket $record): string => 'Send SMS for '.$record->tt_number)
+                ->action(function (Ticket $record, array $data, SmsService $sms): void {
+                    TicketResource::dispatchTicketSms($record, (string) ($data['message'] ?? ''), $sms);
+                }),
             Action::make('verify_docs')
                 ->label('Verify docs')
                 ->visible(fn (Ticket $record) => $record->assigned_to_user_id === auth()->id()
@@ -164,6 +188,13 @@ class ViewTicket extends ViewRecord
                     && ($record->assigned_to_user_id === auth()->id() || auth()->user()?->is_management))
                 ->requiresConfirmation()
                 ->action(fn (Ticket $record, TicketWorkflowService $workflow) => $workflow->close($record, auth()->user())),
+            DeleteAction::make()
+                ->visible(fn (Ticket $record): bool => (bool) auth()->user()?->can('delete', $record)
+                    && $record->status === TicketStatus::Open)
+                ->modalHeading(fn (Ticket $record): string => 'Delete pending request '.$record->tt_number)
+                ->modalDescription('Only pending requests can be deleted.')
+                ->successNotificationTitle('Pending request deleted')
+                ->successRedirectUrl(TicketResource::getUrl('index')),
         ];
     }
 }

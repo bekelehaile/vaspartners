@@ -23,6 +23,7 @@ use App\Services\TicketWorkflowService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Select;
@@ -453,6 +454,12 @@ class TicketResource extends Resource
                         && ($record->assigned_to_user_id === auth()->id() || auth()->user()?->is_management))
                     ->requiresConfirmation()
                     ->action(fn (Ticket $record, TicketWorkflowService $workflow) => $workflow->close($record, auth()->user())),
+                DeleteAction::make()
+                    ->visible(fn (Ticket $record): bool => (bool) auth()->user()?->can('delete', $record)
+                        && $record->status === TicketStatus::Open)
+                    ->modalHeading(fn (Ticket $record): string => 'Delete pending request '.$record->tt_number)
+                    ->modalDescription('Only pending requests can be deleted. This cannot be undone from the list (soft-deleted).')
+                    ->successNotificationTitle('Pending request deleted'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -554,8 +561,13 @@ class TicketResource extends Resource
                         })
                         ->deselectRecordsAfterCompletion(),
                     DeleteBulkAction::make()
+                        ->label('Delete pending')
                         ->authorizeIndividualRecords('delete')
-                        ->visible(fn (): bool => (bool) auth()->user()?->can('Delete:Ticket')),
+                        ->visible(fn (): bool => (bool) auth()->user()?->can('Delete:Ticket'))
+                        ->modalHeading('Delete selected pending requests')
+                        ->modalDescription('Only pending (not started) tickets will be deleted. In progress, completed, rejected, or closed tickets are skipped.')
+                        ->successNotificationTitle('Pending requests deleted')
+                        ->deselectRecordsAfterCompletion(),
                 ]),
             ]);
     }

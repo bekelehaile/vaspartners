@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Enums\TicketStatus;
+use App\Filament\Resources\Tickets\Concerns\SendsFilteredTicketSms;
 use App\Filament\Resources\Tickets\TicketResource;
 use App\Models\Ticket;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
@@ -28,6 +29,7 @@ class MyTickets extends Page implements HasActions, HasSchemas, HasTable
     use InteractsWithActions;
     use InteractsWithSchemas;
     use InteractsWithTable;
+    use SendsFilteredTicketSms;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-inbox-stack';
 
@@ -51,7 +53,14 @@ class MyTickets extends Page implements HasActions, HasSchemas, HasTable
 
     public function getSubheading(): ?string
     {
-        return 'Tickets assigned to you, and requests waiting for your approval.';
+        return 'Tickets assigned to you, and requests waiting for your approval. Filter by tab or status/group before Send SMS to filtered.';
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            $this->sendSmsFilteredHeaderAction(),
+        ];
     }
 
     public static function getNavigationBadge(): ?string

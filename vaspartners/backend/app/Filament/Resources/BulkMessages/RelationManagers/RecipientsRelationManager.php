@@ -5,7 +5,16 @@ namespace App\Filament\Resources\BulkMessages\RelationManagers;
 use App\Enums\BulkMessageRecipientStatus;
 use App\Filament\Resources\Companies\CompanyResource;
 use App\Models\BulkMessageRecipient;
+use App\Models\Company;
+use App\Services\SmsService;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\EditAction;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -16,9 +25,42 @@ class RecipientsRelationManager extends RelationManager
 
     protected static ?string $title = 'Recipients';
 
-    public function isReadOnly(): bool
+    public function form(Schema $schema): Schema
     {
-        return true;
+        return $schema->components([
+            Section::make('Recipient')->schema([
+                TextInput::make('company_name')
+                    ->label('Company name')
+                    ->maxLength(255),
+                TextInput::make('company_tin')
+                    ->label('TIN')
+                    ->maxLength(64),
+                TextInput::make('phone_raw')
+                    ->label('Phone')
+                    ->required()
+                    ->maxLength(32)
+                    ->helperText('Ethio telecom mobile. Saved as last 9 digits for sending.'),
+                Select::make('company_id')
+                    ->label('Matched company')
+                    ->relationship('company', 'name')
+                    ->searchable()
+                    ->preload()
+                    ->nullable()
+                    ->helperText('Optional override. Leave blank to clear the company match.'),
+                Select::make('status')
+                    ->options(collect(BulkMessageRecipientStatus::cases())->mapWithKeys(
+                        fn (BulkMessageRecipientStatus $s) => [$s->value => $s->label()]
+                    ))
+                    ->required()
+                    ->native(false),
+            ])->columns(2),
+            Section::make('Message variables')->schema([
+                TextInput::make('variables.period')->label('Period')->maxLength(120),
+                TextInput::make('variables.service_type')->label('Service type')->maxLength(120),
+                TextInput::make('variables.service_id')->label('Service ID')->maxLength(120),
+                TextInput::make('variables.amount')->label('Amount')->maxLength(64),
+            ])->columns(2),
+        ]);
     }
 
     public function table(Table $table): Table
@@ -56,6 +98,68 @@ class RecipientsRelationManager extends RelationManager
                 SelectFilter::make('status')->options(collect(BulkMessageRecipientStatus::cases())->mapWithKeys(
                     fn (BulkMessageRecipientStatus $s) => [$s->value => $s->label()]
                 )),
+            ])
+            ->recordActions([
+                EditAction::make()
+                    ->mutateFormDataUsing(function (array $data): array {
+                        $sms = app(SmsService::class);
+                        $phone = trim((string) ($data['phone_raw'] ?? ''));
+                        $data['phone_raw'] = $phone !== '' ? $phone : null;
+
+                        if ($phone !== '' && $sms->ensurePhoneIsLocal($phone)) {
+                            $normalized = $sms->normalizePhone($phone);
+                            $data['phone_normalized'] = $normalized;
+
+                            // If company was not explicitly chosen, try match by last-9.
+                            if (blank($data['company_id'] ?? null)) {
+                                $company = Company::query()
+                                    ->whereRaw(
+                                        "RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9) = ?",
+                                        [$normalized]
+                                    )
+                                    ->first();
+                                if ($company) {
+                                    $data['company_id'] = $company->id;
+                                    $data['company_name'] = $data['company_name'] ?: $company->name;
+                                    $data['company_tin'] = $data['company_tin'] ?: $company->tin;
+                                }
+                            }
+                        } elseif ($phone !== '') {
+                            Notification::make()
+                                ->title('Phone may not be a local mobile')
+                                ->body('Saved anyway; sending may skip this recipient.')
+                                ->warning()
+                                ->send();
+                            $data['phone_normalized'] = preg_replace('/\D+/', '', $phone);
+                            $data['phone_normalized'] = $data['phone_normalized']
+                                ? substr($data['phone_normalized'], -9)
+                                : null;
+                        } else {
+                            $data['phone_normalized'] = null;
+                        }
+
+                        $vars = is_array($data['variables'] ?? null) ? $data['variables'] : [];
+                        $data['variables'] = array_filter(
+                            [
+                                'period' => $vars['period'] ?? null,
+                                'service_type' => $vars['service_type'] ?? null,
+                                'service_id' => $vars['service_id'] ?? null,
+                                'amount' => $vars['amount'] ?? null,
+                                'company_name' => $data['company_name'] ?? null,
+                            ],
+                            fn ($v) => filled($v),
+                        ) ?: null;
+
+                        return $data;
+                    })
+                    ->after(function (): void {
+                        $this->getOwnerRecord()->refreshCounts();
+                    }),
+                DeleteAction::make()
+                    ->requiresConfirmation()
+                    ->after(function (): void {
+                        $this->getOwnerRecord()->refreshCounts();
+                    }),
             ])
             ->paginated([25, 50, 100]);
     }
