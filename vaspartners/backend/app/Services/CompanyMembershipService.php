@@ -1204,6 +1204,7 @@ class CompanyMembershipService
 
         $result = DB::transaction(function () use ($actor, $company, $name, $phone, $email, $isActive) {
             $contact = Contact::query()->where('phone_number', $phone)->first();
+            $linkedExisting = (bool) $contact;
 
             if ($contact && (int) $contact->id === (int) $actor->id) {
                 throw ValidationException::withMessages([
@@ -1267,25 +1268,33 @@ class CompanyMembershipService
                 'owner_id' => $actor->id,
                 'member_contact_id' => $contact->id,
                 'is_active' => $isActive,
+                'linked_existing_contact' => $linkedExisting,
             ]);
 
-            return $contact->fresh(['company', 'memberships.company']);
+            return [
+                'contact' => $contact->fresh(['company', 'memberships.company']),
+                'linked_existing' => $linkedExisting,
+            ];
         });
 
+        $contact = $result['contact'];
+        $linkedExisting = $result['linked_existing'];
+
         $row = $this->listCurrentCompanyMembers($actor)
-            ->first(fn (array $m) => ($m['public_id'] ?? null) === $result->public_id);
+            ->first(fn (array $m) => ($m['public_id'] ?? null) === $contact->public_id);
 
         return [
-            'contact' => $result,
+            'contact' => $contact,
+            'linked_existing' => $linkedExisting,
             'member' => $row ?? [
-                'public_id' => $result->public_id,
-                'name' => $result->name,
-                'phone_number' => $result->phone_number,
-                'email' => $result->email,
+                'public_id' => $contact->public_id,
+                'name' => $contact->name,
+                'phone_number' => $contact->phone_number,
+                'email' => $contact->email,
                 'role' => CompanyRole::Member->value,
                 'is_active' => $isActive,
                 'is_owner' => false,
-                'awaiting_fayda' => $this->isPlaceholderContact($result),
+                'awaiting_fayda' => $this->isPlaceholderContact($contact),
                 'permissions' => CompanyMemberPermission::defaultsForMember(),
             ],
         ];

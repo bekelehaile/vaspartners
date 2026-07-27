@@ -115,9 +115,10 @@ function AddMemberForm({
     <div className="company-add-member panel" style={{ margin: "0 0 1rem", borderRadius: 0 }}>
       <h3 style={{ marginTop: 0 }}>Add member</h3>
       <p className="muted">
-        Create a member with their phone number. When they sign in with Fayda using that
-        phone, their identity syncs here. If access is disabled, Fayda still updates their
-        profile but they cannot use this company until you enable them.
+        Create a member with their phone number. Phone and email identify one partner
+        globally; the same person can belong to multiple companies. If this phone already
+        exists, they are linked here as another membership. When they sign in with Fayda,
+        identity syncs; disabled access keeps them out of this company until you enable them.
       </p>
       <div className="field">
         <label htmlFor="add-member-name">
@@ -531,14 +532,13 @@ export function CompanyMembersTable({ enabled }: { enabled: boolean }) {
       )}
       {canManage ? (
         <p className="muted company-members-hint">
-          Add members by phone. Fayda sign-in syncs their identity; only Enabled members
-          get company access. Owner company claim stays separate and never overrides a
-          disabled membership.
+          One partner (unique phone/email) can be a member of many companies. Add by phone
+          to create or link them here; Fayda sign-in syncs identity, and only Enabled access
+          unlocks this company.
         </p>
       ) : (
         <p className="muted company-members-hint">
-          Member roster for this company. Only the company owner can add members or change
-          access.
+          Member roster for this company. Partners may also belong to other companies.
         </p>
       )}
     </div>

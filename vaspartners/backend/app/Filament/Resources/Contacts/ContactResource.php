@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Contacts;
 use App\Filament\Resources\Companies\CompanyResource;
 use App\Filament\Resources\Contacts\Pages\ListContacts;
 use App\Filament\Resources\Contacts\Pages\ViewContact;
+use App\Filament\Resources\Contacts\RelationManagers\MembershipsRelationManager;
 use App\Filament\Resources\Contacts\RelationManagers\ServicesRelationManager;
 use App\Filament\Resources\Contacts\RelationManagers\SubscriptionsRelationManager;
 use App\Filament\Resources\Contacts\RelationManagers\TicketsRelationManager;
@@ -74,21 +75,24 @@ class ContactResource extends Resource
                         fn ($state) => is_array($state) ? json_encode($state) : $state
                     )->columnSpanFull(),
                 ])->columns(3),
-            Section::make('Company details')
-                ->description('Organisation linked to this Fayda partner (create or attach flow).')
+            Section::make('Current company context')
+                ->description('Active portal company for this contact. They may also belong to other companies under Company memberships.')
                 ->schema([
                     TextEntry::make('company.name')
-                        ->label('Company')
+                        ->label('Current company')
                         ->placeholder('—')
                         ->url(fn (Contact $record): ?string => $record->company
                             ? CompanyResource::getUrl('view', ['record' => $record->company])
                             : null),
                     TextEntry::make('company.tin')->label('TIN')->placeholder('—'),
-                    TextEntry::make('company_role')->label('Role')->placeholder('—'),
+                    TextEntry::make('company_role')->label('Role in current company')->placeholder('—'),
                     TextEntry::make('company_phone')->placeholder('—'),
                     TextEntry::make('company_email')->placeholder('—'),
                     TextEntry::make('company_address')->columnSpanFull()->placeholder('—'),
                     TextEntry::make('profile_completed_at')->dateTime()->label('Completed at')->placeholder('—'),
+                    TextEntry::make('memberships_count')
+                        ->label('Total memberships')
+                        ->state(fn (Contact $record): int => $record->memberships()->count()),
                 ])->columns(2),
             Section::make('Status')->schema([
                 TextEntry::make('is_active')->badge(),
@@ -103,7 +107,7 @@ class ContactResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('name')->searchable()->sortable(),
-                TextColumn::make('company.name')->label('Company')->searchable()->placeholder('—')
+                TextColumn::make('company.name')->label('Current company')->searchable()->placeholder('—')
                     ->url(fn (Contact $record): ?string => $record->company
                         ? CompanyResource::getUrl('view', ['record' => $record->company])
                         : null),
@@ -284,6 +288,7 @@ class ContactResource extends Resource
     public static function getRelations(): array
     {
         return [
+            MembershipsRelationManager::class,
             TicketsRelationManager::class,
             SubscriptionsRelationManager::class,
             ServicesRelationManager::class,

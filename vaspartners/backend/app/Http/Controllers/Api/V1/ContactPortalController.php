@@ -606,13 +606,21 @@ class ContactPortalController extends Controller
         ]);
 
         $result = $membership->createMemberByOwner($request->user(), $data);
+        $awaiting = $result['member']['awaiting_fayda'] ?? false;
+        $linkedExisting = $result['linked_existing'] ?? false;
+
+        $message = match (true) {
+            $linkedExisting && $awaiting => 'Existing partner linked to this company. They still need to sign in with Fayda (access applies only if enabled).',
+            $linkedExisting => 'Existing partner linked to this company as an additional membership. They can switch companies in the portal.',
+            $awaiting => 'Member added. They will sync when they sign in with Fayda using this phone number (only if access stays enabled).',
+            default => 'Member added to this company.',
+        };
 
         return response()->json([
             'data' => $membership->listCurrentCompanyMembers($request->user()),
             'member' => $result['member'],
-            'message' => ($result['member']['awaiting_fayda'] ?? false)
-                ? 'Member added. They will sync when they sign in with Fayda using this phone number (only if access stays enabled).'
-                : 'Member added to this company.',
+            'linked_existing' => $linkedExisting,
+            'message' => $message,
         ], 201);
     }
 
