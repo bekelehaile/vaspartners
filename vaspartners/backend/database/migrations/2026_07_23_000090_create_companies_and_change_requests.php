@@ -14,8 +14,8 @@ return new class extends Migration
             $table->string('public_id', 26)->unique();
             $table->string('name');
             $table->string('tin', 64)->unique();
-            $table->string('phone', 32)->nullable();
-            $table->string('email')->nullable();
+            $table->string('phone', 32)->nullable()->unique();
+            $table->string('email')->nullable()->unique();
             $table->text('address')->nullable();
             $table->boolean('is_active')->default(true);
             $table->foreignId('created_by_contact_id')->nullable()->constrained('contacts')->nullOnDelete();

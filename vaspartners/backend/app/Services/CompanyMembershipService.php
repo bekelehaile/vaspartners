@@ -54,13 +54,15 @@ class CompanyMembershipService
 
         $tin = $this->normalizeCode($data['company_tin']);
         $this->assertUniqueTin($tin);
+        $this->assertUniqueCompanyPhone($phone);
+        $this->assertUniqueCompanyEmail($email !== '' ? $email : null);
 
         return DB::transaction(function () use ($contact, $data, $tin, $phone, $email) {
             $company = Company::query()->create([
                 'name' => trim($data['company_name']),
                 'tin' => $tin,
                 'phone' => $phone,
-                'email' => $email !== '' ? $email : null,
+                'email' => $email !== '' ? \App\Support\EmailAddress::normalize($email) : null,
                 'address' => trim($data['company_address']),
                 'is_active' => false,
                 'approval_status' => CompanyApprovalStatus::Pending,
@@ -120,13 +122,15 @@ class CompanyMembershipService
 
         $tin = $this->normalizeCode($data['company_tin']);
         $this->assertUniqueTin($tin, $company->id);
+        $this->assertUniqueCompanyPhone($phone, $company->id);
+        $this->assertUniqueCompanyEmail($email !== '' ? $email : null, $company->id);
 
         return DB::transaction(function () use ($contact, $company, $data, $tin, $phone, $email) {
             $company->fill([
                 'name' => trim($data['company_name']),
                 'tin' => $tin,
                 'phone' => $phone,
-                'email' => $email !== '' ? $email : null,
+                'email' => $email !== '' ? \App\Support\EmailAddress::normalize($email) : null,
                 'address' => trim($data['company_address']),
                 'approval_status' => CompanyApprovalStatus::Pending,
                 'approval_note' => null,
@@ -1181,8 +1185,22 @@ class CompanyMembershipService
         }
 
         $email = isset($data['email']) ? trim((string) $data['email']) : '';
-        $email = $email !== '' ? $email : null;
+        $email = \App\Support\EmailAddress::normalize($email !== '' ? $email : null);
         $isActive = array_key_exists('is_active', $data) ? (bool) $data['is_active'] : true;
+
+        if ($email) {
+            $emailTaken = Contact::query()
+                ->where('email', $email)
+                ->where(function ($q) use ($phone) {
+                    $q->whereNull('phone_number')->orWhere('phone_number', '!=', $phone);
+                })
+                ->exists();
+            if ($emailTaken) {
+                throw ValidationException::withMessages([
+                    'email' => 'This email is already used by another partner.',
+                ]);
+            }
+        }
 
         $result = DB::transaction(function () use ($actor, $company, $name, $phone, $email, $isActive) {
             $contact = Contact::query()->where('phone_number', $phone)->first();
@@ -1848,6 +1866,44 @@ class CompanyMembershipService
         if ($tinQuery->exists()) {
             throw ValidationException::withMessages([
                 'company_tin' => 'This TIN is already registered to another company. TINs are unique — use “Join existing company”, or contact an administrator.',
+            ]);
+        }
+    }
+
+    protected function assertUniqueCompanyPhone(string $phone, ?int $ignoreCompanyId = null): void
+    {
+        $phone = \App\Support\PhoneNumber::normalize($phone);
+        if ($phone === '') {
+            return;
+        }
+
+        $query = Company::query()->where('phone', $phone);
+        if ($ignoreCompanyId) {
+            $query->where('id', '!=', $ignoreCompanyId);
+        }
+
+        if ($query->exists()) {
+            throw ValidationException::withMessages([
+                'company' => 'This company phone number is already registered to another company.',
+            ]);
+        }
+    }
+
+    protected function assertUniqueCompanyEmail(?string $email, ?int $ignoreCompanyId = null): void
+    {
+        $email = \App\Support\EmailAddress::normalize($email);
+        if ($email === null) {
+            return;
+        }
+
+        $query = Company::query()->where('email', $email);
+        if ($ignoreCompanyId) {
+            $query->where('id', '!=', $ignoreCompanyId);
+        }
+
+        if ($query->exists()) {
+            throw ValidationException::withMessages([
+                'company' => 'This company email is already registered to another company.',
             ]);
         }
     }

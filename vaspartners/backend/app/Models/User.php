@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
+use App\Support\EmailAddress;
 use App\Support\PhoneNumber;
 use Illuminate\Auth\Passwords\CanResetPassword;
 use Illuminate\Contracts\Auth\CanResetPassword as CanResetPasswordContract;
@@ -53,6 +54,11 @@ class User extends Authenticatable implements CanResetPasswordContract, Filament
     public function setPhoneAttribute(mixed $value): void
     {
         $this->attributes['phone'] = PhoneNumber::normalizeNullable($value);
+    }
+
+    public function setEmailAttribute(mixed $value): void
+    {
+        $this->attributes['email'] = EmailAddress::normalize($value);
     }
 
     public function manager(): BelongsTo

@@ -76,9 +76,15 @@ class CompanyResource extends Resource
             TextInput::make('phone')
                 ->tel()
                 ->maxLength(32)
-                ->helperText('Saved as last 9 digits.')
+                ->unique(ignoreRecord: true)
+                ->helperText('Saved as last 9 digits. Must be unique across companies.')
                 ->dehydrateStateUsing(fn (?string $state): ?string => \App\Support\PhoneNumber::normalizeNullable($state)),
-            TextInput::make('email')->email()->maxLength(255),
+            TextInput::make('email')
+                ->email()
+                ->maxLength(255)
+                ->unique(ignoreRecord: true)
+                ->helperText('Must be unique across companies.')
+                ->dehydrateStateUsing(fn (?string $state): ?string => \App\Support\EmailAddress::normalize($state)),
             Textarea::make('address')->rows(3)->columnSpanFull(),
             Toggle::make('is_active')
                 ->label('Active')

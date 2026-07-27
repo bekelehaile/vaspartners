@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\CompanyRole;
+use App\Support\EmailAddress;
 use App\Support\PhoneNumber;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
@@ -95,6 +96,20 @@ class Contact extends Authenticatable
                 );
             }
 
+            if (array_key_exists('email', $contact->getAttributes())
+                || $contact->isDirty('email')) {
+                $contact->attributes['email'] = EmailAddress::normalize(
+                    $contact->attributes['email'] ?? null,
+                );
+            }
+
+            if (array_key_exists('company_email', $contact->getAttributes())
+                || $contact->isDirty('company_email')) {
+                $contact->attributes['company_email'] = EmailAddress::normalize(
+                    $contact->attributes['company_email'] ?? null,
+                );
+            }
+
             if ($contact->allowFaydaSync) {
                 return;
             }
@@ -122,6 +137,16 @@ class Contact extends Authenticatable
     public function setCompanyPhoneAttribute(mixed $value): void
     {
         $this->attributes['company_phone'] = PhoneNumber::normalizeNullable($value);
+    }
+
+    public function setEmailAttribute(mixed $value): void
+    {
+        $this->attributes['email'] = EmailAddress::normalize($value);
+    }
+
+    public function setCompanyEmailAttribute(mixed $value): void
+    {
+        $this->attributes['company_email'] = EmailAddress::normalize($value);
     }
 
     /**

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\CompanyApprovalStatus;
 use App\Enums\CompanyRole;
+use App\Support\EmailAddress;
 use App\Support\PhoneNumber;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
@@ -51,6 +52,12 @@ class Company extends Model
                     $company->attributes['phone'] ?? null,
                 );
             }
+
+            if (array_key_exists('email', $company->getAttributes()) || $company->isDirty('email')) {
+                $company->attributes['email'] = EmailAddress::normalize(
+                    $company->attributes['email'] ?? null,
+                );
+            }
         });
 
         static::deleting(function (): bool {
@@ -61,6 +68,11 @@ class Company extends Model
     public function setPhoneAttribute(mixed $value): void
     {
         $this->attributes['phone'] = PhoneNumber::normalizeNullable($value);
+    }
+
+    public function setEmailAttribute(mixed $value): void
+    {
+        $this->attributes['email'] = EmailAddress::normalize($value);
     }
 
     public function uniqueIds(): array

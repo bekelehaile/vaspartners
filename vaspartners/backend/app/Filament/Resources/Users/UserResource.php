@@ -51,7 +51,8 @@ class UserResource extends Resource
                 ->email()
                 ->required()
                 ->unique(ignoreRecord: true)
-                ->maxLength(255),
+                ->maxLength(255)
+                ->dehydrateStateUsing(fn (?string $state): ?string => \App\Support\EmailAddress::normalize($state)),
             TextInput::make('phone')
                 ->tel()
                 ->required()
