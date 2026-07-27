@@ -36,8 +36,6 @@ const publicNav = [
 const portalNav = [
   { href: "/portal", label: "Service requests" },
   { href: "/portal/subscriptions", label: "Subscriptions" },
-  { href: "/portal/company-requests", label: "Company requests" },
-  { href: "/portal/membership-requests", label: "Membership requests" },
   { href: "/portal/services", label: "Services" },
 ] as const;
 

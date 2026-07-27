@@ -334,11 +334,41 @@ textarea {
   line-height: 1.25;
 }
 
+.portal-logged-in-switch {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.portal-logged-in-switch .company-switcher-select-header {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.portal-logged-in-switch-hint {
+  flex: 0 0 auto;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+
 .company-switcher-select-header {
   min-height: 2rem;
   padding: 0.25rem 1.75rem 0.25rem 0.55rem;
   font-size: 0.82rem;
   font-weight: 700;
+  cursor: pointer;
+}
+
+.company-switcher-select-header:disabled {
+  cursor: default;
+  opacity: 1;
+  color: var(--et-ink);
+  background: #fff;
 }
 
 .company-switcher-page {

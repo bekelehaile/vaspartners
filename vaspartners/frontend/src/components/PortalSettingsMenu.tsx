@@ -108,6 +108,20 @@ export function PortalSettingsMenu({
           >
             Company members
           </Link>
+          <Link
+            href="/portal/company-requests"
+            role="menuitem"
+            onClick={close}
+          >
+            Company requests
+          </Link>
+          <Link
+            href="/portal/membership-requests"
+            role="menuitem"
+            onClick={close}
+          >
+            Membership requests
+          </Link>
         </div>
       )}
     </div>

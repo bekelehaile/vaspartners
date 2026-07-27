@@ -348,7 +348,9 @@ export function CompanyMembersTable({ enabled }: { enabled: boolean }) {
   const membersQuery = useCompanyMembers(enabled);
   const setActive = useSetCompanyMemberActive();
   const updatePermissions = useUpdateCompanyMemberPermissions();
+  const updatePhone = useUpdateCompanyMemberPhone();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [phoneEditingId, setPhoneEditingId] = useState<string | null>(null);
   const [detailsId, setDetailsId] = useState<string | null>(null);
 
   const members = membersQuery.data?.members ?? [];
@@ -357,10 +359,12 @@ export function CompanyMembersTable({ enabled }: { enabled: boolean }) {
       ? membersQuery.data.permissionCatalog
       : (me?.company_permission_catalog ?? []);
   const canManage = !!me?.company_can_manage_members;
-  const busy = setActive.isPending || updatePermissions.isPending;
+  const busy =
+    setActive.isPending || updatePermissions.isPending || updatePhone.isPending;
   const error =
     (setActive.error instanceof Error && setActive.error.message) ||
     (updatePermissions.error instanceof Error && updatePermissions.error.message) ||
+    (updatePhone.error instanceof Error && updatePhone.error.message) ||
     null;
 
   const rows = useMemo(() => members, [members]);
@@ -428,6 +432,7 @@ export function CompanyMembersTable({ enabled }: { enabled: boolean }) {
                 const isOwnerRow = member.role === "owner" || member.is_owner;
                 const active = member.is_active !== false;
                 const editing = editingId === member.public_id;
+                const editingPhone = phoneEditingId === member.public_id;
                 const showDetails = detailsId === member.public_id;
 
                 const actions: MemberAction[] = [
@@ -441,10 +446,20 @@ export function CompanyMembersTable({ enabled }: { enabled: boolean }) {
 
                 if (canManage && !isYou && !isOwnerRow && member.public_id) {
                   actions.push({
+                    key: "phone",
+                    label: editingPhone ? "Close phone" : "Change phone",
+                    onSelect: () => {
+                      setEditingId(null);
+                      setPhoneEditingId(editingPhone ? null : member.public_id || null);
+                    },
+                  });
+                  actions.push({
                     key: "permissions",
                     label: editing ? "Close permissions" : "Grant permissions",
-                    onSelect: () =>
-                      setEditingId(editing ? null : member.public_id || null),
+                    onSelect: () => {
+                      setPhoneEditingId(null);
+                      setEditingId(editing ? null : member.public_id || null);
+                    },
                   });
                   if (active) {
                     actions.push({
@@ -480,7 +495,10 @@ export function CompanyMembersTable({ enabled }: { enabled: boolean }) {
                 }
 
                 const mainRow = (
-                  <tr key={id} className={editing ? "is-editing" : undefined}>
+                  <tr
+                    key={id}
+                    className={editing || editingPhone ? "is-editing" : undefined}
+                  >
                     <td>
                       <strong>{member.name || "—"}</strong>
                       {isYou ? <span className="service-meta"> You</span> : null}
@@ -555,6 +573,28 @@ export function CompanyMembersTable({ enabled }: { enabled: boolean }) {
                             <dd>{member.identification_number || "—"}</dd>
                           </div>
                         </dl>
+                      </td>
+                    </tr>,
+                  );
+                }
+
+                if (editingPhone && member.public_id) {
+                  extraRows.push(
+                    <tr key={`${id}-phone`} className="company-member-expand-row">
+                      <td colSpan={8}>
+                        <PhoneEditor
+                          member={member}
+                          busy={busy}
+                          onCancel={() => setPhoneEditingId(null)}
+                          onSave={(phone_number) => {
+                            void updatePhone
+                              .mutateAsync({
+                                public_id: member.public_id!,
+                                phone_number,
+                              })
+                              .then(() => setPhoneEditingId(null));
+                          }}
+                        />
                       </td>
                     </tr>,
                   );
