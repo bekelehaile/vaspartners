@@ -17,7 +17,7 @@ export default function BlogIndexPage() {
         <p className="muted">News and guidance managed from the Ethio telecom admin.</p>
       </div>
 
-      <div className="section">
+      <div className="section section-page">
         {isLoading && <p className="muted">Loading…</p>}
         {!isLoading && !posts.length && (
           <p className="muted">No published posts yet.</p>

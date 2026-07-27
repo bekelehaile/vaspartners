@@ -15,7 +15,7 @@ export default function GalleryPage() {
         <h1>Photo gallery</h1>
         <p className="muted">Images managed from the Ethio telecom admin website tools.</p>
       </div>
-      <LandingGallerySection showIntro={false} />
+      <LandingGallerySection showIntro={false} page />
     </SiteShell>
   );
 }

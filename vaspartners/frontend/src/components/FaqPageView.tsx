@@ -18,7 +18,7 @@ export function FaqPageView() {
         </p>
       </div>
 
-      <div className="section">
+      <div className="section section-page">
         <FaqList />
       </div>
     </SiteShell>

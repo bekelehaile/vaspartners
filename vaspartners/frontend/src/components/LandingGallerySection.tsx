@@ -6,8 +6,10 @@ import { useGallery } from "@/hooks/use-contact";
 
 export function LandingGallerySection({
   showIntro = true,
+  page = false,
 }: {
   showIntro?: boolean;
+  page?: boolean;
 }) {
   const { data: items = [], isLoading } = useGallery();
   const [album, setAlbum] = useState<string>("all");
@@ -26,11 +28,18 @@ export function LandingGallerySection({
   );
 
   if (!isLoading && !items.length) {
-    return showIntro ? null : <p className="muted">No gallery images yet.</p>;
+    return showIntro ? null : (
+      <div className={`section${page ? " section-page" : ""}`}>
+        <p className="muted">No gallery images yet.</p>
+      </div>
+    );
   }
 
   return (
-    <section className="section" id={showIntro ? "gallery" : undefined}>
+    <section
+      className={`section${page ? " section-page" : ""}`}
+      id={showIntro ? "gallery" : undefined}
+    >
       {showIntro && (
         <header className="section-head">
           <span className="section-label">Gallery</span>

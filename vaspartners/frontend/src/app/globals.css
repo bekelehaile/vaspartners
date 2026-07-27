@@ -36,6 +36,10 @@
   --header-via: #fefffe;
   --header-to: #f5fbf6;
 
+  /* Shared public-site content frame (header, hero, sections, footer) */
+  --page-max: 1536px;
+  --page-gutter: 1rem;
+
   --radius: 0.625rem;
   --shadow-soft: 0 10px 30px rgba(17, 24, 39, 0.08);
   --shadow-cta: 0 10px 24px color-mix(in oklab, var(--primary) 35%, transparent);
@@ -180,9 +184,9 @@ textarea {
 }
 
 .topbar-inner {
-  max-width: 1536px;
+  max-width: var(--page-max);
   margin: 0 auto;
-  padding: 0 1rem;
+  padding: 0 var(--page-gutter);
   height: 4rem;
   display: flex;
   align-items: center;
@@ -191,14 +195,14 @@ textarea {
 }
 
 @media (min-width: 640px) {
-  .topbar-inner {
-    padding: 0 1.5rem;
+  :root {
+    --page-gutter: 1.5rem;
   }
 }
 
 @media (min-width: 1024px) {
-  .topbar-inner {
-    padding: 0 2rem;
+  :root {
+    --page-gutter: 2rem;
   }
 }
 
@@ -1360,9 +1364,10 @@ textarea {
 .hero {
   position: relative;
   z-index: 1;
-  width: min(1536px, calc(100% - 2rem));
+  width: 100%;
+  max-width: var(--page-max);
   margin: 0 auto;
-  padding: 3rem 0 3.25rem;
+  padding: 3rem var(--page-gutter) 3.25rem;
   min-height: min(72vh, 40rem);
   display: grid;
   align-items: center;
@@ -1371,7 +1376,8 @@ textarea {
 
 @media (min-width: 640px) {
   .hero {
-    padding: 4.25rem 0 4.5rem;
+    padding-top: 4.25rem;
+    padding-bottom: 4.5rem;
   }
 }
 
@@ -1578,9 +1584,16 @@ textarea {
 
 /* —— Sections —— */
 .section {
-  width: min(1536px, calc(100% - 2rem));
+  width: 100%;
+  max-width: var(--page-max);
   margin: 0 auto;
-  padding: 3.5rem 0;
+  padding: 3.5rem var(--page-gutter);
+}
+
+/* Content under a page title (Blog / Gallery / FAQ) — avoid double top padding */
+.section-page {
+  padding-top: 1.25rem;
+  padding-bottom: 3.5rem;
 }
 
 .section-label {
@@ -2189,9 +2202,10 @@ textarea {
 }
 
 .site-footer-inner {
-  width: min(1536px, calc(100% - 2rem));
+  width: 100%;
+  max-width: var(--page-max);
   margin: 0 auto;
-  padding: 1.5rem 0;
+  padding: 1.5rem var(--page-gutter);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2249,10 +2263,16 @@ textarea {
 
 /* —— Portal —— */
 .portal-hero {
-  width: min(1100px, calc(100% - 2rem));
-  margin: 1.5rem auto 0;
-  padding: 1.75rem 0 1rem;
+  width: 100%;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 2.25rem var(--page-gutter) 0.35rem;
   animation: rise 0.7s ease both;
+}
+
+/* Public marketing pages (blog / gallery / FAQ) share the home content frame */
+.site:not(.site-portal-admin) .portal-hero {
+  max-width: var(--page-max);
 }
 
 .site-portal-admin .portal-hero,
@@ -2552,10 +2572,13 @@ textarea {
 
 .section-flush {
   padding-top: 0;
-  width: min(1100px, calc(100% - 2rem));
+  width: 100%;
+  max-width: min(1100px, 100%);
   margin-left: auto;
   margin-right: auto;
   margin-bottom: 3rem;
+  padding-left: var(--page-gutter);
+  padding-right: var(--page-gutter);
 }
 
 .form-section {
@@ -3735,7 +3758,7 @@ textarea {
 }
 
 .blog-article {
-  width: min(760px, calc(100% - 2rem));
+  max-width: min(760px, 100%);
 }
 
 .blog-article h1 {
