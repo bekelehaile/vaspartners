@@ -1,13 +1,19 @@
 "use client";
 
-import { PortalPageHeader } from "@/components/PortalPageHeader";
-import { ServicesCatalog } from "@/components/ServicesCatalog";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
-export default function ServicesPage() {
+/** Services catalog lives on the public home page — portal link is redundant. */
+export default function PortalServicesRedirectPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace("/#services");
+  }, [router]);
+
   return (
-    <>
-      <PortalPageHeader title="Services" />
-      <ServicesCatalog compact className="section section-flush" />
-    </>
+    <div className="section">
+      <p className="muted">Opening services…</p>
+    </div>
   );
 }

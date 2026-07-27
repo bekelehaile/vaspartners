@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
 import {
   createColumnHelper,
@@ -8,9 +9,31 @@ import {
   getCoreRowModel,
   useReactTable,
 } from "@tanstack/react-table";
+import { FileTextIcon, SearchIcon } from "lucide-react";
+import { JourneyLaunchActions } from "@/components/PortalPageHeader";
 import { StatusPill } from "@/components/StatusJourney";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useServices, useTickets, type TicketFilters } from "@/hooks/use-contact";
 import { statusCopy, type Ticket } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 const columnHelper = createColumnHelper<Ticket>();
 
@@ -23,6 +46,15 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "rejected", label: statusCopy.rejected.label },
 ];
 
+function formatSubmitted(value?: string | null) {
+  if (!value) return "—";
+  return new Date(value).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 export function RequestsTable({
   initialPerPage = 15,
   compact = false,
@@ -30,6 +62,7 @@ export function RequestsTable({
   initialPerPage?: number;
   compact?: boolean;
 }) {
+  const router = useRouter();
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
@@ -55,24 +88,40 @@ export function RequestsTable({
   const columns = useMemo(
     () => [
       columnHelper.accessor("tt_number", {
-        header: "Request number",
-        cell: (info) => (
-          <Link href={`/portal/requests/${info.row.original.tt_number}`} className="table-link">
-            {info.getValue()}
-          </Link>
-        ),
+        header: "Request",
+        cell: (info) => {
+          const ticket = info.row.original;
+          return (
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <Link
+                href={`/portal/requests/${ticket.tt_number}`}
+                className="font-semibold text-foreground hover:text-primary"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {info.getValue()}
+              </Link>
+              {ticket.requisition?.name && (
+                <span className="text-xs text-muted-foreground">
+                  {ticket.requisition.name}
+                </span>
+              )}
+            </div>
+          );
+        },
       }),
       columnHelper.accessor((row) => row.service?.name ?? "—", {
         id: "service",
         header: "Service",
-      }),
-      columnHelper.accessor((row) => row.contact?.name ?? "—", {
-        id: "submitted_by",
-        header: "Submitted by",
-      }),
-      columnHelper.accessor((row) => row.requisition?.name ?? "—", {
-        id: "requisition",
-        header: "Request type",
+        cell: (info) => (
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="font-medium text-foreground">{info.getValue()}</span>
+            {info.row.original.contact?.name && (
+              <span className="text-xs text-muted-foreground">
+                by {info.row.original.contact.name}
+              </span>
+            )}
+          </div>
+        ),
       }),
       columnHelper.accessor("status", {
         header: "Status",
@@ -80,29 +129,29 @@ export function RequestsTable({
       }),
       columnHelper.accessor("created_at", {
         header: "Submitted",
-        cell: (info) =>
-          info.getValue()
-            ? new Date(info.getValue()).toLocaleDateString(undefined, {
-                year: "numeric",
-                month: "short",
-                day: "numeric",
-              })
-            : "—",
+        cell: (info) => (
+          <span className="text-muted-foreground">
+            {formatSubmitted(info.getValue())}
+          </span>
+        ),
       }),
       columnHelper.display({
         id: "actions",
         header: "",
         cell: (info) => (
-          <Link
-            href={`/portal/requests/${info.row.original.tt_number}`}
-            className="btn-ghost table-action"
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7"
+            render={<Link href={`/portal/requests/${info.row.original.tt_number}`} />}
+            onClick={(e) => e.stopPropagation()}
           >
-            View
-          </Link>
+            Open
+          </Button>
         ),
       }),
     ],
-    []
+    [],
   );
 
   const table = useReactTable({
@@ -128,32 +177,39 @@ export function RequestsTable({
   };
 
   const hasFilters = !!(search || status || serviceId);
+  const selectClass =
+    "h-8 min-w-[9.5rem] rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
   return (
-    <div className={`data-table-card${compact ? " is-compact" : ""}`}>
+    <Card className={cn("gap-0 py-0 shadow-sm", compact && "is-compact")}>
       {!compact && (
-        <div className="data-table-toolbar">
-          <form className="data-table-search" onSubmit={applySearch}>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+          <form className="flex min-w-[min(100%,18rem)] flex-1 gap-2" onSubmit={applySearch}>
             <label className="sr-only" htmlFor="requests-search">
               Search requests
             </label>
-            <input
-              id="requests-search"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search by request number, service, or notes…"
-            />
-            <button type="submit" className="btn-ghost">
+            <div className="relative flex-1">
+              <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="requests-search"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Search request number, service, or notes"
+                className="pl-8"
+              />
+            </div>
+            <Button type="submit" variant="outline" size="sm" className="h-8">
               Search
-            </button>
+            </Button>
           </form>
 
-          <div className="data-table-filters">
+          <div className="flex flex-wrap items-center gap-2">
             <label className="sr-only" htmlFor="requests-status">
               Status
             </label>
             <select
               id="requests-status"
+              className={selectClass}
               value={status}
               onChange={(e) => {
                 setStatus(e.target.value);
@@ -172,6 +228,7 @@ export function RequestsTable({
             </label>
             <select
               id="requests-service"
+              className={selectClass}
               value={serviceId}
               onChange={(e) => {
                 setServiceId(e.target.value);
@@ -187,101 +244,142 @@ export function RequestsTable({
             </select>
 
             {hasFilters && (
-              <button type="button" className="linkish" onClick={clearFilters}>
-                Clear filters
-              </button>
+              <Button type="button" variant="link" size="sm" onClick={clearFilters}>
+                Clear
+              </Button>
             )}
           </div>
         </div>
       )}
 
       {isError && (
-        <div className="alert">
+        <div className="alert mx-4 my-3">
           {error instanceof Error ? error.message : "Unable to load requests"}
         </div>
       )}
 
-      <div className="data-table-wrap">
-        <table className="data-table">
-          <thead>
+      <CardContent className="px-0">
+        <Table className="min-w-[640px]">
+          <TableHeader>
             {table.getHeaderGroups().map((hg) => (
-              <tr key={hg.id}>
+              <tr key={hg.id} className="border-b bg-muted/40 hover:bg-muted/40">
                 {hg.headers.map((header) => (
-                  <th key={header.id}>
+                  <TableHead
+                    key={header.id}
+                    className="h-10 px-4 text-[0.72rem] font-bold tracking-[0.06em] text-muted-foreground uppercase"
+                  >
                     {header.isPlaceholder
                       ? null
                       : flexRender(header.column.columnDef.header, header.getContext())}
-                  </th>
+                  </TableHead>
                 ))}
               </tr>
             ))}
-          </thead>
-          <tbody>
+          </TableHeader>
+          <TableBody>
             {isLoading ? (
-              <tr>
-                <td colSpan={columns.length} className="data-table-empty">
-                  Loading requests…
-                </td>
-              </tr>
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={columns.length} className="p-0">
+                  <Empty className="border-0 py-12">
+                    <EmptyHeader>
+                      <EmptyTitle>Loading requests…</EmptyTitle>
+                    </EmptyHeader>
+                  </Empty>
+                </TableCell>
+              </TableRow>
             ) : items.length === 0 ? (
-              <tr>
-                <td colSpan={columns.length} className="data-table-empty">
-                  {hasFilters
-                    ? "No requests match your filters."
-                    : "No company service requests yet. Use New subscription or Manage service above to get started."}
-                </td>
-              </tr>
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={columns.length} className="p-0 whitespace-normal">
+                  <Empty className="border-0 py-12">
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon">
+                        <FileTextIcon />
+                      </EmptyMedia>
+                      <EmptyTitle>
+                        {hasFilters ? "No matching requests" : "No service requests yet"}
+                      </EmptyTitle>
+                      <EmptyDescription>
+                        {hasFilters
+                          ? "Try a different status, service, or clear your filters."
+                          : "Start a subscription or manage an existing service for this company."}
+                      </EmptyDescription>
+                    </EmptyHeader>
+                    <EmptyContent>
+                      {!hasFilters && !compact ? (
+                        <JourneyLaunchActions />
+                      ) : hasFilters ? (
+                        <Button type="button" variant="outline" size="sm" onClick={clearFilters}>
+                          Clear filters
+                        </Button>
+                      ) : null}
+                    </EmptyContent>
+                  </Empty>
+                </TableCell>
+              </TableRow>
             ) : (
               table.getRowModel().rows.map((row) => (
-                <tr key={row.id}>
+                <TableRow
+                  key={row.id}
+                  className="cursor-pointer"
+                  tabIndex={0}
+                  onClick={() =>
+                    router.push(`/portal/requests/${row.original.tt_number}`)
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      router.push(`/portal/requests/${row.original.tt_number}`);
+                    }
+                  }}
+                >
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id}>
+                    <TableCell key={cell.id} className="px-4 py-3 whitespace-normal">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
+                    </TableCell>
                   ))}
-                </tr>
+                </TableRow>
               ))
             )}
-          </tbody>
-        </table>
-      </div>
+          </TableBody>
+        </Table>
+      </CardContent>
 
-      {!compact && (
-        <div className="data-table-footer">
-          <p className="muted">
-            {total === 0
-              ? "0 results"
-              : `Showing page ${currentPage} of ${lastPage} · ${total} request${total === 1 ? "" : "s"}`}
+      {!compact && items.length > 0 && (
+        <CardFooter className="justify-between gap-3 border-t bg-muted/30 py-3">
+          <p className="text-sm text-muted-foreground">
+            {`Page ${currentPage} of ${lastPage} · ${total} request${total === 1 ? "" : "s"}`}
             {isFetching && !isLoading ? " · Updating…" : ""}
           </p>
-          <div className="data-table-pager">
-            <button
+          <div className="flex gap-2">
+            <Button
               type="button"
-              className="btn-ghost"
+              variant="outline"
+              size="sm"
               disabled={currentPage <= 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
             >
               Previous
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="btn-ghost"
+              variant="outline"
+              size="sm"
               disabled={currentPage >= lastPage}
               onClick={() => setPage((p) => p + 1)}
             >
               Next
-            </button>
+            </Button>
           </div>
-        </div>
+        </CardFooter>
       )}
 
       {compact && total > items.length && (
-        <div className="data-table-footer">
-          <Link href="/portal" className="linkish">
+        <CardFooter className="border-t bg-muted/30 py-3">
+          <Button variant="link" size="sm" render={<Link href="/portal" />}>
             View all {total} requests →
-          </Link>
-        </div>
+          </Button>
+        </CardFooter>
       )}
-    </div>
+    </Card>
   );
 }

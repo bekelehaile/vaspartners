@@ -5,6 +5,7 @@ import { ReactNode, useState } from "react";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { NotificationBell } from "@/components/NotificationBell";
 import { PortalSettingsMenu } from "@/components/PortalSettingsMenu";
+import { PortalSidebar } from "@/components/PortalSidebar";
 import { Contact, clearToken, faydaLoginUrl } from "@/lib/api";
 
 function LogInIcon() {
@@ -34,15 +35,15 @@ const publicNav = [
 ] as const;
 
 const portalNav = [
-  { href: "/portal", label: "Service requests" },
+  { href: "/portal", label: "Requests" },
   { href: "/portal/subscriptions", label: "Subscriptions" },
-  { href: "/portal/services", label: "Services" },
 ] as const;
 
 export function SiteShell({
   children,
   me,
   onLogout,
+  compact = false,
   landing = false,
 }: {
   children: ReactNode;
@@ -52,9 +53,18 @@ export function SiteShell({
   landing?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const portalAdmin = !!me && compact;
 
   return (
-    <div className={landing ? "site site-landing" : "site"}>
+    <div
+      className={
+        landing
+          ? "site site-landing"
+          : portalAdmin
+            ? "site site-portal-admin"
+            : "site"
+      }
+    >
       <a href="#main-content" className="skip-link">
         Skip to content
       </a>
@@ -71,23 +81,26 @@ export function SiteShell({
 
           <nav className="topnav" aria-label="Primary">
             {me ? (
-              <>
-                {portalNav.map((item) => (
-                  <Link key={item.href} href={item.href}>
-                    {item.label}
-                  </Link>
-                ))}
+              portalAdmin ? (
                 <div className="portal-header-actions">
                   <CompanySwitcher me={me} variant="header" />
-                  <PortalSettingsMenu />
                   {me.profile_completed && <NotificationBell />}
-                  {onLogout && (
-                    <button type="button" className="portal-signout-btn" onClick={onLogout}>
-                      Sign out
-                    </button>
-                  )}
+                  <PortalSettingsMenu onLogout={onLogout} />
                 </div>
-              </>
+              ) : (
+                <>
+                  {portalNav.map((item) => (
+                    <Link key={item.href} href={item.href}>
+                      {item.label}
+                    </Link>
+                  ))}
+                  <div className="portal-header-actions">
+                    <CompanySwitcher me={me} variant="header" />
+                    {me.profile_completed && <NotificationBell />}
+                    <PortalSettingsMenu onLogout={onLogout} />
+                  </div>
+                </>
+              )
             ) : (
               <>
                 {publicNav.map((item) =>
@@ -124,34 +137,39 @@ export function SiteShell({
           <div className="mobile-sheet">
             <div className="mobile-sheet-card">
               {me ? (
-                <>
-                  {portalNav.map((item) => (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      onClick={() => setOpen(false)}
-                    >
-                      {item.label}
-                    </Link>
-                  ))}
-                  <div className="portal-header-actions portal-header-actions-mobile">
-                    <CompanySwitcher me={me} variant="header" />
-                    <PortalSettingsMenu onNavigate={() => setOpen(false)} />
-                    {me.profile_completed && <NotificationBell />}
-                    {onLogout && (
-                      <button
-                        type="button"
-                        className="portal-signout-btn"
-                        onClick={() => {
-                          setOpen(false);
-                          onLogout();
-                        }}
+                portalAdmin ? (
+                  <>
+                    <PortalSidebar onNavigate={() => setOpen(false)} />
+                    <div className="portal-header-actions portal-header-actions-mobile">
+                      <CompanySwitcher me={me} variant="header" />
+                      {me.profile_completed && <NotificationBell />}
+                      <PortalSettingsMenu
+                        onNavigate={() => setOpen(false)}
+                        onLogout={onLogout}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {portalNav.map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setOpen(false)}
                       >
-                        Sign out
-                      </button>
-                    )}
-                  </div>
-                </>
+                        {item.label}
+                      </Link>
+                    ))}
+                    <div className="portal-header-actions portal-header-actions-mobile">
+                      <CompanySwitcher me={me} variant="header" />
+                      {me.profile_completed && <NotificationBell />}
+                      <PortalSettingsMenu
+                        onNavigate={() => setOpen(false)}
+                        onLogout={onLogout}
+                      />
+                    </div>
+                  </>
+                )
               ) : (
                 <>
                   {publicNav.map((item) =>
@@ -185,7 +203,18 @@ export function SiteShell({
         )}
       </header>
 
-      <main id="main-content">{children}</main>
+      {portalAdmin ? (
+        <div className="portal-admin-frame">
+          <aside className="portal-admin-sidebar" aria-label="Portal navigation">
+            <PortalSidebar />
+          </aside>
+          <main id="main-content" className="portal-admin-main">
+            {children}
+          </main>
+        </div>
+      ) : (
+        <main id="main-content">{children}</main>
+      )}
 
       <footer className="site-footer">
         <div className="site-footer-inner">

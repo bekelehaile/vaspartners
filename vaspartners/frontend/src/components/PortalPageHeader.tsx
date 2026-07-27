@@ -8,6 +8,7 @@ import {
   contactCanCreateSubscriptions,
   contactCanManageServices,
 } from "@/lib/company-permissions";
+import { Button } from "@/components/ui/button";
 
 export function PortalPageHeader({
   kicker,
@@ -33,7 +34,7 @@ export function PortalPageHeader({
 }
 
 export function NewRequestButton({
-  className = "btn-primary",
+  className,
 }: {
   className?: string;
 }) {
@@ -43,9 +44,12 @@ export function NewRequestButton({
   }
 
   return (
-    <Link href="/portal/requests/new" className={className}>
+    <Button
+      className={className}
+      render={<Link href="/portal/requests/new" />}
+    >
       New service request
-    </Link>
+    </Button>
   );
 }
 
@@ -62,14 +66,21 @@ export function JourneyLaunchActions() {
   return (
     <div className="journey-launch">
       {canSubscribe && (
-        <Link href="/portal/requests/new?intent=subscribe" className="btn-primary">
+        <Button
+          className="btn-subscribe"
+          render={<Link href="/portal/requests/new?intent=subscribe" />}
+        >
           New subscription
-        </Link>
+        </Button>
       )}
       {canManage && (
-        <Link href="/portal/requests/new?intent=manage" className="btn-ghost">
+        <Button
+          variant="outline"
+          className="btn-brand-outline"
+          render={<Link href="/portal/requests/new?intent=manage" />}
+        >
           Manage service
-        </Link>
+        </Button>
       )}
     </div>
   );

@@ -2,31 +2,19 @@
 
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
-
-function GearIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-      width="18"
-      height="18"
-    >
-      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
-}
+import { LogOutIcon, UserRoundIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  companySectionHref,
+  navigatePortalHref,
+} from "@/lib/portal-company-nav";
 
 export function PortalSettingsMenu({
   onNavigate,
+  onLogout,
 }: {
   onNavigate?: () => void;
+  onLogout?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -57,62 +45,62 @@ export function PortalSettingsMenu({
 
   const go = (href: string) => {
     close();
-    // Switch company-page tabs via hash even on same-route navigations.
-    if (typeof window !== "undefined" && href.includes("#")) {
-      const [path, hash] = href.split("#");
-      if (window.location.pathname === path) {
-        window.location.hash = hash;
-        window.dispatchEvent(new HashChangeEvent("hashchange"));
-      }
-    }
+    navigatePortalHref(href);
   };
 
   return (
     <div className="portal-settings" ref={rootRef}>
-      <button
+      <Button
         type="button"
-        className="portal-settings-btn"
+        variant="outline"
+        size="sm"
+        className="portal-account-btn"
         aria-expanded={open}
         aria-haspopup="menu"
         aria-controls={menuId}
-        aria-label="Settings"
+        aria-label="Account"
         onClick={() => setOpen((v) => !v)}
       >
-        <GearIcon />
-        <span>Settings</span>
-      </button>
+        <UserRoundIcon />
+        <span>Account</span>
+      </Button>
 
       {open && (
         <div className="portal-settings-menu" id={menuId} role="menu">
           <p className="portal-settings-menu-label">Account</p>
           <Link
-            href="/portal/company#fayda-identity"
+            href={companySectionHref("identity")}
             role="menuitem"
-            onClick={() => go("/portal/company#fayda-identity")}
+            onClick={(e) => {
+              e.preventDefault();
+              go(companySectionHref("identity"));
+            }}
           >
-            Fayda identity
+            Identity
           </Link>
           <Link
-            href="/portal/company#company-info"
+            href={companySectionHref("profile")}
             role="menuitem"
-            onClick={() => go("/portal/company#company-info")}
+            onClick={(e) => {
+              e.preventDefault();
+              go(companySectionHref("profile"));
+            }}
           >
-            Company profile
+            Company
+          </Link>
+          <Link
+            href={companySectionHref("members")}
+            role="menuitem"
+            onClick={(e) => {
+              e.preventDefault();
+              go(companySectionHref("members"));
+            }}
+          >
+            Members
           </Link>
           <div className="portal-settings-divider" role="separator" />
-          <p className="portal-settings-menu-label">Organisation</p>
-          <Link
-            href="/portal/company#company-members-panel"
-            role="menuitem"
-            onClick={() => go("/portal/company#company-members-panel")}
-          >
-            Company members
-          </Link>
-          <Link
-            href="/portal/company-requests"
-            role="menuitem"
-            onClick={close}
-          >
+          <p className="portal-settings-menu-label">Requests</p>
+          <Link href="/portal/company-requests" role="menuitem" onClick={close}>
             Company requests
           </Link>
           <Link
@@ -122,6 +110,23 @@ export function PortalSettingsMenu({
           >
             Membership requests
           </Link>
+          {onLogout && (
+            <>
+              <div className="portal-settings-divider" role="separator" />
+              <button
+                type="button"
+                role="menuitem"
+                className="portal-settings-signout"
+                onClick={() => {
+                  close();
+                  onLogout();
+                }}
+              >
+                <LogOutIcon className="size-3.5 opacity-70" aria-hidden />
+                Sign out
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>

@@ -7,9 +7,8 @@ export default function PortalHomePage() {
   return (
     <>
       <PortalPageHeader
-        kicker="Partner portal"
         title="Service requests"
-        description="Company service requests for your current organisation. Track progress, open any member’s request, and start a new subscription or manage an existing service."
+        description="Track and open requests for your current company. Filter by status or service, then start a new subscription or manage an existing service."
         actions={<JourneyLaunchActions />}
       />
 

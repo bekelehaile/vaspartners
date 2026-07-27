@@ -1,7 +1,6 @@
 "use client";
 
 import { MyCompanyRequestsPanel } from "@/components/CompanyRequestsInbox";
-import { OrganisationRequestsNav } from "@/components/OrganisationRequestsNav";
 import { PortalPageHeader } from "@/components/PortalPageHeader";
 import { useContact } from "@/hooks/use-contact";
 
@@ -16,16 +15,17 @@ export default function CompanyRequestsPage() {
       <PortalPageHeader
         kicker="Organisation"
         title="Company requests"
-        description="Requests you submitted about a company: create or join, leave, transfer ownership, or company profile approval. This is not the same as membership requests waiting for your approval."
+        description="Requests you submitted about a company: create or join, leave, transfer ownership, or company profile approval."
       />
 
       <div className="section section-flush">
-        <OrganisationRequestsNav />
         {membershipDisabled ? (
-          <div className="panel">
-            <p className="muted" style={{ marginBottom: 0 }}>
-              Your company membership is disabled, so company requests are not available.
-            </p>
+          <div className="data-table-card">
+            <div className="portal-empty">
+              <p>
+                Your company membership is disabled, so company requests are not available.
+              </p>
+            </div>
           </div>
         ) : (
           <MyCompanyRequestsPanel enabled={enabled} />

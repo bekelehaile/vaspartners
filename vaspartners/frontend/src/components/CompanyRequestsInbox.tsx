@@ -70,34 +70,34 @@ function RequestCard({
         </span>
       </p>
       {row.company?.name && (
-        <p className="muted" style={{ margin: "0 0 0.35rem" }}>
+        <p className="muted company-request-meta">
           Company: <strong>{row.company.name}</strong>
           {row.company.tin ? ` · TIN ${row.company.tin}` : ""}
         </p>
       )}
       {mode === "membership" && row.applicant?.name && (
-        <p style={{ margin: "0 0 0.35rem" }}>
+        <p className="company-request-meta">
           Partner asking to join: <strong>{row.applicant.name}</strong>
           {row.applicant.phone_number ? ` · ${row.applicant.phone_number}` : ""}
           {row.applicant.email ? ` · ${row.applicant.email}` : ""}
         </p>
       )}
       {row.target_contact?.name && (
-        <p className="muted" style={{ margin: "0 0 0.35rem" }}>
+        <p className="muted company-request-meta">
           Proposed new owner: {row.target_contact.name}
         </p>
       )}
-      {mode === "mine" && wait && <p className="muted">{wait}</p>}
+      {mode === "mine" && wait && <p className="muted company-request-meta">{wait}</p>}
       {row.contact_note && (
-        <p className="muted">
+        <p className="muted company-request-meta">
           {mode === "membership" ? "Their note" : "Your note"}: {row.contact_note}
         </p>
       )}
       {row.decision_note && (
-        <p className="muted">Decision note: {row.decision_note}</p>
+        <p className="muted company-request-meta">Decision note: {row.decision_note}</p>
       )}
       {row.decided_by && row.decided_by !== "—" && row.status !== "pending" && (
-        <p className="muted">Decided by: {row.decided_by}</p>
+        <p className="muted company-request-meta">Decided by: {row.decided_by}</p>
       )}
       <div className="company-request-actions">
         {mode === "membership" && row.can_approve && onDecide && (
@@ -150,14 +150,21 @@ export function MyCompanyRequestsPanel({ enabled }: { enabled: boolean }) {
   }
 
   return (
-    <section className="panel" aria-labelledby="my-company-requests-heading">
+    <section
+      className="company-request-list-card"
+      aria-labelledby="my-company-requests-heading"
+    >
       <h2 id="my-company-requests-heading" className="sr-only">
         Your company requests
       </h2>
 
-      {inbox.isLoading && <p className="muted">Loading your requests…</p>}
+      {inbox.isLoading && (
+        <div className="portal-empty">
+          <p>Loading your requests…</p>
+        </div>
+      )}
       {inbox.isError && (
-        <div className="alert">
+        <div className="alert" style={{ margin: "1rem 1.15rem" }}>
           {inbox.error instanceof Error
             ? inbox.error.message
             : "Could not load your requests"}
@@ -165,26 +172,30 @@ export function MyCompanyRequestsPanel({ enabled }: { enabled: boolean }) {
       )}
 
       {!inbox.isLoading && submitted.length === 0 && (
-        <p className="muted" style={{ marginBottom: 0 }}>
-          You have not submitted any company requests yet. Join or create a company from
-          Settings, then track those submissions here — not under Membership requests.
-        </p>
+        <div className="portal-empty">
+          <p>
+            You have not submitted any company requests yet. Join or create a company from
+            Settings, then track those submissions here — not under Membership requests.
+          </p>
+        </div>
       )}
 
-      <div className="company-request-list">
-        {submitted.map((row) => (
-          <RequestCard
-            key={`mine-${row.kind}-${row.public_id}`}
-            row={row}
-            mode="mine"
-            busy={busy}
-            onCancel={(publicId) => void cancel.mutateAsync(publicId)}
-          />
-        ))}
-      </div>
+      {submitted.length > 0 && (
+        <div className="company-request-list">
+          {submitted.map((row) => (
+            <RequestCard
+              key={`mine-${row.kind}-${row.public_id}`}
+              row={row}
+              mode="mine"
+              busy={busy}
+              onCancel={(publicId) => void cancel.mutateAsync(publicId)}
+            />
+          ))}
+        </div>
+      )}
 
       {cancel.isError && (
-        <div className="alert" style={{ marginTop: "1rem" }}>
+        <div className="alert" style={{ margin: "0 1.15rem 1rem" }}>
           {cancel.error instanceof Error
             ? cancel.error.message
             : "Could not cancel request"}
@@ -208,15 +219,22 @@ export function MembershipRequestsPanel({ enabled }: { enabled: boolean }) {
   }
 
   return (
-    <section className="panel" aria-labelledby="membership-requests-list-heading">
+    <section
+      className="company-request-list-card"
+      aria-labelledby="membership-requests-list-heading"
+    >
       <h2 id="membership-requests-list-heading" className="sr-only">
         Membership requests
         {pendingCount > 0 ? ` (${pendingCount} waiting)` : ""}
       </h2>
 
-      {inbox.isLoading && <p className="muted">Loading membership requests…</p>}
+      {inbox.isLoading && (
+        <div className="portal-empty">
+          <p>Loading membership requests…</p>
+        </div>
+      )}
       {inbox.isError && (
-        <div className="alert">
+        <div className="alert" style={{ margin: "1rem 1.15rem" }}>
           {inbox.error instanceof Error
             ? inbox.error.message
             : "Could not load membership requests"}
@@ -224,29 +242,33 @@ export function MembershipRequestsPanel({ enabled }: { enabled: boolean }) {
       )}
 
       {!inbox.isLoading && toReview.length === 0 && (
-        <p className="muted" style={{ marginBottom: 0 }}>
-          No partners are waiting for your approval. Only company owners (or members
-          granted approval rights) see incoming join requests here. Your own submissions
-          stay under Company requests.
-        </p>
+        <div className="portal-empty">
+          <p>
+            No partners are waiting for your approval. Only company owners (or members
+            granted approval rights) see incoming join requests here. Your own submissions
+            stay under Company requests.
+          </p>
+        </div>
       )}
 
-      <div className="company-request-list">
-        {toReview.map((row) => (
-          <RequestCard
-            key={`membership-${row.kind}-${row.public_id}`}
-            row={row}
-            mode="membership"
-            busy={busy}
-            onDecide={(publicId, decision) =>
-              void decide.mutateAsync({ public_id: publicId, decision })
-            }
-          />
-        ))}
-      </div>
+      {toReview.length > 0 && (
+        <div className="company-request-list">
+          {toReview.map((row) => (
+            <RequestCard
+              key={`membership-${row.kind}-${row.public_id}`}
+              row={row}
+              mode="membership"
+              busy={busy}
+              onDecide={(publicId, decision) =>
+                void decide.mutateAsync({ public_id: publicId, decision })
+              }
+            />
+          ))}
+        </div>
+      )}
 
       {decide.isError && (
-        <div className="alert" style={{ marginTop: "1rem" }}>
+        <div className="alert" style={{ margin: "0 1.15rem 1rem" }}>
           {decide.error instanceof Error
             ? decide.error.message
             : "Could not update membership request"}

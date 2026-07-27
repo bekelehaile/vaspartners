@@ -7,7 +7,6 @@ export default function SubscriptionsPage() {
   return (
     <>
       <PortalPageHeader
-        kicker="Partner portal"
         title="Subscriptions"
         description="Company subscription history for your current organisation — active, renewing, and ended."
         actions={<JourneyLaunchActions />}

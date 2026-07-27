@@ -9,31 +9,30 @@ import { FaydaIdentityPanel } from "@/components/FaydaIdentityPanel";
 import { JoinCompanyPanel } from "@/components/JoinCompanyPanel";
 import { PortalPageHeader } from "@/components/PortalPageHeader";
 import {
+  AdminWorkspace,
+  VerticalTabs,
+} from "@/components/VerticalTabs";
+import {
   useCompanyMembers,
   useContact,
   useDetachCompany,
   useTransferOwnership,
 } from "@/hooks/use-contact";
 import { CompanySwitcher } from "@/components/CompanySwitcher";
+import {
+  COMPANY_SECTION_HASH,
+  COMPANY_SECTION_LABEL,
+  companySectionFromHash,
+  type CompanySectionId,
+} from "@/lib/portal-company-nav";
 import { queryKeys } from "@/lib/query-keys";
 
-type CompanyTab = "identity" | "profile" | "members" | "ownership";
+type CompanyTab = CompanySectionId;
 type OrgAction = "create" | "attach" | null;
-
-const HASH_TO_TAB: Record<string, CompanyTab> = {
-  "fayda-identity": "identity",
-  "fayda-identity-panel": "identity",
-  "company-info": "profile",
-  "company-profile-panel": "profile",
-  "company-members-panel": "members",
-  "transfer-ownership": "ownership",
-  "leave-company": "ownership",
-};
 
 function tabFromHash(): CompanyTab | null {
   if (typeof window === "undefined") return null;
-  const hash = window.location.hash.replace(/^#/, "").trim();
-  return hash ? (HASH_TO_TAB[hash] ?? null) : null;
+  return companySectionFromHash(window.location.hash);
 }
 
 export default function CompanyProfilePage() {
@@ -67,14 +66,17 @@ export default function CompanyProfilePage() {
 
   const tabs = useMemo(() => {
     const items: { id: CompanyTab; label: string }[] = [
-      { id: "identity", label: "Fayda identity" },
-      { id: "profile", label: "Company profile" },
+      { id: "identity", label: COMPANY_SECTION_LABEL.identity },
+      { id: "profile", label: COMPANY_SECTION_LABEL.profile },
     ];
     if (canViewMembers) {
-      items.push({ id: "members", label: "Members" });
+      items.push({ id: "members", label: COMPANY_SECTION_LABEL.members });
     }
     if (isLinked) {
-      items.push({ id: "ownership", label: isOwner ? "Ownership" : "Leave company" });
+      items.push({
+        id: "ownership",
+        label: isOwner ? COMPANY_SECTION_LABEL.ownership : "Leave company",
+      });
     }
     return items;
   }, [canViewMembers, isLinked, isOwner]);
@@ -99,16 +101,9 @@ export default function CompanyProfilePage() {
 
   const selectTab = (next: CompanyTab) => {
     setTab(next);
-    const hash =
-      next === "identity"
-        ? "fayda-identity"
-        : next === "profile"
-          ? "company-info"
-          : next === "members"
-            ? "company-members-panel"
-            : "leave-company";
     if (typeof window !== "undefined") {
-      window.history.replaceState(null, "", `#${hash}`);
+      window.history.replaceState(null, "", `#${COMPANY_SECTION_HASH[next]}`);
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
     }
   };
 
@@ -123,102 +118,100 @@ export default function CompanyProfilePage() {
     (m) => m.role !== "owner" && m.is_active !== false && m.public_id,
   );
 
-  const approvalLabel =
-    me?.company?.approval_status === "rejected"
-      ? "Company profile rejected — update and resubmit"
-      : "Company profile pending admin approval";
+  const companyName = me?.company_name || me?.company?.name || "this organisation";
+
+  const workspaceHeader = (() => {
+    switch (tab) {
+      case "identity":
+        return {
+          kicker: "Account",
+          title: COMPANY_SECTION_LABEL.identity,
+          description: `Your personal National ID details from Fayda${
+            me?.company_role === "owner" ? " (you are the company owner)" : ""
+          }. This is not company registration data.`,
+        };
+      case "profile":
+        return {
+          kicker: "Organisation",
+          title: COMPANY_SECTION_LABEL.profile,
+          description: awaitingApproval
+            ? me?.company?.approval_status === "rejected"
+              ? `Admin feedback: ${me?.company?.approval_note || "Please complete the required company information and resubmit."}`
+              : "An administrator must approve this unique TIN before you can request VAS services."
+            : `Organisation registration for ${companyName}. After approval, only administrators can change these records.`,
+        };
+      case "members":
+        return {
+          kicker: "Organisation",
+          title: COMPANY_SECTION_LABEL.members,
+          description: isOwner
+            ? `Partners linked to ${companyName}. Use Actions to enable or disable access and grant permissions.`
+            : `Partners linked to ${companyName}. Open a row to view Fayda identity details.`,
+        };
+      case "ownership":
+        return {
+          kicker: "Organisation",
+          title: isOwner ? COMPANY_SECTION_LABEL.ownership : "Leave company",
+          description: isOwner
+            ? `Transfer ownership of ${companyName} before you leave, or manage your membership.`
+            : `Leave ${companyName}. Leaving is personal and immediate — no admin approval.`,
+        };
+      default:
+        return {
+          kicker: "Organisation",
+          title: COMPANY_SECTION_LABEL.profile,
+          description: "",
+        };
+    }
+  })();
+
+  const pageHeader = membershipDisabled
+    ? {
+        kicker: "Organisation",
+        title: "Membership disabled",
+        description:
+          "Your access to this company has been disabled. Ask your company owner or an administrator to re-enable it.",
+      }
+    : pending
+      ? {
+          kicker: "Organisation",
+          title: "Company request pending",
+          description: `Your ${pending.type} request for ${pending.company?.name || "a company"} is waiting for ${waitingFor} approval. VAS services stay locked until the company TIN is approved.`,
+        }
+      : showWorkspace
+        ? workspaceHeader
+        : {
+            kicker: "Welcome",
+            title: "Link your Fayda account to a company",
+            description: `Hello${me?.name ? `, ${me.name.split(" ")[0]}` : ""}. Create a new company with a unique TIN for admin approval, or request to join an existing approved company. You cannot use VAS services until that TIN is approved.`,
+          };
 
   return (
     <>
       <PortalPageHeader
-        kicker={isLinked || awaitingApproval ? "Settings" : "Welcome"}
-        title={
-          membershipDisabled
-            ? "Membership disabled"
-            : awaitingApproval
-              ? approvalLabel
-              : isLinked
-                ? "Company & identity"
-                : pending
-                  ? "Company request pending"
-                  : "Link your Fayda account to a company"
-        }
-        description={
-          membershipDisabled
-            ? "Your access to this company has been disabled. Ask your company owner or an administrator to re-enable it."
-            : awaitingApproval
-              ? me?.company?.approval_status === "rejected"
-                ? `Admin feedback: ${me?.company?.approval_note || "Please complete the required company information and resubmit."}`
-                : "You are the company owner. An administrator must approve this unique TIN before you can request VAS services."
-              : isLinked
-                ? `Manage Fayda identity, company profile, and members for ${me?.company_name || me?.company?.name || "this organisation"} using the tabs below. You can also create your own company or request membership in another organisation.`
-                : pending
-                  ? `Your ${pending.type} request for ${pending.company?.name || "a company"} is waiting for ${waitingFor} approval. VAS services stay locked until the company TIN is approved.`
-                  : `Hello${me?.name ? `, ${me.name.split(" ")[0]}` : ""}. Create a new company with a unique TIN for admin approval, or request to join an existing approved company. You cannot use VAS services until that TIN is approved.`
-        }
+        kicker={pageHeader.kicker}
+        title={pageHeader.title}
+        description={pageHeader.description}
       />
 
-      <div className="section company-section section-flush">
-        {hasMemberships && !membershipDisabled && (
-          <div className="panel">
-            <h2>Your companies</h2>
-            <p className="muted">
-              Pick the active company from the list. Subscriptions and service requests use
-              that company. You can own some companies and be a member of others.
-            </p>
+      <div className="section section-flush">
+        <div className="portal-stack">
+        {hasMemberships && !membershipDisabled && !showWorkspace && (
+          <div className="panel portal-stack">
+            <div className="panel-section-head">
+              <h2>Your companies</h2>
+              <p className="muted">
+                Pick the active company from the list. Subscriptions and service requests use
+                that company. You can own some companies and be a member of others.
+              </p>
+            </div>
             {me && <CompanySwitcher me={me} variant="page" showHint />}
-            {canAddOrganisation && (
-              <div className="company-org-actions">
-                <button
-                  type="button"
-                  className={orgAction === "create" ? "btn-primary" : "btn-ghost"}
-                  onClick={() =>
-                    setOrgAction((v) => (v === "create" ? null : "create"))
-                  }
-                >
-                  {orgAction === "create" ? "Cancel" : "Create my company"}
-                </button>
-                <button
-                  type="button"
-                  className={orgAction === "attach" ? "btn-primary" : "btn-ghost"}
-                  onClick={() =>
-                    setOrgAction((v) => (v === "attach" ? null : "attach"))
-                  }
-                >
-                  {orgAction === "attach" ? "Cancel" : "Request membership"}
-                </button>
-              </div>
-            )}
-            {orgAction === "create" && (
-              <div style={{ marginTop: "1rem" }}>
-                <p className="muted">
-                  Register a new company TIN as owner. Your existing memberships stay in
-                  place; you can switch after admin approval.
-                </p>
-                <CompanyProfileForm
-                  key="create-another"
-                  me={me}
-                  createNew
-                  redirectTo="/portal/company"
-                />
-              </div>
-            )}
-            {orgAction === "attach" && (
-              <div style={{ marginTop: "1rem" }}>
-                <JoinCompanyPanel
-                  embedded
-                  title="Request membership in another company"
-                  description="Enter an approved company TIN. The owner must approve your join request. You keep membership in your other companies."
-                />
-              </div>
-            )}
           </div>
         )}
 
         {membershipDisabled && (
           <div className="panel">
-            <h2>Membership disabled</h2>
-            <p className="muted" style={{ marginBottom: 0 }}>
+            <p className="muted" style={{ margin: 0 }}>
               You remain linked to the company, but you cannot view company details or manage
               company services until an administrator re-enables your access.
             </p>
@@ -226,7 +219,7 @@ export default function CompanyProfilePage() {
         )}
 
         {!membershipDisabled && pending && (
-          <div className="alert" style={{ marginBottom: "1rem" }}>
+          <div className="alert alert-info" role="status">
             Your {pending.type.replaceAll("_", " ")} request
             {pending.company?.name ? ` for ${pending.company.name}` : ""} is waiting for{" "}
             {waitingFor}. Track it under{" "}
@@ -238,24 +231,27 @@ export default function CompanyProfilePage() {
         )}
 
         {!membershipDisabled && !pending && !isLinked && !awaitingApproval && (
-          <>
-            <div className="journey-tabs" role="tablist" aria-label="Company onboarding">
-              <button
-                type="button"
-                className={mode === "create" ? "is-active" : undefined}
-                onClick={() => setMode("create")}
-              >
-                Create new company
-              </button>
-              <button
-                type="button"
-                className={mode === "attach" ? "is-active" : undefined}
-                onClick={() => setMode("attach")}
-              >
-                Attach to existing
-              </button>
-            </div>
-
+          <AdminWorkspace
+            sidebar={
+              <VerticalTabs
+                label="Company onboarding"
+                value={mode}
+                onChange={setMode}
+                items={[
+                  {
+                    id: "create",
+                    label: "Create new company",
+                    description: "Register a unique TIN",
+                  },
+                  {
+                    id: "attach",
+                    label: "Attach to existing",
+                    description: "Request membership",
+                  },
+                ]}
+              />
+            }
+          >
             {mode === "create" ? (
               <CompanyProfileForm
                 key={`${me?.public_id ?? "company"}-create`}
@@ -265,50 +261,35 @@ export default function CompanyProfilePage() {
             ) : (
               <JoinCompanyPanel />
             )}
-          </>
+          </AdminWorkspace>
         )}
 
         {showWorkspace && (
-          <div className="company-workspace">
-            <div
-              className="company-workspace-tabs"
-              role="tablist"
-              aria-label="Company and identity"
-            >
-              {tabs.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  role="tab"
-                  id={`company-tab-${item.id}`}
-                  aria-selected={tab === item.id}
-                  aria-controls={`company-panel-${item.id}`}
-                  className={tab === item.id ? "is-active" : undefined}
-                  onClick={() => selectTab(item.id)}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-
+          <AdminWorkspace
+            className="company-workspace"
+            sidebar={
+              <VerticalTabs
+                label="Organisation sections"
+                value={tab}
+                onChange={selectTab}
+                items={tabs.map((item) => ({
+                  id: item.id,
+                  label: item.label,
+                }))}
+              />
+            }
+          >
             {tab === "identity" && (
               <div
                 className="panel"
                 role="tabpanel"
                 id="company-panel-identity"
-                aria-labelledby="company-tab-identity"
+                aria-labelledby="vtab-identity"
               >
-                <div id="fayda-identity-panel">
-                  <h2>Fayda identity</h2>
-                  <p className="muted">
-                    Your personal National ID details from Fayda
-                    {me?.company_role === "owner" ? " (you are the company owner)" : ""}.
-                    This is not company registration data.
-                  </p>
+                <div id="fayda-identity-panel" className="portal-stack-sm">
                   <FaydaIdentityPanel
                     id="fayda-identity"
-                    title="Your Fayda identity"
-                    description="Read-only. Contact Fayda support if anything is wrong."
+                    showHeading={false}
                     person={me ?? {}}
                     badge={
                       me?.company_role === "owner" ? (
@@ -324,16 +305,72 @@ export default function CompanyProfilePage() {
 
             {tab === "profile" && (
               <div
-                className="panel"
+                className="portal-stack"
                 role="tabpanel"
                 id="company-panel-profile"
-                aria-labelledby="company-tab-profile"
+                aria-labelledby="vtab-profile"
               >
-                <div id="company-profile-panel">
-                  <h2>Company profile</h2>
+                {hasMemberships && !membershipDisabled && (
+                  <div className="panel portal-stack">
+                    <div className="panel-section-head">
+                      <h2>Your companies</h2>
+                      <p className="muted">
+                        Pick the active company from the list. Subscriptions and service
+                        requests use that company. You can own some companies and be a member
+                        of others.
+                      </p>
+                    </div>
+                    {me && <CompanySwitcher me={me} variant="page" showHint />}
+                    {canAddOrganisation && (
+                      <div className="company-org-actions">
+                        <button
+                          type="button"
+                          className={orgAction === "create" ? "btn-primary" : "btn-ghost"}
+                          onClick={() =>
+                            setOrgAction((v) => (v === "create" ? null : "create"))
+                          }
+                        >
+                          {orgAction === "create" ? "Cancel" : "Create my company"}
+                        </button>
+                        <button
+                          type="button"
+                          className={orgAction === "attach" ? "btn-primary" : "btn-ghost"}
+                          onClick={() =>
+                            setOrgAction((v) => (v === "attach" ? null : "attach"))
+                          }
+                        >
+                          {orgAction === "attach" ? "Cancel" : "Request membership"}
+                        </button>
+                      </div>
+                    )}
+                    {orgAction === "create" && (
+                      <div className="portal-stack-sm">
+                        <p className="muted">
+                          Register a new company TIN as owner. Your existing memberships stay
+                          in place; you can switch after admin approval.
+                        </p>
+                        <CompanyProfileForm
+                          key="create-another"
+                          me={me}
+                          createNew
+                          redirectTo="/portal/company"
+                        />
+                      </div>
+                    )}
+                    {orgAction === "attach" && (
+                      <JoinCompanyPanel
+                        embedded
+                        title="Request membership in another company"
+                        description="Enter an approved company TIN. The owner must approve your join request. You keep membership in your other companies."
+                      />
+                    )}
+                  </div>
+                )}
+
+                <div id="company-profile-panel" className="panel portal-stack-sm">
                   {awaitingApproval ? (
                     <>
-                      <div className="alert" role="status" style={{ marginBottom: "1rem" }}>
+                      <div className="alert alert-warning" role="status">
                         VAS services are locked until an administrator approves this company
                         TIN. Each TIN can only be registered once.
                       </div>
@@ -368,32 +405,26 @@ export default function CompanyProfilePage() {
                       </section>
                     </>
                   ) : (
-                    <>
-                      <p className="muted">
-                        Organisation registration for this TIN. After approval, only
-                        administrators can change these records.
-                      </p>
-                      <section id="company-info" className="settings-block">
-                        <dl className="fayda-dl company-profile-dl">
-                          <div>
-                            <dt>Company name</dt>
-                            <dd>{me?.company_name || me?.company?.name || "—"}</dd>
-                          </div>
-                          <div>
-                            <dt>TIN</dt>
-                            <dd>{me?.company_tin || me?.company?.tin || "—"}</dd>
-                          </div>
-                          <div>
-                            <dt>Approval</dt>
-                            <dd>{me?.company?.approval_status || "approved"}</dd>
-                          </div>
-                          <div style={{ gridColumn: "1 / -1" }}>
-                            <dt>Address</dt>
-                            <dd>{me?.company_address || me?.company?.address || "—"}</dd>
-                          </div>
-                        </dl>
-                      </section>
-                    </>
+                    <section id="company-info" className="settings-block">
+                      <dl className="fayda-dl company-profile-dl">
+                        <div>
+                          <dt>Company name</dt>
+                          <dd>{me?.company_name || me?.company?.name || "—"}</dd>
+                        </div>
+                        <div>
+                          <dt>TIN</dt>
+                          <dd>{me?.company_tin || me?.company?.tin || "—"}</dd>
+                        </div>
+                        <div>
+                          <dt>Approval</dt>
+                          <dd>{me?.company?.approval_status || "approved"}</dd>
+                        </div>
+                        <div className="field-span-full">
+                          <dt>Address</dt>
+                          <dd>{me?.company_address || me?.company?.address || "—"}</dd>
+                        </div>
+                      </dl>
+                    </section>
                   )}
                 </div>
               </div>
@@ -403,20 +434,9 @@ export default function CompanyProfilePage() {
               <div
                 role="tabpanel"
                 id="company-panel-members"
-                aria-labelledby="company-tab-members"
+                aria-labelledby="vtab-members"
               >
-                <div id="company-members-panel" className="section section-flush">
-                  <div className="portal-hero portal-page-header" style={{ paddingBottom: "1rem" }}>
-                    <div className="portal-page-header-copy">
-                      <h2 style={{ margin: 0 }}>Company members</h2>
-                      <p className="muted" style={{ marginBottom: 0 }}>
-                        Roster of partners linked to this company. Use Actions on each row
-                        {isOwner
-                          ? " to enable or disable access and grant permissions."
-                          : " to view Fayda identity details."}
-                      </p>
-                    </div>
-                  </div>
+                <div id="company-members-panel" className="portal-stack-sm">
                   <CompanyMembersTable enabled={canViewMembers} />
                 </div>
               </div>
@@ -427,32 +447,34 @@ export default function CompanyProfilePage() {
                 className="company-ownership-stack"
                 role="tabpanel"
                 id="company-panel-ownership"
-                aria-labelledby="company-tab-ownership"
+                aria-labelledby="vtab-ownership"
               >
                 {isOwner && (
                   <div className="panel" id="transfer-ownership">
-                    <h2>Transfer ownership</h2>
-                    <p className="muted">
-                      Required before you can leave. Choose an active member as the new
-                      owner and upload a signed letter (PDF). An administrator must approve
-                      the transfer. Track the transfer under{" "}
-                      <Link href="/portal/company-requests">
-                        <strong>Company requests</strong>
-                      </Link>
-                      .
-                    </p>
+                    <div className="panel-section-head">
+                      <h2>Transfer ownership</h2>
+                      <p className="muted">
+                        Required before you can leave. Choose an active member as the new
+                        owner and upload a signed letter (PDF). An administrator must approve
+                        the transfer. Track the transfer under{" "}
+                        <Link href="/portal/company-requests">
+                          <strong>Company requests</strong>
+                        </Link>
+                        .
+                      </p>
+                    </div>
                     {companyMembers.isLoading && (
                       <p className="muted">Loading members…</p>
                     )}
                     {!companyMembers.isLoading && transferCandidates.length === 0 && (
-                      <p className="muted" style={{ marginBottom: 0 }}>
+                      <p className="muted">
                         No other active members yet. Approve a{" "}
                         <Link href="/portal/membership-requests">membership request</Link>{" "}
                         first, then transfer ownership.
                       </p>
                     )}
                     {transferCandidates.length > 0 && (
-                      <>
+                      <div className="portal-stack-sm">
                         <div className="field">
                           <label htmlFor="transfer-target">New owner</label>
                           <select
@@ -521,16 +543,18 @@ export default function CompanyProfilePage() {
                             ? "Submitting…"
                             : "Submit transfer request"}
                         </button>
-                      </>
+                      </div>
                     )}
                   </div>
                 )}
 
                 <div className="panel" id="leave-company">
-                  <h2>Leave this company</h2>
+                  <div className="panel-section-head">
+                    <h2>Leave this company</h2>
+                  </div>
                   {me?.company_role === "owner" ||
                   me?.company_needs_ownership_transfer ? (
-                    <div className="alert" role="status">
+                    <div className="alert alert-warning" role="status">
                       As the company owner you cannot leave yet. Transfer ownership to
                       another active member first (upload a letter PDF; an administrator
                       must approve). After the transfer, you become a member and can leave
@@ -544,7 +568,7 @@ export default function CompanyProfilePage() {
                       ) : null}
                     </div>
                   ) : (
-                    <>
+                    <div className="portal-stack-sm">
                       <p className="muted">
                         Leaving is personal and immediate — no admin approval. Joining
                         another company still needs that company owner’s approval. Your
@@ -568,7 +592,7 @@ export default function CompanyProfilePage() {
                       )}
                       <button
                         type="button"
-                        className="btn-primary"
+                        className="btn-danger"
                         disabled={
                           detach.isPending || me?.company_can_detach === false
                         }
@@ -590,13 +614,14 @@ export default function CompanyProfilePage() {
                       >
                         {detach.isPending ? "Leaving…" : "Leave company"}
                       </button>
-                    </>
+                    </div>
                   )}
                 </div>
               </div>
             )}
-          </div>
+          </AdminWorkspace>
         )}
+        </div>
       </div>
     </>
   );

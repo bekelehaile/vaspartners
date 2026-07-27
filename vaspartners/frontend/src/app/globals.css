@@ -1,21 +1,29 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+/*
+   ---break---
+   */
+@custom-variant dark (&:is(.dark *));
 
 :root {
   /*
-   * Ethio telecom domain brand color — used for footer, CTAs, accents site-wide.
-   * Same oklch token as fixedservices --primary.
+   * Ethio telecom brand palette — footer, CTAs, accents site-wide.
+   * Primary green matches domain brand / fixedservices.
    */
-  --primary: oklch(0.761 0.1736 129.58);
-  --primary-foreground: #ffffff;
-
-  /* Legacy aliases → brand (keep names for older rules / Tailwind theme) */
-  --et-green: var(--primary);
-  --et-green-cta: var(--primary);
   --et-light-green: #80ca28;
   --et-blue: #2868ba;
   --et-light-blue: #0072bc;
   --et-yellow: #f8b909;
   --et-red: #ea1c23;
+
+  --primary: var(--et-light-green);
+  --primary-foreground: #ffffff;
+  /* Same green as hero “VAS Services” — Get started / New subscription */
+  --brand-cta: var(--primary);
+
+  --et-green: var(--primary);
+  --et-green-cta: var(--primary);
 
   --secondary-bg: oklch(0.9703 0.0207 166.11);
 
@@ -31,6 +39,35 @@
   --radius: 0.625rem;
   --shadow-soft: 0 10px 30px rgba(17, 24, 39, 0.08);
   --shadow-cta: 0 10px 24px color-mix(in oklab, var(--primary) 35%, transparent);
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --secondary: color-mix(in oklab, var(--primary) 8%, white);
+  --secondary-foreground: color-mix(in oklab, var(--primary) 55%, #14532d);
+  --muted: color-mix(in oklab, var(--et-foam) 70%, var(--et-line));
+  --muted-foreground: var(--et-muted);
+  --accent: color-mix(in oklab, var(--primary) 12%, white);
+  --accent-foreground: color-mix(in oklab, var(--primary) 55%, #14532d);
+  --destructive: var(--et-red);
+  --border: color-mix(in oklab, var(--et-line) 85%, var(--primary));
+  --input: var(--et-line);
+  --ring: color-mix(in oklab, var(--primary) 55%, oklch(0.708 0 0));
+  --chart-1: var(--primary);
+  --chart-2: var(--et-yellow);
+  --chart-3: var(--et-blue);
+  --chart-4: var(--et-light-blue);
+  --chart-5: var(--et-red);
+  --sidebar: #fff;
+  --sidebar-foreground: var(--et-ink);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: color-mix(in oklab, var(--primary) 10%, white);
+  --sidebar-accent-foreground: color-mix(in oklab, var(--primary) 55%, #14532d);
+  --sidebar-border: var(--et-line);
+  --sidebar-ring: var(--ring);
 }
 
 @theme inline {
@@ -42,6 +79,44 @@
   --color-et-light-blue: var(--et-light-blue);
   --color-et-yellow: var(--et-yellow);
   --color-et-red: var(--et-red);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 * {
@@ -215,6 +290,36 @@ textarea {
   opacity: 0.9;
 }
 
+.btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: var(--et-red);
+  color: #fff !important;
+  border: 1px solid var(--et-red);
+  border-radius: 0.375rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  text-decoration: none;
+}
+
+.btn-danger:hover {
+  opacity: 0.9;
+}
+
+.btn-danger:disabled,
+.btn-primary:disabled,
+.btn-ghost:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 /* Stronger than .topnav a so nav reset cannot wipe the CTA fill */
 .topnav a.btn-login,
 .btn-login {
@@ -300,75 +405,45 @@ textarea {
 }
 
 .company-switcher-header {
-  max-width: 18rem;
+  max-width: 14rem;
 }
 
-.portal-logged-in-as {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.15rem;
-  margin: 0;
-  min-width: 0;
-  max-width: 18rem;
-}
-
-.portal-logged-in-label {
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--et-muted);
-  line-height: 1.2;
-}
-
-.portal-logged-in-company {
+.company-switcher-static {
   display: block;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.875rem;
-  font-weight: 700;
+  height: 2rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--et-line);
+  border-radius: 0.5rem;
+  background: #fff;
   color: var(--et-ink);
-  line-height: 1.25;
-}
-
-.portal-logged-in-switch {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  width: 100%;
-  min-width: 0;
-}
-
-.portal-logged-in-switch .company-switcher-select-header {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.portal-logged-in-switch-hint {
-  flex: 0 0 auto;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--primary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 2rem;
 }
 
 .company-switcher-select-header {
+  width: 100%;
   min-height: 2rem;
-  padding: 0.25rem 1.75rem 0.25rem 0.55rem;
+  max-width: 14rem;
+  padding: 0.25rem 1.75rem 0.25rem 0.65rem;
   font-size: 0.82rem;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
 }
 
+.company-switcher-select-header.is-readonly,
 .company-switcher-select-header:disabled {
   cursor: default;
   opacity: 1;
   color: var(--et-ink);
   background: #fff;
+  appearance: none;
+  background-image: none;
+  padding-right: 0.65rem;
 }
 
 .company-switcher-page {
@@ -443,57 +518,45 @@ textarea {
   position: relative;
 }
 
-.portal-settings-btn,
-.portal-signout-btn,
+.portal-account-btn {
+  height: 2rem;
+  gap: 0.4rem;
+  font-weight: 600;
+  border-color: color-mix(in oklab, var(--primary) 35%, var(--et-line)) !important;
+  color: color-mix(in oklab, var(--primary) 55%, #14532d) !important;
+  background: #fff !important;
+}
+
+.portal-account-btn:hover,
+.portal-account-btn[aria-expanded="true"] {
+  background: color-mix(in oklab, var(--primary) 10%, white) !important;
+  border-color: var(--primary) !important;
+}
+
 .notif-bell-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.45rem;
-  height: 2.35rem;
-  border: 1px solid color-mix(in oklab, var(--et-line) 88%, #9ca3af);
-  border-radius: 0.55rem;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid color-mix(in oklab, var(--primary) 28%, var(--et-line));
+  border-radius: 0.5rem;
   background: #fff;
-  color: #374151;
-  font: inherit;
-  font-size: 0.875rem;
-  font-weight: 600;
+  color: color-mix(in oklab, var(--primary) 45%, #374151);
   cursor: pointer;
   transition:
     border-color 0.18s ease,
     color 0.18s ease,
-    background 0.18s ease,
-    box-shadow 0.18s ease;
+    background 0.18s ease;
   box-shadow: 0 1px 2px rgba(17, 24, 39, 0.04);
 }
 
-.portal-settings-btn {
-  padding: 0 0.85rem;
-}
-
-.portal-signout-btn {
-  padding: 0 0.85rem;
-}
-
-.notif-bell-btn {
-  width: 2.35rem;
-  padding: 0;
-}
-
-.portal-settings-btn:hover,
-.portal-settings-btn[aria-expanded="true"],
 .notif-bell-btn:hover,
 .notif-bell-btn[aria-expanded="true"] {
   border-color: color-mix(in oklab, var(--primary) 45%, var(--et-line));
-  color: color-mix(in oklab, var(--primary) 72%, #14532d);
+  color: var(--et-ink);
   background: color-mix(in oklab, var(--primary) 8%, white);
-  box-shadow: 0 1px 3px color-mix(in oklab, var(--primary) 18%, transparent);
-}
-
-.portal-signout-btn:hover {
-  border-color: color-mix(in oklab, var(--et-red) 35%, var(--et-line));
-  color: var(--et-red);
-  background: color-mix(in oklab, var(--et-red) 6%, white);
 }
 
 .portal-settings-menu,
@@ -504,7 +567,7 @@ textarea {
   z-index: 70;
   background: #fff;
   border: 1px solid color-mix(in oklab, var(--et-line) 85%, #9ca3af);
-  border-radius: 0.85rem;
+  border-radius: 0.75rem;
   box-shadow:
     0 4px 6px -1px rgba(15, 23, 42, 0.06),
     0 18px 40px -12px rgba(15, 23, 42, 0.18);
@@ -513,37 +576,38 @@ textarea {
 }
 
 .portal-settings-menu {
-  min-width: 15.5rem;
+  min-width: 14.5rem;
   padding: 0.4rem;
 }
 
 .portal-settings-menu-label {
   margin: 0;
-  padding: 0.45rem 0.7rem 0.35rem;
+  padding: 0.45rem 0.65rem 0.2rem;
   font-size: 0.68rem;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--et-muted);
 }
 
 .portal-settings-menu a,
 .portal-settings-menu button {
-  display: block;
+  display: flex;
   width: 100%;
-  text-align: left;
-  margin: 0;
-  padding: 0.65rem 0.75rem;
+  align-items: center;
+  gap: 0.5rem;
+  appearance: none;
   border: 0 !important;
-  border-radius: 0.55rem;
   background: transparent;
   color: var(--et-ink);
   font: inherit;
-  font-size: 0.9rem;
-  font-weight: 600;
-  line-height: 1.3;
-  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-align: left;
   text-decoration: none;
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.45rem;
+  cursor: pointer;
   box-shadow: none;
 }
 
@@ -551,14 +615,22 @@ textarea {
 .portal-settings-menu button:hover,
 .portal-settings-menu a:focus-visible,
 .portal-settings-menu button:focus-visible {
-  background: color-mix(in oklab, var(--primary) 10%, white);
-  color: color-mix(in oklab, var(--primary) 70%, #14532d);
+  background: color-mix(in oklab, var(--primary) 8%, white);
+  color: var(--et-ink);
   outline: none;
+}
+
+.portal-settings-signout {
+  color: var(--et-red) !important;
+}
+
+.portal-settings-signout:hover {
+  background: color-mix(in oklab, var(--et-red) 8%, white) !important;
 }
 
 .portal-settings-divider {
   height: 1px;
-  margin: 0.35rem 0.45rem;
+  margin: 0.35rem 0.4rem;
   background: var(--et-line);
   border: 0;
 }
@@ -713,52 +785,6 @@ textarea {
 
 .panel[id] {
   scroll-margin-top: 5.5rem;
-}
-
-.org-requests-nav {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
-  margin: 0 0 1.25rem;
-}
-
-.org-requests-nav a {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  padding: 0.9rem 1rem;
-  border: 1px solid var(--et-line);
-  border-radius: 0.65rem;
-  text-decoration: none;
-  color: inherit;
-  background: color-mix(in oklab, white 92%, var(--et-line));
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.org-requests-nav a:hover {
-  border-color: color-mix(in oklab, var(--primary) 45%, var(--et-line));
-}
-
-.org-requests-nav a.is-active {
-  border-color: var(--primary);
-  background: color-mix(in oklab, var(--primary) 8%, white);
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--primary) 35%, transparent);
-}
-
-.org-requests-nav-label {
-  font-weight: 600;
-  font-size: 1rem;
-}
-
-.org-requests-nav-hint {
-  font-size: 0.85rem;
-  color: #6b7280;
-}
-
-@media (max-width: 640px) {
-  .org-requests-nav {
-    grid-template-columns: 1fr;
-  }
 }
 
 .company-member-actions {
@@ -1037,6 +1063,10 @@ textarea {
   min-width: 0;
 }
 
+.fayda-dl .field-span-full {
+  grid-column: 1 / -1;
+}
+
 .fayda-dl dt {
   margin: 0;
   font-size: 0.72rem;
@@ -1074,41 +1104,6 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-}
-
-.company-workspace-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  padding: 0.35rem;
-  border: 1px solid var(--et-line);
-  border-radius: 0.75rem;
-  background: color-mix(in oklab, white 90%, var(--et-line));
-}
-
-.company-workspace-tabs button {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: #4b5563;
-  font: inherit;
-  font-weight: 550;
-  font-size: 0.95rem;
-  padding: 0.65rem 0.95rem;
-  border-radius: 0.55rem;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-.company-workspace-tabs button:hover {
-  color: var(--et-ink);
-  background: color-mix(in oklab, white 70%, transparent);
-}
-
-.company-workspace-tabs button.is-active {
-  background: #fff;
-  color: var(--primary);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
 }
 
 .company-ownership-stack {
@@ -1442,7 +1437,7 @@ textarea {
 
 .hero-brand em {
   font-style: normal;
-  color: var(--primary);
+  color: var(--brand-cta);
 }
 
 .hero-lead {
@@ -1493,17 +1488,33 @@ textarea {
   transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
 }
 
-.btn-hero {
-  background: var(--primary);
+/* Same green as “VAS Services” — home Get started + portal New subscription */
+.btn-hero,
+.btn-subscribe {
+  background: var(--brand-cta);
   color: #fff !important;
-  border: 1px solid var(--primary);
-  box-shadow: 0 10px 24px color-mix(in oklab, var(--primary) 28%, transparent);
+  border: 1px solid var(--brand-cta);
+  font-weight: 650;
+  box-shadow: 0 10px 24px color-mix(in oklab, var(--brand-cta) 28%, transparent);
 }
 
-.btn-hero:hover {
-  background: var(--primary);
-  border-color: var(--primary);
-  opacity: 0.9;
+.btn-hero:hover,
+.btn-subscribe:hover {
+  background: color-mix(in oklab, var(--brand-cta) 88%, #000);
+  border-color: color-mix(in oklab, var(--brand-cta) 88%, #000);
+  color: #fff !important;
+  opacity: 1;
+}
+
+/* shadcn Button needs !important to beat utility classes */
+.btn-subscribe {
+  background: var(--brand-cta) !important;
+  border-color: var(--brand-cta) !important;
+}
+
+.btn-subscribe:hover {
+  background: color-mix(in oklab, var(--brand-cta) 88%, #000) !important;
+  border-color: color-mix(in oklab, var(--brand-cta) 88%, #000) !important;
 }
 
 .btn-hero-ghost {
@@ -2244,6 +2255,274 @@ textarea {
   animation: rise 0.7s ease both;
 }
 
+.site-portal-admin .portal-hero,
+.site-portal-admin .section,
+.site-portal-admin .section-flush {
+  width: 100%;
+  max-width: none;
+  margin-left: 0;
+  margin-right: 0;
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+
+.site-portal-admin .portal-hero {
+  margin-top: 1rem;
+  padding-top: 1.25rem;
+  padding-bottom: 0.75rem;
+}
+
+.site-portal-admin .section {
+  padding-top: 0.75rem;
+  padding-bottom: 1.5rem;
+}
+
+.site-portal-admin .section-flush {
+  padding-top: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+@media (min-width: 1024px) {
+  .site-portal-admin .portal-hero,
+  .site-portal-admin .section,
+  .site-portal-admin .section-flush {
+    padding-left: 1.75rem;
+    padding-right: 1.75rem;
+  }
+}
+
+/* Admin panel frame: sticky left nav + content */
+.portal-admin-frame {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr;
+  min-height: 0;
+  background: var(--et-foam);
+}
+
+@media (min-width: 960px) {
+  .portal-admin-frame {
+    grid-template-columns: 15.5rem minmax(0, 1fr);
+  }
+}
+
+.portal-admin-sidebar {
+  display: none;
+  border-right: 1px solid var(--et-line);
+  background: #fff;
+  padding: 1rem 0.75rem 1.5rem;
+}
+
+@media (min-width: 960px) {
+  .portal-admin-sidebar {
+    display: block;
+    position: sticky;
+    top: 4rem;
+    align-self: start;
+    height: calc(100vh - 4rem);
+    overflow-y: auto;
+  }
+}
+
+.portal-admin-main {
+  min-width: 0;
+  padding-bottom: 2.5rem;
+}
+
+.portal-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.portal-sidebar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.portal-sidebar-label {
+  margin: 0 0.55rem 0.15rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--et-muted);
+}
+
+.portal-sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.portal-sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.65rem 0.7rem;
+  border-radius: 0.55rem;
+  color: #374151;
+  font-weight: 550;
+  font-size: 0.92rem;
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.portal-sidebar-link:hover {
+  background: color-mix(in oklab, var(--primary) 8%, white);
+  color: var(--et-ink);
+}
+
+.portal-sidebar-link.is-active {
+  background: color-mix(in oklab, var(--primary) 14%, white);
+  color: color-mix(in oklab, var(--primary) 55%, #146c2e);
+  font-weight: 650;
+}
+
+.portal-sidebar-link-icon {
+  width: 1.05rem;
+  height: 1.05rem;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+/* Page-level vertical tabs (status filters, request sections, company) */
+.admin-workspace {
+  display: grid;
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (min-width: 820px) {
+  .admin-workspace {
+    grid-template-columns: 13.5rem minmax(0, 1fr);
+    gap: 1.25rem;
+  }
+}
+
+.admin-workspace-rail {
+  min-width: 0;
+}
+
+.admin-workspace-main {
+  min-width: 0;
+}
+
+.portal-vtabs {
+  display: flex;
+  flex-direction: row;
+  gap: 0.35rem;
+  padding: 0.35rem;
+  border: 1px solid var(--et-line);
+  border-radius: 0.75rem;
+  background: #fff;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (min-width: 820px) {
+  .portal-vtabs {
+    flex-direction: column;
+    overflow-x: visible;
+    position: sticky;
+    top: calc(4rem + 0.75rem);
+  }
+}
+
+.portal-vtab {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #4b5563;
+  font: inherit;
+  font-weight: 550;
+  font-size: 0.9rem;
+  text-align: left;
+  padding: 0.7rem 0.8rem;
+  border-radius: 0.55rem;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  min-width: max-content;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+@media (min-width: 820px) {
+  .portal-vtab {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+.portal-vtab:hover:not(:disabled) {
+  color: var(--et-ink);
+  background: color-mix(in oklab, var(--et-line) 45%, white);
+}
+
+.portal-vtab.is-active {
+  background: color-mix(in oklab, var(--primary) 14%, white);
+  color: color-mix(in oklab, var(--primary) 55%, #146c2e);
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+
+.portal-vtab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.portal-vtab-icon {
+  display: grid;
+  place-items: center;
+  margin-top: 0.1rem;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.portal-vtab-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.portal-vtab-label {
+  line-height: 1.25;
+}
+
+.portal-vtab-desc {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--et-muted);
+  line-height: 1.3;
+}
+
+.portal-vtab.is-active .portal-vtab-desc {
+  color: color-mix(in oklab, var(--primary) 40%, #6b7280);
+}
+
+.portal-vtab-count {
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--et-line) 70%, white);
+  color: #4b5563;
+}
+
+.portal-vpanels,
+.portal-vpanel {
+  min-width: 0;
+}
+
+.company-workspace.admin-workspace {
+  gap: 1.25rem;
+}
+
 .portal-hero h1 {
   font-size: clamp(1.75rem, 3.5vw, 2.4rem);
   font-weight: 700;
@@ -2440,6 +2719,39 @@ textarea {
   background: color-mix(in oklab, var(--primary) 5%, white);
 }
 
+.data-table-row-link {
+  cursor: pointer;
+}
+
+.data-table-row-link:focus-visible td {
+  background: color-mix(in oklab, var(--primary) 8%, white);
+  outline: none;
+}
+
+.table-cell-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.table-cell-primary {
+  color: var(--et-ink);
+  font-weight: 600;
+}
+
+.table-cell-meta {
+  color: var(--et-muted);
+  font-size: 0.82rem;
+  line-height: 1.3;
+}
+
+.table-cell-date {
+  color: var(--et-muted);
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
 .table-link {
   color: var(--et-ink);
   font-weight: 700;
@@ -2615,6 +2927,11 @@ textarea {
   gap: 1.25rem;
 }
 
+.portal-grid-flush {
+  width: 100%;
+  margin: 0;
+}
+
 @media (min-width: 900px) {
   .portal-grid {
     grid-template-columns: 1.3fr 0.9fr;
@@ -2637,6 +2954,78 @@ textarea {
   text-transform: uppercase;
   color: var(--et-muted);
   font-weight: 700;
+}
+
+.request-header-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+}
+
+.request-summary {
+  padding-top: 1.1rem;
+  padding-bottom: 1.1rem;
+}
+
+.request-summary-grid {
+  margin: 0;
+  display: grid;
+  gap: 1rem 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .request-summary-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.request-summary-grid dt {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--et-muted);
+}
+
+.request-summary-grid dd {
+  margin: 0.3rem 0 0;
+  color: var(--et-ink);
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.request-description {
+  margin: 0.25rem 0 1.5rem;
+  padding: 1rem 1.1rem;
+  border-radius: 0.65rem;
+  background: color-mix(in oklab, var(--et-foam) 80%, white);
+  border: 1px solid var(--et-line);
+}
+
+.request-description h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--et-muted);
+  font-weight: 700;
+}
+
+.request-description p {
+  margin: 0;
+  color: var(--et-ink);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.request-docs-block {
+  margin-top: 0.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--et-line);
 }
 
 .request-row {
@@ -2662,32 +3051,50 @@ textarea {
 .pill {
   display: inline-flex;
   align-items: center;
+  gap: 0.35rem;
   border-radius: 999px;
-  padding: 0.2rem 0.65rem;
+  padding: 0.28rem 0.7rem;
   font-size: 0.78rem;
   font-weight: 700;
   width: fit-content;
+  letter-spacing: 0.01em;
+  border: 1px solid transparent;
+}
+
+.pill::before {
+  content: "";
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.85;
+  flex-shrink: 0;
 }
 
 .tone-open {
-  background: color-mix(in oklab, var(--primary) 14%, white);
-  color: color-mix(in oklab, var(--primary) 55%, #146c2e);
+  background: color-mix(in oklab, var(--primary) 12%, white);
+  color: color-mix(in oklab, var(--primary) 45%, #146c2e);
+  border-color: color-mix(in oklab, var(--primary) 22%, transparent);
 }
 .tone-progress {
-  background: #fff6d6;
+  background: #fff8e6;
   color: #8a6500;
+  border-color: color-mix(in oklab, #f8b909 35%, transparent);
 }
 .tone-done {
-  background: #e4f8ea;
+  background: #e8f8ee;
   color: #146c2e;
+  border-color: color-mix(in oklab, #16a34a 25%, transparent);
 }
 .tone-closed {
-  background: #eef2f6;
+  background: #f3f4f6;
   color: #364152;
+  border-color: var(--et-line);
 }
 .tone-alert {
   background: #fde8e8;
   color: var(--et-red);
+  border-color: color-mix(in oklab, var(--et-red) 25%, transparent);
 }
 
 .empty {
@@ -2805,9 +3212,46 @@ textarea {
 }
 
 .company-section {
-  width: min(720px, calc(100% - 2rem));
+  /* Match Service requests / Subscriptions content width */
+  width: min(1100px, calc(100% - 2rem));
   margin: 0 auto 3rem;
   padding-top: 0;
+}
+
+.portal-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.portal-stack-sm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.panel-section-head {
+  margin-bottom: 1rem;
+}
+
+.panel-section-head h2 {
+  margin: 0 0 0.35rem;
+}
+
+.panel-section-head .muted {
+  margin: 0;
+}
+
+.chat-empty {
+  padding: 1.75rem 0.5rem !important;
+}
+
+.chat-panel .panel-section-head {
+  margin-bottom: 0.85rem;
+}
+
+.field-span-full {
+  grid-column: 1 / -1;
 }
 
 .company-form .company-form-head h2 {
@@ -2917,6 +3361,46 @@ textarea {
   margin: 1rem 0;
   background: #fde8e8;
   color: var(--et-red);
+  border: 1px solid color-mix(in oklab, var(--et-red) 22%, transparent);
+}
+
+.alert-info {
+  background: color-mix(in oklab, var(--primary) 10%, white);
+  color: var(--et-ink);
+  border: 1px solid color-mix(in oklab, var(--primary) 22%, var(--et-line));
+}
+
+.alert-warning {
+  background: color-mix(in oklab, #d97706 14%, white);
+  color: #92400e;
+  border: 1px solid color-mix(in oklab, #d97706 28%, transparent);
+}
+
+.alert-success {
+  background: color-mix(in oklab, #16a34a 12%, white);
+  color: #166534;
+  border: 1px solid color-mix(in oklab, #16a34a 24%, transparent);
+}
+
+.portal-empty {
+  display: grid;
+  place-items: center;
+  text-align: center;
+  gap: 0.85rem;
+  padding: 2.5rem 1.25rem;
+  color: var(--et-muted);
+}
+
+.portal-empty p {
+  margin: 0;
+  max-width: 28rem;
+}
+
+.portal-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.65rem;
 }
 
 .portal-modal-backdrop {
@@ -2972,22 +3456,27 @@ textarea {
   list-style: none;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 0.5rem;
-  padding: 0;
-  margin: 1rem 0 1.5rem;
+  gap: 0.65rem;
+  padding: 0.35rem 0 0.25rem;
+  margin: 0 0 0.5rem;
+}
+
+.journey:has(.is-alert) {
+  grid-template-columns: repeat(5, 1fr);
 }
 
 .journey-step {
   display: grid;
-  gap: 0.45rem;
+  gap: 0.5rem;
   justify-items: start;
   color: var(--et-muted);
-  font-size: 0.82rem;
+  font-size: 0.8rem;
+  line-height: 1.25;
 }
 
 .journey-dot {
   width: 100%;
-  height: 4px;
+  height: 5px;
   border-radius: 999px;
   background: #e5e7eb;
 }
@@ -3003,6 +3492,11 @@ textarea {
 
 .journey-step.is-alert .journey-dot {
   background: var(--et-red);
+}
+
+.journey-step.is-alert .journey-label {
+  color: var(--et-red);
+  font-weight: 700;
 }
 
 .auth-wait {
@@ -3266,6 +3760,46 @@ textarea {
   justify-content: flex-end;
 }
 
+/* Ethio green outline — secondary CTAs (Manage service, etc.) */
+.btn-brand-outline {
+  background: #fff !important;
+  border-color: var(--primary) !important;
+  color: var(--primary) !important;
+  font-weight: 650;
+}
+
+.btn-brand-outline:hover {
+  background: color-mix(in oklab, var(--primary) 10%, white) !important;
+  border-color: var(--primary) !important;
+  color: color-mix(in oklab, var(--primary) 70%, #14532d) !important;
+}
+
+/* Keep shadcn default buttons on Ethio green (match footer / Login) */
+[data-slot="button"].bg-primary,
+button.bg-primary {
+  background: var(--primary) !important;
+  color: #fff !important;
+  border-color: var(--primary) !important;
+}
+
+[data-slot="button"].bg-primary:hover,
+button.bg-primary:hover {
+  background: color-mix(in oklab, var(--primary) 88%, #000) !important;
+  border-color: color-mix(in oklab, var(--primary) 88%, #000) !important;
+  opacity: 1;
+}
+
+/* Generic outline buttons pick up Ethio green border */
+[data-slot="button"][data-variant="outline"]:not(.btn-brand-outline),
+[data-slot="button"].border-border {
+  border-color: color-mix(in oklab, var(--primary) 35%, var(--et-line));
+}
+
+[data-slot="button"][data-variant="outline"]:not(.btn-brand-outline):hover {
+  background: color-mix(in oklab, var(--primary) 8%, white);
+  color: color-mix(in oklab, var(--primary) 55%, #14532d);
+}
+
 .journey-panel {
   padding: 1.35rem 1.4rem 1.5rem;
 }
@@ -3512,29 +4046,30 @@ textarea {
   text-decoration: underline;
 }
 
-.journey-tabs {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 1.5rem;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
-}
-
-.journey-tabs button {
-  border: 1px solid var(--et-line);
+.company-request-list-card {
   background: #fff;
-  border-radius: 0.55rem;
-  padding: 0.55rem 0.9rem;
-  font: inherit;
-  font-weight: 600;
-  color: var(--et-muted);
-  cursor: pointer;
+  border: 1px solid var(--et-line);
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  animation: rise 0.65s ease both;
 }
 
-.journey-tabs button.is-active {
-  border-color: var(--primary);
-  color: var(--et-ink);
-  background: var(--et-foam);
+.company-request-list-card .company-request-list {
+  padding: 0.35rem 1.15rem 1.15rem;
+}
+
+.company-request-list-card .company-request-card {
+  margin-top: 0;
+  padding: 1rem 0;
+}
+
+.company-request-list-card .company-request-card:first-child {
+  padding-top: 0.85rem;
+}
+
+.company-request-meta {
+  margin: 0 0 0.35rem;
 }
 
 .chat-header {
@@ -3571,4 +4106,55 @@ textarea {
   opacity: 0.55;
   cursor: not-allowed;
   border-style: dashed;
+}
+/*
+   ---break---
+   */
+.dark {
+  /* Keep Ethio brand hues even if dark surfaces are used */
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: var(--et-light-green);
+  --primary-foreground: #ffffff;
+  --secondary: color-mix(in oklab, var(--primary) 18%, #1a1a1a);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: color-mix(in oklab, var(--primary) 22%, #1a1a1a);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: var(--et-red);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: color-mix(in oklab, var(--primary) 55%, oklch(0.556 0 0));
+  --chart-1: var(--primary);
+  --chart-2: var(--et-yellow);
+  --chart-3: var(--et-blue);
+  --chart-4: var(--et-light-blue);
+  --chart-5: var(--et-red);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: color-mix(in oklab, var(--primary) 18%, #1a1a1a);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: var(--ring);
+}
+/*
+   ---break---
+   */
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
 }

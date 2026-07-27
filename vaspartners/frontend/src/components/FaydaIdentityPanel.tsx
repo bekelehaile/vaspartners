@@ -26,6 +26,7 @@ export function FaydaIdentityPanel({
   person,
   badge,
   footer,
+  showHeading = true,
 }: {
   id?: string;
   title?: string;
@@ -33,16 +34,25 @@ export function FaydaIdentityPanel({
   person: FaydaIdentityFields;
   badge?: ReactNode;
   footer?: ReactNode;
+  /** When false, page header owns the title — avoid duplicate headings. */
+  showHeading?: boolean;
 }) {
   return (
     <section id={id} className="settings-block fayda-readonly">
-      <div className="settings-block-head">
-        <div className="settings-block-title-row">
-          <h3>{title}</h3>
+      {showHeading && (
+        <div className="settings-block-head">
+          <div className="settings-block-title-row">
+            <h3>{title}</h3>
+            {badge}
+          </div>
+          {description && <p className="muted">{description}</p>}
+        </div>
+      )}
+      {!showHeading && badge && (
+        <div className="settings-block-title-row" style={{ marginBottom: "0.75rem" }}>
           {badge}
         </div>
-        <p className="muted">{description}</p>
-      </div>
+      )}
       <dl className="fayda-dl">
         <div>
           <dt>Full name</dt>

@@ -113,19 +113,21 @@ export function TicketChatPanel({
 
   return (
     <aside className="panel chat-panel">
-      <div className="chat-header">
+      <div className="chat-header panel-section-head">
         <div>
-          <h2 style={{ margin: 0 }}>Messages</h2>
-          <p className="muted" style={{ margin: "0.35rem 0 0" }}>
-            Ongoing chat with your account manager
-            {thread.total > 0 ? ` · ${thread.total} message${thread.total === 1 ? "" : "s"}` : ""}.
-            PDF up to {maxKb} KB.
+          <h2>Messages</h2>
+          <p className="muted">
+            Chat with your account manager
+            {thread.total > 0
+              ? ` · ${thread.total} message${thread.total === 1 ? "" : "s"}`
+              : ""}
+            . PDF up to {maxKb} KB.
           </p>
         </div>
       </div>
 
       {(postComment.isError || downloadError || thread.error) && (
-        <div className="alert" style={{ marginTop: "0.75rem" }}>
+        <div className="alert">
           {downloadError
             ? downloadError
             : postComment.isError
@@ -161,8 +163,8 @@ export function TicketChatPanel({
         )}
 
         {messages.length === 0 ? (
-          <div className="empty" style={{ padding: "1rem 0" }}>
-            No messages yet. Ask a question or wait for your account manager.
+          <div className="portal-empty chat-empty">
+            <p>No messages yet. Ask a question or wait for your account manager.</p>
           </div>
         ) : (
           messages.map((m) => {

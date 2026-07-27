@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Poppins } from "next/font/google";
 import { QueryProvider } from "@/providers/query-provider";
 import { absoluteUrl, getSiteUrl, siteConfig } from "@/lib/site";
+import { cn } from "@/lib/utils";
 import "./globals.css";
 
 const sans = Poppins({
@@ -80,7 +81,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang={siteConfig.language}>
+    <html lang={siteConfig.language} className={cn("font-sans", sans.variable)}>
       <body className={`${sans.variable} font-sans antialiased`}>
         <QueryProvider>{children}</QueryProvider>
       </body>
