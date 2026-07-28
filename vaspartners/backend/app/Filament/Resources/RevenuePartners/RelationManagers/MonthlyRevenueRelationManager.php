@@ -26,13 +26,8 @@ class MonthlyRevenueRelationManager extends RelationManager
                     ->label('Period')
                     ->sortable()
                     ->searchable(),
-                TextColumn::make('service_family')
-                    ->label('Family')
-                    ->badge()
-                    ->formatStateUsing(fn ($state) => $state instanceof \App\Enums\RevenueServiceFamily ? $state->label() : (string) $state)
-                    ->color(fn ($state) => ($state instanceof \App\Enums\RevenueServiceFamily
-                        ? $state
-                        : \App\Enums\RevenueServiceFamily::tryFrom((string) $state))?->color() ?? 'gray')
+                TextColumn::make('vasService.name')
+                    ->label('Catalog service')
                     ->toggleable(),
                 TextColumn::make('import.title')
                     ->label('Import')
@@ -49,7 +44,6 @@ class MonthlyRevenueRelationManager extends RelationManager
                         RevenueImportStatus::Sending => 'info',
                         default => 'gray',
                     }),
-                TextColumn::make('service_type')->toggleable()->placeholder('—'),
                 TextColumn::make('amount')
                     ->numeric(decimalPlaces: 2)
                     ->sortable(),

@@ -4,13 +4,14 @@ namespace App\Filament\Imports;
 
 use App\Enums\RevenueImportRowStatus;
 use App\Enums\RevenueImportStatus;
-use App\Enums\RevenueServiceFamily;
 use App\Models\RevenueImport;
 use App\Models\RevenueImportRow;
 use App\Models\RevenuePartner;
+use App\Models\Service;
 use App\Models\User;
 use App\Services\BulkMessageService;
 use App\Services\RevenuePartnerResolver;
+use App\Support\RevenueCatalogServices;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
@@ -22,9 +23,8 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Cleaned monthly revenue CSV.
- * Typical columns: service_id + revenue. short_code is optional.
- * Unresolved rows are flagged for the AM to edit (including amount) before SMS.
+ * Cleaned monthly revenue CSV: service_id + revenue (short_code optional).
+ * Import is scoped to an existing catalog service; unresolved rows are flagged for AM edit.
  */
 class MonthlyRevenueImporter extends Importer
 {
@@ -34,10 +34,9 @@ class MonthlyRevenueImporter extends Importer
     {
         return [
             ImportColumn::make('service_id')
-                ->label('Service ID')
+                ->label('Service ID (billing)')
                 ->requiredMapping()
                 ->rules(['required', 'max:64'])
-                ->example('0042822000002838')
                 ->guess(['service id', 'serviceid', 'sid', 'sp code']),
             ImportColumn::make('short_code')
                 ->label('Short code (optional)')
@@ -58,18 +57,15 @@ class MonthlyRevenueImporter extends Importer
     {
         /** @var User|null $user */
         $user = auth()->user();
-        $options = RevenueServiceFamily::options();
-        if ($user && ! $user->canAccessAllRevenue()) {
-            $allowed = $user->managedRevenueFamilyValues();
-            $options = array_intersect_key($options, array_flip($allowed));
-        }
 
         return [
-            Select::make('service_family')
-                ->label('Service (product family)')
-                ->options($options)
+            Select::make('vas_service_id')
+                ->label('Catalog service')
+                ->options(RevenueCatalogServices::options($user))
                 ->required()
-                ->native(false),
+                ->searchable()
+                ->native(false)
+                ->helperText('Must be an existing portal service. Partners are matched only within this service.'),
             TextInput::make('period')
                 ->label('Month')
                 ->required()
@@ -90,7 +86,7 @@ class MonthlyRevenueImporter extends Importer
 
         return new RevenueImportRow([
             'revenue_import_id' => $batch->id,
-            'service_family' => $batch->service_family?->value ?? $this->options['service_family'] ?? null,
+            'vas_service_id' => $batch->vas_service_id,
             'row_number' => null,
         ]);
     }
@@ -104,16 +100,16 @@ class MonthlyRevenueImporter extends Importer
 
         if ($serviceId === null) {
             throw ValidationException::withMessages([
-                'service_id' => 'Service ID is required.',
+                'service_id' => 'Billing service ID is required.',
             ]);
         }
 
-        $family = (string) ($this->options['service_family'] ?? '');
+        $vasServiceId = (int) ($this->options['vas_service_id'] ?? 0);
         /** @var User|null $user */
         $user = $this->import->user;
-        if ($user instanceof User && ! $user->canAccessAllRevenue() && ! $user->managesRevenueFamily($family)) {
+        if ($user instanceof User && ! $user->managesRevenueService($vasServiceId)) {
             throw ValidationException::withMessages([
-                'service_family' => 'You are not assigned to this product family.',
+                'vas_service_id' => 'You are not assigned to this catalog service.',
             ]);
         }
     }
@@ -127,18 +123,18 @@ class MonthlyRevenueImporter extends Importer
         );
 
         $revenue = $this->data['revenue'] ?? null;
-        $family = RevenueServiceFamily::tryFrom((string) ($this->options['service_family'] ?? ''));
+        $vasServiceId = (int) ($this->options['vas_service_id'] ?? 0) ?: null;
         $amount = is_numeric($revenue) ? round((float) $revenue, 4) : null;
 
         $this->data['amount'] = $amount;
         $this->data['amount_raw'] = $revenue !== null ? (string) $revenue : null;
         $this->data['service_id'] = $lookup['service_id'];
         $this->data['short_code'] = $lookup['short_code'];
+        $this->data['vas_service_id'] = $vasServiceId;
 
         if (! $lookup['ok']) {
             $this->data['revenue_partner_id'] = null;
             $this->data['partner_name'] = null;
-            $this->data['service_type'] = null;
             $this->data['status'] = RevenueImportRowStatus::Invalid->value;
             $this->data['error'] = $lookup['error'];
             unset($this->data['revenue']);
@@ -151,13 +147,12 @@ class MonthlyRevenueImporter extends Importer
         if (! $partner) {
             $this->data['revenue_partner_id'] = null;
             $this->data['partner_name'] = null;
-            $this->data['service_type'] = null;
             $this->data['status'] = RevenueImportRowStatus::MissingPartner->value;
-            $this->data['error'] = 'Unresolved: not in master list. Edit this row or add the partner, then Rematch.';
-        } elseif ($family && $partner->service_family && $partner->service_family !== $family) {
+            $this->data['error'] = 'Unresolved: not in master list for this catalog service. Edit this row or add the partner, then Rematch.';
+        } elseif ($vasServiceId && (int) $partner->vas_service_id !== $vasServiceId) {
             $this->applyPartnerSnapshot($partner);
             $this->data['status'] = RevenueImportRowStatus::Invalid->value;
-            $this->data['error'] = 'Master family does not match this import.';
+            $this->data['error'] = 'Master partner is mapped to a different catalog service.';
         } elseif (! $partner->is_active) {
             $this->applyPartnerSnapshot($partner);
             $this->data['status'] = RevenueImportRowStatus::Invalid->value;
@@ -172,7 +167,6 @@ class MonthlyRevenueImporter extends Importer
             $this->data['error'] = null;
         }
 
-        // Drop CSV-only key so fillRecord does not try to set a missing attribute incorrectly.
         unset($this->data['revenue']);
     }
 
@@ -180,10 +174,10 @@ class MonthlyRevenueImporter extends Importer
     {
         $this->data['revenue_partner_id'] = $partner->id;
         $this->data['partner_name'] = $partner->partner_name;
-        $this->data['service_type'] = $partner->service_type;
         $this->data['service_id'] = $partner->service_id;
         $this->data['short_code'] = RevenuePartnerResolver::normalize($partner->short_code)
             ?? RevenuePartnerResolver::normalize($this->data['short_code'] ?? null);
+        $this->data['vas_service_id'] = $partner->vas_service_id;
     }
 
     protected function afterFill(): void
@@ -199,10 +193,9 @@ class MonthlyRevenueImporter extends Importer
             'amount_raw' => $this->data['amount_raw'] ?? null,
             'revenue_partner_id' => $this->data['revenue_partner_id'] ?? null,
             'partner_name' => $this->data['partner_name'] ?? null,
-            'service_type' => $this->data['service_type'] ?? null,
             'status' => $this->data['status'] ?? RevenueImportRowStatus::Invalid->value,
             'error' => $this->data['error'] ?? null,
-            'service_family' => $this->options['service_family'] ?? $this->record->service_family,
+            'vas_service_id' => $this->data['vas_service_id'] ?? $this->record->vas_service_id,
         ]);
     }
 
@@ -216,17 +209,17 @@ class MonthlyRevenueImporter extends Importer
 
     protected function ensureBatch(): RevenueImport
     {
-        $family = (string) ($this->options['service_family'] ?? '');
+        $vasServiceId = (int) ($this->options['vas_service_id'] ?? 0);
         $period = trim((string) ($this->options['period'] ?? ''));
         $template = trim((string) ($this->options['message_template'] ?? BulkMessageService::DEFAULT_MESSAGE));
-        $familyEnum = RevenueServiceFamily::tryFrom($family);
+        $service = Service::query()->find($vasServiceId);
 
         return RevenueImport::query()->firstOrCreate(
             ['filament_import_id' => $this->import->getKey()],
             [
-                'title' => ($familyEnum?->label() ?? 'Revenue').' — '.$period,
+                'title' => ($service?->name ?? 'Revenue').' — '.$period,
                 'period' => $period !== '' ? $period : 'Unknown',
-                'service_family' => $family !== '' ? $family : null,
+                'vas_service_id' => $vasServiceId,
                 'source_filename' => $this->import->file_name,
                 'status' => RevenueImportStatus::Draft->value,
                 'message_template' => $template !== '' ? $template : BulkMessageService::DEFAULT_MESSAGE,
@@ -239,7 +232,7 @@ class MonthlyRevenueImporter extends Importer
     public function getValidationRules(): array
     {
         $rules = parent::getValidationRules();
-        $rules['service_family'] = ['nullable', Rule::in(array_keys(RevenueServiceFamily::options()))];
+        $rules['vas_service_id'] = ['required', 'integer', Rule::exists('services', 'id')];
 
         return $rules;
     }
@@ -251,7 +244,7 @@ class MonthlyRevenueImporter extends Importer
 
         $body = 'Imported '.Number::format($import->successful_rows).' monthly revenue '.str('row')->plural($import->successful_rows).'.';
         if ($batch) {
-            $body .= " Ready {$batch->matched_count}, missing partner {$batch->missing_partner_count}, missing phone {$batch->missing_phone_count}.";
+            $body .= " Ready {$batch->matched_count}, unresolved {$batch->missing_partner_count}, missing phone {$batch->missing_phone_count}.";
         }
         if ($failed = $import->getFailedRowsCount()) {
             $body .= ' '.Number::format($failed).' '.str('row')->plural($failed).' failed.';

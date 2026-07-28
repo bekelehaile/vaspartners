@@ -22,19 +22,21 @@ class RevenueImportPolicy
             return true;
         }
 
-        $families = $user->managedRevenueFamilyValues();
-        if ($families === []) {
+        $serviceIds = $user->managedRevenueServiceIds();
+        if ($serviceIds === []) {
             return false;
         }
 
-        return $revenueImport->rows()
-            ->whereIn('service_family', $families)
-            ->exists();
+        return in_array((int) $revenueImport->vas_service_id, $serviceIds, true)
+            && (
+                (int) $revenueImport->created_by_user_id === (int) $user->id
+                || $revenueImport->rows()->whereIn('vas_service_id', $serviceIds)->exists()
+            );
     }
 
     public function create(User $user): bool
     {
-        return $user->canAccessAllRevenue() && $user->can('Create:RevenueImport');
+        return $user->can('Create:RevenueImport');
     }
 
     public function update(User $user, RevenueImport $revenueImport): bool
@@ -51,11 +53,7 @@ class RevenueImportPolicy
             return false;
         }
 
-        $family = $revenueImport->service_family instanceof \App\Enums\RevenueServiceFamily
-            ? $revenueImport->service_family->value
-            : (string) $revenueImport->service_family;
-
-        return $user->managesRevenueFamily($family);
+        return $user->managesRevenueService((int) $revenueImport->vas_service_id);
     }
 
     public function delete(User $user, RevenueImport $revenueImport): bool

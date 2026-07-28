@@ -64,8 +64,10 @@ return new class extends Migration
             $table->id();
             $table->foreignId('revenue_import_id')->constrained('revenue_imports')->cascadeOnDelete();
             $table->foreignId('revenue_partner_id')->nullable()->constrained('revenue_partners')->nullOnDelete();
-            $table->foreignId('vas_service_id')->nullable()->constrained('services')->nullOnDelete();
+            // Same catalog service as the parent import (existing services.id).
+            $table->foreignId('vas_service_id')->constrained('services')->restrictOnDelete();
             $table->unsignedInteger('row_number')->nullable();
+            // Finance billing ID from Excel (not services.id).
             $table->string('service_id', 64)->nullable();
             $table->string('partner_name')->nullable();
             $table->string('short_code', 64)->nullable();

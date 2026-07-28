@@ -56,7 +56,9 @@ class RevenuePortalController extends Controller
         $rows = RevenueImportRow::query()
             ->with([
                 'import:id,public_id,title,period,status,bulk_message_id,sent_at,imported_at',
-                'partner:id,public_id,service_id,partner_name,phone,service_type,company_id',
+                'partner:id,public_id,service_id,partner_name,phone,company_id,vas_service_id',
+                'partner.vasService:id,name',
+                'vasService:id,name',
             ])
             ->whereIn('revenue_partner_id', $partnerIds)
             ->whereNotNull('amount')
@@ -88,7 +90,8 @@ class RevenuePortalController extends Controller
                 'import_title' => $import?->title,
                 'service_id' => $row->service_id,
                 'partner_name' => $partner?->partner_name ?: $row->partner_name,
-                'service_type' => $row->service_type ?: $partner?->service_type,
+                'service_type' => $row->vasService?->name
+                    ?: $partner?->vasService?->name,
                 'amount' => $row->amount !== null ? (float) $row->amount : null,
                 'amount_formatted' => $row->amount !== null
                     ? number_format((float) $row->amount, 2, '.', ',')

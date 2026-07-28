@@ -3,13 +3,13 @@
 namespace App\Filament\Resources\RevenueImports;
 
 use App\Enums\RevenueImportStatus;
-use App\Enums\RevenueServiceFamily;
 use App\Filament\Resources\BulkMessages\BulkMessageResource;
 use App\Filament\Resources\RevenueImports\Pages\ListRevenueImports;
 use App\Filament\Resources\RevenueImports\Pages\ViewRevenueImport;
 use App\Filament\Resources\RevenueImports\RelationManagers\RowsRelationManager;
 use App\Models\RevenueImport;
 use App\Models\User;
+use App\Support\RevenueCatalogServices;
 use Filament\Actions\ViewAction;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
@@ -52,13 +52,7 @@ class RevenueImportResource extends Resource
             Section::make('Import')->schema([
                 TextEntry::make('title'),
                 TextEntry::make('period')->label('Month'),
-                TextEntry::make('service_family')
-                    ->label('Service')
-                    ->badge()
-                    ->formatStateUsing(fn ($state) => $state instanceof RevenueServiceFamily ? $state->label() : (string) $state)
-                    ->color(fn ($state) => ($state instanceof RevenueServiceFamily
-                        ? $state
-                        : RevenueServiceFamily::tryFrom((string) $state))?->color() ?? 'gray'),
+                TextEntry::make('vasService.name')->label('Catalog service'),
                 TextEntry::make('status')
                     ->badge()
                     ->formatStateUsing(fn ($state) => $state instanceof RevenueImportStatus ? $state->label() : (string) $state)
@@ -85,7 +79,7 @@ class RevenueImportResource extends Resource
             Section::make('Row counts')->schema([
                 TextEntry::make('total_count')->label('Total'),
                 TextEntry::make('matched_count')->label('Ready'),
-                TextEntry::make('missing_partner_count')->label('Missing partner'),
+                TextEntry::make('missing_partner_count')->label('Unresolved'),
                 TextEntry::make('missing_phone_count')->label('Missing phone'),
                 TextEntry::make('invalid_count')->label('Invalid / duplicate'),
             ])->columns(5),
@@ -98,13 +92,7 @@ class RevenueImportResource extends Resource
             ->columns([
                 TextColumn::make('title')->searchable()->sortable(),
                 TextColumn::make('period')->label('Month')->sortable(),
-                TextColumn::make('service_family')
-                    ->label('Service')
-                    ->badge()
-                    ->formatStateUsing(fn ($state) => $state instanceof RevenueServiceFamily ? $state->label() : (string) $state)
-                    ->color(fn ($state) => ($state instanceof RevenueServiceFamily
-                        ? $state
-                        : RevenueServiceFamily::tryFrom((string) $state))?->color() ?? 'gray'),
+                TextColumn::make('vasService.name')->label('Catalog service')->sortable(),
                 TextColumn::make('status')
                     ->badge()
                     ->formatStateUsing(fn ($state) => $state instanceof RevenueImportStatus ? $state->label() : (string) $state)
@@ -120,14 +108,14 @@ class RevenueImportResource extends Resource
                 TextColumn::make('sender.name')->label('Sent by')->toggleable(),
                 TextColumn::make('sent_at')->dateTime()->toggleable(),
                 TextColumn::make('matched_count')->label('Ready'),
-                TextColumn::make('missing_partner_count')->label('Missing partner')->toggleable(),
+                TextColumn::make('missing_partner_count')->label('Unresolved')->toggleable(),
                 TextColumn::make('missing_phone_count')->label('Missing phone')->toggleable(),
             ])
             ->defaultSort('created_at', 'desc')
             ->filters([
-                SelectFilter::make('service_family')
-                    ->label('Service')
-                    ->options(RevenueServiceFamily::options()),
+                SelectFilter::make('vas_service_id')
+                    ->label('Catalog service')
+                    ->options(fn (): array => RevenueCatalogServices::options(auth()->user())),
             ])
             ->recordActions([
                 ViewAction::make()
@@ -153,7 +141,7 @@ class RevenueImportResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery();
+        $query = parent::getEloquentQuery()->with('vasService');
         /** @var User|null $user */
         $user = auth()->user();
 
@@ -165,15 +153,14 @@ class RevenueImportResource extends Resource
             return $query;
         }
 
-        $families = $user->managedRevenueFamilyValues();
-        if ($families === []) {
+        $serviceIds = $user->managedRevenueServiceIds();
+        if ($serviceIds === []) {
             return $query->whereRaw('1 = 0');
         }
 
-        // AM: own imports within assigned families (who + when scoped).
         return $query
             ->where('created_by_user_id', $user->id)
-            ->whereIn('service_family', $families);
+            ->whereIn('vas_service_id', $serviceIds);
     }
 
     public static function canCreate(): bool

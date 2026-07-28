@@ -6,7 +6,6 @@ use App\Enums\BulkMessageRecipientStatus;
 use App\Enums\BulkMessageStatus;
 use App\Enums\RevenueImportRowStatus;
 use App\Enums\RevenueImportStatus;
-use App\Enums\RevenueServiceFamily;
 use App\Models\BulkMessage;
 use App\Models\BulkMessageRecipient;
 use App\Models\Company;
@@ -31,11 +30,9 @@ class RevenueImportService
 
     public function rematch(RevenueImport $import): void
     {
-        $family = $import->service_family instanceof RevenueServiceFamily
-            ? $import->service_family
-            : RevenueServiceFamily::tryFrom((string) $import->service_family);
+        $vasServiceId = (int) $import->vas_service_id;
 
-        DB::transaction(function () use ($import, $family): void {
+        DB::transaction(function () use ($import, $vasServiceId): void {
             $seen = [];
             foreach ($import->rows()->orderBy('id')->get() as $row) {
                 $payload = $this->classify(
@@ -43,14 +40,14 @@ class RevenueImportService
                     shortCode: $row->short_code,
                     amount: $row->amount !== null ? (float) $row->amount : null,
                     seen: $seen,
-                    family: $family,
+                    vasServiceId: $vasServiceId,
                 );
                 $row->forceFill([
                     'revenue_partner_id' => $payload['revenue_partner_id'],
                     'partner_name' => $payload['partner_name'],
-                    'service_type' => $payload['service_type'],
                     'service_id' => $payload['resolved_service_id'] ?? $row->service_id,
                     'short_code' => $payload['resolved_short_code'] ?? $row->short_code,
+                    'vas_service_id' => $vasServiceId,
                     'status' => $payload['status'],
                     'error' => $payload['error'],
                     'amount' => $payload['amount'],
@@ -61,8 +58,6 @@ class RevenueImportService
     }
 
     /**
-     * AM/admin edit of a monthly row (service id, optional short code, revenue), then re-resolve.
-     *
      * @param  array{service_id?: mixed, short_code?: mixed, amount?: mixed}  $data
      */
     public function updateRow(RevenueImportRow $row, array $data, User $actor): void
@@ -85,17 +80,15 @@ class RevenueImportService
             : ($row->amount !== null ? (float) $row->amount : null);
 
         if ($serviceId === null) {
-            throw ValidationException::withMessages(['service_id' => 'Service ID is required.']);
+            throw ValidationException::withMessages(['service_id' => 'Billing service ID is required.']);
         }
         if ($amount === null || $amount <= 0) {
             throw ValidationException::withMessages(['amount' => 'Revenue must be a positive number.']);
         }
 
-        $family = $import->service_family instanceof RevenueServiceFamily
-            ? $import->service_family
-            : RevenueServiceFamily::tryFrom((string) $import->service_family);
+        $vasServiceId = (int) $import->vas_service_id;
 
-        DB::transaction(function () use ($import, $row, $serviceId, $shortCode, $amount, $family): void {
+        DB::transaction(function () use ($import, $row, $serviceId, $shortCode, $amount, $vasServiceId): void {
             $seen = [];
             foreach ($import->rows()->where('id', '!=', $row->id)->orderBy('id')->get() as $other) {
                 $key = (RevenuePartnerResolver::normalize($other->service_id) ?? '').'|'
@@ -108,7 +101,7 @@ class RevenueImportService
                 shortCode: $shortCode,
                 amount: $amount,
                 seen: $seen,
-                family: $family,
+                vasServiceId: $vasServiceId,
             );
 
             $row->forceFill([
@@ -118,7 +111,7 @@ class RevenueImportService
                 'amount_raw' => (string) $amount,
                 'revenue_partner_id' => $payload['revenue_partner_id'],
                 'partner_name' => $payload['partner_name'],
-                'service_type' => $payload['service_type'],
+                'vas_service_id' => $vasServiceId,
                 'status' => $payload['status'],
                 'error' => $payload['error'],
             ])->save();
@@ -137,11 +130,7 @@ class RevenueImportService
             return false;
         }
 
-        $family = $import->service_family instanceof RevenueServiceFamily
-            ? $import->service_family->value
-            : (string) $import->service_family;
-
-        return $actor->managesRevenueFamily($family);
+        return $actor->managesRevenueService((int) $import->vas_service_id);
     }
 
     public function registerMissingPartners(RevenueImport $import): int
@@ -151,11 +140,9 @@ class RevenueImportService
         $actor = auth()->user();
         $this->assertCanManage($actor, $import);
 
-        $family = $import->service_family instanceof RevenueServiceFamily
-            ? $import->service_family
-            : RevenueServiceFamily::tryFrom((string) $import->service_family);
+        $vasServiceId = (int) $import->vas_service_id;
 
-        DB::transaction(function () use ($import, &$created, $family): void {
+        DB::transaction(function () use ($import, &$created, $vasServiceId): void {
             $rows = $import->rows()
                 ->where('status', RevenueImportRowStatus::MissingPartner->value)
                 ->where(function ($q): void {
@@ -169,7 +156,7 @@ class RevenueImportService
                 if (! $lookup['ok'] || $lookup['service_id'] === null) {
                     $row->forceFill([
                         'status' => RevenueImportRowStatus::Invalid,
-                        'error' => $lookup['error'] ?? 'Cannot register partner without service_id.',
+                        'error' => $lookup['error'] ?? 'Cannot register partner without billing service_id.',
                     ])->save();
 
                     continue;
@@ -182,8 +169,7 @@ class RevenueImportService
                         [
                             'short_code' => $lookup['short_code'] ?? $row->short_code,
                             'partner_name' => filled($row->partner_name) ? (string) $row->partner_name : ('Partner '.$lookup['service_id']),
-                            'service_type' => $row->service_type,
-                            'service_family' => $family?->value,
+                            'vas_service_id' => $vasServiceId,
                             'phone' => null,
                             'is_active' => true,
                         ],
@@ -192,16 +178,25 @@ class RevenueImportService
                     if ($partner->wasRecentlyCreated) {
                         $created++;
                     }
-                } elseif ($lookup['short_code'] && ! $partner->short_code) {
-                    $partner->forceFill(['short_code' => $lookup['short_code']])->save();
+                } else {
+                    $updates = [];
+                    if ($lookup['short_code'] && ! $partner->short_code) {
+                        $updates['short_code'] = $lookup['short_code'];
+                    }
+                    if (! $partner->vas_service_id) {
+                        $updates['vas_service_id'] = $vasServiceId;
+                    }
+                    if ($updates !== []) {
+                        $partner->forceFill($updates)->save();
+                    }
                 }
 
                 $row->forceFill([
                     'revenue_partner_id' => $partner->id,
                     'partner_name' => $partner->partner_name,
-                    'service_type' => $partner->service_type,
                     'service_id' => $partner->service_id,
                     'short_code' => RevenuePartnerResolver::normalize($partner->short_code) ?? $row->short_code,
+                    'vas_service_id' => $partner->vas_service_id ?: $vasServiceId,
                     'status' => $partner->hasUsablePhone()
                         ? RevenueImportRowStatus::Matched
                         : RevenueImportRowStatus::MissingPhone,
@@ -223,7 +218,7 @@ class RevenueImportService
         $actor = auth()->user();
         if (! $actor || ! $this->actorCanSend($actor, $import)) {
             throw ValidationException::withMessages([
-                'import' => 'You can only send SMS for your own imports in an assigned service family.',
+                'import' => 'You can only send SMS for your own imports on an assigned catalog service.',
             ]);
         }
 
@@ -232,7 +227,7 @@ class RevenueImportService
         }
 
         if ($import->missing_partner_count > 0 || $import->missing_phone_count > 0) {
-            throw ValidationException::withMessages(['import' => 'Fix missing partners / phones before sending.']);
+            throw ValidationException::withMessages(['import' => 'Fix unresolved / missing-phone rows before sending.']);
         }
 
         $template = trim((string) ($messageTemplate ?? $import->message_template ?: BulkMessageService::DEFAULT_MESSAGE));
@@ -242,7 +237,7 @@ class RevenueImportService
 
         $ready = $import->rows()
             ->where('status', RevenueImportRowStatus::Matched->value)
-            ->with('partner')
+            ->with(['partner', 'vasService'])
             ->orderBy('id')
             ->get();
 
@@ -260,9 +255,7 @@ class RevenueImportService
                 'created_by_user_id' => $actor->id,
             ]);
 
-            $familyLabel = $import->service_family instanceof RevenueServiceFamily
-                ? $import->service_family->label()
-                : (string) $import->service_family;
+            $serviceLabel = $import->vasService?->name ?? 'Service';
 
             foreach ($ready as $index => $row) {
                 $partner = $row->partner;
@@ -279,7 +272,7 @@ class RevenueImportService
                     'company_tin' => $company?->tin,
                     'variables' => [
                         'period' => $import->period,
-                        'service_type' => (string) ($partner?->service_type ?: $familyLabel),
+                        'service_type' => $serviceLabel,
                         'service_id' => (string) ($partner?->service_id ?: $row->service_id),
                         'amount' => $this->formatAmount((float) $row->amount),
                         'company_name' => (string) ($partner?->partner_name ?: $row->partner_name ?: 'Partner'),
@@ -325,19 +318,7 @@ class RevenueImportService
 
     public function actorCanSend(User $actor, RevenueImport $import): bool
     {
-        if ($actor->canAccessAllRevenue()) {
-            return true;
-        }
-
-        if ((int) $import->created_by_user_id !== (int) $actor->id) {
-            return false;
-        }
-
-        $family = $import->service_family instanceof RevenueServiceFamily
-            ? $import->service_family->value
-            : (string) $import->service_family;
-
-        return $actor->managesRevenueFamily($family);
+        return $this->actorCanManage($actor, $import);
     }
 
     /**
@@ -348,7 +329,6 @@ class RevenueImportService
      *   error:?string,
      *   amount:?float,
      *   partner_name:?string,
-     *   service_type:?string,
      *   resolved_service_id:?string,
      *   resolved_short_code:?string
      * }
@@ -358,13 +338,13 @@ class RevenueImportService
         ?string $shortCode,
         ?float $amount,
         array &$seen,
-        ?RevenueServiceFamily $family,
+        ?int $vasServiceId,
     ): array {
         $serviceId = RevenuePartnerResolver::normalize($serviceId);
         $shortCode = RevenuePartnerResolver::normalize($shortCode);
 
         if ($serviceId === null && $shortCode === null) {
-            return $this->invalid('Service ID and short code are both empty.', $amount);
+            return $this->invalid('Billing service ID and short code are both empty.', $amount);
         }
         if ($amount === null || $amount <= 0) {
             return $this->invalid('Revenue must be a positive number.', $amount, $serviceId, $shortCode);
@@ -378,7 +358,6 @@ class RevenueImportService
                 'error' => 'Duplicate in this import (same service_id / short_code).',
                 'amount' => $amount,
                 'partner_name' => null,
-                'service_type' => null,
                 'resolved_service_id' => $serviceId,
                 'resolved_short_code' => $shortCode,
             ];
@@ -401,20 +380,18 @@ class RevenueImportService
                 'error' => 'Unresolved: not in master list. Edit this row or add the partner, then Rematch.',
                 'amount' => $amount,
                 'partner_name' => null,
-                'service_type' => null,
                 'resolved_service_id' => $serviceId,
                 'resolved_short_code' => $shortCode,
             ];
         }
 
-        if ($family && $partner->service_family && $partner->service_family !== $family) {
+        if ($vasServiceId && (int) $partner->vas_service_id !== $vasServiceId) {
             return [
                 'revenue_partner_id' => $partner->id,
                 'status' => RevenueImportRowStatus::Invalid,
-                'error' => 'Master family mismatch.',
+                'error' => 'Master partner is mapped to a different catalog service.',
                 'amount' => $amount,
                 'partner_name' => $partner->partner_name,
-                'service_type' => $partner->service_type,
                 'resolved_service_id' => $partner->service_id,
                 'resolved_short_code' => RevenuePartnerResolver::normalize($partner->short_code) ?? $shortCode,
             ];
@@ -427,7 +404,6 @@ class RevenueImportService
                 'error' => 'Inactive on master list.',
                 'amount' => $amount,
                 'partner_name' => $partner->partner_name,
-                'service_type' => $partner->service_type,
                 'resolved_service_id' => $partner->service_id,
                 'resolved_short_code' => RevenuePartnerResolver::normalize($partner->short_code) ?? $shortCode,
             ];
@@ -440,7 +416,6 @@ class RevenueImportService
                 'error' => 'Phone missing on master list.',
                 'amount' => $amount,
                 'partner_name' => $partner->partner_name,
-                'service_type' => $partner->service_type,
                 'resolved_service_id' => $partner->service_id,
                 'resolved_short_code' => RevenuePartnerResolver::normalize($partner->short_code) ?? $shortCode,
             ];
@@ -452,7 +427,6 @@ class RevenueImportService
             'error' => null,
             'amount' => $amount,
             'partner_name' => $partner->partner_name,
-            'service_type' => $partner->service_type,
             'resolved_service_id' => $partner->service_id,
             'resolved_short_code' => RevenuePartnerResolver::normalize($partner->short_code) ?? $shortCode,
         ];
@@ -465,7 +439,6 @@ class RevenueImportService
      *   error: string,
      *   amount: ?float,
      *   partner_name: null,
-     *   service_type: null,
      *   resolved_service_id: ?string,
      *   resolved_short_code: ?string
      * }
@@ -482,7 +455,6 @@ class RevenueImportService
             'error' => $error,
             'amount' => $amount,
             'partner_name' => null,
-            'service_type' => null,
             'resolved_service_id' => $serviceId,
             'resolved_short_code' => $shortCode,
         ];

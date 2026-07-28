@@ -35,11 +35,11 @@ class RowsRelationManager extends RelationManager
                 if (! $user || $user->canAccessAllRevenue()) {
                     return $query;
                 }
-                $families = $user->managedRevenueFamilyValues();
+                $serviceIds = $user->managedRevenueServiceIds();
 
-                return $families === []
+                return $serviceIds === []
                     ? $query->whereRaw('1 = 0')
-                    : $query->whereIn('service_family', $families);
+                    : $query->whereIn('vas_service_id', $serviceIds);
             })
             ->columns([
                 IconColumn::make('needs_attention')
@@ -53,10 +53,9 @@ class RowsRelationManager extends RelationManager
                     ->tooltip(fn (RevenueImportRow $record): string => $record->status instanceof RevenueImportRowStatus
                         ? $record->status->label()
                         : (string) $record->status),
-                TextColumn::make('service_id')->label('Service ID')->searchable()->copyable(),
+                TextColumn::make('service_id')->label('Billing service ID')->searchable()->copyable(),
                 TextColumn::make('short_code')->label('Short code')->placeholder('—')->toggleable()->searchable(),
                 TextColumn::make('partner_name')->searchable()->wrap()->placeholder('—'),
-                TextColumn::make('service_type')->toggleable()->placeholder('—'),
                 TextColumn::make('amount')
                     ->label('Revenue')
                     ->numeric(decimalPlaces: 2)
@@ -86,9 +85,6 @@ class RowsRelationManager extends RelationManager
                     ->options(collect(RevenueImportRowStatus::cases())
                         ->mapWithKeys(fn (RevenueImportRowStatus $s) => [$s->value => $s->label()])
                         ->all()),
-                SelectFilter::make('service_family')
-                    ->label('Family')
-                    ->options(\App\Enums\RevenueServiceFamily::options()),
             ])
             ->recordActions([
                 Action::make('edit_row')

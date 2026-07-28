@@ -14,7 +14,7 @@ class ListRevenuePartners extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'Master list: service ID, short code, service type, phone, status. Monthly amounts live under Monthly revenue.';
+        return 'Master list mapped to existing catalog services. Billing service ID + short code from finance; monthly amounts under Monthly revenue.';
     }
 
     protected function getHeaderActions(): array

@@ -81,8 +81,8 @@ class RevenuePartnerPolicy
             return true;
         }
 
-        $family = $partner->service_family?->value;
+        $family = $partner->vas_service_id;
 
-        return $user->managesRevenueFamily($family);
+        return $user->managesRevenueService($family ? (int) $family : null);
     }
 }

@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\RevenuePartners;
 
-use App\Enums\RevenueServiceFamily;
 use App\Filament\Resources\Companies\CompanyResource;
 use App\Filament\Resources\RevenuePartners\Pages\CreateRevenuePartner;
 use App\Filament\Resources\RevenuePartners\Pages\EditRevenuePartner;
@@ -12,6 +11,7 @@ use App\Filament\Resources\RevenuePartners\RelationManagers\MonthlyRevenueRelati
 use App\Models\RevenuePartner;
 use App\Models\User;
 use App\Support\PhoneNumber;
+use App\Support\RevenueCatalogServices;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Select;
@@ -53,29 +53,31 @@ class RevenuePartnerResource extends Resource
 
     public static function form(Schema $schema): Schema
     {
+        /** @var User|null $user */
+        $user = auth()->user();
+
         return $schema->components([
             Section::make('Master record')
-                ->description('Partners are grouped by finance product line (Excel sheet type). Account managers only see families assigned to them.')
+                ->description('Mapped to an existing catalog service. Billing service ID / short code come from finance Excel.')
                 ->schema([
-                    Select::make('service_family')
-                        ->label('Product family')
-                        ->options(RevenueServiceFamily::options())
+                    Select::make('vas_service_id')
+                        ->label('Catalog service')
+                        ->options(RevenueCatalogServices::options($user))
                         ->required()
-                        ->native(false),
+                        ->searchable()
+                        ->native(false)
+                        ->helperText('Must be an existing portal service — not a free-text product family.'),
                     TextInput::make('service_id')
-                        ->label('Service ID')
+                        ->label('Billing service ID')
                         ->required()
                         ->maxLength(64)
                         ->unique(ignoreRecord: true)
-                        ->helperText('Unique. Monthly CSV can match on this and/or short code.'),
+                        ->helperText('Finance endpoint ID. Monthly CSV matches on this and/or short code.'),
                     TextInput::make('short_code')
                         ->label('Short code')
                         ->maxLength(64)
                         ->unique(ignoreRecord: true)
-                        ->helperText('Optional but unique when set. Monthly CSV can match on short code alone.'),
-                    TextInput::make('service_type')
-                        ->label('Service type')
-                        ->maxLength(120),
+                        ->helperText('Optional but unique when set.'),
                     TextInput::make('partner_name')
                         ->label('Partner name')
                         ->required()
@@ -114,16 +116,9 @@ class RevenuePartnerResource extends Resource
     {
         return $schema->components([
             Section::make('Revenue partner')->schema([
-                TextEntry::make('service_family')
-                    ->label('Product family')
-                    ->badge()
-                    ->formatStateUsing(fn ($state) => $state instanceof RevenueServiceFamily ? $state->label() : (string) $state)
-                    ->color(fn ($state) => ($state instanceof RevenueServiceFamily
-                        ? $state
-                        : RevenueServiceFamily::tryFrom((string) $state))?->color() ?? 'gray'),
-                TextEntry::make('service_id')->label('Service ID')->copyable(),
+                TextEntry::make('vasService.name')->label('Catalog service'),
+                TextEntry::make('service_id')->label('Billing service ID')->copyable(),
                 TextEntry::make('short_code')->label('Short code')->placeholder('—'),
-                TextEntry::make('service_type')->placeholder('—'),
                 TextEntry::make('partner_name'),
                 TextEntry::make('phone')->placeholder('— missing —'),
                 IconEntry::make('is_active')->boolean()->label('Active'),
@@ -144,17 +139,12 @@ class RevenuePartnerResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('service_family')
-                    ->label('Family')
-                    ->badge()
-                    ->formatStateUsing(fn ($state) => $state instanceof RevenueServiceFamily ? $state->label() : (string) $state)
-                    ->color(fn ($state) => ($state instanceof RevenueServiceFamily
-                        ? $state
-                        : RevenueServiceFamily::tryFrom((string) $state))?->color() ?? 'gray')
+                TextColumn::make('vasService.name')
+                    ->label('Catalog service')
+                    ->searchable()
                     ->sortable(),
-                TextColumn::make('service_id')->label('Service ID')->searchable()->sortable()->copyable(),
+                TextColumn::make('service_id')->label('Billing service ID')->searchable()->sortable()->copyable(),
                 TextColumn::make('short_code')->label('Short code')->searchable()->toggleable(),
-                TextColumn::make('service_type')->toggleable()->placeholder('—'),
                 TextColumn::make('partner_name')->searchable()->sortable()->wrap(),
                 TextColumn::make('phone')
                     ->placeholder('— missing —')
@@ -169,9 +159,9 @@ class RevenuePartnerResource extends Resource
             ])
             ->defaultSort('partner_name')
             ->filters([
-                SelectFilter::make('service_family')
-                    ->label('Product family')
-                    ->options(RevenueServiceFamily::options()),
+                SelectFilter::make('vas_service_id')
+                    ->label('Catalog service')
+                    ->options(fn (): array => RevenueCatalogServices::options(auth()->user())),
                 TernaryFilter::make('phone')
                     ->label('Phone')
                     ->placeholder('All')
@@ -210,7 +200,7 @@ class RevenuePartnerResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery();
+        $query = parent::getEloquentQuery()->with('vasService');
         /** @var User|null $user */
         $user = auth()->user();
 
@@ -222,12 +212,12 @@ class RevenuePartnerResource extends Resource
             return $query;
         }
 
-        $families = $user->managedRevenueFamilyValues();
-        if ($families === []) {
+        $serviceIds = $user->managedRevenueServiceIds();
+        if ($serviceIds === []) {
             return $query->whereRaw('1 = 0');
         }
 
-        return $query->whereIn('service_family', $families);
+        return $query->whereIn('vas_service_id', $serviceIds);
     }
 
     public static function canCreate(): bool

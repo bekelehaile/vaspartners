@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Models\RevenuePartner;
+use App\Models\Service;
 use App\Services\RevenuePartnerResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -13,10 +14,17 @@ class RevenuePartnerResolverTest extends TestCase
 
     private RevenuePartnerResolver $resolver;
 
+    private Service $catalogService;
+
     protected function setUp(): void
     {
         parent::setUp();
         $this->resolver = new RevenuePartnerResolver;
+        $this->catalogService = Service::query()->create([
+            'name' => 'API',
+            'slug' => 'api-test-'.uniqid(),
+            'is_active' => true,
+        ]);
     }
 
     public function test_requires_service_id_or_short_code(): void
@@ -32,6 +40,7 @@ class RevenuePartnerResolverTest extends TestCase
         $partner = RevenuePartner::query()->create([
             'service_id' => 'SID-1',
             'short_code' => '8100',
+            'vas_service_id' => $this->catalogService->id,
             'partner_name' => 'Alpha',
             'is_active' => true,
         ]);
@@ -48,6 +57,7 @@ class RevenuePartnerResolverTest extends TestCase
         $partner = RevenuePartner::query()->create([
             'service_id' => 'SID-2',
             'short_code' => '8200',
+            'vas_service_id' => $this->catalogService->id,
             'partner_name' => 'Beta',
             'is_active' => true,
         ]);
@@ -64,6 +74,7 @@ class RevenuePartnerResolverTest extends TestCase
         $partner = RevenuePartner::query()->create([
             'service_id' => 'SID-3',
             'short_code' => '8300',
+            'vas_service_id' => $this->catalogService->id,
             'partner_name' => 'Gamma',
             'is_active' => true,
         ]);
@@ -79,12 +90,14 @@ class RevenuePartnerResolverTest extends TestCase
         RevenuePartner::query()->create([
             'service_id' => 'SID-A',
             'short_code' => '9100',
+            'vas_service_id' => $this->catalogService->id,
             'partner_name' => 'A',
             'is_active' => true,
         ]);
         RevenuePartner::query()->create([
             'service_id' => 'SID-B',
             'short_code' => '9200',
+            'vas_service_id' => $this->catalogService->id,
             'partner_name' => 'B',
             'is_active' => true,
         ]);
@@ -100,6 +113,7 @@ class RevenuePartnerResolverTest extends TestCase
         RevenuePartner::query()->create([
             'service_id' => 'SID-4',
             'short_code' => '8400',
+            'vas_service_id' => $this->catalogService->id,
             'partner_name' => 'Delta',
             'is_active' => true,
         ]);
