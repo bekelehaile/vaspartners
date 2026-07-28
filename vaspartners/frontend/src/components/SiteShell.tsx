@@ -190,11 +190,19 @@ export function SiteShell({
                     <div className="portal-header-actions portal-header-actions-mobile">
                       <CompanySwitcher me={me} variant="header" />
                       {me.profile_completed && <NotificationBell />}
-                      <PortalSettingsMenu
-                        onNavigate={() => setOpen(false)}
-                        onLogout={onLogout}
-                      />
                     </div>
+                    {onLogout && (
+                      <button
+                        type="button"
+                        className="portal-mobile-signout"
+                        onClick={() => {
+                          setOpen(false);
+                          onLogout();
+                        }}
+                      >
+                        Sign out
+                      </button>
+                    )}
                   </>
                 ) : (
                   <>
@@ -210,11 +218,19 @@ export function SiteShell({
                     <div className="portal-header-actions portal-header-actions-mobile">
                       <CompanySwitcher me={me} variant="header" />
                       {me.profile_completed && <NotificationBell />}
-                      <PortalSettingsMenu
-                        onNavigate={() => setOpen(false)}
-                        onLogout={onLogout}
-                      />
                     </div>
+                    {onLogout && (
+                      <button
+                        type="button"
+                        className="portal-mobile-signout"
+                        onClick={() => {
+                          setOpen(false);
+                          onLogout();
+                        }}
+                      >
+                        Sign out
+                      </button>
+                    )}
                   </>
                 )
               ) : (

@@ -1330,6 +1330,33 @@ textarea {
   border-bottom: 1px solid var(--et-line);
 }
 
+.portal-mobile-signout {
+  appearance: none;
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--et-line);
+  border-radius: 0.55rem;
+  background: #fff;
+  color: var(--et-red);
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-align: center;
+  cursor: pointer;
+}
+
+.portal-mobile-signout:hover {
+  background: color-mix(in oklab, var(--et-red) 8%, white);
+}
+
+/* Account dropdown is desktop-only; mobile uses sidebar + Sign out */
+@media (max-width: 959.98px) {
+  .portal-settings {
+    display: none;
+  }
+}
+
 .mobile-sheet-card {
   max-width: 28rem;
   margin: 0 auto;
