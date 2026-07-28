@@ -178,13 +178,13 @@ export function RequestsTable({
 
   const hasFilters = !!(search || status || serviceId);
   const selectClass =
-    "h-8 min-w-[9.5rem] rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+    "h-8 w-full min-w-0 flex-1 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:min-w-[9.5rem] sm:flex-none";
 
   return (
     <Card className={cn("gap-0 py-0 shadow-sm", compact && "is-compact")}>
       {!compact && (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
-          <form className="flex min-w-[min(100%,18rem)] flex-1 gap-2" onSubmit={applySearch}>
+        <div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <form className="flex w-full min-w-0 flex-1 gap-2 sm:min-w-[min(100%,18rem)]" onSubmit={applySearch}>
             <label className="sr-only" htmlFor="requests-search">
               Search requests
             </label>
@@ -198,12 +198,12 @@ export function RequestsTable({
                 className="pl-8"
               />
             </div>
-            <Button type="submit" variant="outline" size="sm" className="h-8">
+            <Button type="submit" variant="outline" size="sm" className="h-8 shrink-0">
               Search
             </Button>
           </form>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             <label className="sr-only" htmlFor="requests-status">
               Status
             </label>
@@ -259,93 +259,118 @@ export function RequestsTable({
       )}
 
       <CardContent className="px-0">
-        <Table className="min-w-[640px]">
-          <TableHeader>
-            {table.getHeaderGroups().map((hg) => (
-              <tr key={hg.id} className="border-b bg-muted/40 hover:bg-muted/40">
-                {hg.headers.map((header) => (
-                  <TableHead
-                    key={header.id}
-                    className="h-10 px-4 text-[0.72rem] font-bold tracking-[0.06em] text-muted-foreground uppercase"
+        {isLoading ? (
+          <Empty className="border-0 py-12">
+            <EmptyHeader>
+              <EmptyTitle>Loading requests…</EmptyTitle>
+            </EmptyHeader>
+          </Empty>
+        ) : items.length === 0 ? (
+          <Empty className="border-0 py-12">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <FileTextIcon />
+              </EmptyMedia>
+              <EmptyTitle>
+                {hasFilters ? "No matching requests" : "No service requests yet"}
+              </EmptyTitle>
+              <EmptyDescription>
+                {hasFilters
+                  ? "Try a different status, service, or clear your filters."
+                  : "Start a subscription or manage an existing service for this company."}
+              </EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              {!hasFilters && !compact ? (
+                <JourneyLaunchActions />
+              ) : hasFilters ? (
+                <Button type="button" variant="outline" size="sm" onClick={clearFilters}>
+                  Clear filters
+                </Button>
+              ) : null}
+            </EmptyContent>
+          </Empty>
+        ) : (
+          <>
+            <ul className="portal-mobile-list">
+              {items.map((ticket) => (
+                <li key={ticket.public_id || ticket.tt_number}>
+                  <button
+                    type="button"
+                    className="portal-mobile-card"
+                    onClick={() => router.push(`/portal/requests/${ticket.tt_number}`)}
                   >
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
-                  </TableHead>
-                ))}
-              </tr>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={columns.length} className="p-0">
-                  <Empty className="border-0 py-12">
-                    <EmptyHeader>
-                      <EmptyTitle>Loading requests…</EmptyTitle>
-                    </EmptyHeader>
-                  </Empty>
-                </TableCell>
-              </TableRow>
-            ) : items.length === 0 ? (
-              <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={columns.length} className="p-0 whitespace-normal">
-                  <Empty className="border-0 py-12">
-                    <EmptyHeader>
-                      <EmptyMedia variant="icon">
-                        <FileTextIcon />
-                      </EmptyMedia>
-                      <EmptyTitle>
-                        {hasFilters ? "No matching requests" : "No service requests yet"}
-                      </EmptyTitle>
-                      <EmptyDescription>
-                        {hasFilters
-                          ? "Try a different status, service, or clear your filters."
-                          : "Start a subscription or manage an existing service for this company."}
-                      </EmptyDescription>
-                    </EmptyHeader>
-                    <EmptyContent>
-                      {!hasFilters && !compact ? (
-                        <JourneyLaunchActions />
-                      ) : hasFilters ? (
-                        <Button type="button" variant="outline" size="sm" onClick={clearFilters}>
-                          Clear filters
-                        </Button>
-                      ) : null}
-                    </EmptyContent>
-                  </Empty>
-                </TableCell>
-              </TableRow>
-            ) : (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  className="cursor-pointer"
-                  tabIndex={0}
-                  onClick={() =>
-                    router.push(`/portal/requests/${row.original.tt_number}`)
-                  }
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      router.push(`/portal/requests/${row.original.tt_number}`);
-                    }
-                  }}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className="px-4 py-3 whitespace-normal">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
+                    <div className="portal-mobile-card-top">
+                      <div>
+                        <p className="portal-mobile-card-title">{ticket.tt_number}</p>
+                        {ticket.requisition?.name && (
+                          <p className="portal-mobile-card-meta">{ticket.requisition.name}</p>
+                        )}
+                      </div>
+                      <StatusPill status={ticket.status} />
+                    </div>
+                    <div className="portal-mobile-card-row">
+                      <span>{ticket.service?.name ?? "—"}</span>
+                      <span>{formatSubmitted(ticket.created_at)}</span>
+                    </div>
+                    {ticket.contact?.name && (
+                      <p className="portal-mobile-card-meta">by {ticket.contact.name}</p>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+
+            <div className="portal-desktop-table">
+              <Table className="min-w-[640px]">
+                <TableHeader>
+                  {table.getHeaderGroups().map((hg) => (
+                    <tr key={hg.id} className="border-b bg-muted/40 hover:bg-muted/40">
+                      {hg.headers.map((header) => (
+                        <TableHead
+                          key={header.id}
+                          className="h-10 px-4 text-[0.72rem] font-bold tracking-[0.06em] text-muted-foreground uppercase"
+                        >
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(header.column.columnDef.header, header.getContext())}
+                        </TableHead>
+                      ))}
+                    </tr>
                   ))}
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+                </TableHeader>
+                <TableBody>
+                  {table.getRowModel().rows.map((row) => (
+                    <TableRow
+                      key={row.id}
+                      className="cursor-pointer"
+                      tabIndex={0}
+                      onClick={() =>
+                        router.push(`/portal/requests/${row.original.tt_number}`)
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          router.push(`/portal/requests/${row.original.tt_number}`);
+                        }
+                      }}
+                    >
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell key={cell.id} className="px-4 py-3 whitespace-normal">
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </>
+        )}
       </CardContent>
 
       {!compact && items.length > 0 && total >= 10 && (
-        <CardFooter className="justify-between gap-3 border-t bg-muted/30 py-3">
+        <CardFooter className="flex-col items-stretch justify-between gap-3 border-t bg-muted/30 py-3 sm:flex-row sm:items-center">
           <p className="text-sm text-muted-foreground">
             {`Page ${currentPage} of ${lastPage} · ${total} request${total === 1 ? "" : "s"}`}
             {isFetching && !isLoading ? " · Updating…" : ""}
@@ -355,6 +380,7 @@ export function RequestsTable({
               type="button"
               variant="outline"
               size="sm"
+              className="flex-1 sm:flex-none"
               disabled={currentPage <= 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
             >
@@ -364,6 +390,7 @@ export function RequestsTable({
               type="button"
               variant="outline"
               size="sm"
+              className="flex-1 sm:flex-none"
               disabled={currentPage >= lastPage}
               onClick={() => setPage((p) => p + 1)}
             >

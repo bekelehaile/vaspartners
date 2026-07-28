@@ -139,42 +139,85 @@ export function PartnerRevenueTable() {
         </div>
       )}
 
-      <div className="data-table-wrap">
-        <table className="data-table">
-          <thead>
-            {table.getHeaderGroups().map((hg) => (
-              <tr key={hg.id}>
-                {hg.headers.map((header) => (
-                  <th key={header.id}>
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
-                  </th>
-                ))}
-              </tr>
+      {isLoading ? (
+        <p className="portal-mobile-empty">Loading revenue…</p>
+      ) : filtered.length === 0 ? (
+        <p className="portal-mobile-empty">No revenue rows for this company yet.</p>
+      ) : (
+        <>
+          <ul className="portal-mobile-list">
+            {filtered.map((row) => (
+              <li key={row.id}>
+                <div
+                  className={`portal-mobile-card${
+                    row.sms_status === "failed" ? " is-attention" : ""
+                  }`}
+                >
+                  <div className="portal-mobile-card-top">
+                    <div>
+                      <p className="portal-mobile-card-title">
+                        {row.amount_formatted || "—"}
+                      </p>
+                      <p className="portal-mobile-card-meta">
+                        {row.period || "—"} · {row.service_type || "—"}
+                      </p>
+                    </div>
+                    <span
+                      className={smsChipClass(row.sms_status)}
+                      title={row.sms_error || undefined}
+                    >
+                      {smsLabel(row.sms_status)}
+                    </span>
+                  </div>
+                  <div className="portal-mobile-card-row">
+                    <span className="table-mono">{row.service_id || "—"}</span>
+                    <span>{row.partner_name || "—"}</span>
+                  </div>
+                  {row.sms_error && (
+                    <p className="portal-mobile-card-meta">{row.sms_error}</p>
+                  )}
+                </div>
+              </li>
             ))}
-          </thead>
-          <tbody>
-            {isLoading ? (
-              <tr>
-                <td colSpan={columns.length}>Loading revenue…</td>
-              </tr>
-            ) : filtered.length === 0 ? (
-              <tr>
-                <td colSpan={columns.length}>No revenue rows for this company yet.</td>
-              </tr>
-            ) : (
-              table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className={row.original.sms_status === "failed" ? "is-attention" : undefined}>
-                  {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+          </ul>
+
+          <div className="portal-desktop-table">
+            <div className="data-table-wrap">
+              <table className="data-table">
+                <thead>
+                  {table.getHeaderGroups().map((hg) => (
+                    <tr key={hg.id}>
+                      {hg.headers.map((header) => (
+                        <th key={header.id}>
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(header.column.columnDef.header, header.getContext())}
+                        </th>
+                      ))}
+                    </tr>
                   ))}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+                </thead>
+                <tbody>
+                  {table.getRowModel().rows.map((row) => (
+                    <tr
+                      key={row.id}
+                      className={
+                        row.original.sms_status === "failed" ? "is-attention" : undefined
+                      }
+                    >
+                      {row.getVisibleCells().map((cell) => (
+                        <td key={cell.id}>
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

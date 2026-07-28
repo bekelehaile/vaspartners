@@ -131,50 +131,85 @@ export function SubscriptionsTable() {
         </div>
       )}
 
-      <div className="data-table-wrap">
-        <table className="data-table">
-          <thead>
-            {table.getHeaderGroups().map((hg) => (
-              <tr key={hg.id}>
-                {hg.headers.map((header) => (
-                  <th key={header.id}>
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
-                  </th>
-                ))}
-              </tr>
-            ))}
-          </thead>
-          <tbody>
-            {isLoading ? (
-              <tr>
-                <td colSpan={columns.length} className="data-table-empty">
-                  Loading subscriptions…
-                </td>
-              </tr>
-            ) : filtered.length === 0 ? (
-              <tr>
-                <td colSpan={columns.length} className="data-table-empty">
-                  {items.length === 0
-                    ? "No company subscriptions yet. Start a new subscription from Service requests."
-                    : "No subscriptions match this filter."}
-                </td>
-              </tr>
-            ) : (
-              table.getRowModel().rows.map((row) => (
-                <tr key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
+      {isLoading ? (
+        <p className="portal-mobile-empty">Loading subscriptions…</p>
+      ) : filtered.length === 0 ? (
+        <p className="portal-mobile-empty">
+          {items.length === 0
+            ? "No company subscriptions yet. Start a new subscription from Service requests."
+            : "No subscriptions match this filter."}
+        </p>
+      ) : (
+        <>
+          <ul className="portal-mobile-list">
+            {filtered.map((sub) => {
+              const alive = isAliveSubscriptionStatus(sub.status);
+              return (
+                <li key={sub.id}>
+                  <div className="portal-mobile-card">
+                    <div className="portal-mobile-card-top">
+                      <div>
+                        <p className="portal-mobile-card-title">
+                          {sub.service?.name ?? sub.public_id}
+                        </p>
+                        <p className="portal-mobile-card-meta">{sub.public_id}</p>
+                      </div>
+                      <span className={`status-chip${alive ? " is-alive" : " is-ended"}`}>
+                        {subscriptionStatusLabel(sub.status)}
+                      </span>
+                    </div>
+                    <div className="portal-mobile-card-row">
+                      <span>Started {formatDate(sub.started_at)}</span>
+                      <span>Renewal {formatDate(sub.next_renewal_due_at)}</span>
+                    </div>
+                    {canManage && alive && (
+                      <div className="portal-mobile-card-actions">
+                        <Link
+                          href={`/portal/requests/new?intent=manage&subscription_id=${sub.id}`}
+                          className="btn-ghost table-action"
+                        >
+                          Manage
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+
+          <div className="portal-desktop-table">
+            <div className="data-table-wrap">
+              <table className="data-table">
+                <thead>
+                  {table.getHeaderGroups().map((hg) => (
+                    <tr key={hg.id}>
+                      {hg.headers.map((header) => (
+                        <th key={header.id}>
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(header.column.columnDef.header, header.getContext())}
+                        </th>
+                      ))}
+                    </tr>
                   ))}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+                </thead>
+                <tbody>
+                  {table.getRowModel().rows.map((row) => (
+                    <tr key={row.id}>
+                      {row.getVisibleCells().map((cell) => (
+                        <td key={cell.id}>
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
 
       <div className="data-table-footer">
         <p className="muted">
