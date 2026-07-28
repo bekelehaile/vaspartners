@@ -37,8 +37,8 @@ class RevenueImport extends Model
 
     protected static function booted(): void
     {
-        static::deleting(function (): bool {
-            return false;
+        static::deleting(function (RevenueImport $import): bool {
+            return $import->canBeDeleted();
         });
     }
 
@@ -145,5 +145,31 @@ class RevenueImport extends Model
         if (! in_array($this->status, [RevenueImportStatus::Sending, RevenueImportStatus::Completed], true)) {
             $this->forceFill(['status' => $status])->save();
         }
+    }
+
+    /** True when any SMS was queued or delivered for this import. */
+    public function hasQueuedOrSentSms(): bool
+    {
+        if (in_array($this->status, [RevenueImportStatus::Sending, RevenueImportStatus::Completed], true)) {
+            return true;
+        }
+
+        if ((int) $this->sent_count > 0 || filled($this->sent_at)) {
+            return true;
+        }
+
+        return $this->rows()
+            ->where(function ($q): void {
+                $q->where('status', 'sent')
+                    ->orWhereNotNull('sent_at')
+                    ->orWhereNotNull('bulk_message_id')
+                    ->orWhereNotNull('bulk_message_recipient_id');
+            })
+            ->exists();
+    }
+
+    public function canBeDeleted(): bool
+    {
+        return ! $this->hasQueuedOrSentSms();
     }
 }

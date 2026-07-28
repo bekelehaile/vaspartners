@@ -9,6 +9,7 @@ use App\Models\RevenueImport;
 use App\Models\User;
 use App\Services\RevenueImportService;
 use Filament\Actions\Action;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
@@ -55,6 +56,11 @@ class ViewRevenueImport extends ViewRecord
             EditAction::make()
                 ->url(fn (): string => RevenueImportResource::getUrl('edit', ['record' => $record]))
                 ->visible(fn (): bool => RevenueImportResource::canEdit($record->fresh() ?? $record)),
+            DeleteAction::make()
+                ->visible(fn (): bool => RevenueImportResource::canDelete($record->fresh() ?? $record))
+                ->modalHeading('Delete monthly revenue import')
+                ->modalDescription('Deletes this import and its payload rows. Only allowed when no SMS has been queued or sent.')
+                ->successRedirectUrl(RevenueImportResource::getUrl('index')),
             Action::make('set_status')
                 ->label('Set status')
                 ->icon('heroicon-o-flag')

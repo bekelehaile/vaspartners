@@ -16,6 +16,8 @@ use App\Services\RevenueImportService;
 use App\Support\RevenueCatalogServices;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Select;
@@ -165,9 +167,38 @@ class RevenueImportResource extends Resource
                 EditAction::make()
                     ->url(fn (RevenueImport $record): string => static::getUrl('edit', ['record' => $record]))
                     ->visible(fn (RevenueImport $record): bool => static::canEdit($record)),
+                DeleteAction::make()
+                    ->visible(fn (RevenueImport $record): bool => static::canDelete($record))
+                    ->modalHeading('Delete monthly revenue import')
+                    ->modalDescription('Deletes this import and its payload rows. Only allowed when no SMS has been queued or sent.'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    DeleteBulkAction::make()
+                        ->modalHeading('Delete selected imports')
+                        ->modalDescription('Only imports with no queued/sent SMS will be deleted. Others are skipped.')
+                        ->action(function (Collection $records): void {
+                            $deleted = 0;
+                            $skipped = 0;
+                            foreach ($records as $import) {
+                                if (! $import instanceof RevenueImport) {
+                                    continue;
+                                }
+                                $import = $import->fresh();
+                                if (! $import || ! static::canDelete($import)) {
+                                    $skipped++;
+
+                                    continue;
+                                }
+                                $import->delete();
+                                $deleted++;
+                            }
+                            Notification::make()
+                                ->title($deleted > 0 ? "Deleted {$deleted} import(s)" : 'Nothing deleted')
+                                ->body($skipped > 0 ? "{$skipped} skipped (SMS already queued/sent or not allowed)." : null)
+                                ->color($deleted > 0 ? 'success' : 'warning')
+                                ->send();
+                        }),
                     BulkAction::make('set_status')
                         ->label('Set status')
                         ->icon('heroicon-o-flag')
@@ -400,12 +431,22 @@ class RevenueImportResource extends Resource
 
     public static function canDelete(Model $record): bool
     {
-        return false;
+        if (! $record instanceof RevenueImport) {
+            return false;
+        }
+
+        /** @var User|null $user */
+        $user = auth()->user();
+
+        return $user?->can('delete', $record) ?? false;
     }
 
     public static function canDeleteAny(): bool
     {
-        return false;
+        /** @var User|null $user */
+        $user = auth()->user();
+
+        return $user?->can('deleteAny', RevenueImport::class) ?? false;
     }
 
     public static function canForceDelete(Model $record): bool

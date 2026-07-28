@@ -55,6 +55,7 @@ class RevenuePermissionsSeeder extends Seeder
             'View:RevenueImport',
             'Create:RevenueImport',
             'Update:RevenueImport',
+            'Delete:RevenueImport',
         ];
         foreach ($amPerms as $name) {
             Permission::findOrCreate($name, 'web');

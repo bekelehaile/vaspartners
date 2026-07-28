@@ -56,12 +56,24 @@ class RevenueImportPolicy
 
     public function delete(User $user, RevenueImport $revenueImport): bool
     {
-        return false;
+        if (! $user->can('Delete:RevenueImport')) {
+            return false;
+        }
+
+        if (! $revenueImport->canBeDeleted()) {
+            return false;
+        }
+
+        if ($user->canAccessAllRevenue()) {
+            return true;
+        }
+
+        return (int) $revenueImport->created_by_user_id === (int) $user->id;
     }
 
     public function deleteAny(User $user): bool
     {
-        return false;
+        return $user->can('DeleteAny:RevenueImport') || $user->can('Delete:RevenueImport');
     }
 
     public function restore(User $user, RevenueImport $revenueImport): bool
