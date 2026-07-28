@@ -76,45 +76,13 @@ class User extends Authenticatable implements CanResetPasswordContract, Filament
         return $this->belongsToMany(Category::class);
     }
 
-    public function revenueServiceAssignments(): HasMany
-    {
-        return $this->hasMany(RevenueServiceManager::class);
-    }
-
     /**
-     * Super admin and admin see all revenue data; account managers are service-scoped.
+     * Super admin and admin see all revenue data (unscoped).
+     * Account managers use resource permissions; monthly imports they created remain theirs.
      */
     public function canAccessAllRevenue(): bool
     {
         return $this->hasAnyRole(['super_admin', 'admin']);
-    }
-
-    /**
-     * Catalog service IDs this user may validate.
-     *
-     * @return list<int>
-     */
-    public function managedRevenueServiceIds(): array
-    {
-        return $this->revenueServiceAssignments()
-            ->pluck('service_id')
-            ->map(fn ($id) => (int) $id)
-            ->unique()
-            ->values()
-            ->all();
-    }
-
-    public function managesRevenueService(?int $serviceId): bool
-    {
-        if (! $serviceId) {
-            return false;
-        }
-
-        if ($this->canAccessAllRevenue()) {
-            return true;
-        }
-
-        return in_array($serviceId, $this->managedRevenueServiceIds(), true);
     }
 
     /**

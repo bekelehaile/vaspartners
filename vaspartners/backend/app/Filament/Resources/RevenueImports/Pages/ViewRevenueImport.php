@@ -55,7 +55,8 @@ class ViewRevenueImport extends ViewRecord
                 ->label('Register missing partners')
                 ->icon('heroicon-o-user-plus')
                 ->color('warning')
-                ->visible(fn (): bool => $record->fresh()->missing_partner_count > 0)
+                ->visible(fn (): bool => $this->importIsEditable($record)
+                    && $record->fresh()->missing_partner_count > 0)
                 ->requiresConfirmation()
                 ->action(function (RevenueImportService $revenueImports) use ($record): void {
                     $created = $revenueImports->registerMissingPartners($record->fresh());
@@ -77,10 +78,10 @@ class ViewRevenueImport extends ViewRecord
                 ->label('Rematch')
                 ->icon('heroicon-o-arrow-path')
                 ->color('gray')
-                ->visible(fn (): bool => ! in_array($record->fresh()->status, [RevenueImportStatus::Sending], true))
+                ->visible(fn (): bool => $this->importIsEditable($record))
                 ->action(function (RevenueImportService $revenueImports) use ($record): void {
                     $revenueImports->rematch($record->fresh());
-                    Notification::make()->title('Rematched against master list')->success()->send();
+                    Notification::make()->title('Rematched against your partner list')->success()->send();
                     $this->refreshFormData([
                         'status', 'matched_count', 'missing_partner_count', 'missing_phone_count', 'invalid_count',
                     ]);
@@ -90,14 +91,15 @@ class ViewRevenueImport extends ViewRecord
                 ->icon('heroicon-o-paper-airplane')
                 ->color('success')
                 ->visible(fn (): bool => $canSend
+                    && $this->importIsEditable($record)
                     && $record->fresh()->matched_count > 0
                     && $record->fresh()->missing_partner_count === 0
                     && $record->fresh()->missing_phone_count === 0
-                    && ! in_array($record->fresh()->status, [RevenueImportStatus::Sending], true))
+                    && $record->fresh()->invalid_count === 0)
                 ->requiresConfirmation()
                 ->modalHeading('Send bulk SMS for this import')
                 ->modalDescription(fn (): string => sprintf(
-                    'Queue %d ready row(s). Recorded as sent by you.',
+                    'Queue %d ready row(s). Double sending for the same partner + month is blocked.',
                     $record->fresh()->matched_count,
                 ))
                 ->action(function (RevenueImportService $revenueImports) use ($record): void {
@@ -114,5 +116,13 @@ class ViewRevenueImport extends ViewRecord
                     }
                 }),
         ];
+    }
+
+    protected function importIsEditable(RevenueImport $record): bool
+    {
+        $fresh = $record->fresh();
+
+        return ! in_array($fresh->status, [RevenueImportStatus::Sending, RevenueImportStatus::Completed], true)
+            && blank($fresh->bulk_message_id);
     }
 }

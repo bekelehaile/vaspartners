@@ -13,17 +13,14 @@ class ListRevenueImports extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'Import cleaned CSV (billing service_id + revenue). Choose an existing catalog service + month. Unresolved rows are flagged for edit.';
+        return 'Import monthly CSV (service ID + revenue). Rows match your partner master list by service ID / short code. Already-sent partner+month rows are blocked.';
     }
 
     protected function getHeaderActions(): array
     {
         $user = auth()->user();
         if (! $user?->can('Create:RevenueImport') && ! $user?->canAccessAllRevenue()) {
-            // AMs get Create via seeder; still show if they manage a family
-            if (! $user || ($user->managedRevenueServiceIds() === [] && ! $user->canAccessAllRevenue())) {
-                return [];
-            }
+            return [];
         }
 
         return [

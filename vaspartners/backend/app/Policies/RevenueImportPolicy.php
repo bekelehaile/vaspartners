@@ -22,16 +22,8 @@ class RevenueImportPolicy
             return true;
         }
 
-        $serviceIds = $user->managedRevenueServiceIds();
-        if ($serviceIds === []) {
-            return false;
-        }
-
-        return in_array((int) $revenueImport->vas_service_id, $serviceIds, true)
-            && (
-                (int) $revenueImport->created_by_user_id === (int) $user->id
-                || $revenueImport->rows()->whereIn('vas_service_id', $serviceIds)->exists()
-            );
+        // AMs only open imports they created.
+        return (int) $revenueImport->created_by_user_id === (int) $user->id;
     }
 
     public function create(User $user): bool
@@ -49,11 +41,7 @@ class RevenueImportPolicy
             return true;
         }
 
-        if ((int) $revenueImport->created_by_user_id !== (int) $user->id) {
-            return false;
-        }
-
-        return $user->managesRevenueService((int) $revenueImport->vas_service_id);
+        return (int) $revenueImport->created_by_user_id === (int) $user->id;
     }
 
     public function delete(User $user, RevenueImport $revenueImport): bool

@@ -10,11 +10,14 @@ use App\Support\RevenueCatalogServices;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
-use Filament\Forms\Components\Select;
 use Illuminate\Support\Number;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
+/**
+ * Each AM imports partners that belong to them.
+ * Re-import: service ID / short code are kept when already set; missing ones (and phone) can be filled.
+ */
 class RevenuePartnerImporter extends Importer
 {
     protected static ?string $model = RevenuePartner::class;
@@ -23,15 +26,15 @@ class RevenuePartnerImporter extends Importer
     {
         return [
             ImportColumn::make('service_id')
-                ->label('Service ID (billing)')
+                ->label('Service ID')
                 ->rules(['nullable', 'max:64'])
                 ->example('0042822000002838')
-                ->helperText('Required to create a new partner. Finance endpoint ID.'),
+                ->helperText('Required to create a new partner. On re-import, existing values are kept.'),
             ImportColumn::make('short_code')
                 ->label('Short code')
                 ->rules(['nullable', 'max:64'])
                 ->example('8100')
-                ->helperText('Unique. Can match an existing partner when billing service_id is blank.'),
+                ->helperText('Unique. On re-import, filled only when the master record is missing one.'),
             ImportColumn::make('partner_name')
                 ->label('Partner name')
                 ->requiredMapping()
@@ -40,36 +43,34 @@ class RevenuePartnerImporter extends Importer
             ImportColumn::make('phone')
                 ->label('Phone')
                 ->rules(['nullable', 'max:32'])
-                ->example('911223344'),
+                ->example('911223344')
+                ->ignoreBlankState()
+                ->helperText('Updated when provided. Blank cells do not clear an existing phone.'),
             ImportColumn::make('is_active')
                 ->label('Status (active)')
                 ->boolean()
                 ->rules(['nullable', 'boolean'])
-                ->example('1'),
+                ->example('1')
+                ->ignoreBlankState(),
         ];
     }
 
     public static function getOptionsFormComponents(): array
     {
-        /** @var User|null $user */
-        $user = auth()->user();
-
         return [
-            Select::make('vas_service_id')
-                ->label('Catalog service')
-                ->options(RevenueCatalogServices::options($user))
-                ->required()
-                ->searchable()
-                ->native(false)
-                ->helperText('Maps all imported partners to an existing portal service (not a free-text product family).'),
+            RevenueCatalogServices::importSelect(
+                'Catalog service for labeling / SMS wording. Ownership is by account manager, not by service.',
+            ),
         ];
     }
 
     public function resolveRecord(): ?RevenuePartner
     {
+        $ownerUserId = $this->ownerUserIdForMatch();
         $lookup = app(RevenuePartnerResolver::class)->resolveForUpsert(
             $this->data['service_id'] ?? null,
             $this->data['short_code'] ?? null,
+            $ownerUserId,
         );
 
         if (! $lookup['ok']) {
@@ -88,6 +89,7 @@ class RevenuePartnerImporter extends Importer
 
         return new RevenuePartner([
             'service_id' => $lookup['service_id'],
+            'created_by_user_id' => $this->import->user_id,
         ]);
     }
 
@@ -98,17 +100,8 @@ class RevenuePartnerImporter extends Importer
 
         if ($this->data['service_id'] === null && $this->data['short_code'] === null) {
             throw ValidationException::withMessages([
-                'service_id' => 'Provide billing service_id and/or short_code.',
-                'short_code' => 'Provide billing service_id and/or short_code.',
-            ]);
-        }
-
-        $vasServiceId = (int) ($this->options['vas_service_id'] ?? 0);
-        /** @var User|null $user */
-        $user = auth()->user() ?? $this->import->user;
-        if ($user instanceof User && ! $user->managesRevenueService($vasServiceId)) {
-            throw ValidationException::withMessages([
-                'vas_service_id' => 'You are not assigned to this catalog service.',
+                'service_id' => 'Provide service ID and/or short code.',
+                'short_code' => 'Provide service ID and/or short code.',
             ]);
         }
     }
@@ -120,10 +113,104 @@ class RevenuePartnerImporter extends Importer
         }
 
         if (! array_key_exists('is_active', $this->data) || $this->data['is_active'] === null) {
-            $this->data['is_active'] = true;
+            // New records default to active; existing keep their value via ignoreBlankState.
+            if (! $this->record?->exists) {
+                $this->data['is_active'] = true;
+            }
         }
 
-        $this->data['vas_service_id'] = (int) ($this->options['vas_service_id'] ?? 0) ?: null;
+        if ($this->record?->exists) {
+            $this->preserveExistingIdentifiersOnUpdate();
+        }
+    }
+
+    protected function afterFill(): void
+    {
+        if (! $this->record instanceof RevenuePartner) {
+            return;
+        }
+
+        $vasServiceId = (int) ($this->options['vas_service_id'] ?? 0) ?: null;
+        if ($vasServiceId && ! $this->record->vas_service_id) {
+            $this->record->vas_service_id = $vasServiceId;
+        }
+
+        if (! $this->record->exists && $this->import->user_id && ! $this->record->created_by_user_id) {
+            $this->record->created_by_user_id = $this->import->user_id;
+        }
+    }
+
+    /**
+     * Re-import: never overwrite an existing service ID / short code.
+     * Fill only when the master record is missing that field. Phone may update when CSV has a value.
+     */
+    protected function preserveExistingIdentifiersOnUpdate(): void
+    {
+        /** @var RevenuePartner $partner */
+        $partner = $this->record;
+
+        $existingServiceId = RevenuePartnerResolver::normalize($partner->service_id);
+        $existingShortCode = RevenuePartnerResolver::normalize($partner->short_code);
+        $incomingServiceId = RevenuePartnerResolver::normalize($this->data['service_id'] ?? null);
+        $incomingShortCode = RevenuePartnerResolver::normalize($this->data['short_code'] ?? null);
+
+        if ($existingServiceId !== null) {
+            $this->data['service_id'] = $existingServiceId;
+        } elseif ($incomingServiceId !== null) {
+            $taken = RevenuePartner::query()
+                ->where('service_id', $incomingServiceId)
+                ->whereKeyNot($partner->getKey())
+                ->exists();
+            if ($taken) {
+                throw ValidationException::withMessages([
+                    'service_id' => "Service ID {$incomingServiceId} is already used by another master partner.",
+                ]);
+            }
+            $this->data['service_id'] = $incomingServiceId;
+        } else {
+            $this->data['service_id'] = $partner->service_id;
+        }
+
+        if ($existingShortCode !== null) {
+            $this->data['short_code'] = $existingShortCode;
+        } elseif ($incomingShortCode !== null) {
+            $taken = RevenuePartner::query()
+                ->where('short_code', $incomingShortCode)
+                ->whereKeyNot($partner->getKey())
+                ->exists();
+            if ($taken) {
+                throw ValidationException::withMessages([
+                    'short_code' => "Short code {$incomingShortCode} is already used by another master partner.",
+                ]);
+            }
+            $this->data['short_code'] = $incomingShortCode;
+        } else {
+            // Leave blank state ignored so null CSV does not clear a null field; keep model value.
+            unset($this->data['short_code']);
+        }
+
+        // Phone: CSV value updates; blank already ignored via ignoreBlankState().
+        if (! filled($this->data['phone'] ?? null)) {
+            unset($this->data['phone']);
+        }
+    }
+
+    /**
+     * AMs match only their own partners; admins match the full master list.
+     */
+    protected function ownerUserIdForMatch(): ?int
+    {
+        $userId = (int) ($this->import->user_id ?? 0);
+        if ($userId <= 0) {
+            return null;
+        }
+
+        $user = User::query()->find($userId);
+        if ($user?->canAccessAllRevenue()) {
+            return null;
+        }
+
+        return $userId;
     }
 
     public function getValidationRules(): array

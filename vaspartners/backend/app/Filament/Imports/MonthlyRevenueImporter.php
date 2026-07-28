@@ -10,12 +10,12 @@ use App\Models\RevenuePartner;
 use App\Models\Service;
 use App\Models\User;
 use App\Services\BulkMessageService;
+use App\Services\RevenueImportService;
 use App\Services\RevenuePartnerResolver;
 use App\Support\RevenueCatalogServices;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
-use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Illuminate\Support\Number;
@@ -24,7 +24,7 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Cleaned monthly revenue CSV: service_id + revenue (short_code optional).
- * Import is scoped to an existing catalog service; unresolved rows are flagged for AM edit.
+ * Matches against the importing AM's partner master list only.
  */
 class MonthlyRevenueImporter extends Importer
 {
@@ -34,9 +34,10 @@ class MonthlyRevenueImporter extends Importer
     {
         return [
             ImportColumn::make('service_id')
-                ->label('Service ID (billing)')
+                ->label('Service ID')
                 ->requiredMapping()
                 ->rules(['required', 'max:64'])
+                ->example('0042822000002838')
                 ->guess(['service id', 'serviceid', 'sid', 'sp code']),
             ImportColumn::make('short_code')
                 ->label('Short code (optional)')
@@ -55,17 +56,10 @@ class MonthlyRevenueImporter extends Importer
 
     public static function getOptionsFormComponents(): array
     {
-        /** @var User|null $user */
-        $user = auth()->user();
-
         return [
-            Select::make('vas_service_id')
-                ->label('Catalog service')
-                ->options(RevenueCatalogServices::options($user))
-                ->required()
-                ->searchable()
-                ->native(false)
-                ->helperText('Must be an existing portal service. Partners are matched only within this service.'),
+            RevenueCatalogServices::importSelect(
+                'Catalog service for SMS wording only. Matching uses your partner master list (service ID / short code).',
+            ),
             TextInput::make('period')
                 ->label('Month')
                 ->required()
@@ -100,31 +94,25 @@ class MonthlyRevenueImporter extends Importer
 
         if ($serviceId === null) {
             throw ValidationException::withMessages([
-                'service_id' => 'Billing service ID is required.',
-            ]);
-        }
-
-        $vasServiceId = (int) ($this->options['vas_service_id'] ?? 0);
-        /** @var User|null $user */
-        $user = $this->import->user;
-        if ($user instanceof User && ! $user->managesRevenueService($vasServiceId)) {
-            throw ValidationException::withMessages([
-                'vas_service_id' => 'You are not assigned to this catalog service.',
+                'service_id' => 'Service ID is required.',
             ]);
         }
     }
 
     protected function beforeFill(): void
     {
+        $ownerUserId = $this->ownerUserIdForMatch();
         $resolver = app(RevenuePartnerResolver::class);
         $lookup = $resolver->resolve(
             $this->data['service_id'] ?? null,
             $this->data['short_code'] ?? null,
+            $ownerUserId,
         );
 
         $revenue = $this->data['revenue'] ?? null;
         $vasServiceId = (int) ($this->options['vas_service_id'] ?? 0) ?: null;
         $amount = is_numeric($revenue) ? round((float) $revenue, 4) : null;
+        $period = trim((string) ($this->options['period'] ?? ''));
 
         $this->data['amount'] = $amount;
         $this->data['amount_raw'] = $revenue !== null ? (string) $revenue : null;
@@ -148,11 +136,7 @@ class MonthlyRevenueImporter extends Importer
             $this->data['revenue_partner_id'] = null;
             $this->data['partner_name'] = null;
             $this->data['status'] = RevenueImportRowStatus::MissingPartner->value;
-            $this->data['error'] = 'Unresolved: not in master list for this catalog service. Edit this row or add the partner, then Rematch.';
-        } elseif ($vasServiceId && (int) $partner->vas_service_id !== $vasServiceId) {
-            $this->applyPartnerSnapshot($partner);
-            $this->data['status'] = RevenueImportRowStatus::Invalid->value;
-            $this->data['error'] = 'Master partner is mapped to a different catalog service.';
+            $this->data['error'] = 'Unresolved: service ID / short code not in your partner master list.';
         } elseif (! $partner->is_active) {
             $this->applyPartnerSnapshot($partner);
             $this->data['status'] = RevenueImportRowStatus::Invalid->value;
@@ -161,6 +145,10 @@ class MonthlyRevenueImporter extends Importer
             $this->applyPartnerSnapshot($partner);
             $this->data['status'] = RevenueImportRowStatus::MissingPhone->value;
             $this->data['error'] = 'Master list phone is empty or invalid.';
+        } elseif ($period !== '' && app(RevenueImportService::class)->wouldDoubleSend($partner, $period)) {
+            $this->applyPartnerSnapshot($partner);
+            $this->data['status'] = RevenueImportRowStatus::Duplicate->value;
+            $this->data['error'] = "SMS already sent for this partner in period {$period}.";
         } else {
             $this->applyPartnerSnapshot($partner);
             $this->data['status'] = RevenueImportRowStatus::Matched->value;
@@ -177,7 +165,25 @@ class MonthlyRevenueImporter extends Importer
         $this->data['service_id'] = $partner->service_id;
         $this->data['short_code'] = RevenuePartnerResolver::normalize($partner->short_code)
             ?? RevenuePartnerResolver::normalize($this->data['short_code'] ?? null);
-        $this->data['vas_service_id'] = $partner->vas_service_id;
+        $this->data['vas_service_id'] = $this->data['vas_service_id'] ?? $partner->vas_service_id;
+    }
+
+    /**
+     * AMs match only their partners; admins match the full master list.
+     */
+    protected function ownerUserIdForMatch(): ?int
+    {
+        $userId = (int) ($this->import->user_id ?? 0);
+        if ($userId <= 0) {
+            return null;
+        }
+
+        $user = User::query()->find($userId);
+        if ($user?->canAccessAllRevenue()) {
+            return null;
+        }
+
+        return $userId;
     }
 
     protected function afterFill(): void

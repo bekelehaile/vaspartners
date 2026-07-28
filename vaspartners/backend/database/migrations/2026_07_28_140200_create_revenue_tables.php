@@ -21,19 +21,13 @@ return new class extends Migration
             $table->string('partner_name');
             $table->string('phone', 32)->nullable()->index();
             $table->foreignId('company_id')->nullable()->constrained('companies')->nullOnDelete();
+            $table->foreignId('created_by_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->boolean('is_active')->default(true)->index();
             $table->text('notes')->nullable();
             $table->timestamps();
 
             $table->index('partner_name');
-        });
-
-        Schema::create('revenue_service_managers', function (Blueprint $table): void {
-            $table->id();
-            $table->foreignId('service_id')->constrained('services')->cascadeOnDelete();
-            $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
-            $table->timestamps();
-            $table->unique(['service_id', 'user_id']);
+            $table->index('created_by_user_id');
         });
 
         Schema::create('revenue_imports', function (Blueprint $table): void {
@@ -87,7 +81,6 @@ return new class extends Migration
     {
         Schema::dropIfExists('revenue_import_rows');
         Schema::dropIfExists('revenue_imports');
-        Schema::dropIfExists('revenue_service_managers');
         Schema::dropIfExists('revenue_partners');
     }
 };

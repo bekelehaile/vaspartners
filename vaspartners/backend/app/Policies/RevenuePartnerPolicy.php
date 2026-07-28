@@ -18,12 +18,12 @@ class RevenuePartnerPolicy
             return false;
         }
 
-        return $this->withinScope($user, $revenuePartner);
+        return $this->ownsOrAdmin($user, $revenuePartner);
     }
 
     public function create(User $user): bool
     {
-        return $user->canAccessAllRevenue() && $user->can('Create:RevenuePartner');
+        return $user->can('Create:RevenuePartner');
     }
 
     public function update(User $user, RevenuePartner $revenuePartner): bool
@@ -32,7 +32,7 @@ class RevenuePartnerPolicy
             return false;
         }
 
-        return $this->withinScope($user, $revenuePartner);
+        return $this->ownsOrAdmin($user, $revenuePartner);
     }
 
     public function delete(User $user, RevenuePartner $revenuePartner): bool
@@ -75,14 +75,12 @@ class RevenuePartnerPolicy
         return false;
     }
 
-    protected function withinScope(User $user, RevenuePartner $partner): bool
+    protected function ownsOrAdmin(User $user, RevenuePartner $revenuePartner): bool
     {
         if ($user->canAccessAllRevenue()) {
             return true;
         }
 
-        $family = $partner->vas_service_id;
-
-        return $user->managesRevenueService($family ? (int) $family : null);
+        return (int) $revenuePartner->created_by_user_id === (int) $user->id;
     }
 }

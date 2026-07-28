@@ -8,12 +8,14 @@ use App\Filament\Resources\RevenuePartners\Pages\EditRevenuePartner;
 use App\Filament\Resources\RevenuePartners\Pages\ListRevenuePartners;
 use App\Filament\Resources\RevenuePartners\Pages\ViewRevenuePartner;
 use App\Filament\Resources\RevenuePartners\RelationManagers\MonthlyRevenueRelationManager;
+use App\Models\Company;
 use App\Models\RevenuePartner;
 use App\Models\User;
 use App\Support\PhoneNumber;
 use App\Support\RevenueCatalogServices;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -22,6 +24,7 @@ use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -53,40 +56,37 @@ class RevenuePartnerResource extends Resource
 
     public static function form(Schema $schema): Schema
     {
-        /** @var User|null $user */
-        $user = auth()->user();
-
         return $schema->components([
-            Section::make('Master record')
-                ->description('Mapped to an existing catalog service. Billing service ID / short code come from finance Excel.')
+            Section::make('Partner')
                 ->schema([
-                    Select::make('vas_service_id')
-                        ->label('Catalog service')
-                        ->options(RevenueCatalogServices::options($user))
-                        ->required()
-                        ->searchable()
-                        ->native(false)
-                        ->helperText('Must be an existing portal service — not a free-text product family.'),
-                    TextInput::make('service_id')
-                        ->label('Billing service ID')
-                        ->required()
-                        ->maxLength(64)
-                        ->unique(ignoreRecord: true)
-                        ->helperText('Finance endpoint ID. Monthly CSV matches on this and/or short code.'),
-                    TextInput::make('short_code')
-                        ->label('Short code')
-                        ->maxLength(64)
-                        ->unique(ignoreRecord: true)
-                        ->helperText('Optional but unique when set.'),
-                    TextInput::make('partner_name')
+                    Select::make('company_id')
                         ->label('Partner name')
+                        ->options(
+                            fn (): array => Company::query()
+                                ->where('is_active', true)
+                                ->orderBy('name')
+                                ->pluck('name', 'id')
+                                ->all()
+                        )
+                        ->searchable()
+                        ->preload()
                         ->required()
-                        ->maxLength(255),
+                        ->native(false)
+                        ->live()
+                        ->afterStateUpdated(function ($state, Set $set): void {
+                            $company = $state ? Company::query()->find($state) : null;
+                            $set('partner_name', $company?->name);
+                            $set('phone', PhoneNumber::normalizeNullable($company?->phone));
+                        })
+                        ->columnSpanFull(),
+                    Hidden::make('partner_name')
+                        ->dehydrated()
+                        ->required(),
                     TextInput::make('phone')
                         ->label('Phone')
                         ->tel()
                         ->maxLength(32)
-                        ->helperText('Last 9 digits. Required before SMS.')
+                        ->helperText('Last 9 digits for SMS. Fills from the company when available.')
                         ->dehydrateStateUsing(fn (?string $state): ?string => PhoneNumber::normalizeNullable($state))
                         ->rule(fn (): \Closure => function (string $attribute, mixed $value, \Closure $fail): void {
                             if ($value === null || $value === '') {
@@ -98,36 +98,60 @@ class RevenuePartnerResource extends Resource
                         }),
                     Toggle::make('is_active')
                         ->label('Active')
-                        ->default(true),
-                    Select::make('company_id')
-                        ->label('Linked company')
-                        ->relationship('company', 'name')
+                        ->default(true)
+                        ->inline(false),
+                ])
+                ->columns(2),
+
+            Section::make('Service & billing')
+                ->schema([
+                    Select::make('vas_service_id')
+                        ->label('Catalog service')
+                        ->options(RevenueCatalogServices::options())
+                        ->required()
                         ->searchable()
                         ->preload()
-                        ->nullable(),
+                        ->native(false)
+                        ->helperText('For labeling / SMS wording only. Partners belong to the importing account manager.')
+                        ->columnSpanFull(),
+                    TextInput::make('service_id')
+                        ->label('Service ID')
+                        ->required()
+                        ->maxLength(64)
+                        ->unique(ignoreRecord: true)
+                        ->helperText('Finance endpoint ID. Monthly CSV matches this within your partner list.'),
+                    TextInput::make('short_code')
+                        ->label('Short code')
+                        ->maxLength(64)
+                        ->unique(ignoreRecord: true)
+                        ->helperText('Optional alternate match key. Unique when set.'),
                     Textarea::make('notes')
                         ->rows(3)
                         ->columnSpanFull(),
-                ])->columns(2),
+                ])
+                ->columns(2),
         ]);
     }
 
     public static function infolist(Schema $schema): Schema
     {
         return $schema->components([
-            Section::make('Revenue partner')->schema([
-                TextEntry::make('vasService.name')->label('Catalog service'),
-                TextEntry::make('service_id')->label('Billing service ID')->copyable(),
-                TextEntry::make('short_code')->label('Short code')->placeholder('—'),
-                TextEntry::make('partner_name'),
-                TextEntry::make('phone')->placeholder('— missing —'),
-                IconEntry::make('is_active')->boolean()->label('Active'),
+            Section::make('Partner')->schema([
+                TextEntry::make('partner_name')->label('Partner name'),
                 TextEntry::make('company.name')
-                    ->label('Linked company')
+                    ->label('Company')
                     ->placeholder('—')
                     ->url(fn (RevenuePartner $record): ?string => $record->company
                         ? CompanyResource::getUrl('view', ['record' => $record->company])
                         : null),
+                TextEntry::make('phone')->label('Phone')->placeholder('— missing —'),
+                IconEntry::make('is_active')->boolean()->label('Active'),
+            ])->columns(2),
+            Section::make('Service & billing')->schema([
+                TextEntry::make('vasService.name')->label('Catalog service'),
+                TextEntry::make('service_id')->label('Service ID')->copyable(),
+                TextEntry::make('short_code')->label('Short code')->placeholder('—'),
+                TextEntry::make('creator.name')->label('Account manager')->placeholder('—'),
                 TextEntry::make('notes')->placeholder('—')->columnSpanFull(),
                 TextEntry::make('created_at')->dateTime(),
                 TextEntry::make('updated_at')->dateTime(),
@@ -143,25 +167,25 @@ class RevenuePartnerResource extends Resource
                     ->label('Catalog service')
                     ->searchable()
                     ->sortable(),
-                TextColumn::make('service_id')->label('Billing service ID')->searchable()->sortable()->copyable(),
+                TextColumn::make('service_id')->label('Service ID')->searchable()->sortable()->copyable(),
                 TextColumn::make('short_code')->label('Short code')->searchable()->toggleable(),
                 TextColumn::make('partner_name')->searchable()->sortable()->wrap(),
                 TextColumn::make('phone')
                     ->placeholder('— missing —')
                     ->color(fn (?string $state): string => filled($state) ? 'gray' : 'danger')
                     ->searchable(),
-                IconColumn::make('is_active')->boolean()->label('Active'),
-                TextColumn::make('import_rows_count')
-                    ->counts('importRows')
-                    ->label('Months')
+                TextColumn::make('creator.name')
+                    ->label('Account manager')
+                    ->toggleable()
                     ->sortable(),
+                IconColumn::make('is_active')->boolean()->label('Active'),
                 TextColumn::make('updated_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('partner_name')
             ->filters([
                 SelectFilter::make('vas_service_id')
                     ->label('Catalog service')
-                    ->options(fn (): array => RevenueCatalogServices::options(auth()->user())),
+                    ->options(fn (): array => RevenueCatalogServices::options()),
                 TernaryFilter::make('phone')
                     ->label('Phone')
                     ->placeholder('All')
@@ -200,7 +224,7 @@ class RevenuePartnerResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery()->with('vasService');
+        $query = parent::getEloquentQuery()->with(['vasService', 'creator']);
         /** @var User|null $user */
         $user = auth()->user();
 
@@ -212,19 +236,15 @@ class RevenuePartnerResource extends Resource
             return $query;
         }
 
-        $serviceIds = $user->managedRevenueServiceIds();
-        if ($serviceIds === []) {
-            return $query->whereRaw('1 = 0');
-        }
-
-        return $query->whereIn('vas_service_id', $serviceIds);
+        // AMs: only partners they imported / created.
+        return $query->where('created_by_user_id', $user->id);
     }
 
     public static function canCreate(): bool
     {
         $user = auth()->user();
 
-        return $user instanceof User && $user->canAccessAllRevenue() && $user->can('Create:RevenuePartner');
+        return $user instanceof User && $user->can('Create:RevenuePartner');
     }
 
     public static function canDelete(Model $record): bool

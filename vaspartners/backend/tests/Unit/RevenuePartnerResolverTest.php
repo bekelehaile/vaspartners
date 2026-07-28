@@ -105,7 +105,7 @@ class RevenuePartnerResolverTest extends TestCase
         $result = $this->resolver->resolve('SID-A', '9200');
 
         $this->assertFalse($result['ok']);
-        $this->assertStringContainsString('different master partners', (string) $result['error']);
+        $this->assertStringContainsString('different partners', (string) $result['error']);
     }
 
     public function test_rejects_when_service_id_match_has_conflicting_short_code(): void
@@ -140,5 +140,36 @@ class RevenuePartnerResolverTest extends TestCase
 
         $this->assertFalse($result['ok']);
         $this->assertStringContainsString('service_id is required', (string) $result['error']);
+    }
+
+    public function test_owner_scope_matches_only_owned_partners(): void
+    {
+        $owner = \App\Models\User::factory()->create();
+        $other = \App\Models\User::factory()->create();
+
+        $mine = RevenuePartner::query()->create([
+            'service_id' => 'SID-OWN',
+            'short_code' => '1001',
+            'vas_service_id' => $this->catalogService->id,
+            'partner_name' => 'Mine',
+            'created_by_user_id' => $owner->id,
+            'is_active' => true,
+        ]);
+        RevenuePartner::query()->create([
+            'service_id' => 'SID-THEIRS',
+            'short_code' => '1002',
+            'vas_service_id' => $this->catalogService->id,
+            'partner_name' => 'Theirs',
+            'created_by_user_id' => $other->id,
+            'is_active' => true,
+        ]);
+
+        $hit = $this->resolver->resolve('SID-OWN', null, (int) $owner->id);
+        $this->assertTrue($hit['ok']);
+        $this->assertSame($mine->id, $hit['partner']?->id);
+
+        $miss = $this->resolver->resolve('SID-THEIRS', null, (int) $owner->id);
+        $this->assertFalse($miss['ok']);
+        $this->assertStringContainsString('another account manager', (string) $miss['error']);
     }
 }

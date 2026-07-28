@@ -3,9 +3,11 @@
 namespace App\Services;
 
 use App\Models\RevenuePartner;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
  * Resolve a revenue partner from service_id and/or short_code with conflict checks.
+ * Optionally scoped to partners owned by a given account manager.
  */
 class RevenuePartnerResolver
 {
@@ -31,7 +33,7 @@ class RevenuePartnerResolver
      *   error: string
      * }
      */
-    public function resolve(?string $serviceId, ?string $shortCode): array
+    public function resolve(?string $serviceId, ?string $shortCode, ?int $ownerUserId = null): array
     {
         $serviceId = self::normalize($serviceId);
         $shortCode = self::normalize($shortCode);
@@ -41,19 +43,19 @@ class RevenuePartnerResolver
         }
 
         $byServiceId = $serviceId !== null
-            ? RevenuePartner::query()->where('service_id', $serviceId)->first()
+            ? $this->baseQuery($ownerUserId)->where('service_id', $serviceId)->first()
             : null;
 
         $byShortCode = null;
         if ($shortCode !== null) {
-            $matches = RevenuePartner::query()
+            $matches = $this->baseQuery($ownerUserId)
                 ->where('short_code', $shortCode)
                 ->limit(2)
                 ->get();
 
             if ($matches->count() > 1) {
                 return $this->fail(
-                    "Short code {$shortCode} matches multiple master partners.",
+                    "Short code {$shortCode} matches multiple of your partners.",
                     $serviceId,
                     $shortCode,
                 );
@@ -64,13 +66,25 @@ class RevenuePartnerResolver
 
         if ($byServiceId && $byShortCode && (int) $byServiceId->id !== (int) $byShortCode->id) {
             return $this->fail(
-                'service_id and short_code match different master partners.',
+                'service_id and short_code match different partners in your master list.',
                 $serviceId,
                 $shortCode,
             );
         }
 
         $partner = $byServiceId ?? $byShortCode;
+
+        // Globally exists but not owned by this AM → treat as not found for matching.
+        if (! $partner && $ownerUserId) {
+            $elsewhere = $this->existsElsewhere($serviceId, $shortCode, $ownerUserId);
+            if ($elsewhere) {
+                return $this->fail(
+                    'This service ID / short code belongs to another account manager.',
+                    $serviceId,
+                    $shortCode,
+                );
+            }
+        }
 
         if ($partner) {
             if ($serviceId !== null && $partner->service_id !== $serviceId) {
@@ -101,8 +115,6 @@ class RevenuePartnerResolver
     }
 
     /**
-     * Find an existing partner for master-list upsert, or null when creating new.
-     *
      * @return array{
      *   ok: true,
      *   partner: ?RevenuePartner,
@@ -117,9 +129,9 @@ class RevenuePartnerResolver
      *   error: string
      * }
      */
-    public function resolveForUpsert(?string $serviceId, ?string $shortCode): array
+    public function resolveForUpsert(?string $serviceId, ?string $shortCode, ?int $ownerUserId = null): array
     {
-        $resolved = $this->resolve($serviceId, $shortCode);
+        $resolved = $this->resolve($serviceId, $shortCode, $ownerUserId);
         if (! $resolved['ok']) {
             return $resolved;
         }
@@ -127,7 +139,6 @@ class RevenuePartnerResolver
         $serviceId = $resolved['service_id'];
         $shortCode = $resolved['short_code'];
 
-        // Creating a new master row always needs a service_id (unique business key).
         if ($resolved['partner'] === null && $serviceId === null) {
             return $this->fail(
                 'service_id is required to create a new revenue partner (short_code alone is only for matching).',
@@ -136,7 +147,6 @@ class RevenuePartnerResolver
             );
         }
 
-        // If creating by service_id, short_code must not already belong to another partner.
         if ($resolved['partner'] === null && $shortCode !== null) {
             $taken = RevenuePartner::query()->where('short_code', $shortCode)->exists();
             if ($taken) {
@@ -148,7 +158,43 @@ class RevenuePartnerResolver
             }
         }
 
+        if ($resolved['partner'] === null && $serviceId !== null) {
+            $taken = RevenuePartner::query()->where('service_id', $serviceId)->exists();
+            if ($taken) {
+                return $this->fail(
+                    "Service ID {$serviceId} is already used by another master partner.",
+                    $serviceId,
+                    $shortCode,
+                );
+            }
+        }
+
         return $resolved;
+    }
+
+    protected function baseQuery(?int $ownerUserId): Builder
+    {
+        $query = RevenuePartner::query();
+        if ($ownerUserId) {
+            $query->where('created_by_user_id', $ownerUserId);
+        }
+
+        return $query;
+    }
+
+    protected function existsElsewhere(?string $serviceId, ?string $shortCode, int $ownerUserId): bool
+    {
+        return RevenuePartner::query()
+            ->where('created_by_user_id', '!=', $ownerUserId)
+            ->where(function ($q) use ($serviceId, $shortCode): void {
+                if ($serviceId !== null) {
+                    $q->orWhere('service_id', $serviceId);
+                }
+                if ($shortCode !== null) {
+                    $q->orWhere('short_code', $shortCode);
+                }
+            })
+            ->exists();
     }
 
     /**

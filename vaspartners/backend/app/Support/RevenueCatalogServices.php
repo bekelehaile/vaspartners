@@ -3,7 +3,7 @@
 namespace App\Support;
 
 use App\Models\Service;
-use App\Models\User;
+use Filament\Forms\Components\Select;
 use Illuminate\Support\Collection;
 
 final class RevenueCatalogServices
@@ -13,31 +13,35 @@ final class RevenueCatalogServices
      *
      * @return Collection<int, Service>
      */
-    public static function query(?User $user = null): Collection
+    public static function query(): Collection
     {
-        $q = Service::query()
+        return Service::query()
             ->where('is_active', true)
             ->orderBy('sort_order')
-            ->orderBy('name');
-
-        if ($user && ! $user->canAccessAllRevenue()) {
-            $ids = $user->managedRevenueServiceIds();
-            if ($ids === []) {
-                return collect();
-            }
-            $q->whereIn('id', $ids);
-        }
-
-        return $q->get();
+            ->orderBy('name')
+            ->get();
     }
 
     /**
      * @return array<int, string>
      */
-    public static function options(?User $user = null): array
+    public static function options(): array
     {
-        return self::query($user)
+        return self::query()
             ->mapWithKeys(fn (Service $service) => [$service->id => $service->name])
             ->all();
+    }
+
+    public static function importSelect(string $helperText = ''): Select
+    {
+        return Select::make('vas_service_id')
+            ->label('Catalog service')
+            ->options(self::options())
+            ->required()
+            ->searchable()
+            ->native(false)
+            ->helperText($helperText !== ''
+                ? $helperText
+                : 'Existing portal service this revenue belongs to.');
     }
 }

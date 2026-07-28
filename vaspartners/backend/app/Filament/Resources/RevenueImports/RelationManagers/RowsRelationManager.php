@@ -29,18 +29,6 @@ class RowsRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(function ($query) {
-                /** @var User|null $user */
-                $user = auth()->user();
-                if (! $user || $user->canAccessAllRevenue()) {
-                    return $query;
-                }
-                $serviceIds = $user->managedRevenueServiceIds();
-
-                return $serviceIds === []
-                    ? $query->whereRaw('1 = 0')
-                    : $query->whereIn('vas_service_id', $serviceIds);
-            })
             ->columns([
                 IconColumn::make('needs_attention')
                     ->label('')
@@ -53,7 +41,7 @@ class RowsRelationManager extends RelationManager
                     ->tooltip(fn (RevenueImportRow $record): string => $record->status instanceof RevenueImportRowStatus
                         ? $record->status->label()
                         : (string) $record->status),
-                TextColumn::make('service_id')->label('Billing service ID')->searchable()->copyable(),
+                TextColumn::make('service_id')->label('Service ID')->searchable()->copyable(),
                 TextColumn::make('short_code')->label('Short code')->placeholder('—')->toggleable()->searchable(),
                 TextColumn::make('partner_name')->searchable()->wrap()->placeholder('—'),
                 TextColumn::make('amount')
@@ -153,7 +141,8 @@ class RowsRelationManager extends RelationManager
             return false;
         }
 
-        if (in_array($import->status, [RevenueImportStatus::Sending, RevenueImportStatus::Completed], true)) {
+        if (in_array($import->status, [RevenueImportStatus::Sending, RevenueImportStatus::Completed], true)
+            || filled($import->bulk_message_id)) {
             return false;
         }
 

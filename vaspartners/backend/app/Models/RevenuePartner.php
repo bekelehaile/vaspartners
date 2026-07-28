@@ -20,13 +20,30 @@ class RevenuePartner extends Model
         'partner_name',
         'phone',
         'company_id',
+        'created_by_user_id',
         'is_active',
         'notes',
     ];
 
     protected static function booted(): void
     {
+        static::creating(function (RevenuePartner $partner): void {
+            if (! $partner->created_by_user_id && auth()->id()) {
+                $partner->created_by_user_id = auth()->id();
+            }
+        });
+
         static::saving(function (RevenuePartner $partner): void {
+            if ($partner->company_id) {
+                $company = Company::query()->find($partner->company_id);
+                if ($company) {
+                    $partner->partner_name = $company->name;
+                    if (! filled($partner->phone) && filled($company->phone)) {
+                        $partner->phone = PhoneNumber::normalizeNullable($company->phone);
+                    }
+                }
+            }
+
             if (filled($partner->phone)) {
                 $partner->phone = PhoneNumber::normalizeNullable($partner->phone);
             }
@@ -41,6 +58,7 @@ class RevenuePartner extends Model
                     ->first();
                 if ($company) {
                     $partner->company_id = $company->id;
+                    $partner->partner_name = $company->name;
                 }
             }
         });
@@ -75,6 +93,11 @@ class RevenuePartner extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by_user_id');
     }
 
     public function importRows(): HasMany

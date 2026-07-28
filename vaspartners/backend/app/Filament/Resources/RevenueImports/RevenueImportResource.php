@@ -115,7 +115,7 @@ class RevenueImportResource extends Resource
             ->filters([
                 SelectFilter::make('vas_service_id')
                     ->label('Catalog service')
-                    ->options(fn (): array => RevenueCatalogServices::options(auth()->user())),
+                    ->options(fn (): array => RevenueCatalogServices::options()),
             ])
             ->recordActions([
                 ViewAction::make()
@@ -153,14 +153,8 @@ class RevenueImportResource extends Resource
             return $query;
         }
 
-        $serviceIds = $user->managedRevenueServiceIds();
-        if ($serviceIds === []) {
-            return $query->whereRaw('1 = 0');
-        }
-
-        return $query
-            ->where('created_by_user_id', $user->id)
-            ->whereIn('vas_service_id', $serviceIds);
+        // AMs: only imports they created.
+        return $query->where('created_by_user_id', $user->id);
     }
 
     public static function canCreate(): bool
