@@ -27,6 +27,7 @@ class RevenueImport extends Model
         'total_count',
         'valid_count',
         'matched_count',
+        'sent_count',
         'missing_partner_count',
         'missing_phone_count',
         'invalid_count',
@@ -85,16 +86,32 @@ class RevenueImport extends Model
         return $this->hasMany(RevenueImportRow::class);
     }
 
+    /** Import matching / amount rows that have not been queued for SMS yet. */
+    public function payloadRows(): HasMany
+    {
+        return $this->hasMany(RevenueImportRow::class)
+            ->where('status', '!=', 'sent');
+    }
+
+    /** Rows already queued/sent for SMS (retry / delivery tracking). */
+    public function sentRows(): HasMany
+    {
+        return $this->hasMany(RevenueImportRow::class)
+            ->where('status', 'sent');
+    }
+
     public function refreshCounts(): void
     {
         $this->forceFill([
             'total_count' => $this->rows()->count(),
             'valid_count' => $this->rows()->whereIn('status', [
                 'matched',
+                'sent',
                 'missing_partner',
                 'missing_phone',
             ])->count(),
             'matched_count' => $this->rows()->where('status', 'matched')->count(),
+            'sent_count' => $this->rows()->where('status', 'sent')->count(),
             'missing_partner_count' => $this->rows()->where('status', 'missing_partner')->count(),
             'missing_phone_count' => $this->rows()->where('status', 'missing_phone')->count(),
             'invalid_count' => $this->rows()->whereIn('status', ['invalid', 'duplicate'])->count(),
@@ -109,8 +126,18 @@ class RevenueImport extends Model
             && $this->missing_partner_count === 0
             && $this->missing_phone_count === 0) {
             $status = RevenueImportStatus::Ready;
-        } elseif ($this->total_count === 0 || ($this->matched_count === 0 && $this->missing_partner_count === 0 && $this->missing_phone_count === 0)) {
+        } elseif ($this->total_count === 0
+            || ($this->matched_count === 0
+                && $this->sent_count === 0
+                && $this->missing_partner_count === 0
+                && $this->missing_phone_count === 0)) {
             $status = RevenueImportStatus::Failed;
+        } elseif ($this->matched_count === 0
+            && $this->sent_count > 0
+            && $this->missing_partner_count === 0
+            && $this->missing_phone_count === 0) {
+            // All Ready rows were sent; nothing left unresolved.
+            $status = RevenueImportStatus::Completed;
         } else {
             $status = RevenueImportStatus::Reviewing;
         }

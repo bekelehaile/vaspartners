@@ -6,6 +6,7 @@ use App\Enums\BulkMessageRecipientStatus;
 use App\Enums\BulkMessageStatus;
 use App\Enums\RevenueImportRowStatus;
 use App\Enums\RevenueImportStatus;
+use App\Jobs\SendBulkMessageRecipientJob;
 use App\Models\BulkMessage;
 use App\Models\BulkMessageRecipient;
 use App\Models\Company;
@@ -37,6 +38,14 @@ class RevenueImportService
         DB::transaction(function () use ($import, $vasServiceId, $ownerUserId, $period): void {
             $seen = [];
             foreach ($import->rows()->orderBy('id')->get() as $row) {
+                if ($row->wasSent() || $row->status === RevenueImportRowStatus::Sent) {
+                    $key = (RevenuePartnerResolver::normalize($row->service_id) ?? '').'|'
+                        .(RevenuePartnerResolver::normalize($row->short_code) ?? '');
+                    $seen[$key] = true;
+
+                    continue;
+                }
+
                 $payload = $this->classify(
                     serviceId: $row->service_id,
                     shortCode: $row->short_code,
@@ -44,7 +53,7 @@ class RevenueImportService
                     seen: $seen,
                     ownerUserId: $ownerUserId,
                     period: $period,
-                    excludeImportId: (int) $import->id,
+                    excludeRowId: (int) $row->id,
                 );
                 $row->forceFill([
                     'revenue_partner_id' => $payload['revenue_partner_id'],
@@ -74,8 +83,7 @@ class RevenueImportService
         $actor = auth()->user();
         $this->assertCanManage($actor, $import);
 
-        if (in_array($import->status, [RevenueImportStatus::Sending, RevenueImportStatus::Completed], true)
-            || filled($import->bulk_message_id)) {
+        if (in_array($import->status, [RevenueImportStatus::Sending, RevenueImportStatus::Completed], true)) {
             throw ValidationException::withMessages(['import' => 'This import can no longer be edited.']);
         }
 
@@ -115,7 +123,7 @@ class RevenueImportService
                     seen: $seen,
                     ownerUserId: $ownerUserId,
                     period: $period,
-                    excludeImportId: (int) $import->id,
+                    excludeRowId: (int) $row->id,
                 );
 
                 $row->forceFill([
@@ -231,6 +239,18 @@ class RevenueImportService
         ?string $note,
         ?int $ownerUserId,
     ): void {
+        if ($row->wasSent() || $row->status === RevenueImportRowStatus::Sent) {
+            throw ValidationException::withMessages([
+                'status' => 'This row was already sent and cannot change status.',
+            ]);
+        }
+
+        if ($status === RevenueImportRowStatus::Sent) {
+            throw ValidationException::withMessages([
+                'status' => 'Use Send SMS to mark a row as Sent.',
+            ]);
+        }
+
         $partner = $row->partner;
 
         $payload = match ($status) {
@@ -259,6 +279,9 @@ class RevenueImportService
                 'status' => RevenueImportRowStatus::Duplicate,
                 'error' => $note ?? 'Marked duplicate manually.',
             ],
+            RevenueImportRowStatus::Sent => throw ValidationException::withMessages([
+                'status' => 'Use Send SMS to mark a row as Sent.',
+            ]),
         };
 
         $row->forceFill($payload)->save();
@@ -314,8 +337,7 @@ class RevenueImportService
 
     protected function assertImportEditable(RevenueImport $import): void
     {
-        if (in_array($import->status, [RevenueImportStatus::Sending, RevenueImportStatus::Completed], true)
-            || filled($import->bulk_message_id)) {
+        if (in_array($import->status, [RevenueImportStatus::Sending, RevenueImportStatus::Completed], true)) {
             throw ValidationException::withMessages(['import' => 'This import can no longer be edited.']);
         }
     }
@@ -331,6 +353,11 @@ class RevenueImportService
         }
 
         $this->assertCanManage($actor, $import);
+        $this->assertImportEditable($import);
+
+        if ($row->wasSent() || $row->status === RevenueImportRowStatus::Sent) {
+            throw ValidationException::withMessages(['row' => 'This row was already sent and cannot be edited.']);
+        }
 
         if (in_array($import->status, [RevenueImportStatus::Sending, RevenueImportStatus::Completed], true)) {
             throw ValidationException::withMessages(['row' => 'This import can no longer be edited.']);
@@ -367,7 +394,7 @@ class RevenueImportService
                 seen: $seen,
                 ownerUserId: $ownerUserId,
                 period: (string) $import->period,
-                excludeImportId: (int) $import->id,
+                excludeRowId: (int) $row->id,
             );
 
             $row->forceFill([
@@ -526,12 +553,6 @@ class RevenueImportService
             ]);
         }
 
-        if ($import->status !== RevenueImportStatus::Ready) {
-            throw ValidationException::withMessages([
-                'import' => 'Import status must be Ready to send before SMS can be queued.',
-            ]);
-        }
-
         $template = trim((string) ($messageTemplate ?? $import->message_template ?: BulkMessageService::DEFAULT_MESSAGE));
         if ($template === '' || mb_strlen($template) > 640) {
             throw ValidationException::withMessages(['message' => 'SMS template is required (max 640).']);
@@ -599,7 +620,7 @@ class RevenueImportService
                     'import' => "Row {$row->service_id} has no usable partner phone.",
                 ]);
             }
-            if ($this->alreadySentForPeriod($row, (string) $import->period, (int) $import->id)) {
+            if ($this->alreadySentForPeriod($row, (string) $import->period, (int) $row->id)) {
                 throw ValidationException::withMessages([
                     'import' => "SMS already sent for period {$import->period} and service ID {$row->service_id}.",
                 ]);
@@ -630,7 +651,7 @@ class RevenueImportService
                 $normalized = PhoneNumber::normalize($phone);
                 $company = $this->findCompanyByLastNine($normalized);
 
-                BulkMessageRecipient::query()->create([
+                $recipient = BulkMessageRecipient::query()->create([
                     'campaign_id' => $campaign->id,
                     'company_id' => $company?->id,
                     'phone_raw' => $phone,
@@ -651,7 +672,10 @@ class RevenueImportService
 
                 $row->forceFill([
                     'bulk_message_id' => $campaign->id,
+                    'bulk_message_recipient_id' => $recipient->id,
                     'sent_at' => $sentAt,
+                    'status' => RevenueImportRowStatus::Sent,
+                    'error' => null,
                 ])->save();
             }
 
@@ -663,6 +687,7 @@ class RevenueImportService
                 'sent_at' => $import->sent_at ?? $sentAt,
                 'sent_by_user_id' => $actor->id,
             ])->save();
+            $import->refreshCounts();
 
             $this->bulkMessages->queue($campaign->fresh());
 
@@ -735,11 +760,11 @@ class RevenueImportService
             return false;
         }
 
-        if ($import->status !== RevenueImportStatus::Ready) {
+        if (in_array($import->status, [RevenueImportStatus::Sending, RevenueImportStatus::Completed], true)) {
             return false;
         }
 
-        if ($row->wasSent()) {
+        if ($row->wasSent() || $row->status === RevenueImportRowStatus::Sent) {
             return false;
         }
 
@@ -754,20 +779,123 @@ class RevenueImportService
 
     public function importCanSendSms(RevenueImport $import): bool
     {
-        return $import->status === RevenueImportStatus::Ready
-            && $this->unsentReadyCount($import) > 0;
+        if (in_array($import->status, [RevenueImportStatus::Sending, RevenueImportStatus::Completed], true)) {
+            return false;
+        }
+
+        return $this->unsentReadyCount($import) > 0;
+    }
+
+    public function rowCanRetrySms(RevenueImportRow $row): bool
+    {
+        if (! $row->wasSent()) {
+            return false;
+        }
+
+        $recipient = $row->smsRecipient;
+        if (! $recipient) {
+            return false;
+        }
+
+        return in_array($recipient->status, [
+            BulkMessageRecipientStatus::Failed,
+            BulkMessageRecipientStatus::Skipped,
+        ], true);
+    }
+
+    /**
+     * Re-queue failed/skipped SMS for one or more already-sent revenue rows.
+     *
+     * @param  iterable<int>  $rowIds
+     * @return array{retried: int, skipped: int, errors: list<string>}
+     */
+    public function retryFailedSms(RevenueImport $import, iterable $rowIds): array
+    {
+        /** @var User|null $actor */
+        $actor = auth()->user();
+        if (! $actor || ! $this->actorCanSend($actor, $import)) {
+            throw ValidationException::withMessages([
+                'import' => 'You can only retry SMS for imports you manage.',
+            ]);
+        }
+
+        $ids = collect($rowIds)->map(fn ($id) => (int) $id)->filter()->unique()->values()->all();
+        $retried = 0;
+        $skipped = 0;
+        $errors = [];
+
+        $rows = $import->rows()
+            ->whereIn('id', $ids)
+            ->with('smsRecipient')
+            ->orderBy('id')
+            ->get();
+
+        foreach ($rows as $row) {
+            try {
+                $this->retryFailedSmsForRow($row);
+                $retried++;
+            } catch (ValidationException $e) {
+                $skipped++;
+                $errors[] = ($row->service_id ?: $row->short_code ?: "#{$row->id}").': '
+                    .(collect($e->errors())->flatten()->first() ?? $e->getMessage());
+            }
+        }
+
+        return [
+            'retried' => $retried,
+            'skipped' => $skipped,
+            'errors' => $errors,
+        ];
+    }
+
+    public function retryFailedSmsForRow(RevenueImportRow $row): void
+    {
+        if (! $this->rowCanRetrySms($row)) {
+            throw ValidationException::withMessages([
+                'row' => 'Only Failed or Skipped SMS rows can be retried.',
+            ]);
+        }
+
+        $recipient = $row->smsRecipient;
+        if (! $recipient) {
+            throw ValidationException::withMessages(['row' => 'No SMS recipient linked to this row.']);
+        }
+
+        $recipient->forceFill([
+            'status' => BulkMessageRecipientStatus::Pending,
+            'error' => null,
+        ])->save();
+
+        $campaign = $recipient->bulkMessage;
+        if ($campaign && in_array($campaign->status, [
+            BulkMessageStatus::Draft,
+            BulkMessageStatus::Completed,
+            BulkMessageStatus::Failed,
+        ], true)) {
+            $campaign->forceFill([
+                'status' => BulkMessageStatus::Queued,
+                'queued_at' => now(),
+                'completed_at' => null,
+            ])->save();
+        }
+
+        SendBulkMessageRecipientJob::dispatch((int) $recipient->id);
     }
 
     /**
      * True when SMS was already queued/sent for this partner in the given month.
      */
-    public function wouldDoubleSend(RevenuePartner $partner, string $period, ?int $excludeImportId = null): bool
-    {
+    public function wouldDoubleSend(
+        RevenuePartner $partner,
+        string $period,
+        ?int $excludeRowId = null,
+    ): bool {
         return $this->alreadySentForPartnerPeriod(
             (int) $partner->id,
             $partner->service_id,
             $period,
-            $excludeImportId,
+            $excludeRowId,
+            RevenuePartnerResolver::normalize($partner->short_code),
         );
     }
 
@@ -790,7 +918,7 @@ class RevenueImportService
         array &$seen,
         ?int $ownerUserId = null,
         ?string $period = null,
-        ?int $excludeImportId = null,
+        ?int $excludeRowId = null,
     ): array {
         $serviceId = RevenuePartnerResolver::normalize($serviceId);
         $shortCode = RevenuePartnerResolver::normalize($shortCode);
@@ -861,7 +989,13 @@ class RevenueImportService
             ];
         }
 
-        if ($period && $this->alreadySentForPartnerPeriod($partner->id, $partner->service_id, $period, $excludeImportId)) {
+        if ($period && $this->alreadySentForPartnerPeriod(
+            (int) $partner->id,
+            $partner->service_id,
+            $period,
+            $excludeRowId,
+            RevenuePartnerResolver::normalize($partner->short_code) ?? $shortCode,
+        )) {
             return [
                 'revenue_partner_id' => $partner->id,
                 'status' => RevenueImportRowStatus::Duplicate,
@@ -884,43 +1018,52 @@ class RevenueImportService
         ];
     }
 
-    protected function alreadySentForPeriod(RevenueImportRow $row, string $period, int $excludeImportId): bool
+    protected function alreadySentForPeriod(RevenueImportRow $row, string $period, ?int $excludeRowId = null): bool
     {
         return $this->alreadySentForPartnerPeriod(
             $row->revenue_partner_id ? (int) $row->revenue_partner_id : null,
             $row->service_id,
             $period,
-            $excludeImportId,
+            $excludeRowId,
+            RevenuePartnerResolver::normalize($row->short_code),
         );
     }
 
+    /**
+     * True when any Monthly Revenue row for this period was already queued/sent
+     * for the same partner, service ID, or short code.
+     */
     protected function alreadySentForPartnerPeriod(
         ?int $partnerId,
         ?string $serviceId,
         string $period,
-        ?int $excludeImportId,
+        ?int $excludeRowId = null,
+        ?string $shortCode = null,
     ): bool {
         $period = trim($period);
-        if ($period === '' || (! $partnerId && ! filled($serviceId))) {
+        $serviceId = RevenuePartnerResolver::normalize($serviceId);
+        $shortCode = RevenuePartnerResolver::normalize($shortCode);
+        if ($period === '' || (! $partnerId && $serviceId === null && $shortCode === null)) {
             return false;
         }
 
         return RevenueImportRow::query()
             ->where(function ($q): void {
-                $q->whereNotNull('sent_at')->orWhereNotNull('bulk_message_id');
+                $q->where('status', RevenueImportRowStatus::Sent->value)
+                    ->orWhereNotNull('sent_at')
+                    ->orWhereNotNull('bulk_message_id');
             })
-            ->whereHas('import', function ($q) use ($period, $excludeImportId): void {
-                $q->where('period', $period);
-                if ($excludeImportId) {
-                    $q->where('id', '!=', $excludeImportId);
-                }
-            })
-            ->where(function ($q) use ($partnerId, $serviceId): void {
+            ->when($excludeRowId, fn ($q) => $q->where('id', '!=', $excludeRowId))
+            ->whereHas('import', fn ($q) => $q->where('period', $period))
+            ->where(function ($q) use ($partnerId, $serviceId, $shortCode): void {
                 if ($partnerId) {
                     $q->orWhere('revenue_partner_id', $partnerId);
                 }
-                if (filled($serviceId)) {
+                if ($serviceId !== null) {
                     $q->orWhere('service_id', $serviceId);
+                }
+                if ($shortCode !== null) {
+                    $q->orWhere('short_code', $shortCode);
                 }
             })
             ->exists();

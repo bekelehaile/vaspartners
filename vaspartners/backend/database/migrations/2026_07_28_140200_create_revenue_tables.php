@@ -46,6 +46,7 @@ return new class extends Migration
             $table->unsignedInteger('total_count')->default(0);
             $table->unsignedInteger('valid_count')->default(0);
             $table->unsignedInteger('matched_count')->default(0);
+            $table->unsignedInteger('sent_count')->default(0);
             $table->unsignedInteger('missing_partner_count')->default(0);
             $table->unsignedInteger('missing_phone_count')->default(0);
             $table->unsignedInteger('invalid_count')->default(0);

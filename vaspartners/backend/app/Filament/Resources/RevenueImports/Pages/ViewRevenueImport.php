@@ -173,7 +173,7 @@ class ViewRevenueImport extends ViewRecord
                 ->requiresConfirmation()
                 ->modalHeading('Send SMS for Ready rows')
                 ->modalDescription(fn (): string => sprintf(
-                    'Import must be Ready to send. Queue %d Ready row(s) that still need SMS.',
+                    'Queue %d Ready row(s) that still need SMS. Other unresolved rows can stay for later.',
                     app(RevenueImportService::class)->unsentReadyCount($record->fresh()),
                 ))
                 ->action(function (RevenueImportService $revenueImports) use ($record): void {

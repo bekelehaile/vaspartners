@@ -27,9 +27,17 @@ use Illuminate\Validation\ValidationException;
 
 class RowsRelationManager extends RelationManager
 {
-    protected static string $relationship = 'rows';
+    protected static string $relationship = 'payloadRows';
 
-    protected static ?string $title = 'Import rows';
+    protected static ?string $title = 'Import payload';
+
+    /**
+     * Keep row SMS / status actions available on the View page.
+     */
+    public function isReadOnly(): bool
+    {
+        return false;
+    }
 
     public function table(Table $table): Table
     {
@@ -63,11 +71,6 @@ class RowsRelationManager extends RelationManager
                     ->label('Phone')
                     ->placeholder('—')
                     ->toggleable(),
-                TextColumn::make('sent_at')
-                    ->label('SMS')
-                    ->dateTime()
-                    ->placeholder('Not sent')
-                    ->toggleable(),
                 TextColumn::make('error')->wrap()->toggleable()->limit(80),
             ])
             ->defaultSort('id')
@@ -79,15 +82,9 @@ class RowsRelationManager extends RelationManager
                         false: fn ($query) => $query->where('status', RevenueImportRowStatus::Matched->value),
                         blank: fn ($query) => $query,
                     ),
-                TernaryFilter::make('sms_sent')
-                    ->label('SMS sent')
-                    ->queries(
-                        true: fn ($query) => $query->where(fn ($q) => $q->whereNotNull('sent_at')->orWhereNotNull('bulk_message_id')),
-                        false: fn ($query) => $query->whereNull('sent_at')->whereNull('bulk_message_id'),
-                        blank: fn ($query) => $query,
-                    ),
                 SelectFilter::make('status')
                     ->options(collect(RevenueImportRowStatus::cases())
+                        ->reject(fn (RevenueImportRowStatus $s) => $s === RevenueImportRowStatus::Sent)
                         ->mapWithKeys(fn (RevenueImportRowStatus $s) => [$s->value => $s->label()])
                         ->all()),
             ])
@@ -98,7 +95,7 @@ class RowsRelationManager extends RelationManager
                     ->color('success')
                     ->requiresConfirmation()
                     ->modalHeading('Send SMS for this row')
-                    ->modalDescription('Only Ready rows can be sent. Queues one SMS using the import template.')
+                    ->modalDescription('Only rows with status Ready (partner phone set) can be sent. Status becomes Sent after queueing.')
                     ->visible(function (RevenueImportRow $record): bool {
                         /** @var User|null $user */
                         $user = auth()->user();
@@ -107,7 +104,7 @@ class RowsRelationManager extends RelationManager
 
                         return $user
                             && app(RevenueImportService::class)->actorCanSend($user, $import)
-                            && app(RevenueImportService::class)->rowCanSendSms($record, $import);
+                            && app(RevenueImportService::class)->rowCanSendSms($record->loadMissing('partner'), $import);
                     })
                     ->action(function (RevenueImportRow $record, RevenueImportService $revenueImports): void {
                         /** @var RevenueImport $import */
@@ -116,9 +113,7 @@ class RowsRelationManager extends RelationManager
                             $revenueImports->sendRowsViaBulkMessage($import->fresh(), [$record->id]);
                             Notification::make()
                                 ->title('SMS queued')
-                                ->body($record->partner?->phone
-                                    ? "Queued for {$record->partner->phone}"
-                                    : 'Queued from Monthly Revenue.')
+                                ->body('Row status set to Sent.')
                                 ->success()
                                 ->send();
                         } catch (ValidationException $e) {
@@ -144,11 +139,12 @@ class RowsRelationManager extends RelationManager
                         Select::make('status')
                             ->label('Status')
                             ->options(collect(RevenueImportRowStatus::cases())
+                                ->reject(fn (RevenueImportRowStatus $s) => $s === RevenueImportRowStatus::Sent)
                                 ->mapWithKeys(fn (RevenueImportRowStatus $s) => [$s->value => $s->label()])
                                 ->all())
                             ->required()
                             ->native(false)
-                            ->helperText('Ready requires a master partner with a usable phone.'),
+                            ->helperText('Ready requires a master partner with a usable phone. Sent is set only by Send SMS.'),
                         Textarea::make('note')
                             ->label('Note')
                             ->rows(2)
@@ -298,7 +294,7 @@ class RowsRelationManager extends RelationManager
                         ->color('success')
                         ->requiresConfirmation()
                         ->modalHeading('Send SMS for selected Ready rows')
-                        ->modalDescription('Every selected row must be Ready (partner phone set, not yet sent). Non-Ready rows will block the send.')
+                        ->modalDescription('Every selected row must have status Ready with a partner phone and not yet sent. Non-Ready rows will block the send.')
                         ->deselectRecordsAfterCompletion()
                         ->visible(function (): bool {
                             /** @var User|null $user */
@@ -339,11 +335,12 @@ class RowsRelationManager extends RelationManager
                             Select::make('status')
                                 ->label('Status')
                                 ->options(collect(RevenueImportRowStatus::cases())
+                                    ->reject(fn (RevenueImportRowStatus $s) => $s === RevenueImportRowStatus::Sent)
                                     ->mapWithKeys(fn (RevenueImportRowStatus $s) => [$s->value => $s->label()])
                                     ->all())
                                 ->required()
                                 ->native(false)
-                                ->helperText('Ready requires a master partner with a usable phone.'),
+                                ->helperText('Ready requires a master partner with a usable phone. Sent is set only by Send SMS.'),
                             Textarea::make('note')
                                 ->label('Note')
                                 ->rows(2)

@@ -8,6 +8,7 @@ use App\Filament\Resources\RevenueImports\Pages\EditRevenueImport;
 use App\Filament\Resources\RevenueImports\Pages\ListRevenueImports;
 use App\Filament\Resources\RevenueImports\Pages\ViewRevenueImport;
 use App\Filament\Resources\RevenueImports\RelationManagers\RowsRelationManager;
+use App\Filament\Resources\RevenueImports\RelationManagers\SentSmsRelationManager;
 use App\Models\RevenueImport;
 use App\Models\User;
 use App\Services\BulkMessageService;
@@ -114,10 +115,11 @@ class RevenueImportResource extends Resource
             Section::make('Row counts')->schema([
                 TextEntry::make('total_count')->label('Total'),
                 TextEntry::make('matched_count')->label('Ready'),
+                TextEntry::make('sent_count')->label('Sent'),
                 TextEntry::make('missing_partner_count')->label('Unresolved'),
                 TextEntry::make('missing_phone_count')->label('Missing phone'),
                 TextEntry::make('invalid_count')->label('Invalid / duplicate'),
-            ])->columns(5),
+            ])->columns(6),
         ]);
     }
 
@@ -143,6 +145,7 @@ class RevenueImportResource extends Resource
                 TextColumn::make('sender.name')->label('Sent by')->toggleable(),
                 TextColumn::make('sent_at')->dateTime()->toggleable(),
                 TextColumn::make('matched_count')->label('Ready'),
+                TextColumn::make('sent_count')->label('Sent')->toggleable(),
                 TextColumn::make('missing_partner_count')->label('Unresolved')->toggleable(),
                 TextColumn::make('missing_phone_count')->label('Missing phone')->toggleable(),
             ])
@@ -287,7 +290,7 @@ class RevenueImportResource extends Resource
                         ->color('success')
                         ->requiresConfirmation()
                         ->modalHeading('Send SMS for selected imports')
-                        ->modalDescription('Only imports with status Ready to send (and unsent Ready rows) will be queued.')
+                        ->modalDescription('Queues SMS for Ready rows on each selected import (row status Ready + phone). Unresolved rows can be fixed later.')
                         ->deselectRecordsAfterCompletion()
                         ->action(function (Collection $records, RevenueImportService $revenueImports): void {
                             /** @var User|null $user */
@@ -344,6 +347,7 @@ class RevenueImportResource extends Resource
     {
         return [
             RowsRelationManager::class,
+            SentSmsRelationManager::class,
         ];
     }
 

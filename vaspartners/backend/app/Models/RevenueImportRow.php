@@ -22,6 +22,7 @@ class RevenueImportRow extends Model
         'error',
         'raw',
         'bulk_message_id',
+        'bulk_message_recipient_id',
         'sent_at',
     ];
 
@@ -55,8 +56,15 @@ class RevenueImportRow extends Model
         return $this->belongsTo(BulkMessage::class, 'bulk_message_id');
     }
 
+    public function smsRecipient(): BelongsTo
+    {
+        return $this->belongsTo(BulkMessageRecipient::class, 'bulk_message_recipient_id');
+    }
+
     public function wasSent(): bool
     {
-        return filled($this->sent_at) || filled($this->bulk_message_id);
+        return $this->status === RevenueImportRowStatus::Sent
+            || filled($this->sent_at)
+            || filled($this->bulk_message_id);
     }
 }
