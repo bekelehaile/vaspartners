@@ -11,7 +11,6 @@ class RevenueImportRow extends Model
     protected $fillable = [
         'revenue_import_id',
         'revenue_partner_id',
-        'sheet_name',
         'service_family',
         'row_number',
         'service_id',

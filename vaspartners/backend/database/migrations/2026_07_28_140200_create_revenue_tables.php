@@ -5,17 +5,17 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Single clean schema for revenue master list + monthly imports + AM family assignment.
+ * Revenue master list, monthly import batches/rows, and AM family assignment.
  */
 return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('revenue_partners', function (Blueprint $table) {
+        Schema::create('revenue_partners', function (Blueprint $table): void {
             $table->id();
             $table->ulid('public_id')->unique();
             $table->string('service_id', 64)->unique();
-            $table->string('short_code', 64)->nullable()->index();
+            $table->string('short_code', 64)->nullable()->unique();
             $table->string('service_family', 32)->nullable()->index();
             $table->string('partner_name');
             $table->string('service_type', 120)->nullable();
@@ -28,7 +28,7 @@ return new class extends Migration
             $table->index('partner_name');
         });
 
-        Schema::create('revenue_family_managers', function (Blueprint $table) {
+        Schema::create('revenue_family_managers', function (Blueprint $table): void {
             $table->id();
             $table->string('service_family', 32)->index();
             $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
@@ -36,15 +36,14 @@ return new class extends Migration
             $table->unique(['service_family', 'user_id']);
         });
 
-        Schema::create('revenue_imports', function (Blueprint $table) {
+        Schema::create('revenue_imports', function (Blueprint $table): void {
             $table->id();
             $table->ulid('public_id')->unique();
             $table->string('title');
             $table->string('period', 64)->index();
             $table->string('service_family', 32)->nullable()->index();
             $table->string('source_filename')->nullable();
-            $table->string('source_path')->nullable();
-            $table->unsignedBigInteger('filament_import_id')->nullable()->index();
+            $table->foreignId('filament_import_id')->nullable()->constrained('imports')->nullOnDelete();
             $table->string('status', 32)->default('draft')->index();
             $table->text('message_template')->nullable();
             $table->foreignId('created_by_user_id')->nullable()->constrained('users')->nullOnDelete();
@@ -56,17 +55,15 @@ return new class extends Migration
             $table->unsignedInteger('missing_partner_count')->default(0);
             $table->unsignedInteger('missing_phone_count')->default(0);
             $table->unsignedInteger('invalid_count')->default(0);
-            $table->json('sheet_summary')->nullable();
             $table->timestamp('imported_at')->nullable();
             $table->timestamp('sent_at')->nullable();
             $table->timestamps();
         });
 
-        Schema::create('revenue_import_rows', function (Blueprint $table) {
+        Schema::create('revenue_import_rows', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('revenue_import_id')->constrained('revenue_imports')->cascadeOnDelete();
             $table->foreignId('revenue_partner_id')->nullable()->constrained('revenue_partners')->nullOnDelete();
-            $table->string('sheet_name', 120)->nullable();
             $table->string('service_family', 32)->nullable()->index();
             $table->unsignedInteger('row_number')->nullable();
             $table->string('service_id', 64)->nullable();

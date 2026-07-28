@@ -19,7 +19,6 @@ class RevenueImport extends Model
         'period',
         'service_family',
         'source_filename',
-        'source_path',
         'filament_import_id',
         'status',
         'message_template',
@@ -32,7 +31,6 @@ class RevenueImport extends Model
         'missing_partner_count',
         'missing_phone_count',
         'invalid_count',
-        'sheet_summary',
         'imported_at',
         'sent_at',
     ];
@@ -49,7 +47,6 @@ class RevenueImport extends Model
         return [
             'status' => RevenueImportStatus::class,
             'service_family' => RevenueServiceFamily::class,
-            'sheet_summary' => 'array',
             'imported_at' => 'datetime',
             'sent_at' => 'datetime',
         ];

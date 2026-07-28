@@ -5,6 +5,7 @@ namespace App\Filament\Imports;
 use App\Enums\RevenueServiceFamily;
 use App\Models\RevenuePartner;
 use App\Models\User;
+use App\Services\RevenuePartnerResolver;
 use App\Support\PhoneNumber;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
@@ -12,6 +13,7 @@ use Filament\Actions\Imports\Models\Import;
 use Filament\Forms\Components\Select;
 use Illuminate\Support\Number;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class RevenuePartnerImporter extends Importer
 {
@@ -22,13 +24,14 @@ class RevenuePartnerImporter extends Importer
         return [
             ImportColumn::make('service_id')
                 ->label('Service ID')
-                ->requiredMapping()
-                ->rules(['required', 'max:64'])
-                ->example('0042822000002838'),
+                ->rules(['nullable', 'max:64'])
+                ->example('0042822000002838')
+                ->helperText('Required to create a new partner. Also used for matching.'),
             ImportColumn::make('short_code')
                 ->label('Short code')
                 ->rules(['nullable', 'max:64'])
-                ->example('8100'),
+                ->example('8100')
+                ->helperText('Unique. Can match an existing partner when service_id is blank.'),
             ImportColumn::make('service_type')
                 ->label('Service type')
                 ->rules(['nullable', 'max:120'])
@@ -72,23 +75,47 @@ class RevenuePartnerImporter extends Importer
 
     public function resolveRecord(): ?RevenuePartner
     {
-        $serviceId = trim((string) ($this->data['service_id'] ?? ''));
-        if ($serviceId === '') {
-            return null;
+        $lookup = app(RevenuePartnerResolver::class)->resolveForUpsert(
+            $this->data['service_id'] ?? null,
+            $this->data['short_code'] ?? null,
+        );
+
+        if (! $lookup['ok']) {
+            throw ValidationException::withMessages([
+                'service_id' => $lookup['error'],
+                'short_code' => $lookup['error'],
+            ]);
         }
 
-        return RevenuePartner::query()->firstOrNew([
-            'service_id' => $serviceId,
+        $this->data['service_id'] = $lookup['service_id'];
+        $this->data['short_code'] = $lookup['short_code'];
+
+        if ($lookup['partner'] instanceof RevenuePartner) {
+            return $lookup['partner'];
+        }
+
+        return new RevenuePartner([
+            'service_id' => $lookup['service_id'],
         ]);
     }
 
     protected function beforeValidate(): void
     {
+        $this->data['service_id'] = RevenuePartnerResolver::normalize($this->data['service_id'] ?? null);
+        $this->data['short_code'] = RevenuePartnerResolver::normalize($this->data['short_code'] ?? null);
+
+        if ($this->data['service_id'] === null && $this->data['short_code'] === null) {
+            throw ValidationException::withMessages([
+                'service_id' => 'Provide service_id and/or short_code.',
+                'short_code' => 'Provide service_id and/or short_code.',
+            ]);
+        }
+
         $family = (string) ($this->options['service_family'] ?? '');
         /** @var User|null $user */
         $user = auth()->user() ?? $this->import->user;
         if ($user instanceof User && ! $user->canAccessAllRevenue() && ! $user->managesRevenueFamily($family)) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
+            throw ValidationException::withMessages([
                 'service_family' => 'You are not assigned to this product family.',
             ]);
         }
@@ -111,6 +138,8 @@ class RevenuePartnerImporter extends Importer
     {
         $rules = parent::getValidationRules();
         $rules['service_family'] = ['nullable', Rule::in(array_keys(RevenueServiceFamily::options()))];
+        $rules['service_id'] = ['nullable', 'max:64'];
+        $rules['short_code'] = ['nullable', 'max:64'];
 
         return $rules;
     }

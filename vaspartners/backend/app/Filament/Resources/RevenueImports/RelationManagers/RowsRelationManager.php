@@ -41,7 +41,6 @@ class RowsRelationManager extends RelationManager
                         ? $state
                         : \App\Enums\RevenueServiceFamily::tryFrom((string) $state))?->color() ?? 'gray')
                     ->toggleable(),
-                TextColumn::make('sheet_name')->label('Sheet')->toggleable()->wrap(),
                 TextColumn::make('row_number')->label('Row')->toggleable(),
                 TextColumn::make('service_id')->label('Service ID')->searchable()->copyable(),
                 TextColumn::make('partner_name')->searchable()->wrap(),

@@ -93,7 +93,6 @@ class RevenuePortalController extends Controller
                 'amount_formatted' => $row->amount !== null
                     ? number_format((float) $row->amount, 2, '.', ',')
                     : null,
-                'sheet_name' => $row->sheet_name,
                 'imported_at' => $import?->imported_at?->toIso8601String(),
                 'sent_at' => $import?->sent_at?->toIso8601String(),
                 'sms_status' => $sms['status'] ?? ($import?->bulk_message_id ? 'pending' : 'not_sent'),

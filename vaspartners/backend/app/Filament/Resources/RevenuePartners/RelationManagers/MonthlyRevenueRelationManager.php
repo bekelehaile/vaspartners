@@ -49,7 +49,6 @@ class MonthlyRevenueRelationManager extends RelationManager
                         RevenueImportStatus::Sending => 'info',
                         default => 'gray',
                     }),
-                TextColumn::make('sheet_name')->label('Sheet')->toggleable()->wrap(),
                 TextColumn::make('service_type')->toggleable()->placeholder('—'),
                 TextColumn::make('amount')
                     ->numeric(decimalPlaces: 2)

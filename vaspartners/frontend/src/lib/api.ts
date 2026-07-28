@@ -126,7 +126,6 @@ export type PartnerRevenueRow = {
   service_type?: string | null;
   amount?: number | null;
   amount_formatted?: string | null;
-  sheet_name?: string | null;
   imported_at?: string | null;
   sent_at?: string | null;
   sms_status: "not_sent" | "pending" | "sent" | "failed" | "skipped" | string;

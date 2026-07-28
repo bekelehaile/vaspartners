@@ -66,10 +66,13 @@ class RevenuePartnerResource extends Resource
                         ->label('Service ID')
                         ->required()
                         ->maxLength(64)
-                        ->unique(ignoreRecord: true),
+                        ->unique(ignoreRecord: true)
+                        ->helperText('Unique. Monthly CSV can match on this and/or short code.'),
                     TextInput::make('short_code')
                         ->label('Short code')
-                        ->maxLength(64),
+                        ->maxLength(64)
+                        ->unique(ignoreRecord: true)
+                        ->helperText('Optional but unique when set. Monthly CSV can match on short code alone.'),
                     TextInput::make('service_type')
                         ->label('Service type')
                         ->maxLength(120),
