@@ -84,6 +84,16 @@ class RevenuePartnerImporter extends Importer
         $this->data['short_code'] = $lookup['short_code'];
 
         if ($lookup['partner'] instanceof RevenuePartner) {
+            // Claim unowned seed partners for the importing AM.
+            if ($ownerUserId
+                && ! $lookup['partner']->created_by_user_id
+                && $this->import->user_id
+            ) {
+                $lookup['partner']->forceFill([
+                    'created_by_user_id' => $this->import->user_id,
+                ])->save();
+            }
+
             return $lookup['partner'];
         }
 

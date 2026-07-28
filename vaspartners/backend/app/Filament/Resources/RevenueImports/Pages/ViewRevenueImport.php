@@ -122,7 +122,6 @@ class ViewRevenueImport extends ViewRecord
     {
         $fresh = $record->fresh();
 
-        return ! in_array($fresh->status, [RevenueImportStatus::Sending, RevenueImportStatus::Completed], true)
-            && blank($fresh->bulk_message_id);
+        return $fresh && RevenueImportResource::importIsEditable($fresh);
     }
 }

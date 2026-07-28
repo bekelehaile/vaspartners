@@ -15,7 +15,6 @@ use App\Support\PhoneNumber;
 use App\Support\RevenueCatalogServices;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
-use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -24,6 +23,7 @@ use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
@@ -59,8 +59,14 @@ class RevenuePartnerResource extends Resource
         return $schema->components([
             Section::make('Partner')
                 ->schema([
-                    Select::make('company_id')
+                    TextInput::make('partner_name')
                         ->label('Partner name')
+                        ->required()
+                        ->maxLength(255)
+                        ->helperText('Name from the finance / billing system (Excel). Not overwritten by company.')
+                        ->columnSpanFull(),
+                    Select::make('company_id')
+                        ->label('Company')
                         ->options(
                             fn (): array => Company::query()
                                 ->where('is_active', true)
@@ -70,23 +76,27 @@ class RevenuePartnerResource extends Resource
                         )
                         ->searchable()
                         ->preload()
-                        ->required()
+                        ->nullable()
                         ->native(false)
                         ->live()
-                        ->afterStateUpdated(function ($state, Set $set): void {
+                        ->afterStateUpdated(function ($state, Set $set, Get $get): void {
                             $company = $state ? Company::query()->find($state) : null;
-                            $set('partner_name', $company?->name);
-                            $set('phone', PhoneNumber::normalizeNullable($company?->phone));
+                            if (! $company) {
+                                return;
+                            }
+                            // Portal company is validated here; only fill phone when empty.
+                            // Partner name stays the finance-system value.
+                            if (! filled($get('phone'))) {
+                                $set('phone', PhoneNumber::normalizeNullable($company->phone));
+                            }
                         })
+                        ->helperText('Optional validated portal company. Used for linking; does not replace partner name.')
                         ->columnSpanFull(),
-                    Hidden::make('partner_name')
-                        ->dehydrated()
-                        ->required(),
                     TextInput::make('phone')
                         ->label('Phone')
                         ->tel()
                         ->maxLength(32)
-                        ->helperText('Last 9 digits for SMS. Fills from the company when available.')
+                        ->helperText('Last 9 digits for SMS. Can fill from the linked company when empty.')
                         ->dehydrateStateUsing(fn (?string $state): ?string => PhoneNumber::normalizeNullable($state))
                         ->rule(fn (): \Closure => function (string $attribute, mixed $value, \Closure $fail): void {
                             if ($value === null || $value === '') {
@@ -169,7 +179,15 @@ class RevenuePartnerResource extends Resource
                     ->sortable(),
                 TextColumn::make('service_id')->label('Service ID')->searchable()->sortable()->copyable(),
                 TextColumn::make('short_code')->label('Short code')->searchable()->toggleable(),
-                TextColumn::make('partner_name')->searchable()->sortable()->wrap(),
+                TextColumn::make('partner_name')->label('Partner name')->searchable()->sortable()->wrap(),
+                TextColumn::make('company.name')
+                    ->label('Company')
+                    ->placeholder('—')
+                    ->searchable()
+                    ->toggleable()
+                    ->url(fn (RevenuePartner $record): ?string => $record->company
+                        ? CompanyResource::getUrl('view', ['record' => $record->company])
+                        : null),
                 TextColumn::make('phone')
                     ->placeholder('— missing —')
                     ->color(fn (?string $state): string => filled($state) ? 'gray' : 'danger')
@@ -224,7 +242,7 @@ class RevenuePartnerResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery()->with(['vasService', 'creator']);
+        $query = parent::getEloquentQuery()->with(['vasService', 'creator', 'company']);
         /** @var User|null $user */
         $user = auth()->user();
 

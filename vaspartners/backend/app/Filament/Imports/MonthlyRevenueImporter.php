@@ -16,8 +16,9 @@ use App\Support\RevenueCatalogServices;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\TextInput;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Number;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -60,11 +61,13 @@ class MonthlyRevenueImporter extends Importer
             RevenueCatalogServices::importSelect(
                 'Catalog service for SMS wording only. Matching uses your partner master list (service ID / short code).',
             ),
-            TextInput::make('period')
+            Select::make('period')
                 ->label('Month')
+                ->options(fn (): array => static::monthOptions())
                 ->required()
-                ->maxLength(64)
-                ->placeholder('April 2026'),
+                ->searchable()
+                ->native(false)
+                ->default(fn (): string => now()->format('F Y')),
             Textarea::make('message_template')
                 ->label('SMS template')
                 ->rows(4)
@@ -72,6 +75,26 @@ class MonthlyRevenueImporter extends Importer
                 ->default(BulkMessageService::DEFAULT_MESSAGE)
                 ->helperText('{company_name} {period} {service_type} {service_id} {amount}'),
         ];
+    }
+
+    /**
+     * Month labels stored on revenue_imports.period (e.g. "April 2026").
+     *
+     * @return array<string, string>
+     */
+    public static function monthOptions(): array
+    {
+        $options = [];
+        $cursor = Carbon::now()->startOfMonth()->subYears(4);
+        $end = Carbon::now()->startOfMonth()->addYear();
+
+        while ($cursor->lte($end)) {
+            $label = $cursor->format('F Y');
+            $options[$label] = $label;
+            $cursor->addMonth();
+        }
+
+        return array_reverse($options, true);
     }
 
     public function resolveRecord(): ?RevenueImportRow

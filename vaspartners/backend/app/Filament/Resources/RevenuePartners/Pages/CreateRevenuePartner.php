@@ -16,6 +16,6 @@ class CreateRevenuePartner extends CreateRecord
 
     public function getSubheading(): ?string
     {
-        return 'Choose the company as Partner name, then set catalog service and service ID.';
+        return 'Set partner name (required). Optionally link a portal company, then catalog service and service ID.';
     }
 }

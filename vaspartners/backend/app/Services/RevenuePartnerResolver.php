@@ -176,7 +176,11 @@ class RevenuePartnerResolver
     {
         $query = RevenuePartner::query();
         if ($ownerUserId) {
-            $query->where('created_by_user_id', $ownerUserId);
+            // Owned by this AM, or unowned seed rows that can be claimed.
+            $query->where(function ($q) use ($ownerUserId): void {
+                $q->where('created_by_user_id', $ownerUserId)
+                    ->orWhereNull('created_by_user_id');
+            });
         }
 
         return $query;
@@ -185,6 +189,7 @@ class RevenuePartnerResolver
     protected function existsElsewhere(?string $serviceId, ?string $shortCode, int $ownerUserId): bool
     {
         return RevenuePartner::query()
+            ->whereNotNull('created_by_user_id')
             ->where('created_by_user_id', '!=', $ownerUserId)
             ->where(function ($q) use ($serviceId, $shortCode): void {
                 if ($serviceId !== null) {
