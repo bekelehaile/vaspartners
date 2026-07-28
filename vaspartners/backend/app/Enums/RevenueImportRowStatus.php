@@ -14,7 +14,7 @@ enum RevenueImportRowStatus: string
     {
         return match ($this) {
             self::Matched => 'Ready',
-            self::MissingPartner => 'Missing partner',
+            self::MissingPartner => 'Unresolved',
             self::MissingPhone => 'Missing phone',
             self::Invalid => 'Invalid',
             self::Duplicate => 'Duplicate',

@@ -76,13 +76,13 @@ class User extends Authenticatable implements CanResetPasswordContract, Filament
         return $this->belongsToMany(Category::class);
     }
 
-    public function revenueFamilyAssignments(): HasMany
+    public function revenueServiceAssignments(): HasMany
     {
-        return $this->hasMany(RevenueFamilyManager::class);
+        return $this->hasMany(RevenueServiceManager::class);
     }
 
     /**
-     * Super admin and admin see all revenue data; account managers are family-scoped.
+     * Super admin and admin see all revenue data; account managers are service-scoped.
      */
     public function canAccessAllRevenue(): bool
     {
@@ -90,23 +90,23 @@ class User extends Authenticatable implements CanResetPasswordContract, Filament
     }
 
     /**
-     * Product families this user may validate (empty when unscoped admin).
+     * Catalog service IDs this user may validate.
      *
-     * @return list<string>
+     * @return list<int>
      */
-    public function managedRevenueFamilyValues(): array
+    public function managedRevenueServiceIds(): array
     {
-        return $this->revenueFamilyAssignments()
-            ->pluck('service_family')
-            ->map(fn ($family) => $family instanceof \App\Enums\RevenueServiceFamily ? $family->value : (string) $family)
+        return $this->revenueServiceAssignments()
+            ->pluck('service_id')
+            ->map(fn ($id) => (int) $id)
             ->unique()
             ->values()
             ->all();
     }
 
-    public function managesRevenueFamily(?string $family): bool
+    public function managesRevenueService(?int $serviceId): bool
     {
-        if ($family === null || $family === '') {
+        if (! $serviceId) {
             return false;
         }
 
@@ -114,7 +114,7 @@ class User extends Authenticatable implements CanResetPasswordContract, Filament
             return true;
         }
 
-        return in_array($family, $this->managedRevenueFamilyValues(), true);
+        return in_array($serviceId, $this->managedRevenueServiceIds(), true);
     }
 
     /**

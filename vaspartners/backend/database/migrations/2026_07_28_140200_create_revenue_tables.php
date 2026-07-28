@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Revenue master list, monthly import batches/rows, and AM family assignment.
+ * Revenue master list + monthly imports mapped to existing catalog services.
  */
 return new class extends Migration
 {
@@ -14,11 +14,11 @@ return new class extends Migration
         Schema::create('revenue_partners', function (Blueprint $table): void {
             $table->id();
             $table->ulid('public_id')->unique();
+            // Finance / billing endpoint ID from Excel (not services.id).
             $table->string('service_id', 64)->unique();
             $table->string('short_code', 64)->nullable()->unique();
-            $table->string('service_family', 32)->nullable()->index();
+            $table->foreignId('vas_service_id')->constrained('services')->restrictOnDelete();
             $table->string('partner_name');
-            $table->string('service_type', 120)->nullable();
             $table->string('phone', 32)->nullable()->index();
             $table->foreignId('company_id')->nullable()->constrained('companies')->nullOnDelete();
             $table->boolean('is_active')->default(true)->index();
@@ -28,12 +28,12 @@ return new class extends Migration
             $table->index('partner_name');
         });
 
-        Schema::create('revenue_family_managers', function (Blueprint $table): void {
+        Schema::create('revenue_service_managers', function (Blueprint $table): void {
             $table->id();
-            $table->string('service_family', 32)->index();
+            $table->foreignId('service_id')->constrained('services')->cascadeOnDelete();
             $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
             $table->timestamps();
-            $table->unique(['service_family', 'user_id']);
+            $table->unique(['service_id', 'user_id']);
         });
 
         Schema::create('revenue_imports', function (Blueprint $table): void {
@@ -41,7 +41,7 @@ return new class extends Migration
             $table->ulid('public_id')->unique();
             $table->string('title');
             $table->string('period', 64)->index();
-            $table->string('service_family', 32)->nullable()->index();
+            $table->foreignId('vas_service_id')->constrained('services')->restrictOnDelete();
             $table->string('source_filename')->nullable();
             $table->foreignId('filament_import_id')->nullable()->constrained('imports')->nullOnDelete();
             $table->string('status', 32)->default('draft')->index();
@@ -64,11 +64,10 @@ return new class extends Migration
             $table->id();
             $table->foreignId('revenue_import_id')->constrained('revenue_imports')->cascadeOnDelete();
             $table->foreignId('revenue_partner_id')->nullable()->constrained('revenue_partners')->nullOnDelete();
-            $table->string('service_family', 32)->nullable()->index();
+            $table->foreignId('vas_service_id')->nullable()->constrained('services')->nullOnDelete();
             $table->unsignedInteger('row_number')->nullable();
             $table->string('service_id', 64)->nullable();
             $table->string('partner_name')->nullable();
-            $table->string('service_type', 120)->nullable();
             $table->string('short_code', 64)->nullable();
             $table->decimal('amount', 18, 4)->nullable();
             $table->string('amount_raw', 64)->nullable();
@@ -86,7 +85,7 @@ return new class extends Migration
     {
         Schema::dropIfExists('revenue_import_rows');
         Schema::dropIfExists('revenue_imports');
-        Schema::dropIfExists('revenue_family_managers');
+        Schema::dropIfExists('revenue_service_managers');
         Schema::dropIfExists('revenue_partners');
     }
 };

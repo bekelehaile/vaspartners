@@ -2,9 +2,10 @@
 
 namespace App\Filament\Pages;
 
-use App\Enums\RevenueServiceFamily;
-use App\Models\RevenueFamilyManager;
+use App\Models\RevenueServiceManager;
+use App\Models\Service;
 use App\Models\User;
+use App\Support\RevenueCatalogServices;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -14,7 +15,7 @@ use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Assign 2+ account managers per revenue product family for validation scoping.
+ * Assign account managers to existing catalog services for revenue scoping.
  *
  * @property-read Schema $form
  */
@@ -47,9 +48,9 @@ class ManageRevenueFamilyManagers extends Page
     public function mount(): void
     {
         $fill = [];
-        foreach (RevenueServiceFamily::cases() as $family) {
-            $fill[$family->value] = RevenueFamilyManager::query()
-                ->where('service_family', $family->value)
+        foreach (RevenueCatalogServices::query() as $service) {
+            $fill[(string) $service->id] = RevenueServiceManager::query()
+                ->where('service_id', $service->id)
                 ->pluck('user_id')
                 ->map(fn ($id) => (int) $id)
                 ->all();
@@ -59,7 +60,7 @@ class ManageRevenueFamilyManagers extends Page
 
     public function getSubheading(): ?string
     {
-        return 'Assign account managers to each product line (API with MA, SMS-MO, Premium SMS MT, CRBT). They only see partners and monthly rows for their families. Super admin and admin see everything.';
+        return 'Assign account managers to existing catalog services. They only see revenue partners and monthly imports for those services. Super admin and admin see everything.';
     }
 
     public function form(Schema $schema): Schema
@@ -72,20 +73,19 @@ class ManageRevenueFamilyManagers extends Page
             ->all();
 
         $sections = [];
-        foreach (RevenueServiceFamily::cases() as $family) {
-            $sections[] = Section::make($family->label())
-                ->description('Select two or more account managers who validate this sheet type.')
+        foreach (RevenueCatalogServices::query() as $service) {
+            $sections[] = Section::make($service->name)
+                ->description('Account managers who validate revenue for this catalog service.')
                 ->schema([
-                    Select::make($family->value)
+                    Select::make((string) $service->id)
                         ->label('Account managers')
                         ->multiple()
                         ->options($managers)
                         ->searchable()
                         ->preload()
-                        ->required()
-                        ->minItems(0)
-                        ->helperText('Leave empty only while onboarding; AMs with no family see no revenue data.'),
-                ]);
+                        ->helperText('Leave empty only while onboarding; AMs with no service see no revenue data.'),
+                ])
+                ->collapsed();
         }
 
         return $schema->components($sections)->statePath('data');
@@ -114,24 +114,25 @@ class ManageRevenueFamilyManagers extends Page
     public function save(): void
     {
         $data = $this->form->getState();
+        $serviceIds = Service::query()->where('is_active', true)->pluck('id')->map(fn ($id) => (int) $id)->all();
 
-        DB::transaction(function () use ($data): void {
-            foreach (RevenueServiceFamily::cases() as $family) {
-                $userIds = collect($data[$family->value] ?? [])
+        DB::transaction(function () use ($data, $serviceIds): void {
+            foreach ($serviceIds as $serviceId) {
+                $userIds = collect($data[(string) $serviceId] ?? [])
                     ->map(fn ($id) => (int) $id)
                     ->filter()
                     ->unique()
                     ->values()
                     ->all();
 
-                RevenueFamilyManager::query()
-                    ->where('service_family', $family->value)
+                RevenueServiceManager::query()
+                    ->where('service_id', $serviceId)
                     ->whereNotIn('user_id', $userIds ?: [0])
                     ->delete();
 
                 foreach ($userIds as $userId) {
-                    RevenueFamilyManager::query()->firstOrCreate([
-                        'service_family' => $family->value,
+                    RevenueServiceManager::query()->firstOrCreate([
+                        'service_id' => $serviceId,
                         'user_id' => $userId,
                     ]);
                 }

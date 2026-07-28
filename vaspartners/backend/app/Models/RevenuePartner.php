@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Enums\RevenueServiceFamily;
 use App\Support\PhoneNumber;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
@@ -17,10 +16,9 @@ class RevenuePartner extends Model
         'public_id',
         'service_id',
         'short_code',
-        'service_family',
+        'vas_service_id',
         'partner_name',
         'phone',
-        'service_type',
         'company_id',
         'is_active',
         'notes',
@@ -56,7 +54,6 @@ class RevenuePartner extends Model
     {
         return [
             'is_active' => 'boolean',
-            'service_family' => RevenueServiceFamily::class,
         ];
     }
 
@@ -68,6 +65,11 @@ class RevenuePartner extends Model
     public function getRouteKeyName(): string
     {
         return 'public_id';
+    }
+
+    public function vasService(): BelongsTo
+    {
+        return $this->belongsTo(Service::class, 'vas_service_id');
     }
 
     public function company(): BelongsTo

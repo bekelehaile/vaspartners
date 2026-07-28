@@ -11,6 +11,7 @@ use App\Models\BulkMessage;
 use App\Models\BulkMessageRecipient;
 use App\Models\Company;
 use App\Models\RevenueImport;
+use App\Models\RevenueImportRow;
 use App\Models\RevenuePartner;
 use App\Models\User;
 use App\Support\PhoneNumber;
@@ -57,6 +58,90 @@ class RevenueImportService
             }
             $import->resolveStatusFromRows();
         });
+    }
+
+    /**
+     * AM/admin edit of a monthly row (service id, optional short code, revenue), then re-resolve.
+     *
+     * @param  array{service_id?: mixed, short_code?: mixed, amount?: mixed}  $data
+     */
+    public function updateRow(RevenueImportRow $row, array $data, User $actor): void
+    {
+        $import = $row->import;
+        if (! $import) {
+            throw ValidationException::withMessages(['row' => 'Import not found.']);
+        }
+
+        $this->assertCanManage($actor, $import);
+
+        if (in_array($import->status, [RevenueImportStatus::Sending, RevenueImportStatus::Completed], true)) {
+            throw ValidationException::withMessages(['row' => 'This import can no longer be edited.']);
+        }
+
+        $serviceId = RevenuePartnerResolver::normalize($data['service_id'] ?? $row->service_id);
+        $shortCode = RevenuePartnerResolver::normalize($data['short_code'] ?? $row->short_code);
+        $amount = isset($data['amount']) && is_numeric($data['amount'])
+            ? round((float) $data['amount'], 4)
+            : ($row->amount !== null ? (float) $row->amount : null);
+
+        if ($serviceId === null) {
+            throw ValidationException::withMessages(['service_id' => 'Service ID is required.']);
+        }
+        if ($amount === null || $amount <= 0) {
+            throw ValidationException::withMessages(['amount' => 'Revenue must be a positive number.']);
+        }
+
+        $family = $import->service_family instanceof RevenueServiceFamily
+            ? $import->service_family
+            : RevenueServiceFamily::tryFrom((string) $import->service_family);
+
+        DB::transaction(function () use ($import, $row, $serviceId, $shortCode, $amount, $family): void {
+            $seen = [];
+            foreach ($import->rows()->where('id', '!=', $row->id)->orderBy('id')->get() as $other) {
+                $key = (RevenuePartnerResolver::normalize($other->service_id) ?? '').'|'
+                    .(RevenuePartnerResolver::normalize($other->short_code) ?? '');
+                $seen[$key] = true;
+            }
+
+            $payload = $this->classify(
+                serviceId: $serviceId,
+                shortCode: $shortCode,
+                amount: $amount,
+                seen: $seen,
+                family: $family,
+            );
+
+            $row->forceFill([
+                'service_id' => $payload['resolved_service_id'] ?? $serviceId,
+                'short_code' => $payload['resolved_short_code'] ?? $shortCode,
+                'amount' => $payload['amount'],
+                'amount_raw' => (string) $amount,
+                'revenue_partner_id' => $payload['revenue_partner_id'],
+                'partner_name' => $payload['partner_name'],
+                'service_type' => $payload['service_type'],
+                'status' => $payload['status'],
+                'error' => $payload['error'],
+            ])->save();
+
+            $import->resolveStatusFromRows();
+        });
+    }
+
+    public function actorCanManage(User $actor, RevenueImport $import): bool
+    {
+        if ($actor->canAccessAllRevenue()) {
+            return true;
+        }
+
+        if ((int) $import->created_by_user_id !== (int) $actor->id) {
+            return false;
+        }
+
+        $family = $import->service_family instanceof RevenueServiceFamily
+            ? $import->service_family->value
+            : (string) $import->service_family;
+
+        return $actor->managesRevenueFamily($family);
     }
 
     public function registerMissingPartners(RevenueImport $import): int
@@ -313,7 +398,7 @@ class RevenueImportService
             return [
                 'revenue_partner_id' => null,
                 'status' => RevenueImportRowStatus::MissingPartner,
-                'error' => 'Not in master list (service_id / short_code).',
+                'error' => 'Unresolved: not in master list. Edit this row or add the partner, then Rematch.',
                 'amount' => $amount,
                 'partner_name' => null,
                 'service_type' => null,
@@ -408,7 +493,7 @@ class RevenueImportService
         if (! $actor) {
             throw ValidationException::withMessages(['import' => 'Not authenticated.']);
         }
-        if ($actor->canAccessAllRevenue() || (int) $import->created_by_user_id === (int) $actor->id) {
+        if ($this->actorCanManage($actor, $import)) {
             return;
         }
 

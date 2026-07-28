@@ -22,9 +22,9 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Single-sheet cleaned monthly revenue CSV.
- * Columns: service_id, short_code, revenue (match master by either or both).
- * Master list supplies partner name / phone / service type.
+ * Cleaned monthly revenue CSV.
+ * Typical columns: service_id + revenue. short_code is optional.
+ * Unresolved rows are flagged for the AM to edit (including amount) before SMS.
  */
 class MonthlyRevenueImporter extends Importer
 {
@@ -35,15 +35,14 @@ class MonthlyRevenueImporter extends Importer
         return [
             ImportColumn::make('service_id')
                 ->label('Service ID')
-                ->rules(['nullable', 'max:64'])
+                ->requiredMapping()
+                ->rules(['required', 'max:64'])
                 ->example('0042822000002838')
-                ->helperText('Required if short_code is empty.')
                 ->guess(['service id', 'serviceid', 'sid', 'sp code']),
             ImportColumn::make('short_code')
-                ->label('Short code')
+                ->label('Short code (optional)')
                 ->rules(['nullable', 'max:64'])
                 ->example('8100')
-                ->helperText('Required if service_id is empty.')
                 ->guess(['short code', 'shortcode']),
             ImportColumn::make('revenue')
                 ->label('Revenue')
@@ -103,10 +102,9 @@ class MonthlyRevenueImporter extends Importer
         $this->data['service_id'] = $serviceId;
         $this->data['short_code'] = $shortCode;
 
-        if ($serviceId === null && $shortCode === null) {
+        if ($serviceId === null) {
             throw ValidationException::withMessages([
-                'service_id' => 'Provide service_id and/or short_code.',
-                'short_code' => 'Provide service_id and/or short_code.',
+                'service_id' => 'Service ID is required.',
             ]);
         }
 
@@ -155,7 +153,7 @@ class MonthlyRevenueImporter extends Importer
             $this->data['partner_name'] = null;
             $this->data['service_type'] = null;
             $this->data['status'] = RevenueImportRowStatus::MissingPartner->value;
-            $this->data['error'] = 'Not in revenue partners master list (service_id / short_code).';
+            $this->data['error'] = 'Unresolved: not in master list. Edit this row or add the partner, then Rematch.';
         } elseif ($family && $partner->service_family && $partner->service_family !== $family) {
             $this->applyPartnerSnapshot($partner);
             $this->data['status'] = RevenueImportRowStatus::Invalid->value;

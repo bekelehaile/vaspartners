@@ -13,7 +13,7 @@ class ListRevenueImports extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'Import one cleaned CSV (service_id, short_code, revenue). Select service family + month. Validate, then send SMS. Scoped by who imported and assigned family.';
+        return 'Import cleaned CSV (service_id + revenue; short_code optional). Unresolved rows are flagged — edit them (including amount), then send SMS.';
     }
 
     protected function getHeaderActions(): array

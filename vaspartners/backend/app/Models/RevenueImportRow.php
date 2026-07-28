@@ -11,11 +11,10 @@ class RevenueImportRow extends Model
     protected $fillable = [
         'revenue_import_id',
         'revenue_partner_id',
-        'service_family',
+        'vas_service_id',
         'row_number',
         'service_id',
         'partner_name',
-        'service_type',
         'short_code',
         'amount',
         'amount_raw',
@@ -28,7 +27,6 @@ class RevenueImportRow extends Model
     {
         return [
             'status' => RevenueImportRowStatus::class,
-            'service_family' => \App\Enums\RevenueServiceFamily::class,
             'amount' => 'decimal:4',
             'raw' => 'array',
         ];
@@ -42,5 +40,10 @@ class RevenueImportRow extends Model
     public function partner(): BelongsTo
     {
         return $this->belongsTo(RevenuePartner::class, 'revenue_partner_id');
+    }
+
+    public function vasService(): BelongsTo
+    {
+        return $this->belongsTo(Service::class, 'vas_service_id');
     }
 }

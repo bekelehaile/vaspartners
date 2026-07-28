@@ -39,7 +39,23 @@ class RevenueImportPolicy
 
     public function update(User $user, RevenueImport $revenueImport): bool
     {
-        return $user->canAccessAllRevenue() && $user->can('Update:RevenueImport');
+        if (! $user->can('Update:RevenueImport')) {
+            return false;
+        }
+
+        if ($user->canAccessAllRevenue()) {
+            return true;
+        }
+
+        if ((int) $revenueImport->created_by_user_id !== (int) $user->id) {
+            return false;
+        }
+
+        $family = $revenueImport->service_family instanceof \App\Enums\RevenueServiceFamily
+            ? $revenueImport->service_family->value
+            : (string) $revenueImport->service_family;
+
+        return $user->managesRevenueFamily($family);
     }
 
     public function delete(User $user, RevenueImport $revenueImport): bool

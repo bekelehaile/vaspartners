@@ -2,11 +2,11 @@
 
 namespace App\Filament\Imports;
 
-use App\Enums\RevenueServiceFamily;
 use App\Models\RevenuePartner;
 use App\Models\User;
 use App\Services\RevenuePartnerResolver;
 use App\Support\PhoneNumber;
+use App\Support\RevenueCatalogServices;
 use Filament\Actions\Imports\ImportColumn;
 use Filament\Actions\Imports\Importer;
 use Filament\Actions\Imports\Models\Import;
@@ -23,19 +23,15 @@ class RevenuePartnerImporter extends Importer
     {
         return [
             ImportColumn::make('service_id')
-                ->label('Service ID')
+                ->label('Service ID (billing)')
                 ->rules(['nullable', 'max:64'])
                 ->example('0042822000002838')
-                ->helperText('Required to create a new partner. Also used for matching.'),
+                ->helperText('Required to create a new partner. Finance endpoint ID.'),
             ImportColumn::make('short_code')
                 ->label('Short code')
                 ->rules(['nullable', 'max:64'])
                 ->example('8100')
-                ->helperText('Unique. Can match an existing partner when service_id is blank.'),
-            ImportColumn::make('service_type')
-                ->label('Service type')
-                ->rules(['nullable', 'max:120'])
-                ->example('API'),
+                ->helperText('Unique. Can match an existing partner when billing service_id is blank.'),
             ImportColumn::make('partner_name')
                 ->label('Partner name')
                 ->requiredMapping()
@@ -57,19 +53,15 @@ class RevenuePartnerImporter extends Importer
     {
         /** @var User|null $user */
         $user = auth()->user();
-        $options = RevenueServiceFamily::options();
-        if ($user && ! $user->canAccessAllRevenue()) {
-            $allowed = $user->managedRevenueFamilyValues();
-            $options = array_intersect_key($options, array_flip($allowed));
-        }
 
         return [
-            Select::make('service_family')
-                ->label('Product family')
-                ->options($options)
+            Select::make('vas_service_id')
+                ->label('Catalog service')
+                ->options(RevenueCatalogServices::options($user))
                 ->required()
+                ->searchable()
                 ->native(false)
-                ->helperText('All imported master rows are tagged with this family.'),
+                ->helperText('Maps all imported partners to an existing portal service (not a free-text product family).'),
         ];
     }
 
@@ -106,17 +98,17 @@ class RevenuePartnerImporter extends Importer
 
         if ($this->data['service_id'] === null && $this->data['short_code'] === null) {
             throw ValidationException::withMessages([
-                'service_id' => 'Provide service_id and/or short_code.',
-                'short_code' => 'Provide service_id and/or short_code.',
+                'service_id' => 'Provide billing service_id and/or short_code.',
+                'short_code' => 'Provide billing service_id and/or short_code.',
             ]);
         }
 
-        $family = (string) ($this->options['service_family'] ?? '');
+        $vasServiceId = (int) ($this->options['vas_service_id'] ?? 0);
         /** @var User|null $user */
         $user = auth()->user() ?? $this->import->user;
-        if ($user instanceof User && ! $user->canAccessAllRevenue() && ! $user->managesRevenueFamily($family)) {
+        if ($user instanceof User && ! $user->managesRevenueService($vasServiceId)) {
             throw ValidationException::withMessages([
-                'service_family' => 'You are not assigned to this product family.',
+                'vas_service_id' => 'You are not assigned to this catalog service.',
             ]);
         }
     }
@@ -131,13 +123,13 @@ class RevenuePartnerImporter extends Importer
             $this->data['is_active'] = true;
         }
 
-        $this->data['service_family'] = $this->options['service_family'] ?? null;
+        $this->data['vas_service_id'] = (int) ($this->options['vas_service_id'] ?? 0) ?: null;
     }
 
     public function getValidationRules(): array
     {
         $rules = parent::getValidationRules();
-        $rules['service_family'] = ['nullable', Rule::in(array_keys(RevenueServiceFamily::options()))];
+        $rules['vas_service_id'] = ['required', 'integer', Rule::exists('services', 'id')];
         $rules['service_id'] = ['nullable', 'max:64'];
         $rules['short_code'] = ['nullable', 'max:64'];
 

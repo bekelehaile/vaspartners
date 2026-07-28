@@ -2,22 +2,19 @@
 
 namespace App\Models;
 
-use App\Enums\RevenueServiceFamily;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class RevenueFamilyManager extends Model
+class RevenueServiceManager extends Model
 {
     protected $fillable = [
-        'service_family',
+        'service_id',
         'user_id',
     ];
 
-    protected function casts(): array
+    public function service(): BelongsTo
     {
-        return [
-            'service_family' => RevenueServiceFamily::class,
-        ];
+        return $this->belongsTo(Service::class);
     }
 
     public function user(): BelongsTo

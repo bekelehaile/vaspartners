@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use App\Enums\RevenueImportStatus;
-use App\Enums\RevenueServiceFamily;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -17,7 +16,7 @@ class RevenueImport extends Model
         'public_id',
         'title',
         'period',
-        'service_family',
+        'vas_service_id',
         'source_filename',
         'filament_import_id',
         'status',
@@ -46,7 +45,6 @@ class RevenueImport extends Model
     {
         return [
             'status' => RevenueImportStatus::class,
-            'service_family' => RevenueServiceFamily::class,
             'imported_at' => 'datetime',
             'sent_at' => 'datetime',
         ];
@@ -60,6 +58,11 @@ class RevenueImport extends Model
     public function getRouteKeyName(): string
     {
         return 'public_id';
+    }
+
+    public function vasService(): BelongsTo
+    {
+        return $this->belongsTo(Service::class, 'vas_service_id');
     }
 
     public function creator(): BelongsTo
