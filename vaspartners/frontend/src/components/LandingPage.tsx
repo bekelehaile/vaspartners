@@ -9,7 +9,7 @@ import { LandingBlogSection } from "@/components/LandingBlogSection";
 import { LandingFaqSection } from "@/components/FaqList";
 import { LandingGallerySection } from "@/components/LandingGallerySection";
 import { LandingServicesSection } from "@/components/LandingServicesSection";
-import { faydaLoginUrl } from "@/lib/api";
+import { portalLoginHref, useAuthConfig } from "@/hooks/use-auth-config";
 import { useContact, useLogout } from "@/hooks/use-contact";
 
 function LandingInner() {
@@ -17,6 +17,14 @@ function LandingInner() {
   const authError = params.get("error");
   const { data: me = null } = useContact();
   const logout = useLogout();
+  const { data: authConfig } = useAuthConfig();
+  const loginHref = portalLoginHref(authConfig);
+  const loginExternal = loginHref.startsWith("http");
+  const signInLabel = authConfig?.phone_otp_enabled
+    ? authConfig.fayda_enabled
+      ? "Sign in with phone or Fayda"
+      : "Sign in with phone"
+    : "Sign in with Fayda";
 
   return (
     <SiteShell me={me} onLogout={() => void logout()} landing>
@@ -31,7 +39,8 @@ function LandingInner() {
             </p>
             {authError && (
               <p className="alert" style={{ marginBottom: "1rem", maxWidth: "28rem" }}>
-                Fayda sign-in failed ({authError}). Please try again.
+                Sign-in failed ({authError}). Please try again
+                {authConfig?.phone_otp_enabled ? " or use phone OTP" : ""}.
               </p>
             )}
             <div className="hero-actions">
@@ -42,10 +51,14 @@ function LandingInner() {
                 >
                   {me.profile_completed ? "Go to my portal" : "Complete company setup"}
                 </Link>
-              ) : (
-                <a className="btn-hero" href={faydaLoginUrl()}>
+              ) : loginExternal ? (
+                <a className="btn-hero" href={loginHref}>
                   Get started
                 </a>
+              ) : (
+                <Link className="btn-hero" href={loginHref} prefetch={false}>
+                  Get started
+                </Link>
               )}
               <a className="btn-hero-ghost" href="#services">
                 Explore services
@@ -81,8 +94,12 @@ function LandingInner() {
               <span className="process-step-num" aria-hidden>
                 01
               </span>
-              <h3>Sign in with Fayda</h3>
-              <p>Verify your identity with National ID and open your partner account.</p>
+              <h3>{signInLabel.replace(/^Sign in with /, "Sign in — ")}</h3>
+              <p>
+                {authConfig?.phone_otp_enabled
+                  ? "Verify with SMS code (or Fayda when available) and open your partner account."
+                  : "Verify your identity with National ID and open your partner account."}
+              </p>
             </li>
             <li className="process-step">
               <span className="process-step-num" aria-hidden>

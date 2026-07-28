@@ -57,6 +57,7 @@ class DatabaseSeeder extends Seeder
 
         $this->call(AccountManagerRoleSeeder::class);
         $this->call(BulkMessagePermissionsSeeder::class);
+        $this->call(AppSettingsPermissionsSeeder::class);
         $this->call(RevenuePermissionsSeeder::class);
         $this->call(CompanyPermissionsSeeder::class);
         $this->call(TicketPermissionsSeeder::class);

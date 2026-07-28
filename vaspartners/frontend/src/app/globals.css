@@ -4237,6 +4237,100 @@ button.bg-primary:hover {
 /*
    ---break---
    */
+
+
+/* —— Partner login (phone OTP / Fayda) —— */
+.login-page {
+  display: flex;
+  justify-content: center;
+  padding-block: 2.5rem 4rem;
+}
+
+.login-card {
+  width: min(28rem, 100%);
+  padding: 1.75rem 1.5rem 2rem;
+  border: 1px solid var(--et-line);
+  border-radius: 1rem;
+  background: color-mix(in oklab, white 92%, var(--primary) 8%);
+  box-shadow: 0 12px 40px color-mix(in oklab, var(--et-ink) 8%, transparent);
+}
+
+.login-card h1 {
+  margin: 0 0 0.35rem;
+  font-size: 1.55rem;
+  line-height: 1.25;
+}
+
+.login-form {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+.login-form label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--et-ink);
+}
+
+.login-form input {
+  width: 100%;
+  border: 1px solid var(--et-line);
+  border-radius: 0.625rem;
+  padding: 0.7rem 0.85rem;
+  font: inherit;
+  background: white;
+}
+
+.login-form input:focus {
+  outline: 2px solid color-mix(in oklab, var(--primary) 45%, transparent);
+  outline-offset: 1px;
+}
+
+.login-form .btn-hero {
+  margin-top: 0.35rem;
+  width: 100%;
+  justify-content: center;
+}
+
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1.25rem 0;
+  color: var(--et-muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.login-divider::before,
+.login-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--et-line);
+}
+
+.login-fayda {
+  width: 100%;
+  justify-content: center;
+}
+
+.login-fayda-note,
+.login-back,
+.login-phone-hint {
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.login-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

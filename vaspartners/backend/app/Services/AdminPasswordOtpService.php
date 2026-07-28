@@ -15,6 +15,8 @@ use stdClass;
  */
 class AdminPasswordOtpService
 {
+    public const PURPOSE = 'admin_password_reset';
+
     private const EXPIRY_MINUTES = 5;
 
     private const OTP_RATE_LIMIT = 3;
@@ -59,6 +61,7 @@ class AdminPasswordOtpService
     public function findValidRecord(string $otp): ?stdClass
     {
         $record = DB::table('otps')
+            ->where('purpose', self::PURPOSE)
             ->where('code', $this->hash($otp))
             ->first();
 
@@ -78,6 +81,7 @@ class AdminPasswordOtpService
     public function deleteByCode(string $otp): void
     {
         DB::table('otps')
+            ->where('purpose', self::PURPOSE)
             ->where('code', $this->hash($otp))
             ->delete();
     }
@@ -106,10 +110,14 @@ class AdminPasswordOtpService
     private function store(string $phone, string $otp): void
     {
         DB::transaction(function () use ($phone, $otp): void {
-            DB::table('otps')->where('phone_number', $phone)->delete();
+            DB::table('otps')
+                ->where('phone_number', $phone)
+                ->where('purpose', self::PURPOSE)
+                ->delete();
 
             DB::table('otps')->insert([
                 'phone_number' => $phone,
+                'purpose' => self::PURPOSE,
                 'code' => $this->hash($otp),
                 'expires_at' => now()->addMinutes(self::EXPIRY_MINUTES),
                 'created_at' => now(),

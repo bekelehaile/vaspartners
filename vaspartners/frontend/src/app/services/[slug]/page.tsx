@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import { SiteShell } from "@/components/SiteShell";
 import { ServiceRequirements } from "@/components/ServiceRequirements";
 import { useContact, useLogout, useServices } from "@/hooks/use-contact";
-import { faydaLoginUrl } from "@/lib/api";
+import { portalLoginHref, useAuthConfig } from "@/hooks/use-auth-config";
 import {
   formatServiceDescription,
   serviceImageUrl,
@@ -17,6 +17,9 @@ export default function ServiceDetailPage() {
   const slug = params?.slug ?? "";
   const { data: me = null } = useContact();
   const logout = useLogout();
+  const { data: authConfig } = useAuthConfig();
+  const loginHref = portalLoginHref(authConfig);
+  const loginExternal = loginHref.startsWith("http");
   const { data: services = [], isLoading, isError } = useServices();
 
   const service = useMemo(
@@ -101,10 +104,14 @@ export default function ServiceDetailPage() {
                       ? "Get started"
                       : "Complete company approval first"}
                   </Link>
-                ) : (
-                  <a className="btn-hero" href={faydaLoginUrl()}>
+                ) : loginExternal ? (
+                  <a className="btn-hero" href={loginHref}>
                     Get started
                   </a>
+                ) : (
+                  <Link className="btn-hero" href={loginHref} prefetch={false}>
+                    Get started
+                  </Link>
                 )}
                 <Link href="/#services" className="btn-hero-ghost">
                   Back to services

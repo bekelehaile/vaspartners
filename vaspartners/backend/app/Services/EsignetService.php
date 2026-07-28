@@ -159,13 +159,14 @@ class EsignetService
 
         $contact = Contact::query()->where('sub', $sub)->first();
 
-        // Adopt invite / migrated placeholders so owner-created members and MVAS rows keep tickets.
+        // Adopt invite / migrated / phone-OTP placeholders so tickets & memberships stay linked.
         if (! $contact) {
             $contact = Contact::query()
                 ->where('phone_number', $phoneNumber)
                 ->where(function ($q) {
                     $q->where('sub', 'like', 'invite-%')
-                        ->orWhere('sub', 'like', 'mvas-contact-%');
+                        ->orWhere('sub', 'like', 'mvas-contact-%')
+                        ->orWhere('sub', 'like', 'otp-%');
                 })
                 ->first();
         }

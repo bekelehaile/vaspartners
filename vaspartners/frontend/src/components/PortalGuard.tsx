@@ -23,12 +23,12 @@ export function PortalGuard({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!getToken()) {
-      router.replace("/");
+      router.replace("/login");
       return;
     }
     if (isLoading) return;
     if (isError) {
-      router.replace("/");
+      router.replace("/login");
       return;
     }
     if (me && !canUseServices && !onCompanyPage) {

@@ -266,6 +266,42 @@ export function faydaLoginUrl() {
   return `${API}/auth/fayda/redirect`;
 }
 
+export type AuthConfig = {
+  auth_mode: "fayda" | "phone_otp" | "both";
+  fayda_enabled: boolean;
+  phone_otp_enabled: boolean;
+  note?: string | null;
+};
+
+export async function fetchAuthConfig(): Promise<AuthConfig> {
+  const res = await api<{ data: AuthConfig }>("/auth/config");
+  return res.data;
+}
+
+export async function requestPortalOtp(phone: string) {
+  return api<{
+    message: string;
+    data: { phone: string; expires_in: number; needs_name: boolean };
+  }>("/auth/otp/request", {
+    method: "POST",
+    body: JSON.stringify({ phone }),
+  });
+}
+
+export async function verifyPortalOtp(payload: {
+  phone: string;
+  code: string;
+  name?: string;
+}) {
+  return api<{
+    message: string;
+    data: { token: string; is_new: boolean; contact: Contact };
+  }>("/auth/otp/verify", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function api<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");

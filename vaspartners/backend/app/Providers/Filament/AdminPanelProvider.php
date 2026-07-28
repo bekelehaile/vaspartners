@@ -83,6 +83,7 @@ class AdminPanelProvider extends PanelProvider
                 NavigationGroup::make()->label('Catalog')->icon(Heroicon::Cog6Tooth),
                 NavigationGroup::make()->label('Geo')->icon(Heroicon::Map),
                 NavigationGroup::make()->label('Website')->icon(Heroicon::GlobeAlt),
+                NavigationGroup::make()->label('Settings')->icon(Heroicon::Cog6Tooth),
             ]);
     }
 }

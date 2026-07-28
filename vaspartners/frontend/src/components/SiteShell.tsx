@@ -6,7 +6,8 @@ import { CompanySwitcher } from "@/components/CompanySwitcher";
 import { NotificationBell } from "@/components/NotificationBell";
 import { PortalSettingsMenu } from "@/components/PortalSettingsMenu";
 import { PortalSidebar } from "@/components/PortalSidebar";
-import { Contact, clearClientSession, faydaLoginUrl } from "@/lib/api";
+import { portalLoginHref, useAuthConfig } from "@/hooks/use-auth-config";
+import { Contact, clearClientSession } from "@/lib/api";
 
 function LogInIcon() {
   return (
@@ -39,6 +40,42 @@ const portalNav = [
   { href: "/portal/subscriptions", label: "Subscriptions" },
   { href: "/portal/revenue", label: "Revenue" },
 ] as const;
+
+function LoginLink({
+  className,
+  style,
+  onClick,
+  children,
+}: {
+  className?: string;
+  style?: React.CSSProperties;
+  onClick?: () => void;
+  children: ReactNode;
+}) {
+  const { data: authConfig } = useAuthConfig();
+  const href = portalLoginHref(authConfig);
+  const external = href.startsWith("http");
+
+  if (external) {
+    return (
+      <a className={className} href={href} onClick={onClick} style={style}>
+        {children}
+      </a>
+    );
+  }
+
+  return (
+    <Link
+      className={className}
+      href={href}
+      onClick={onClick}
+      style={style}
+      prefetch={false}
+    >
+      {children}
+    </Link>
+  );
+}
 
 export function SiteShell({
   children,
@@ -115,10 +152,10 @@ export function SiteShell({
                     </Link>
                   )
                 )}
-                <a className="btn-login" href={faydaLoginUrl()}>
+                <LoginLink className="btn-login">
                   <LogInIcon />
                   <span>Login</span>
-                </a>
+                </LoginLink>
               </>
             )}
           </nav>
@@ -188,15 +225,14 @@ export function SiteShell({
                       </Link>
                     )
                   )}
-                  <a
+                  <LoginLink
                     className="btn-login"
-                    href={faydaLoginUrl()}
                     onClick={() => setOpen(false)}
                     style={{ width: "100%" }}
                   >
                     <LogInIcon />
                     <span>Login</span>
-                  </a>
+                  </LoginLink>
                 </>
               )}
             </div>

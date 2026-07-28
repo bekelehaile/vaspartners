@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\AppSetting;
 use App\Services\CompanyMembershipService;
 use App\Services\EsignetService;
 use Illuminate\Http\Request;
@@ -12,6 +13,12 @@ class FaydaAuthController extends Controller
 {
     public function redirect(Request $request, EsignetService $esignet)
     {
+        if (! AppSetting::faydaEnabled()) {
+            return response()->json([
+                'message' => 'Fayda sign-in is currently disabled. Use phone OTP instead.',
+            ], 403);
+        }
+
         $built = $esignet->buildAuthorizationUrl();
         if (($built['status'] ?? '') !== 'ok') {
             return response()->json(['message' => $built['message'] ?? 'Unable to start Fayda login'], 500);
