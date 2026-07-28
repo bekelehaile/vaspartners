@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\Tickets\Pages;
 
 use App\Enums\TicketStatus;
-use App\Filament\Resources\Tickets\Concerns\SendsFilteredTicketSms;
 use App\Filament\Resources\Tickets\TicketResource;
 use App\Models\Ticket;
 use Filament\Resources\Pages\ListRecords;
@@ -12,21 +11,7 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ListTickets extends ListRecords
 {
-    use SendsFilteredTicketSms;
-
     protected static string $resource = TicketResource::class;
-
-    public function getSubheading(): ?string
-    {
-        return 'Filter by tab, status, or group before using Send SMS to filtered. Individual and selected-row SMS are always available when permitted.';
-    }
-
-    protected function getHeaderActions(): array
-    {
-        return [
-            $this->sendSmsFilteredHeaderAction(),
-        ];
-    }
 
     public function getTabs(): array
     {
