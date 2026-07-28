@@ -34,15 +34,11 @@ class RevenuePartner extends Model
         });
 
         static::saving(function (RevenuePartner $partner): void {
+            // Company is our validated portal record. Partner name comes from finance — never overwrite it.
             if ($partner->company_id) {
                 $company = Company::query()->find($partner->company_id);
-                if ($company) {
-                    if (! filled($partner->partner_name)) {
-                        $partner->partner_name = $company->name;
-                    }
-                    if (! filled($partner->phone) && filled($company->phone)) {
-                        $partner->phone = PhoneNumber::normalizeNullable($company->phone);
-                    }
+                if ($company && ! filled($partner->phone) && filled($company->phone)) {
+                    $partner->phone = PhoneNumber::normalizeNullable($company->phone);
                 }
             }
 
@@ -50,7 +46,7 @@ class RevenuePartner extends Model
                 $partner->phone = PhoneNumber::normalizeNullable($partner->phone);
             }
 
-            // Auto-link company by phone when none is set; do not overwrite partner_name.
+            // Auto-link company by phone when none is set; keep finance partner_name as-is.
             if (! $partner->company_id && filled($partner->phone)) {
                 $company = Company::query()
                     ->whereRaw(
@@ -61,9 +57,6 @@ class RevenuePartner extends Model
                     ->first();
                 if ($company) {
                     $partner->company_id = $company->id;
-                    if (! filled($partner->partner_name)) {
-                        $partner->partner_name = $company->name;
-                    }
                 }
             }
         });

@@ -39,13 +39,15 @@ class RevenuePartnerImporter extends Importer
                 ->label('Partner name')
                 ->requiredMapping()
                 ->rules(['required', 'max:255'])
-                ->example('FANA BROADCASTING CORPORATE S.C'),
+                ->example('FANA BROADCASTING CORPORATE S.C')
+                ->helperText('Name from the finance system (Excel).'),
             ImportColumn::make('phone')
                 ->label('Phone')
-                ->rules(['nullable', 'max:32'])
+                ->requiredMapping()
+                ->rules(['required', 'max:32'])
                 ->example('911223344')
                 ->ignoreBlankState()
-                ->helperText('Updated when provided. Blank cells do not clear an existing phone.'),
+                ->helperText('Required for new partners. On re-import, blank keeps an existing phone.'),
             ImportColumn::make('is_active')
                 ->label('Status (active)')
                 ->boolean()
@@ -107,11 +109,29 @@ class RevenuePartnerImporter extends Importer
     {
         $this->data['service_id'] = RevenuePartnerResolver::normalize($this->data['service_id'] ?? null);
         $this->data['short_code'] = RevenuePartnerResolver::normalize($this->data['short_code'] ?? null);
+        $this->data['phone'] = PhoneNumber::normalizeNullable($this->data['phone'] ?? null);
 
         if ($this->data['service_id'] === null && $this->data['short_code'] === null) {
             throw ValidationException::withMessages([
                 'service_id' => 'Provide service ID and/or short code.',
                 'short_code' => 'Provide service ID and/or short code.',
+            ]);
+        }
+
+        $phone = $this->data['phone'];
+        if ($this->record?->exists) {
+            $effectivePhone = $phone ?? PhoneNumber::normalizeNullable($this->record->phone);
+            if ($effectivePhone === null || ! PhoneNumber::isValidLocalMobile($effectivePhone)) {
+                throw ValidationException::withMessages([
+                    'phone' => 'Phone is required (local mobile 9/7 + 8 digits).',
+                ]);
+            }
+            if ($phone !== null) {
+                $this->data['phone'] = $effectivePhone;
+            }
+        } elseif ($phone === null || ! PhoneNumber::isValidLocalMobile($phone)) {
+            throw ValidationException::withMessages([
+                'phone' => 'Phone is required (local mobile 9/7 + 8 digits).',
             ]);
         }
     }

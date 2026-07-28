@@ -14,7 +14,7 @@ class ListRevenuePartners extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'Import partners that belong to you. Monthly CSV matches service ID / short code in your list (not by service ownership).';
+        return 'Partner name comes from finance/Excel. Optionally link a validated portal company. Monthly CSV matches service ID / short code.';
     }
 
     protected function getHeaderActions(): array

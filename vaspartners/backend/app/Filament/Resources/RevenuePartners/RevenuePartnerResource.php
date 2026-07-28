@@ -95,11 +95,14 @@ class RevenuePartnerResource extends Resource
                     TextInput::make('phone')
                         ->label('Phone')
                         ->tel()
+                        ->required()
                         ->maxLength(32)
-                        ->helperText('Last 9 digits for SMS. Can fill from the linked company when empty.')
+                        ->helperText('Required for SMS. Last 9 digits (9/7 + 8 digits). Can fill from the linked company.')
                         ->dehydrateStateUsing(fn (?string $state): ?string => PhoneNumber::normalizeNullable($state))
                         ->rule(fn (): \Closure => function (string $attribute, mixed $value, \Closure $fail): void {
                             if ($value === null || $value === '') {
+                                $fail('Phone is required.');
+
                                 return;
                             }
                             if (! PhoneNumber::isValidLocalMobile($value)) {
@@ -147,10 +150,10 @@ class RevenuePartnerResource extends Resource
     {
         return $schema->components([
             Section::make('Partner')->schema([
-                TextEntry::make('partner_name')->label('Partner name'),
+                TextEntry::make('partner_name')->label('Partner name (finance)'),
                 TextEntry::make('company.name')
-                    ->label('Company')
-                    ->placeholder('—')
+                    ->label('Company (validated)')
+                    ->placeholder('— not linked —')
                     ->url(fn (RevenuePartner $record): ?string => $record->company
                         ? CompanyResource::getUrl('view', ['record' => $record->company])
                         : null),
