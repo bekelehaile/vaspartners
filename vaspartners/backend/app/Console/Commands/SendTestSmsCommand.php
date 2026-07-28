@@ -17,12 +17,13 @@ class SendTestSmsCommand extends Command
         $message = (string) $this->option('message');
 
         if (! $sms->ensurePhoneIsLocal($phone)) {
-            $this->error('Phone must be a local Ethio telecom mobile (9/7 + 8 digits).');
+            $this->error('Phone must be an Ethiopian mobile (+251 / 09 / 07…).');
 
             return self::FAILURE;
         }
 
-        $this->info('Dispatching SMS to '.$sms->normalizePhone($phone).'…');
+        $normalized = $sms->normalizePhone($phone);
+        $this->info('Dispatching SMS to +251'.$normalized.'…');
         $sms->send($phone, $message);
         $this->comment('Queued on sms. Ensure the queue worker is running.');
 

@@ -5,15 +5,17 @@ namespace App\Jobs;
 use App\Services\SmsService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Queue\Middleware\RateLimited;
 use RuntimeException;
 
 class SendSmsJob implements ShouldQueue
 {
     use Queueable;
 
-    public int $tries = 3;
+    public int $tries = 5;
 
-    public int $backoff = 5;
+    /** @var list<int> */
+    public array $backoff = [5, 15, 30, 60];
 
     public function __construct(
         public string $phone,
@@ -22,10 +24,25 @@ class SendSmsJob implements ShouldQueue
         $this->onQueue('sms');
     }
 
+    /**
+     * @return list<object>
+     */
+    public function middleware(): array
+    {
+        return [
+            new RateLimited('sms-global'),
+        ];
+    }
+
     public function handle(SmsService $sms): void
     {
+        if (! $sms->ensurePhoneIsLocal($this->phone)) {
+            // Do not retry non-Ethiopian / invalid numbers.
+            return;
+        }
+
         if (! $sms->sendNow($this->phone, $this->message)) {
-            throw new RuntimeException("Failed to send SMS to {$this->phone}");
+            throw new RuntimeException("Failed to send SMS to +251{$this->phone}");
         }
     }
 }

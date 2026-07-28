@@ -3,7 +3,6 @@
 namespace App\Filament\Pages\Auth;
 
 use App\Filament\Pages\Auth\Concerns\ThrottlesAuthByIdentifier;
-use App\Jobs\SendSmsJob;
 use App\Models\User;
 use App\Services\AdminPasswordOtpService;
 use App\Services\SmsService;
@@ -199,8 +198,8 @@ class ResetPassword extends BaseResetPassword
 
             try {
                 if (filled($user->phone)) {
-                    SendSmsJob::dispatch(
-                        app(SmsService::class)->normalizePhone($user->phone),
+                    app(SmsService::class)->send(
+                        $user->phone,
                         'Your VAS Partners admin password was changed. If you did not do this, contact support immediately. Ethio telecom',
                     );
                 }

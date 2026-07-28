@@ -1,0 +1,51 @@
+<?php
+
+namespace Tests\Unit;
+
+use App\Support\PhoneNumber;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\TestCase;
+
+class PhoneNumberTest extends TestCase
+{
+    #[DataProvider('validEthiopianNumbers')]
+    public function test_normalizes_ethiopian_mobiles(string $input, string $expectedNine): void
+    {
+        $this->assertTrue(PhoneNumber::isValidLocalMobile($input));
+        $this->assertSame($expectedNine, PhoneNumber::normalize($input));
+        $this->assertSame('251'.$expectedNine, PhoneNumber::toMsisdn251($input));
+        $this->assertSame('+251'.$expectedNine, PhoneNumber::toE164($input));
+    }
+
+    public static function validEthiopianNumbers(): array
+    {
+        return [
+            'local 09' => ['0912345678', '912345678'],
+            'local 9' => ['912345678', '912345678'],
+            'plus 251' => ['+251912345678', '912345678'],
+            '251 prefix' => ['251912345678', '912345678'],
+            'spaces' => ['+251 91 234 5678', '912345678'],
+            '07 local' => ['0712345678', '712345678'],
+            'plus 251 7' => ['+251712345678', '712345678'],
+        ];
+    }
+
+    #[DataProvider('invalidNumbers')]
+    public function test_rejects_non_ethiopian_or_invalid(string $input): void
+    {
+        $this->assertFalse(PhoneNumber::isValidLocalMobile($input));
+        $this->assertNull(PhoneNumber::toMsisdn251($input));
+        $this->assertNull(PhoneNumber::toE164($input));
+    }
+
+    public static function invalidNumbers(): array
+    {
+        return [
+            'us' => ['+12025550123'],
+            'kenya' => ['+254712345678'],
+            'empty' => [''],
+            'too short' => ['91234567'],
+            'landline-ish' => ['0111234567'],
+        ];
+    }
+}

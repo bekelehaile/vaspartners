@@ -17,6 +17,26 @@ return [
 
     'enabled' => (bool) env('SMS_ENABLED', true),
 
+    /*
+    |--------------------------------------------------------------------------
+    | SMS rate limits (all gateway traffic)
+    |--------------------------------------------------------------------------
+    |
+    | per_phone — max SMS to one Ethiopian number in the decay window
+    | global    — max SMS across the whole app in the decay window
+    |
+    */
+    'sms_rate' => [
+        'per_phone' => [
+            'max' => (int) env('SMS_RATE_PER_PHONE_MAX', 20),
+            'decay_seconds' => (int) env('SMS_RATE_PER_PHONE_DECAY', 3600),
+        ],
+        'global' => [
+            'max' => (int) env('SMS_RATE_GLOBAL_MAX', 120),
+            'decay_seconds' => (int) env('SMS_RATE_GLOBAL_DECAY', 60),
+        ],
+    ],
+
     'templates' => [
 
         'ticket_submitted' => <<<'SMS'

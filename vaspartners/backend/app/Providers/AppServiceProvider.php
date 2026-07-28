@@ -3,7 +3,9 @@
 namespace App\Providers;
 
 use Filament\Tables\Table;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use STS\FilamentImpersonate\Facades\Impersonation;
@@ -17,6 +19,8 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $this->configureSmsRateLimiters();
+
         // All admin tables: newest first, no clickable row navigation (use explicit actions).
         Table::configureUsing(function (Table $table): void {
             $table
@@ -44,6 +48,16 @@ class AppServiceProvider extends ServiceProvider
                     return redirect(session()->pull('impersonate.back_to') ?? $fallback);
                 })
                 ->name('filament-impersonate.leave');
+        });
+    }
+
+    private function configureSmsRateLimiters(): void
+    {
+        RateLimiter::for('sms-global', function () {
+            $max = max(1, (int) config('notifications.sms_rate.global.max', 120));
+            $decay = max(1, (int) config('notifications.sms_rate.global.decay_seconds', 60));
+
+            return Limit::perMinutes(max(1, (int) ceil($decay / 60)), $max)->by('sms-global');
         });
     }
 }

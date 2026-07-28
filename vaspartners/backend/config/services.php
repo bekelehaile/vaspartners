@@ -49,8 +49,10 @@ return [
 
     /*
     | Ethio telecom bulk SMS gateway.
-    | Full URL prefix ending with receiver= — phone + message are appended.
+    | Full URL prefix ending with receiver= — MSISDN (251…) + message are appended.
+    | Receivers are always Ethiopian mobiles (+251 / 251XXXXXXXXX).
     */
     'sms_endpoint' => env('SMS_ENDPOINT', 'https://smsgw.ethiotelecom.et/bl/index.php?receiver='),
+    'sms_country_code' => env('SMS_COUNTRY_CODE', '251'),
 
 ];
