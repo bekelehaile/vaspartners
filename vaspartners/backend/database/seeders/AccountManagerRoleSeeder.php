@@ -24,7 +24,7 @@ class AccountManagerRoleSeeder extends Seeder
         ];
 
         $role = Role::findOrCreate('account_manager', 'web');
-        $role->syncPermissions($permissions);
+        $role->givePermissionTo($permissions);
 
         // Keep My Tickets available to roles that already manage all tickets
         $myTickets = $permissions[0];

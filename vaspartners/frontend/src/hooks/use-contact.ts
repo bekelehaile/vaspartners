@@ -10,6 +10,7 @@ import {
   FeedbackInbox,
   GalleryItem,
   PartnerFeedback,
+  PartnerRevenueRow,
   Service,
   Subscription,
   Ticket,
@@ -133,6 +134,21 @@ export function useSubscriptions(options?: { enabled?: boolean }) {
   });
 }
 
+export function usePartnerRevenue(options?: { enabled?: boolean }) {
+  const enabled = options?.enabled ?? true;
+  return useQuery({
+    queryKey: queryKeys.revenue,
+    enabled: enabled && !!getToken(),
+    queryFn: async () => {
+      const res = await api<{ data: PartnerRevenueRow[]; message?: string }>("/revenue");
+      return {
+        items: Array.isArray(res.data) ? res.data : [],
+        message: res.message,
+      };
+    },
+  });
+}
+
 export type TicketFilters = {
   status?: string;
   search?: string;
@@ -231,6 +247,7 @@ export function useSwitchCompany() {
       queryClient.setQueryData(queryKeys.contact.me, contact);
       void queryClient.invalidateQueries({ queryKey: queryKeys.contact.me });
       void queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.revenue });
       void queryClient.invalidateQueries({ queryKey: queryKeys.contact.tickets });
       void queryClient.invalidateQueries({ queryKey: ["company-members"] });
       void queryClient.invalidateQueries({ queryKey: ["company-membership-requests"] });
@@ -442,6 +459,7 @@ export function useDetachCompany() {
       queryClient.setQueryData(queryKeys.contact.me, contact);
       void queryClient.invalidateQueries({ queryKey: queryKeys.contact.me });
       void queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.revenue });
       void queryClient.invalidateQueries({ queryKey: ["company-membership-requests"] });
       void queryClient.invalidateQueries({ queryKey: ["company-requests-inbox"] });
     },

@@ -76,6 +76,47 @@ class User extends Authenticatable implements CanResetPasswordContract, Filament
         return $this->belongsToMany(Category::class);
     }
 
+    public function revenueFamilyAssignments(): HasMany
+    {
+        return $this->hasMany(RevenueFamilyManager::class);
+    }
+
+    /**
+     * Super admin and admin see all revenue data; account managers are family-scoped.
+     */
+    public function canAccessAllRevenue(): bool
+    {
+        return $this->hasAnyRole(['super_admin', 'admin']);
+    }
+
+    /**
+     * Product families this user may validate (empty when unscoped admin).
+     *
+     * @return list<string>
+     */
+    public function managedRevenueFamilyValues(): array
+    {
+        return $this->revenueFamilyAssignments()
+            ->pluck('service_family')
+            ->map(fn ($family) => $family instanceof \App\Enums\RevenueServiceFamily ? $family->value : (string) $family)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    public function managesRevenueFamily(?string $family): bool
+    {
+        if ($family === null || $family === '') {
+            return false;
+        }
+
+        if ($this->canAccessAllRevenue()) {
+            return true;
+        }
+
+        return in_array($family, $this->managedRevenueFamilyValues(), true);
+    }
+
     /**
      * Operational group IDs this staff member is scoped to.
      * Empty collection = no group restriction from category_user.

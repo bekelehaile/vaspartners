@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
+  BanknoteIcon,
   Building2Icon,
   ClipboardListIcon,
   FileTextIcon,
@@ -41,6 +42,12 @@ const workspaceNav: NavItem[] = [
     label: "Subscriptions",
     icon: PackageIcon,
     match: (path) => path.startsWith("/portal/subscriptions"),
+  },
+  {
+    href: "/portal/revenue",
+    label: "Revenue",
+    icon: BanknoteIcon,
+    match: (path) => path.startsWith("/portal/revenue"),
   },
   {
     href: "/portal/feedback",

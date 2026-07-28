@@ -117,6 +117,23 @@ export type Subscription = {
   terminated_at?: string | null;
 };
 
+export type PartnerRevenueRow = {
+  id: number;
+  period?: string | null;
+  import_title?: string | null;
+  service_id?: string | null;
+  partner_name?: string | null;
+  service_type?: string | null;
+  amount?: number | null;
+  amount_formatted?: string | null;
+  sheet_name?: string | null;
+  imported_at?: string | null;
+  sent_at?: string | null;
+  sms_status: "not_sent" | "pending" | "sent" | "failed" | "skipped" | string;
+  sms_error?: string | null;
+  sms_sent_at?: string | null;
+};
+
 export type FaqItem = {
   id: number;
   question: string;
