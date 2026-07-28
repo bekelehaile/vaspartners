@@ -4,12 +4,12 @@ namespace App\Filament\Resources\RevenueImports;
 
 use App\Enums\RevenueImportStatus;
 use App\Filament\Imports\MonthlyRevenueImporter;
-use App\Filament\Resources\BulkMessages\BulkMessageResource;
 use App\Filament\Resources\RevenueImports\Pages\EditRevenueImport;
 use App\Filament\Resources\RevenueImports\Pages\ListRevenueImports;
 use App\Filament\Resources\RevenueImports\Pages\ViewRevenueImport;
 use App\Filament\Resources\RevenueImports\RelationManagers\RowsRelationManager;
 use App\Models\RevenueImport;
+use App\Models\User;
 use App\Services\BulkMessageService;
 use App\Services\RevenueImportService;
 use App\Support\RevenueCatalogServices;
@@ -109,12 +109,6 @@ class RevenueImportResource extends Resource
                 TextEntry::make('sender.name')->label('Sent by')->placeholder('—'),
                 TextEntry::make('sent_at')->label('Sent at')->dateTime()->placeholder('—'),
                 TextEntry::make('source_filename')->label('CSV file')->placeholder('—'),
-                TextEntry::make('bulkMessage.title')
-                    ->label('Bulk SMS campaign')
-                    ->placeholder('—')
-                    ->url(fn (RevenueImport $record): ?string => $record->bulkMessage
-                        ? BulkMessageResource::getUrl('view', ['record' => $record->bulkMessage])
-                        : null),
                 TextEntry::make('message_template')->label('SMS template')->columnSpanFull(),
             ])->columns(2),
             Section::make('Row counts')->schema([
@@ -171,6 +165,59 @@ class RevenueImportResource extends Resource
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    BulkAction::make('set_status')
+                        ->label('Set status')
+                        ->icon('heroicon-o-flag')
+                        ->color('gray')
+                        ->form([
+                            Select::make('status')
+                                ->label('Import status')
+                                ->options(collect([
+                                    RevenueImportStatus::Draft,
+                                    RevenueImportStatus::Reviewing,
+                                    RevenueImportStatus::Ready,
+                                    RevenueImportStatus::Failed,
+                                ])->mapWithKeys(fn (RevenueImportStatus $s) => [$s->value => $s->label()])->all())
+                                ->required()
+                                ->native(false)
+                                ->helperText('Ready only if all rows are fixed. Already-sent imports are skipped.'),
+                        ])
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (Collection $records, array $data, RevenueImportService $revenueImports): void {
+                            $status = RevenueImportStatus::from((string) $data['status']);
+                            $done = 0;
+                            $skipped = 0;
+                            $errors = [];
+                            foreach ($records as $import) {
+                                if (! $import instanceof RevenueImport) {
+                                    continue;
+                                }
+                                $import = $import->fresh();
+                                if (! $import || ! static::importIsEditable($import)) {
+                                    $skipped++;
+
+                                    continue;
+                                }
+                                try {
+                                    $revenueImports->setImportStatus($import, $status);
+                                    $done++;
+                                } catch (ValidationException $e) {
+                                    $skipped++;
+                                    $errors[] = ($import->title ?: 'Import').': '
+                                        .(collect($e->errors())->flatten()->first() ?? $e->getMessage());
+                                }
+                            }
+                            Notification::make()
+                                ->title($done > 0
+                                    ? "Set {$status->label()} on {$done} import(s)"
+                                    : 'No imports updated')
+                                ->body(trim(implode(' ', array_filter([
+                                    $skipped > 0 ? "{$skipped} skipped." : null,
+                                    $errors !== [] ? implode(' ', array_slice($errors, 0, 3)) : null,
+                                ]))) ?: null)
+                                ->color($done > 0 ? 'success' : 'warning')
+                                ->send();
+                        }),
                     BulkAction::make('rematch')
                         ->label('Rematch selected')
                         ->icon('heroicon-o-arrow-path')
@@ -240,7 +287,7 @@ class RevenueImportResource extends Resource
                         ->color('success')
                         ->requiresConfirmation()
                         ->modalHeading('Send SMS for selected imports')
-                        ->modalDescription('Only ready imports (all rows matched, phones set, not yet sent) will be queued. Double sending is blocked.')
+                        ->modalDescription('Only imports with status Ready to send (and unsent Ready rows) will be queued.')
                         ->deselectRecordsAfterCompletion()
                         ->action(function (Collection $records, RevenueImportService $revenueImports): void {
                             /** @var User|null $user */
@@ -259,11 +306,7 @@ class RevenueImportResource extends Resource
 
                                     continue;
                                 }
-                                if (! static::importIsEditable($import)
-                                    || $import->matched_count < 1
-                                    || $import->missing_partner_count > 0
-                                    || $import->missing_phone_count > 0
-                                    || $import->invalid_count > 0) {
+                                if (! $revenueImports->importCanSendSms($import)) {
                                     $skipped++;
 
                                     continue;
@@ -294,8 +337,7 @@ class RevenueImportResource extends Resource
 
     public static function importIsEditable(RevenueImport $import): bool
     {
-        return ! in_array($import->status, [RevenueImportStatus::Sending, RevenueImportStatus::Completed], true)
-            && blank($import->bulk_message_id);
+        return ! in_array($import->status, [RevenueImportStatus::Sending, RevenueImportStatus::Completed], true);
     }
 
     public static function getRelations(): array

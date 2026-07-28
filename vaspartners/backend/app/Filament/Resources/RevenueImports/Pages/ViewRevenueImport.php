@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\RevenueImports\Pages;
 
 use App\Enums\RevenueImportStatus;
-use App\Filament\Resources\BulkMessages\BulkMessageResource;
 use App\Filament\Resources\RevenueImports\RevenueImportResource;
 use App\Filament\Resources\RevenuePartners\RevenuePartnerResource;
 use App\Models\RevenueImport;
@@ -11,6 +10,7 @@ use App\Models\User;
 use App\Services\RevenueImportService;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Illuminate\Validation\ValidationException;
@@ -55,6 +55,47 @@ class ViewRevenueImport extends ViewRecord
             EditAction::make()
                 ->url(fn (): string => RevenueImportResource::getUrl('edit', ['record' => $record]))
                 ->visible(fn (): bool => RevenueImportResource::canEdit($record->fresh() ?? $record)),
+            Action::make('set_status')
+                ->label('Set status')
+                ->icon('heroicon-o-flag')
+                ->color('gray')
+                ->visible(fn (): bool => $this->importIsEditable($record))
+                ->fillForm(fn (): array => [
+                    'status' => ($record->fresh()->status instanceof RevenueImportStatus
+                        ? $record->fresh()->status->value
+                        : (string) $record->fresh()->status),
+                ])
+                ->form([
+                    Select::make('status')
+                        ->label('Import status')
+                        ->options(collect([
+                            RevenueImportStatus::Draft,
+                            RevenueImportStatus::Reviewing,
+                            RevenueImportStatus::Ready,
+                            RevenueImportStatus::Failed,
+                        ])->mapWithKeys(fn (RevenueImportStatus $s) => [$s->value => $s->label()])->all())
+                        ->required()
+                        ->native(false)
+                        ->helperText('Ready only if all rows are fixed. Sending / Completed are set when SMS is queued.'),
+                ])
+                ->action(function (array $data, RevenueImportService $revenueImports) use ($record): void {
+                    try {
+                        $status = RevenueImportStatus::from((string) $data['status']);
+                        $revenueImports->setImportStatus($record->fresh(), $status);
+                        Notification::make()
+                            ->title('Import status updated')
+                            ->body($status->label())
+                            ->success()
+                            ->send();
+                        $this->refreshFormData(['status']);
+                    } catch (ValidationException $e) {
+                        Notification::make()
+                            ->title('Could not set status')
+                            ->body(collect($e->errors())->flatten()->first() ?? $e->getMessage())
+                            ->danger()
+                            ->send();
+                    }
+                }),
             Action::make('register_missing')
                 ->label('Register missing partners')
                 ->icon('heroicon-o-user-plus')
@@ -78,6 +119,39 @@ class ViewRevenueImport extends ViewRecord
                 ->icon('heroicon-o-identification')
                 ->color('gray')
                 ->url(RevenuePartnerResource::getUrl('index')),
+            Action::make('sync_phones')
+                ->label('Sync phones')
+                ->icon('heroicon-o-device-phone-mobile')
+                ->color('warning')
+                ->visible(fn (): bool => $this->importIsEditable($record)
+                    && $record->fresh()->missing_phone_count > 0)
+                ->requiresConfirmation()
+                ->modalHeading('Sync phones from Revenue Partners')
+                ->modalDescription('Re-check missing-phone rows by Service ID or Short code. Rows become ready when the master partner has a usable phone.')
+                ->action(function (RevenueImportService $revenueImports) use ($record): void {
+                    try {
+                        $result = $revenueImports->syncPhonesFromPartners($record->fresh());
+                        Notification::make()
+                            ->title($result['synced'] > 0
+                                ? "Synced phone for {$result['synced']} row(s)"
+                                : 'No phones synced')
+                            ->body(collect([
+                                $result['still_missing'] > 0 ? "{$result['still_missing']} still missing phone on partner" : null,
+                                $result['unresolved'] > 0 ? "{$result['unresolved']} unresolved (no partner)" : null,
+                            ])->filter()->implode('. ') ?: null)
+                            ->color($result['synced'] > 0 ? 'success' : 'warning')
+                            ->send();
+                        $this->refreshFormData([
+                            'status', 'matched_count', 'missing_partner_count', 'missing_phone_count', 'invalid_count',
+                        ]);
+                    } catch (ValidationException $e) {
+                        Notification::make()
+                            ->title('Could not sync phones')
+                            ->body(collect($e->errors())->flatten()->first() ?? $e->getMessage())
+                            ->danger()
+                            ->send();
+                    }
+                }),
             Action::make('rematch')
                 ->label('Rematch')
                 ->icon('heroicon-o-arrow-path')
@@ -95,22 +169,25 @@ class ViewRevenueImport extends ViewRecord
                 ->icon('heroicon-o-paper-airplane')
                 ->color('success')
                 ->visible(fn (): bool => $canSend
-                    && $this->importIsEditable($record)
-                    && $record->fresh()->matched_count > 0
-                    && $record->fresh()->missing_partner_count === 0
-                    && $record->fresh()->missing_phone_count === 0
-                    && $record->fresh()->invalid_count === 0)
+                    && app(RevenueImportService::class)->importCanSendSms($record->fresh()))
                 ->requiresConfirmation()
-                ->modalHeading('Send bulk SMS for this import')
+                ->modalHeading('Send SMS for Ready rows')
                 ->modalDescription(fn (): string => sprintf(
-                    'Queue %d ready row(s). Double sending for the same partner + month is blocked.',
-                    $record->fresh()->matched_count,
+                    'Import must be Ready to send. Queue %d Ready row(s) that still need SMS.',
+                    app(RevenueImportService::class)->unsentReadyCount($record->fresh()),
                 ))
                 ->action(function (RevenueImportService $revenueImports) use ($record): void {
                     try {
                         $campaign = $revenueImports->sendViaBulkMessage($record->fresh());
-                        Notification::make()->title('SMS queued')->success()->send();
-                        $this->redirect(BulkMessageResource::getUrl('view', ['record' => $campaign]));
+                        $count = $campaign->recipients()->count();
+                        Notification::make()
+                            ->title('SMS queued')
+                            ->body("{$count} message(s) queued from Monthly Revenue.")
+                            ->success()
+                            ->send();
+                        $this->refreshFormData([
+                            'status', 'matched_count', 'missing_partner_count', 'missing_phone_count', 'invalid_count', 'sent_at',
+                        ]);
                     } catch (ValidationException $e) {
                         Notification::make()
                             ->title('Could not send')

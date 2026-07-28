@@ -62,6 +62,265 @@ class RevenueImportService
     }
 
     /**
+     * Re-check rows against the master list by service ID and/or short code
+     * and mark matched when the partner now has a usable phone.
+     *
+     * @param  iterable<int>|null  $rowIds  null = all missing-phone rows on the import
+     * @return array{synced: int, still_missing: int, unresolved: int}
+     */
+    public function syncPhonesFromPartners(RevenueImport $import, ?iterable $rowIds = null): array
+    {
+        /** @var User|null $actor */
+        $actor = auth()->user();
+        $this->assertCanManage($actor, $import);
+
+        if (in_array($import->status, [RevenueImportStatus::Sending, RevenueImportStatus::Completed], true)
+            || filled($import->bulk_message_id)) {
+            throw ValidationException::withMessages(['import' => 'This import can no longer be edited.']);
+        }
+
+        $ids = $rowIds === null ? null : collect($rowIds)->map(fn ($id) => (int) $id)->filter()->unique()->values()->all();
+
+        $synced = 0;
+        $stillMissing = 0;
+        $unresolved = 0;
+
+        DB::transaction(function () use ($import, $ids, &$synced, &$stillMissing, &$unresolved): void {
+            $ownerUserId = $this->ownerUserIdForImport($import);
+            $vasServiceId = (int) $import->vas_service_id;
+            $period = (string) $import->period;
+
+            $query = $import->rows()->orderBy('id');
+            if ($ids !== null) {
+                $query->whereIn('id', $ids);
+            } else {
+                $query->where('status', RevenueImportRowStatus::MissingPhone->value);
+            }
+
+            $rows = $query->get();
+            $targetIds = $rows->pluck('id')->all();
+
+            $seen = [];
+            foreach ($import->rows()->whereNotIn('id', $targetIds)->orderBy('id')->get() as $other) {
+                $key = (RevenuePartnerResolver::normalize($other->service_id) ?? '').'|'
+                    .(RevenuePartnerResolver::normalize($other->short_code) ?? '');
+                $seen[$key] = true;
+            }
+
+            foreach ($rows as $row) {
+                $payload = $this->classify(
+                    serviceId: $row->service_id,
+                    shortCode: $row->short_code,
+                    amount: $row->amount !== null ? (float) $row->amount : null,
+                    seen: $seen,
+                    ownerUserId: $ownerUserId,
+                    period: $period,
+                    excludeImportId: (int) $import->id,
+                );
+
+                $row->forceFill([
+                    'revenue_partner_id' => $payload['revenue_partner_id'],
+                    'partner_name' => $payload['partner_name'],
+                    'service_id' => $payload['resolved_service_id'] ?? $row->service_id,
+                    'short_code' => $payload['resolved_short_code'] ?? $row->short_code,
+                    'vas_service_id' => $vasServiceId,
+                    'status' => $payload['status'],
+                    'error' => $payload['error'],
+                    'amount' => $payload['amount'],
+                ])->save();
+
+                match ($payload['status']) {
+                    RevenueImportRowStatus::Matched => $synced++,
+                    RevenueImportRowStatus::MissingPhone => $stillMissing++,
+                    RevenueImportRowStatus::MissingPartner => $unresolved++,
+                    default => null,
+                };
+            }
+
+            $import->resolveStatusFromRows();
+        });
+
+        return [
+            'synced' => $synced,
+            'still_missing' => $stillMissing,
+            'unresolved' => $unresolved,
+        ];
+    }
+
+    /**
+     * Manually set status on one or more import rows, then refresh the import status.
+     *
+     * @param  iterable<int>  $rowIds
+     * @return array{updated: int, skipped: int, errors: list<string>}
+     */
+    public function setRowStatuses(
+        RevenueImport $import,
+        iterable $rowIds,
+        RevenueImportRowStatus $status,
+        ?string $note = null,
+    ): array {
+        /** @var User|null $actor */
+        $actor = auth()->user();
+        $this->assertCanManage($actor, $import);
+        $this->assertImportEditable($import);
+
+        $ids = collect($rowIds)->map(fn ($id) => (int) $id)->filter()->unique()->values()->all();
+        $updated = 0;
+        $skipped = 0;
+        $errors = [];
+        $note = filled(trim((string) $note)) ? trim((string) $note) : null;
+
+        DB::transaction(function () use ($import, $ids, $status, $note, &$updated, &$skipped, &$errors): void {
+            $ownerUserId = $this->ownerUserIdForImport($import);
+            $rows = $import->rows()->with('partner')->whereIn('id', $ids)->orderBy('id')->get();
+
+            foreach ($rows as $row) {
+                try {
+                    $this->applyManualRowStatus($row, $status, $note, $ownerUserId);
+                    $updated++;
+                } catch (ValidationException $e) {
+                    $skipped++;
+                    $errors[] = ($row->service_id ?: $row->short_code ?: "#{$row->id}").': '
+                        .(collect($e->errors())->flatten()->first() ?? $e->getMessage());
+                }
+            }
+
+            $import->resolveStatusFromRows();
+        });
+
+        return [
+            'updated' => $updated,
+            'skipped' => $skipped,
+            'errors' => $errors,
+        ];
+    }
+
+    /**
+     * Manually set the monthly import status (not Sending / Completed).
+     */
+    public function setImportStatus(RevenueImport $import, RevenueImportStatus $status): void
+    {
+        /** @var User|null $actor */
+        $actor = auth()->user();
+        $this->assertCanManage($actor, $import);
+        $this->assertImportEditable($import);
+
+        if (in_array($status, [RevenueImportStatus::Sending, RevenueImportStatus::Completed], true)) {
+            throw ValidationException::withMessages([
+                'status' => 'Sending and Completed are set automatically when SMS is queued.',
+            ]);
+        }
+
+        if ($status === RevenueImportStatus::Ready) {
+            $import->refreshCounts();
+            if ($import->matched_count < 1
+                || $import->missing_partner_count > 0
+                || $import->missing_phone_count > 0) {
+                throw ValidationException::withMessages([
+                    'status' => 'Import is not Ready yet — fix unresolved / missing-phone rows first.',
+                ]);
+            }
+        }
+
+        $import->forceFill(['status' => $status])->save();
+    }
+
+    protected function applyManualRowStatus(
+        RevenueImportRow $row,
+        RevenueImportRowStatus $status,
+        ?string $note,
+        ?int $ownerUserId,
+    ): void {
+        $partner = $row->partner;
+
+        $payload = match ($status) {
+            RevenueImportRowStatus::Matched => $this->manualMatchedPayload($row, $partner, $ownerUserId),
+            RevenueImportRowStatus::MissingPartner => [
+                'revenue_partner_id' => null,
+                'partner_name' => $row->partner_name,
+                'status' => RevenueImportRowStatus::MissingPartner,
+                'error' => $note ?? 'Marked unresolved manually.',
+            ],
+            RevenueImportRowStatus::MissingPhone => [
+                'revenue_partner_id' => $row->revenue_partner_id,
+                'partner_name' => $partner?->partner_name ?? $row->partner_name,
+                'status' => RevenueImportRowStatus::MissingPhone,
+                'error' => $note ?? 'Marked missing phone manually.',
+            ],
+            RevenueImportRowStatus::Invalid => [
+                'revenue_partner_id' => $row->revenue_partner_id,
+                'partner_name' => $row->partner_name,
+                'status' => RevenueImportRowStatus::Invalid,
+                'error' => $note ?? 'Marked invalid manually.',
+            ],
+            RevenueImportRowStatus::Duplicate => [
+                'revenue_partner_id' => $row->revenue_partner_id,
+                'partner_name' => $row->partner_name,
+                'status' => RevenueImportRowStatus::Duplicate,
+                'error' => $note ?? 'Marked duplicate manually.',
+            ],
+        };
+
+        $row->forceFill($payload)->save();
+    }
+
+    /**
+     * @return array{
+     *   revenue_partner_id: int,
+     *   partner_name: ?string,
+     *   service_id: ?string,
+     *   short_code: ?string,
+     *   status: RevenueImportRowStatus,
+     *   error: null
+     * }
+     */
+    protected function manualMatchedPayload(
+        RevenueImportRow $row,
+        ?RevenuePartner $partner,
+        ?int $ownerUserId,
+    ): array {
+        if (! $partner) {
+            $lookup = $this->partners->resolve($row->service_id, $row->short_code, $ownerUserId);
+            $partner = $lookup['ok'] ? $lookup['partner'] : null;
+        }
+
+        if (! $partner) {
+            throw ValidationException::withMessages([
+                'status' => 'Cannot mark Ready — no master partner for this Service ID / Short code.',
+            ]);
+        }
+
+        if (! $partner->is_active) {
+            throw ValidationException::withMessages([
+                'status' => 'Cannot mark Ready — partner is inactive.',
+            ]);
+        }
+
+        if (! $partner->hasUsablePhone()) {
+            throw ValidationException::withMessages([
+                'status' => 'Cannot mark Ready — partner has no usable phone. Sync phone or set it on the master list.',
+            ]);
+        }
+
+        return [
+            'revenue_partner_id' => $partner->id,
+            'partner_name' => $partner->partner_name,
+            'service_id' => $partner->service_id ?? $row->service_id,
+            'short_code' => RevenuePartnerResolver::normalize($partner->short_code) ?? $row->short_code,
+            'status' => RevenueImportRowStatus::Matched,
+            'error' => null,
+        ];
+    }
+
+    protected function assertImportEditable(RevenueImport $import): void
+    {
+        if (in_array($import->status, [RevenueImportStatus::Sending, RevenueImportStatus::Completed], true)
+            || filled($import->bulk_message_id)) {
+            throw ValidationException::withMessages(['import' => 'This import can no longer be edited.']);
+        }
+    }
+
+    /**
      * @param  array{service_id?: mixed, short_code?: mixed, amount?: mixed}  $data
      */
     public function updateRow(RevenueImportRow $row, array $data, User $actor): void
@@ -238,6 +497,19 @@ class RevenueImportService
 
     public function sendViaBulkMessage(RevenueImport $import, ?string $messageTemplate = null): BulkMessage
     {
+        return $this->sendRowsViaBulkMessage($import, null, $messageTemplate);
+    }
+
+    /**
+     * Queue SMS for ready (matched + phone) rows that have not been sent yet.
+     *
+     * @param  iterable<int>|null  $rowIds  null = all unsent ready rows on the import
+     */
+    public function sendRowsViaBulkMessage(
+        RevenueImport $import,
+        ?iterable $rowIds = null,
+        ?string $messageTemplate = null,
+    ): BulkMessage {
         /** @var User|null $actor */
         $actor = auth()->user();
         if (! $actor || ! $this->actorCanSend($actor, $import)) {
@@ -246,13 +518,18 @@ class RevenueImportService
             ]);
         }
 
-        if (in_array($import->status, [RevenueImportStatus::Sending, RevenueImportStatus::Completed], true)
-            || filled($import->bulk_message_id)) {
-            throw ValidationException::withMessages(['import' => 'This import was already sent. Double sending is blocked.']);
+        if (in_array($import->status, [RevenueImportStatus::Sending, RevenueImportStatus::Completed], true)) {
+            throw ValidationException::withMessages([
+                'import' => $import->status === RevenueImportStatus::Completed
+                    ? 'This import is already completed.'
+                    : 'SMS is already sending for this import. Wait for it to finish.',
+            ]);
         }
 
-        if ($import->missing_partner_count > 0 || $import->missing_phone_count > 0 || $import->invalid_count > 0) {
-            throw ValidationException::withMessages(['import' => 'Fix unresolved / invalid / missing-phone rows before sending.']);
+        if ($import->status !== RevenueImportStatus::Ready) {
+            throw ValidationException::withMessages([
+                'import' => 'Import status must be Ready to send before SMS can be queued.',
+            ]);
         }
 
         $template = trim((string) ($messageTemplate ?? $import->message_template ?: BulkMessageService::DEFAULT_MESSAGE));
@@ -260,28 +537,83 @@ class RevenueImportService
             throw ValidationException::withMessages(['message' => 'SMS template is required (max 640).']);
         }
 
-        $ready = $import->rows()
-            ->where('status', RevenueImportRowStatus::Matched->value)
-            ->with(['partner', 'vasService'])
-            ->orderBy('id')
-            ->get();
+        $ids = $rowIds === null
+            ? null
+            : collect($rowIds)->map(fn ($id) => (int) $id)->filter()->unique()->values()->all();
 
-        if ($ready->isEmpty()) {
-            throw ValidationException::withMessages(['import' => 'No ready rows to send.']);
+        if ($ids !== null) {
+            $selected = $import->rows()->whereIn('id', $ids)->with('partner')->orderBy('id')->get();
+            if ($selected->isEmpty()) {
+                throw ValidationException::withMessages(['import' => 'No rows selected.']);
+            }
+
+            $notReady = $selected->filter(
+                fn (RevenueImportRow $row): bool => $row->status !== RevenueImportRowStatus::Matched
+                    || $row->wasSent()
+                    || ! $row->partner
+                    || ! $row->partner->hasUsablePhone()
+            );
+
+            if ($notReady->isNotEmpty()) {
+                $sample = $notReady->take(3)->map(function (RevenueImportRow $row): string {
+                    $key = $row->service_id ?: $row->short_code ?: "#{$row->id}";
+                    $status = $row->status instanceof RevenueImportRowStatus
+                        ? $row->status->label()
+                        : (string) $row->status;
+
+                    return "{$key} ({$status})";
+                })->implode(', ');
+
+                throw ValidationException::withMessages([
+                    'import' => "Only Ready rows can be sent. {$notReady->count()} selected row(s) are not Ready"
+                        .($sample !== '' ? ": {$sample}" : '.'),
+                ]);
+            }
         }
 
-        // Block double send for the same partner + period already completed elsewhere.
+        $query = $import->rows()
+            ->where('status', RevenueImportRowStatus::Matched->value)
+            ->whereNull('sent_at')
+            ->whereNull('bulk_message_id')
+            ->with(['partner', 'vasService'])
+            ->orderBy('id');
+
+        if ($ids !== null) {
+            $query->whereIn('id', $ids);
+        }
+
+        $ready = $query->get();
+
+        if ($ready->isEmpty()) {
+            throw ValidationException::withMessages([
+                'import' => $ids !== null
+                    ? 'No selected Ready rows left to send.'
+                    : 'No Ready rows left to send.',
+            ]);
+        }
+
         foreach ($ready as $row) {
+            $partner = $row->partner;
+            if (! $partner || ! $partner->hasUsablePhone()) {
+                throw ValidationException::withMessages([
+                    'import' => "Row {$row->service_id} has no usable partner phone.",
+                ]);
+            }
             if ($this->alreadySentForPeriod($row, (string) $import->period, (int) $import->id)) {
                 throw ValidationException::withMessages([
-                    'import' => "SMS already sent for period {$import->period} and service ID {$row->service_id}. Rematch or remove that row.",
+                    'import' => "SMS already sent for period {$import->period} and service ID {$row->service_id}.",
                 ]);
             }
         }
 
         return DB::transaction(function () use ($import, $template, $ready, $actor): BulkMessage {
+            $title = $import->title;
+            if ($ready->count() < (int) $import->matched_count) {
+                $title .= ' (partial '.$ready->count().')';
+            }
+
             $campaign = BulkMessage::query()->create([
-                'title' => $import->title,
+                'title' => $title,
                 'message' => $template,
                 'source_filename' => $import->source_filename,
                 'source_path' => null,
@@ -290,6 +622,7 @@ class RevenueImportService
             ]);
 
             $serviceLabel = $import->vasService?->name ?? 'Service';
+            $sentAt = now();
 
             foreach ($ready as $index => $row) {
                 $partner = $row->partner;
@@ -315,6 +648,11 @@ class RevenueImportService
                     'status' => BulkMessageRecipientStatus::Pending,
                     'error' => null,
                 ]);
+
+                $row->forceFill([
+                    'bulk_message_id' => $campaign->id,
+                    'sent_at' => $sentAt,
+                ])->save();
             }
 
             $campaign->refreshCounts();
@@ -322,7 +660,7 @@ class RevenueImportService
                 'bulk_message_id' => $campaign->id,
                 'message_template' => $template,
                 'status' => RevenueImportStatus::Sending,
-                'sent_at' => now(),
+                'sent_at' => $import->sent_at ?? $sentAt,
                 'sent_by_user_id' => $actor->id,
             ])->save();
 
@@ -344,15 +682,80 @@ class RevenueImportService
         }
 
         if ($campaign->status === BulkMessageStatus::Completed) {
-            $import->forceFill(['status' => RevenueImportStatus::Completed])->save();
+            $this->finalizeAfterCampaign($import);
         } elseif ($campaign->status === BulkMessageStatus::Failed) {
+            // Unlock so remaining ready rows can still be sent after fixing failures.
             $import->forceFill(['status' => RevenueImportStatus::Failed])->save();
+            $import->refresh();
+            if ($this->unsentReadyCount($import) > 0
+                || $import->missing_partner_count > 0
+                || $import->missing_phone_count > 0) {
+                $import->forceFill(['status' => RevenueImportStatus::Reviewing])->save();
+                $import->resolveStatusFromRows();
+            }
         }
+    }
+
+    protected function finalizeAfterCampaign(RevenueImport $import): void
+    {
+        $import->refreshCounts();
+        $unsentReady = $this->unsentReadyCount($import);
+
+        if ($unsentReady === 0
+            && $import->missing_partner_count === 0
+            && $import->missing_phone_count === 0) {
+            $import->forceFill(['status' => RevenueImportStatus::Completed])->save();
+
+            return;
+        }
+
+        // Unlock for more partial sends / fixes.
+        $import->forceFill(['status' => RevenueImportStatus::Reviewing])->save();
+        $import->resolveStatusFromRows();
+    }
+
+    public function unsentReadyCount(RevenueImport $import): int
+    {
+        return $import->rows()
+            ->where('status', RevenueImportRowStatus::Matched->value)
+            ->whereNull('sent_at')
+            ->whereNull('bulk_message_id')
+            ->count();
     }
 
     public function actorCanSend(User $actor, RevenueImport $import): bool
     {
         return $this->actorCanManage($actor, $import);
+    }
+
+    public function rowCanSendSms(RevenueImportRow $row, ?RevenueImport $import = null): bool
+    {
+        $import ??= $row->import;
+        if (! $import) {
+            return false;
+        }
+
+        if ($import->status !== RevenueImportStatus::Ready) {
+            return false;
+        }
+
+        if ($row->wasSent()) {
+            return false;
+        }
+
+        if ($row->status !== RevenueImportRowStatus::Matched) {
+            return false;
+        }
+
+        $partner = $row->partner;
+
+        return $partner !== null && $partner->hasUsablePhone();
+    }
+
+    public function importCanSendSms(RevenueImport $import): bool
+    {
+        return $import->status === RevenueImportStatus::Ready
+            && $this->unsentReadyCount($import) > 0;
     }
 
     /**
@@ -503,13 +906,11 @@ class RevenueImportService
         }
 
         return RevenueImportRow::query()
+            ->where(function ($q): void {
+                $q->whereNotNull('sent_at')->orWhereNotNull('bulk_message_id');
+            })
             ->whereHas('import', function ($q) use ($period, $excludeImportId): void {
-                $q->where('period', $period)
-                    ->whereIn('status', [
-                        RevenueImportStatus::Sending->value,
-                        RevenueImportStatus::Completed->value,
-                    ])
-                    ->whereNotNull('bulk_message_id');
+                $q->where('period', $period);
                 if ($excludeImportId) {
                     $q->where('id', '!=', $excludeImportId);
                 }

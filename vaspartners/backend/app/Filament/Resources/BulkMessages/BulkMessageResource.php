@@ -43,6 +43,17 @@ class BulkMessageResource extends Resource
 
     protected static ?int $navigationSort = 4;
 
+    public static function shouldRegisterNavigation(): bool
+    {
+        // Monthly Revenue owns partner messaging now; keep Bulk Messages off the nav.
+        return false;
+    }
+
+    public static function canAccess(): bool
+    {
+        return false;
+    }
+
     public static function getNavigationBadgeTooltip(): ?string
     {
         return 'Special-case SMS campaigns imported from CSV/Excel';

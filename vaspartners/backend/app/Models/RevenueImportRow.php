@@ -21,6 +21,8 @@ class RevenueImportRow extends Model
         'status',
         'error',
         'raw',
+        'bulk_message_id',
+        'sent_at',
     ];
 
     protected function casts(): array
@@ -29,6 +31,7 @@ class RevenueImportRow extends Model
             'status' => RevenueImportRowStatus::class,
             'amount' => 'decimal:4',
             'raw' => 'array',
+            'sent_at' => 'datetime',
         ];
     }
 
@@ -45,5 +48,15 @@ class RevenueImportRow extends Model
     public function vasService(): BelongsTo
     {
         return $this->belongsTo(Service::class, 'vas_service_id');
+    }
+
+    public function bulkMessage(): BelongsTo
+    {
+        return $this->belongsTo(BulkMessage::class, 'bulk_message_id');
+    }
+
+    public function wasSent(): bool
+    {
+        return filled($this->sent_at) || filled($this->bulk_message_id);
     }
 }
