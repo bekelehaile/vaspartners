@@ -4,7 +4,9 @@ namespace App\Services;
 
 use App\Models\AppSetting;
 use App\Models\Contact;
+use App\Support\EmailAddress;
 use App\Support\PhoneNumber;
+use App\Support\PortalProfileOptions;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -84,9 +86,10 @@ class PortalPhoneOtpService
     /**
      * Verify OTP and return an authenticated contact (creates profile on first sign-in).
      *
+     * @param  array{name?: ?string, email?: ?string, gender?: ?string, nationality?: ?string}|null  $profile
      * @return array{contact: Contact, token: string, is_new: bool}
      */
-    public function verify(string $rawPhone, string $code, ?string $name = null): array
+    public function verify(string $rawPhone, string $code, ?array $profile = null): array
     {
         $this->assertEnabled();
 
@@ -107,7 +110,7 @@ class PortalPhoneOtpService
 
         $this->deleteRecord($phone);
 
-        $result = $this->findOrCreateContact($phone, $name);
+        $result = $this->findOrCreateContact($phone, $profile ?? []);
         $contact = $result['contact'];
 
         if ($contact->is_banned || ! $contact->is_active) {
@@ -137,23 +140,41 @@ class PortalPhoneOtpService
     }
 
     /**
+     * @param  array{name?: ?string, email?: ?string, gender?: ?string, nationality?: ?string}  $profile
      * @return array{contact: Contact, is_new: bool}
      */
-    protected function findOrCreateContact(string $phone, ?string $name): array
+    protected function findOrCreateContact(string $phone, array $profile): array
     {
         $contact = Contact::query()->where('phone_number', $phone)->first();
-        $isNew = false;
 
         if ($contact) {
             return ['contact' => $contact, 'is_new' => false];
         }
 
-        $displayName = trim((string) $name);
+        $displayName = trim((string) ($profile['name'] ?? ''));
         if ($displayName === '') {
             throw new RuntimeException('Please enter your full name to create your profile.');
         }
         if (mb_strlen($displayName) < 2 || mb_strlen($displayName) > 120) {
             throw new RuntimeException('Name must be between 2 and 120 characters.');
+        }
+
+        $email = EmailAddress::normalize($profile['email'] ?? null);
+        if (! $email || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            throw new RuntimeException('Please enter a valid email address.');
+        }
+
+        $gender = trim((string) ($profile['gender'] ?? ''));
+        if (! PortalProfileOptions::isValidGender($gender)) {
+            throw new RuntimeException('Please select gender (Male or Female).');
+        }
+
+        $nationality = trim((string) ($profile['nationality'] ?? PortalProfileOptions::DEFAULT_NATIONALITY));
+        if ($nationality === '') {
+            $nationality = PortalProfileOptions::DEFAULT_NATIONALITY;
+        }
+        if (! PortalProfileOptions::isValidNationality($nationality)) {
+            throw new RuntimeException('Please select a valid nationality.');
         }
 
         $sub = 'otp-'.$phone;
@@ -162,13 +183,15 @@ class PortalPhoneOtpService
             'sub' => $sub,
             'name' => $displayName,
             'phone_number' => $phone,
+            'email' => $email,
+            'gender' => $gender,
+            'nationality' => $nationality,
             'identification_type' => '2',
             'identification_number' => $sub,
         ]);
         $contact->forceFill(['is_active' => true])->save();
-        $isNew = true;
 
-        return ['contact' => $contact->fresh(), 'is_new' => $isNew];
+        return ['contact' => $contact->fresh(), 'is_new' => true];
     }
 
     protected function findValidRecord(string $phone, string $otp): ?stdClass

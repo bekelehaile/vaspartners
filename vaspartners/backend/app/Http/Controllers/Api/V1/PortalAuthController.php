@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\AppSetting;
 use App\Services\CompanyMembershipService;
 use App\Services\PortalPhoneOtpService;
+use App\Support\PortalProfileOptions;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use RuntimeException;
 use Throwable;
 
@@ -15,7 +17,12 @@ class PortalAuthController extends Controller
     public function config()
     {
         return response()->json([
-            'data' => AppSetting::authConfig(),
+            'data' => [
+                ...AppSetting::authConfig(),
+                'genders' => PortalProfileOptions::GENDERS,
+                'nationalities' => PortalProfileOptions::nationalities(),
+                'default_nationality' => PortalProfileOptions::DEFAULT_NATIONALITY,
+            ],
         ]);
     }
 
@@ -47,13 +54,21 @@ class PortalAuthController extends Controller
             'phone' => ['required', 'string', 'max:32'],
             'code' => ['required', 'string', 'max:12'],
             'name' => ['nullable', 'string', 'max:120'],
+            'email' => ['nullable', 'string', 'max:255'],
+            'gender' => ['nullable', 'string', Rule::in(PortalProfileOptions::GENDERS)],
+            'nationality' => ['nullable', 'string', Rule::in(PortalProfileOptions::nationalities())],
         ]);
 
         try {
             $result = $otp->verify(
                 $data['phone'],
                 $data['code'],
-                $data['name'] ?? null,
+                [
+                    'name' => $data['name'] ?? null,
+                    'email' => $data['email'] ?? null,
+                    'gender' => $data['gender'] ?? null,
+                    'nationality' => $data['nationality'] ?? PortalProfileOptions::DEFAULT_NATIONALITY,
+                ],
             );
         } catch (RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);

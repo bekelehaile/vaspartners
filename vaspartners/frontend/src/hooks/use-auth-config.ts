@@ -9,6 +9,9 @@ const fallback: AuthConfig = {
   fayda_enabled: true,
   phone_otp_enabled: true,
   note: null,
+  genders: ["Male", "Female"],
+  nationalities: ["Ethiopia"],
+  default_nationality: "Ethiopia",
 };
 
 export function useAuthConfig() {

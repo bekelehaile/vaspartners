@@ -17,6 +17,10 @@ import { queryKeys } from "@/lib/query-keys";
 
 type Step = "phone" | "code";
 
+const FALLBACK_GENDERS = ["Male", "Female"];
+const FALLBACK_NATIONALITIES = ["Ethiopia"];
+const FALLBACK_DEFAULT_NATIONALITY = "Ethiopia";
+
 export function LoginPageView() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -26,12 +30,23 @@ export function LoginPageView() {
 
   const faydaOn = authConfig?.fayda_enabled ?? true;
   const otpOn = authConfig?.phone_otp_enabled ?? true;
+  const genders = authConfig?.genders?.length
+    ? authConfig.genders
+    : FALLBACK_GENDERS;
+  const nationalities = authConfig?.nationalities?.length
+    ? authConfig.nationalities
+    : FALLBACK_NATIONALITIES;
+  const defaultNationality =
+    authConfig?.default_nationality || FALLBACK_DEFAULT_NATIONALITY;
 
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
-  const [needsName, setNeedsName] = useState(false);
+  const [email, setEmail] = useState("");
+  const [gender, setGender] = useState("");
+  const [nationality, setNationality] = useState(defaultNationality);
+  const [needsProfile, setNeedsProfile] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -71,7 +86,8 @@ export function LoginPageView() {
     try {
       const res = await requestPortalOtp(phone);
       setPhone(res.data.phone);
-      setNeedsName(res.data.needs_name);
+      setNeedsProfile(res.data.needs_name);
+      setNationality(defaultNationality);
       setStep("code");
       setInfo("We sent a 6-digit code by SMS. It expires in 5 minutes.");
     } catch (err) {
@@ -89,7 +105,14 @@ export function LoginPageView() {
       const res = await verifyPortalOtp({
         phone,
         code,
-        name: needsName ? name : undefined,
+        ...(needsProfile
+          ? {
+              name,
+              email,
+              gender,
+              nationality: nationality || defaultNationality,
+            }
+          : {}),
       });
       setToken(res.data.token);
       queryClient.setQueryData(queryKeys.contact.me, res.data.contact);
@@ -169,7 +192,7 @@ export function LoginPageView() {
                       Change number
                     </button>
                   </p>
-                  {needsName && (
+                  {needsProfile && (
                     <>
                       <label htmlFor="login-name">Full name</label>
                       <input
@@ -183,6 +206,51 @@ export function LoginPageView() {
                         required
                         disabled={busy}
                       />
+                      <label htmlFor="login-email">Email</label>
+                      <input
+                        id="login-email"
+                        name="email"
+                        type="email"
+                        autoComplete="email"
+                        placeholder="name@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                        disabled={busy}
+                      />
+                      <label htmlFor="login-gender">Gender</label>
+                      <select
+                        id="login-gender"
+                        name="gender"
+                        value={gender}
+                        onChange={(e) => setGender(e.target.value)}
+                        required
+                        disabled={busy}
+                      >
+                        <option value="" disabled>
+                          Select gender
+                        </option>
+                        {genders.map((g) => (
+                          <option key={g} value={g}>
+                            {g}
+                          </option>
+                        ))}
+                      </select>
+                      <label htmlFor="login-nationality">Nationality</label>
+                      <select
+                        id="login-nationality"
+                        name="nationality"
+                        value={nationality}
+                        onChange={(e) => setNationality(e.target.value)}
+                        required
+                        disabled={busy}
+                      >
+                        {nationalities.map((n) => (
+                          <option key={n} value={n}>
+                            {n}
+                          </option>
+                        ))}
+                      </select>
                     </>
                   )}
                   <label htmlFor="login-code">Verification code</label>

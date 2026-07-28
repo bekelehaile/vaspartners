@@ -271,6 +271,9 @@ export type AuthConfig = {
   fayda_enabled: boolean;
   phone_otp_enabled: boolean;
   note?: string | null;
+  genders?: string[];
+  nationalities?: string[];
+  default_nationality?: string;
 };
 
 export async function fetchAuthConfig(): Promise<AuthConfig> {
@@ -292,6 +295,9 @@ export async function verifyPortalOtp(payload: {
   phone: string;
   code: string;
   name?: string;
+  email?: string;
+  gender?: string;
+  nationality?: string;
 }) {
   return api<{
     message: string;
