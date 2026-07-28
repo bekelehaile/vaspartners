@@ -10,7 +10,6 @@ use App\Filament\Resources\RevenueImports\Pages\ListRevenueImports;
 use App\Filament\Resources\RevenueImports\Pages\ViewRevenueImport;
 use App\Filament\Resources\RevenueImports\RelationManagers\RowsRelationManager;
 use App\Models\RevenueImport;
-use App\Models\User;
 use App\Services\BulkMessageService;
 use App\Services\RevenueImportService;
 use App\Support\RevenueCatalogServices;
@@ -76,20 +75,6 @@ class RevenueImportResource extends Resource
                     ->preload()
                     ->native(false)
                     ->helperText('Used for SMS {service_type} wording.'),
-                Select::make('created_by_user_id')
-                    ->label('Imported by')
-                    ->options(fn (): array => User::query()
-                        ->where('is_active', true)
-                        ->whereDoesntHave('roles', fn ($q) => $q->where('name', 'super_admin'))
-                        ->orderBy('name')
-                        ->pluck('name', 'id')
-                        ->all())
-                    ->searchable()
-                    ->preload()
-                    ->nullable()
-                    ->native(false)
-                    ->visible(fn (): bool => (bool) auth()->user()?->canAccessAllRevenue())
-                    ->helperText('Owner of this monthly import (AMs only see their own).'),
                 Textarea::make('message_template')
                     ->label('SMS template')
                     ->rows(4)
