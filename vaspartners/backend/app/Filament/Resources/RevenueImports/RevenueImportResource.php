@@ -3,17 +3,24 @@
 namespace App\Filament\Resources\RevenueImports;
 
 use App\Enums\RevenueImportStatus;
+use App\Filament\Imports\MonthlyRevenueImporter;
 use App\Filament\Resources\BulkMessages\BulkMessageResource;
+use App\Filament\Resources\RevenueImports\Pages\EditRevenueImport;
 use App\Filament\Resources\RevenueImports\Pages\ListRevenueImports;
 use App\Filament\Resources\RevenueImports\Pages\ViewRevenueImport;
 use App\Filament\Resources\RevenueImports\RelationManagers\RowsRelationManager;
 use App\Models\RevenueImport;
 use App\Models\User;
+use App\Services\BulkMessageService;
 use App\Services\RevenueImportService;
 use App\Support\RevenueCatalogServices;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -49,7 +56,50 @@ class RevenueImportResource extends Resource
 
     public static function form(Schema $schema): Schema
     {
-        return $schema->components([]);
+        return $schema->components([
+            Section::make('Import')->schema([
+                TextInput::make('title')
+                    ->required()
+                    ->maxLength(255)
+                    ->columnSpanFull(),
+                Select::make('period')
+                    ->label('Month')
+                    ->options(fn (): array => MonthlyRevenueImporter::monthOptions())
+                    ->required()
+                    ->searchable()
+                    ->native(false),
+                Select::make('vas_service_id')
+                    ->label('Catalog service')
+                    ->options(fn (): array => RevenueCatalogServices::options())
+                    ->required()
+                    ->searchable()
+                    ->preload()
+                    ->native(false)
+                    ->helperText('Used for SMS {service_type} wording.'),
+                Select::make('created_by_user_id')
+                    ->label('Imported by')
+                    ->options(fn (): array => User::query()
+                        ->where('is_active', true)
+                        ->whereDoesntHave('roles', fn ($q) => $q->where('name', 'super_admin'))
+                        ->orderBy('name')
+                        ->pluck('name', 'id')
+                        ->all())
+                    ->searchable()
+                    ->preload()
+                    ->nullable()
+                    ->native(false)
+                    ->visible(fn (): bool => (bool) auth()->user()?->canAccessAllRevenue())
+                    ->helperText('Owner of this monthly import (AMs only see their own).'),
+                Textarea::make('message_template')
+                    ->label('SMS template')
+                    ->rows(4)
+                    ->required()
+                    ->maxLength(640)
+                    ->default(BulkMessageService::DEFAULT_MESSAGE)
+                    ->helperText('{company_name} {period} {service_type} {service_id} {amount}')
+                    ->columnSpanFull(),
+            ])->columns(2),
+        ]);
     }
 
     public static function infolist(Schema $schema): Schema
@@ -130,6 +180,9 @@ class RevenueImportResource extends Resource
             ->recordActions([
                 ViewAction::make()
                     ->url(fn (RevenueImport $record): string => static::getUrl('view', ['record' => $record])),
+                EditAction::make()
+                    ->url(fn (RevenueImport $record): string => static::getUrl('edit', ['record' => $record]))
+                    ->visible(fn (RevenueImport $record): bool => static::canEdit($record)),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -272,6 +325,7 @@ class RevenueImportResource extends Resource
         return [
             'index' => ListRevenueImports::route('/'),
             'view' => ViewRevenueImport::route('/{record}'),
+            'edit' => EditRevenueImport::route('/{record}/edit'),
         ];
     }
 
@@ -299,7 +353,18 @@ class RevenueImportResource extends Resource
 
     public static function canEdit(Model $record): bool
     {
-        return false;
+        if (! $record instanceof RevenueImport) {
+            return false;
+        }
+
+        if (! static::importIsEditable($record)) {
+            return false;
+        }
+
+        /** @var User|null $user */
+        $user = auth()->user();
+
+        return $user?->can('update', $record) ?? false;
     }
 
     public static function canDelete(Model $record): bool

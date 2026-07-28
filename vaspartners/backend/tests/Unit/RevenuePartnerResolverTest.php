@@ -134,12 +134,24 @@ class RevenuePartnerResolverTest extends TestCase
         $this->assertSame('7777', $result['short_code']);
     }
 
-    public function test_upsert_requires_service_id_for_create(): void
+    public function test_upsert_allows_short_code_only_create(): void
     {
         $result = $this->resolver->resolveForUpsert(null, '8500');
 
-        $this->assertFalse($result['ok']);
-        $this->assertStringContainsString('service_id is required', (string) $result['error']);
+        $this->assertTrue($result['ok']);
+        $this->assertNull($result['partner']);
+        $this->assertNull($result['service_id']);
+        $this->assertSame('8500', $result['short_code']);
+    }
+
+    public function test_upsert_allows_both_service_id_and_short_code(): void
+    {
+        $result = $this->resolver->resolveForUpsert('SID-NEW', '8600');
+
+        $this->assertTrue($result['ok']);
+        $this->assertNull($result['partner']);
+        $this->assertSame('SID-NEW', $result['service_id']);
+        $this->assertSame('8600', $result['short_code']);
     }
 
     public function test_owner_scope_matches_only_owned_partners(): void

@@ -139,9 +139,9 @@ class RevenuePartnerResolver
         $serviceId = $resolved['service_id'];
         $shortCode = $resolved['short_code'];
 
-        if ($resolved['partner'] === null && $serviceId === null) {
+        if ($resolved['partner'] === null && $serviceId === null && $shortCode === null) {
             return $this->fail(
-                'service_id is required to create a new revenue partner (short_code alone is only for matching).',
+                'Provide service ID and/or short code to create a partner.',
                 $serviceId,
                 $shortCode,
             );

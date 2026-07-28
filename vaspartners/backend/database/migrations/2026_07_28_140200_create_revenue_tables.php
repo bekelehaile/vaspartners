@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->ulid('public_id')->unique();
             // Finance / billing endpoint ID from Excel (not services.id).
-            $table->string('service_id', 64)->unique();
+            $table->string('service_id', 64)->nullable()->unique();
             $table->string('short_code', 64)->nullable()->unique();
             $table->foreignId('vas_service_id')->constrained('services')->restrictOnDelete();
             $table->string('partner_name');

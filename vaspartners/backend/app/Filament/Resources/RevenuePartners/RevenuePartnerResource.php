@@ -109,6 +109,16 @@ class RevenuePartnerResource extends Resource
                                 $fail('Phone must be a local mobile (9/7 + 8 digits).');
                             }
                         }),
+                    Select::make('created_by_user_id')
+                        ->label('Account manager')
+                        ->options(fn (): array => static::accountManagerOptions())
+                        ->searchable()
+                        ->preload()
+                        ->required()
+                        ->native(false)
+                        ->default(fn (): ?int => auth()->id())
+                        ->helperText('Staff user who owns this partner.')
+                        ->columnSpanFull(),
                     Toggle::make('is_active')
                         ->label('Active')
                         ->default(true)
@@ -129,15 +139,20 @@ class RevenuePartnerResource extends Resource
                         ->columnSpanFull(),
                     TextInput::make('service_id')
                         ->label('Service ID')
-                        ->required()
                         ->maxLength(64)
+                        ->nullable()
                         ->unique(ignoreRecord: true)
-                        ->helperText('Finance endpoint ID. Monthly CSV matches this within your partner list.'),
+                        ->requiredWithout('short_code')
+                        ->dehydrateStateUsing(fn (?string $state): ?string => filled(trim((string) $state)) ? trim((string) $state) : null)
+                        ->helperText('Finance endpoint ID. Provide Service ID and/or Short code.'),
                     TextInput::make('short_code')
                         ->label('Short code')
                         ->maxLength(64)
+                        ->nullable()
                         ->unique(ignoreRecord: true)
-                        ->helperText('Optional alternate match key. Unique when set.'),
+                        ->requiredWithout('service_id')
+                        ->dehydrateStateUsing(fn (?string $state): ?string => filled(trim((string) $state)) ? trim((string) $state) : null)
+                        ->helperText('Provide Service ID and/or Short code. Both may be set together.'),
                     Textarea::make('notes')
                         ->rows(3)
                         ->columnSpanFull(),
@@ -162,7 +177,7 @@ class RevenuePartnerResource extends Resource
             ])->columns(2),
             Section::make('Service & billing')->schema([
                 TextEntry::make('vasService.name')->label('Catalog service'),
-                TextEntry::make('service_id')->label('Service ID')->copyable(),
+                TextEntry::make('service_id')->label('Service ID')->placeholder('—')->copyable(),
                 TextEntry::make('short_code')->label('Short code')->placeholder('—'),
                 TextEntry::make('creator.name')->label('Account manager')->placeholder('—'),
                 TextEntry::make('notes')->placeholder('—')->columnSpanFull(),
@@ -207,6 +222,11 @@ class RevenuePartnerResource extends Resource
                 SelectFilter::make('vas_service_id')
                     ->label('Catalog service')
                     ->options(fn (): array => RevenueCatalogServices::options()),
+                SelectFilter::make('created_by_user_id')
+                    ->label('Account manager')
+                    ->options(fn (): array => static::accountManagerOptions())
+                    ->searchable()
+                    ->preload(),
                 TernaryFilter::make('phone')
                     ->label('Phone')
                     ->placeholder('All')
@@ -241,6 +261,21 @@ class RevenuePartnerResource extends Resource
             'view' => ViewRevenuePartner::route('/{record}'),
             'edit' => EditRevenuePartner::route('/{record}/edit'),
         ];
+    }
+
+    /**
+     * Active staff users eligible as revenue partner owners (excludes super_admin).
+     *
+     * @return array<int, string>
+     */
+    public static function accountManagerOptions(): array
+    {
+        return User::query()
+            ->where('is_active', true)
+            ->whereDoesntHave('roles', fn ($q) => $q->where('name', 'super_admin'))
+            ->orderBy('name')
+            ->pluck('name', 'id')
+            ->all();
     }
 
     public static function getEloquentQuery(): Builder

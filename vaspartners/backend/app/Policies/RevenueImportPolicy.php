@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\RevenueImportStatus;
 use App\Models\RevenueImport;
 use App\Models\User;
 
@@ -34,6 +35,15 @@ class RevenueImportPolicy
     public function update(User $user, RevenueImport $revenueImport): bool
     {
         if (! $user->can('Update:RevenueImport')) {
+            return false;
+        }
+
+        $status = $revenueImport->status instanceof RevenueImportStatus
+            ? $revenueImport->status
+            : RevenueImportStatus::tryFrom((string) $revenueImport->status);
+
+        if (in_array($status, [RevenueImportStatus::Sending, RevenueImportStatus::Completed], true)
+            || filled($revenueImport->bulk_message_id)) {
             return false;
         }
 

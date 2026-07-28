@@ -10,6 +10,7 @@ use App\Models\RevenueImport;
 use App\Models\User;
 use App\Services\RevenueImportService;
 use Filament\Actions\Action;
+use Filament\Actions\EditAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Illuminate\Validation\ValidationException;
@@ -51,6 +52,9 @@ class ViewRevenueImport extends ViewRecord
         $canSend = $user && app(RevenueImportService::class)->actorCanSend($user, $record);
 
         return [
+            EditAction::make()
+                ->url(fn (): string => RevenueImportResource::getUrl('edit', ['record' => $record]))
+                ->visible(fn (): bool => RevenueImportResource::canEdit($record->fresh() ?? $record)),
             Action::make('register_missing')
                 ->label('Register missing partners')
                 ->icon('heroicon-o-user-plus')

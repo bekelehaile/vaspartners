@@ -29,12 +29,12 @@ class RevenuePartnerImporter extends Importer
                 ->label('Service ID')
                 ->rules(['nullable', 'max:64'])
                 ->example('0042822000002838')
-                ->helperText('Required to create a new partner. On re-import, existing values are kept.'),
+                ->helperText('Provide Service ID and/or Short code. On re-import, existing values are kept.'),
             ImportColumn::make('short_code')
                 ->label('Short code')
                 ->rules(['nullable', 'max:64'])
                 ->example('8100')
-                ->helperText('Unique. On re-import, filled only when the master record is missing one.'),
+                ->helperText('Provide Service ID and/or Short code. Both may be set. On re-import, filled only when missing.'),
             ImportColumn::make('partner_name')
                 ->label('Partner name')
                 ->requiredMapping()
@@ -101,6 +101,7 @@ class RevenuePartnerImporter extends Importer
 
         return new RevenuePartner([
             'service_id' => $lookup['service_id'],
+            'short_code' => $lookup['short_code'],
             'created_by_user_id' => $this->import->user_id,
         ]);
     }

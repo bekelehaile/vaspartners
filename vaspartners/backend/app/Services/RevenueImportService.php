@@ -160,10 +160,10 @@ class RevenueImportService
 
             foreach ($rows as $row) {
                 $lookup = $this->partners->resolveForUpsert($row->service_id, $row->short_code, $matchOwnerId);
-                if (! $lookup['ok'] || $lookup['service_id'] === null) {
+                if (! $lookup['ok'] || ($lookup['service_id'] === null && $lookup['short_code'] === null)) {
                     $row->forceFill([
                         'status' => RevenueImportRowStatus::Invalid,
-                        'error' => $lookup['error'] ?? 'Cannot register partner without service ID.',
+                        'error' => $lookup['error'] ?? 'Cannot register partner without service ID or short code.',
                     ])->save();
 
                     continue;
@@ -171,17 +171,28 @@ class RevenueImportService
 
                 $partner = $lookup['partner'];
                 if (! $partner) {
-                    $partner = RevenuePartner::query()->firstOrCreate(
-                        ['service_id' => (string) $lookup['service_id']],
-                        [
-                            'short_code' => $lookup['short_code'] ?? $row->short_code,
-                            'partner_name' => filled($row->partner_name) ? (string) $row->partner_name : ('Partner '.$lookup['service_id']),
-                            'vas_service_id' => $vasServiceId,
-                            'created_by_user_id' => $createOwnerId,
-                            'phone' => null,
-                            'is_active' => true,
-                        ],
-                    );
+                    $attrs = [
+                        'short_code' => $lookup['short_code'] ?? $row->short_code,
+                        'partner_name' => filled($row->partner_name)
+                            ? (string) $row->partner_name
+                            : ('Partner '.($lookup['service_id'] ?? $lookup['short_code'])),
+                        'vas_service_id' => $vasServiceId,
+                        'created_by_user_id' => $createOwnerId,
+                        'phone' => null,
+                        'is_active' => true,
+                    ];
+
+                    if ($lookup['service_id'] !== null) {
+                        $partner = RevenuePartner::query()->firstOrCreate(
+                            ['service_id' => (string) $lookup['service_id']],
+                            $attrs,
+                        );
+                    } else {
+                        $partner = RevenuePartner::query()->firstOrCreate(
+                            ['short_code' => (string) $lookup['short_code']],
+                            array_merge($attrs, ['service_id' => null]),
+                        );
+                    }
 
                     if ($partner->wasRecentlyCreated) {
                         $created++;
