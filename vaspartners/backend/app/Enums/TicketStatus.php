@@ -2,7 +2,10 @@
 
 namespace App\Enums;
 
-enum TicketStatus: string
+use Filament\Support\Contracts\HasColor;
+use Filament\Support\Contracts\HasLabel;
+
+enum TicketStatus: string implements HasColor, HasLabel
 {
     case Open = 'open';
     case InProgress = 'in_progress';
@@ -18,6 +21,25 @@ enum TicketStatus: string
             self::Completed => 'Completed',
             self::Closed => 'Closed',
             self::Rejected => 'Rejected',
+        };
+    }
+
+    public function getLabel(): string
+    {
+        return $this->label();
+    }
+
+    /**
+     * Badge colors aligned with Attachments (success / danger / warning / info / gray).
+     */
+    public function getColor(): string
+    {
+        return match ($this) {
+            self::Completed => 'success',
+            self::Closed => 'gray',
+            self::Rejected => 'danger',
+            self::InProgress => 'info',
+            self::Open => 'warning',
         };
     }
 

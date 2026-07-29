@@ -62,7 +62,7 @@ class ApprovalStepsRelationManager extends RelationManager
                     ->label('Doc review at decision')
                     ->badge()
                     ->formatStateUsing(fn (?string $state): string => match ($state) {
-                        'passed' => 'Passed',
+                        'passed' => 'Reviewed',
                         'failed' => 'Failed',
                         'pending' => 'Pending',
                         default => $state ?: '—',

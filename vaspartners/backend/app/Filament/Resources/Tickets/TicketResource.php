@@ -70,13 +70,10 @@ class TicketResource extends Resource
                     ->formatStateUsing(fn ($state): string => $state instanceof TicketStatus
                         ? $state->label()
                         : (TicketStatus::tryFrom((string) $state)?->label() ?? (string) $state))
-                    ->color(fn ($state): string => match ($state instanceof TicketStatus ? $state : TicketStatus::tryFrom((string) $state)) {
-                        TicketStatus::Completed, TicketStatus::Closed => 'success',
-                        TicketStatus::Rejected => 'danger',
-                        TicketStatus::InProgress => 'info',
-                        TicketStatus::Open => 'warning',
-                        default => 'gray',
-                    }),
+                    ->color(fn ($state): string => ($state instanceof TicketStatus
+                        ? $state
+                        : TicketStatus::tryFrom((string) $state)
+                    )?->getColor() ?? 'gray'),
                 TextEntry::make('service.name')->label('Service')->placeholder('—'),
                 TextEntry::make('requisition.name')->label('Request type')->placeholder('—'),
                 TextEntry::make('category.name')->label('Group')->placeholder('—'),
@@ -101,33 +98,8 @@ class TicketResource extends Resource
                     ->label('Doc review')
                     ->badge()
                     ->placeholder('—')
-                    ->formatStateUsing(function (Ticket $record, $state): string {
-                        if ($record->attachmentStatus()['state'] === 'none_required') {
-                            return 'Not needed';
-                        }
-
-                        if ($state instanceof DocumentReviewStatus) {
-                            return $state->label();
-                        }
-
-                        return DocumentReviewStatus::tryFrom((string) $state)?->label() ?? (string) ($state ?: '—');
-                    })
-                    ->color(function (Ticket $record, $state): string {
-                        if ($record->attachmentStatus()['state'] === 'none_required') {
-                            return 'gray';
-                        }
-
-                        $status = $state instanceof DocumentReviewStatus
-                            ? $state
-                            : DocumentReviewStatus::tryFrom((string) $state);
-
-                        return match ($status) {
-                            DocumentReviewStatus::Passed => 'success',
-                            DocumentReviewStatus::Failed => 'danger',
-                            DocumentReviewStatus::Pending => 'warning',
-                            default => 'gray',
-                        };
-                    }),
+                    ->formatStateUsing(fn (Ticket $record): string => $record->documentReviewLabel())
+                    ->color(fn (Ticket $record): string => $record->documentReviewColor()),
                 TextEntry::make('missing_attachments')
                     ->label('Missing required docs')
                     ->state(function (Ticket $record): string {
@@ -260,7 +232,14 @@ class TicketResource extends Resource
                 TextColumn::make('service.name')->sortable(),
                 TextColumn::make('category.name')->label('Group')->toggleable(),
                 TextColumn::make('requisition.name')->label('Type')->toggleable(),
-                TextColumn::make('status')->badge(),
+                TextColumn::make('status')->badge()
+                    ->formatStateUsing(fn ($state) => $state instanceof TicketStatus
+                        ? $state->label()
+                        : (TicketStatus::tryFrom((string) $state)?->label() ?? (string) $state))
+                    ->color(fn ($state): string => ($state instanceof TicketStatus
+                        ? $state
+                        : TicketStatus::tryFrom((string) $state)
+                    )?->getColor() ?? 'gray'),
                 TextColumn::make('attachments')
                     ->label('Attachments')
                     ->badge()
@@ -282,33 +261,8 @@ class TicketResource extends Resource
                     ->label('Doc review')
                     ->badge()
                     ->toggleable()
-                    ->formatStateUsing(function (Ticket $record, $state): string {
-                        if ($record->attachmentStatus()['state'] === 'none_required') {
-                            return 'Not needed';
-                        }
-
-                        if ($state instanceof DocumentReviewStatus) {
-                            return $state->label();
-                        }
-
-                        return DocumentReviewStatus::tryFrom((string) $state)?->label() ?? (string) $state;
-                    })
-                    ->color(function (Ticket $record, $state): string {
-                        if ($record->attachmentStatus()['state'] === 'none_required') {
-                            return 'gray';
-                        }
-
-                        $status = $state instanceof DocumentReviewStatus
-                            ? $state
-                            : DocumentReviewStatus::tryFrom((string) $state);
-
-                        return match ($status) {
-                            DocumentReviewStatus::Passed => 'success',
-                            DocumentReviewStatus::Failed => 'danger',
-                            DocumentReviewStatus::Pending => 'warning',
-                            default => 'gray',
-                        };
-                    }),
+                    ->formatStateUsing(fn (Ticket $record): string => $record->documentReviewLabel())
+                    ->color(fn (Ticket $record): string => $record->documentReviewColor()),
                 TextColumn::make('assignee.name')->label('AM'),
                 TextColumn::make('currentApprover.name')->label('Approver'),
                 TextColumn::make('created_at')->dateTime()->sortable(),

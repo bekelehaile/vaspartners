@@ -28,8 +28,19 @@ class TicketsRelationManager extends RelationManager
                 TextColumn::make('tt_number')->label('Request number')->searchable()->sortable(),
                 TextColumn::make('service.name')->label('Service')->searchable(),
                 TextColumn::make('requisition.name')->label('Type'),
-                TextColumn::make('status')->badge(),
-                TextColumn::make('document_review_status')->label('Docs')->badge(),
+                TextColumn::make('status')->badge()
+                    ->formatStateUsing(fn ($state) => $state instanceof \App\Enums\TicketStatus
+                        ? $state->label()
+                        : (\App\Enums\TicketStatus::tryFrom((string) $state)?->label() ?? (string) $state))
+                    ->color(fn ($state): string => ($state instanceof \App\Enums\TicketStatus
+                        ? $state
+                        : \App\Enums\TicketStatus::tryFrom((string) $state)
+                    )?->getColor() ?? 'gray'),
+                TextColumn::make('document_review_status')
+                    ->label('Docs')
+                    ->badge()
+                    ->formatStateUsing(fn ($record): string => $record->documentReviewLabel())
+                    ->color(fn ($record): string => $record->documentReviewColor()),
                 TextColumn::make('created_at')->dateTime()->sortable(),
             ])
             ->recordActions([

@@ -133,9 +133,10 @@ class UserResource extends Resource
                 IconColumn::make('is_active')->label('Active')->boolean(),
                 TextColumn::make('last_login_at')
                     ->label('Last login')
-                    ->dateTime()
+                    ->since()
                     ->sortable()
                     ->placeholder('Never')
+                    ->dateTimeTooltip()
                     ->toggleable(),
                 TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])

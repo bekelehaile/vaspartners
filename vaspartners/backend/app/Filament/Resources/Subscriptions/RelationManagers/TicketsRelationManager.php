@@ -43,13 +43,10 @@ class TicketsRelationManager extends RelationManager
                     ->formatStateUsing(fn ($state) => $state instanceof TicketStatus
                         ? $state->label()
                         : (TicketStatus::tryFrom((string) $state)?->label() ?? (string) $state))
-                    ->color(fn ($state): string => match ($state instanceof TicketStatus ? $state : TicketStatus::tryFrom((string) $state)) {
-                        TicketStatus::Completed, TicketStatus::Closed => 'success',
-                        TicketStatus::Rejected => 'danger',
-                        TicketStatus::InProgress => 'info',
-                        TicketStatus::Open => 'warning',
-                        default => 'gray',
-                    }),
+                    ->color(fn ($state): string => ($state instanceof TicketStatus
+                        ? $state
+                        : TicketStatus::tryFrom((string) $state)
+                    )?->getColor() ?? 'gray'),
                 TextColumn::make('contact.name')->label('Partner')->toggleable(),
                 TextColumn::make('created_at')->dateTime()->sortable(),
             ])

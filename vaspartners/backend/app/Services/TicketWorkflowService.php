@@ -63,6 +63,19 @@ class TicketWorkflowService
             TicketStatus::Closed => $ticket->closed_at = now(),
             default => null,
         };
+
+        // Terminal / approved outcomes with complete docs cannot remain "Pending" review.
+        if (in_array($to, [TicketStatus::Completed, TicketStatus::Closed], true)) {
+            $attachState = $this->attachmentStatus($ticket)['state'] ?? null;
+            $review = $ticket->document_review_status instanceof DocumentReviewStatus
+                ? $ticket->document_review_status
+                : DocumentReviewStatus::tryFrom((string) $ticket->document_review_status);
+
+            if ($attachState === 'complete' && ($review === null || $review === DocumentReviewStatus::Pending)) {
+                $ticket->document_review_status = DocumentReviewStatus::Passed;
+            }
+        }
+
         $ticket->save();
 
         TicketStatusHistory::query()->create([

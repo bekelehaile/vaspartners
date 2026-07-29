@@ -85,6 +85,50 @@ class Ticket extends Model
         return $this->attachmentStatusCache ??= app(\App\Services\TicketWorkflowService::class)->attachmentStatus($this);
     }
 
+    /**
+     * Doc-review badge status for UI.
+     * Closed/Completed with all required docs must not stay Pending.
+     */
+    public function effectiveDocumentReviewStatus(): ?DocumentReviewStatus
+    {
+        $attachState = $this->attachmentStatus()['state'] ?? null;
+        if ($attachState === 'none_required') {
+            return null;
+        }
+
+        $stored = $this->document_review_status instanceof DocumentReviewStatus
+            ? $this->document_review_status
+            : DocumentReviewStatus::tryFrom((string) $this->document_review_status);
+
+        if (
+            $stored === DocumentReviewStatus::Pending
+            && $attachState === 'complete'
+            && in_array($this->status, [TicketStatus::Closed, TicketStatus::Completed], true)
+        ) {
+            return DocumentReviewStatus::Passed;
+        }
+
+        return $stored;
+    }
+
+    public function documentReviewLabel(): string
+    {
+        if (($this->attachmentStatus()['state'] ?? null) === 'none_required') {
+            return 'Not needed';
+        }
+
+        return $this->effectiveDocumentReviewStatus()?->label() ?? '—';
+    }
+
+    public function documentReviewColor(): string
+    {
+        if (($this->attachmentStatus()['state'] ?? null) === 'none_required') {
+            return 'gray';
+        }
+
+        return $this->effectiveDocumentReviewStatus()?->getColor() ?? 'gray';
+    }
+
     public function contact(): BelongsTo { return $this->belongsTo(Contact::class); }
     public function service(): BelongsTo { return $this->belongsTo(Service::class); }
     public function requisition(): BelongsTo { return $this->belongsTo(Requisition::class); }

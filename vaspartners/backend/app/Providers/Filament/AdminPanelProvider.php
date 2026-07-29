@@ -79,6 +79,7 @@ class AdminPanelProvider extends PanelProvider
             ->navigationGroups([
                 // Top → bottom (Website last)
                 NavigationGroup::make()->label('Tickets')->icon(Heroicon::Ticket),
+                NavigationGroup::make()->label('Reports')->icon(Heroicon::ChartBarSquare),
                 NavigationGroup::make()->label('Partners')->icon(Heroicon::BuildingOffice),
                 NavigationGroup::make()->label('User Management')->icon(Heroicon::UserGroup),
                 NavigationGroup::make()->label('Catalog')->icon(Heroicon::Cog6Tooth),
