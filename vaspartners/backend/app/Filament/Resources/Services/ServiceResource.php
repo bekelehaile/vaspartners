@@ -9,6 +9,8 @@ use App\Filament\Resources\Services\Pages\ListServices;
 use App\Filament\Resources\Services\RelationManagers\DocumentMatrixRelationManager;
 use App\Filament\Resources\Services\RelationManagers\FinalApproversRelationManager;
 use App\Models\Service;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -21,6 +23,7 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
 class ServiceResource extends Resource
@@ -133,7 +136,12 @@ class ServiceResource extends Resource
                 IconColumn::make('is_subscription_based')->boolean()->label('Subs'),
                 IconColumn::make('is_active')->boolean(),
             ])->recordActions([
-                \Filament\Actions\EditAction::make(),
+                EditAction::make(),
+                DeleteAction::make()
+                    ->visible(fn (Service $record): bool => static::canDelete($record))
+                    ->modalHeading(fn (Service $record): string => 'Delete service '.$record->name)
+                    ->modalDescription('Only allowed when this service has no pending or in-progress requests. Closed and rejected history is kept.')
+                    ->successNotificationTitle('Service deleted'),
             ]);
     }
 
@@ -152,5 +160,12 @@ class ServiceResource extends Resource
             'create' => CreateService::route('/create'),
             'edit' => EditService::route('/{record}/edit'),
         ];
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return $record instanceof Service
+            && parent::canDelete($record)
+            && ! $record->hasActiveRequests();
     }
 }

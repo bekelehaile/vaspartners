@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Enums\RenewalInterval;
+use App\Enums\TicketStatus;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -108,5 +110,32 @@ class Service extends Model
     public function subscriptions(): HasMany
     {
         return $this->hasMany(Subscription::class);
+    }
+
+    public function tickets(): HasMany
+    {
+        return $this->hasMany(Ticket::class);
+    }
+
+    /** Open / in-progress tickets that should block catalog delete. */
+    public function activeTickets(): HasMany
+    {
+        return $this->tickets()->whereIn('status', [
+            TicketStatus::Open->value,
+            TicketStatus::InProgress->value,
+        ]);
+    }
+
+    public function hasActiveRequests(): bool
+    {
+        return $this->activeTickets()->exists();
+    }
+
+    public function scopeWithoutActiveRequests(Builder $query): Builder
+    {
+        return $query->whereDoesntHave('tickets', fn (Builder $q) => $q->whereIn('status', [
+            TicketStatus::Open->value,
+            TicketStatus::InProgress->value,
+        ]));
     }
 }

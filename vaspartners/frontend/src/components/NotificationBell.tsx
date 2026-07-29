@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   type AppNotification,
   useMarkAllNotificationsRead,
@@ -39,6 +40,8 @@ function toneFor(template?: string | null): string {
     case "ticket_completed":
     case "profile_completed":
     case "company_profile_approved":
+    case "company_tin_validated":
+    case "documents_passed":
       return "success";
     case "documents_need_attention":
     case "ticket_rejected":
@@ -89,8 +92,11 @@ function IconFor({ template }: { template?: string | null }) {
 
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const { data, isLoading } = useNotifications({ enabled: true });
+  const panelRef = useRef<HTMLDivElement>(null);
+  const panelId = useId();
+  const { data, isLoading, isError, error } = useNotifications({ enabled: true });
   const markRead = useMarkNotificationRead();
   const markAll = useMarkAllNotificationsRead();
 
@@ -98,20 +104,94 @@ export function NotificationBell() {
   const unread = data?.unreadCount ?? 0;
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
     if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (rootRef.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
+      setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
-    document.addEventListener("mousedown", onDoc);
+
+    document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onKey);
     return () => {
-      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
+
+  const panel =
+    open && mounted
+      ? createPortal(
+          <div
+            ref={panelRef}
+            className="notif-panel notif-panel-portal"
+            role="dialog"
+            aria-label="Notifications"
+            id={panelId}
+          >
+            <div className="notif-panel-head">
+              <div>
+                <strong>Notifications</strong>
+                <p className="notif-panel-sub">
+                  {isError
+                    ? "Could not load notifications"
+                    : unread > 0
+                      ? `${unread} unread update${unread === 1 ? "" : "s"}`
+                      : "You are up to date"}
+                </p>
+              </div>
+              {unread > 0 && (
+                <button
+                  type="button"
+                  className="notif-mark-all"
+                  disabled={markAll.isPending}
+                  onClick={() => markAll.mutate()}
+                >
+                  Mark all read
+                </button>
+              )}
+            </div>
+
+            <div className="notif-panel-body">
+              {isLoading && <p className="muted notif-empty">Loading notifications…</p>}
+              {isError && (
+                <p className="alert notif-empty" role="alert">
+                  {error instanceof Error ? error.message : "Could not load notifications."}
+                </p>
+              )}
+              {!isLoading && !isError && !items.length && (
+                <div className="notif-empty-state">
+                  <IconFor template="ticket_submitted" />
+                  <p>No notifications yet</p>
+                  <span className="muted">
+                    Updates about your company and service requests will appear here.
+                  </span>
+                </div>
+              )}
+              {items.map((n) => (
+                <NotificationRow
+                  key={n.id}
+                  notification={n}
+                  onOpen={() => {
+                    if (!n.read_at) markRead.mutate(n.id);
+                    setOpen(false);
+                  }}
+                />
+              ))}
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
 
   return (
     <div className="notif-bell" ref={rootRef}>
@@ -120,6 +200,7 @@ export function NotificationBell() {
         className="notif-bell-btn"
         aria-expanded={open}
         aria-haspopup="dialog"
+        aria-controls={open ? panelId : undefined}
         aria-label={unread ? `${unread} unread notifications` : "Notifications"}
         onClick={() => setOpen((v) => !v)}
       >
@@ -128,54 +209,7 @@ export function NotificationBell() {
           <span className="notif-badge">{unread > 9 ? "9+" : unread}</span>
         )}
       </button>
-
-      {open && (
-        <div className="notif-panel" role="dialog" aria-label="Notifications">
-          <div className="notif-panel-head">
-            <div>
-              <strong>Notifications</strong>
-              <p className="notif-panel-sub">
-                {unread > 0
-                  ? `${unread} unread update${unread === 1 ? "" : "s"}`
-                  : "You are up to date"}
-              </p>
-            </div>
-            {unread > 0 && (
-              <button
-                type="button"
-                className="notif-mark-all"
-                disabled={markAll.isPending}
-                onClick={() => markAll.mutate()}
-              >
-                Mark all read
-              </button>
-            )}
-          </div>
-
-          <div className="notif-panel-body">
-            {isLoading && <p className="muted notif-empty">Loading notifications…</p>}
-            {!isLoading && !items.length && (
-              <div className="notif-empty-state">
-                <IconFor template="ticket_submitted" />
-                <p>No notifications yet</p>
-                <span className="muted">
-                  Updates about your service requests will appear here.
-                </span>
-              </div>
-            )}
-            {items.map((n) => (
-              <NotificationRow
-                key={n.id}
-                notification={n}
-                onOpen={() => {
-                  if (!n.read_at) markRead.mutate(n.id);
-                  setOpen(false);
-                }}
-              />
-            ))}
-          </div>
-        </div>
-      )}
+      {panel}
     </div>
   );
 }

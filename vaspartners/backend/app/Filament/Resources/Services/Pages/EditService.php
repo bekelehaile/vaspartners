@@ -21,7 +21,13 @@ class EditService extends EditRecord
 
     protected function getHeaderActions(): array
     {
-        return [DeleteAction::make()];
+        return [
+            DeleteAction::make()
+                ->visible(fn (): bool => ServiceResource::canDelete($this->getRecord()))
+                ->modalHeading(fn (): string => 'Delete service '.$this->getRecord()->name)
+                ->modalDescription('Only allowed when this service has no pending or in-progress requests. Closed and rejected history is kept.')
+                ->successNotificationTitle('Service deleted'),
+        ];
     }
 
     /**

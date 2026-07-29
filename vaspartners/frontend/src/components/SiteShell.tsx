@@ -131,7 +131,7 @@ export function SiteShell({
               portalAdmin ? (
                 <div className="portal-header-actions">
                   <CompanySwitcher me={me} variant="header" />
-                  {me.profile_completed && <NotificationBell />}
+                  <NotificationBell />
                   <PortalSettingsMenu onLogout={onLogout} />
                 </div>
               ) : (
@@ -143,7 +143,7 @@ export function SiteShell({
                   ))}
                   <div className="portal-header-actions">
                     <CompanySwitcher me={me} variant="header" />
-                    {me.profile_completed && <NotificationBell />}
+                    <NotificationBell />
                     <PortalSettingsMenu onLogout={onLogout} />
                   </div>
                 </>
@@ -172,7 +172,7 @@ export function SiteShell({
           <div className="topbar-end">
             {me ? (
               <div className="portal-mobile-tools" aria-label="Account tools">
-                {me.profile_completed && <NotificationBell />}
+                <NotificationBell />
                 <PortalSettingsMenu onLogout={onLogout} />
               </div>
             ) : null}

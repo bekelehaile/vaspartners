@@ -693,6 +693,23 @@ textarea {
   animation: detail-in 0.18s ease both;
 }
 
+/* Rendered on document.body so sticky topbar does not clip/trap the panel on mobile */
+.notif-panel-portal {
+  position: fixed;
+  top: calc(4rem + 0.35rem);
+  right: max(0.75rem, env(safe-area-inset-right, 0px));
+  left: auto;
+  z-index: 120;
+  width: min(24.5rem, calc(100vw - 1.5rem));
+  max-height: min(70dvh, 28rem);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.notif-panel-portal .notif-cta {
+  opacity: 1;
+}
+
 .portal-settings-menu {
   min-width: 14.5rem;
   padding: 0.4rem;

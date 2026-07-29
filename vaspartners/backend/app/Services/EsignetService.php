@@ -187,7 +187,10 @@ class EsignetService
             'address' => $payload['address'] ?? $contact->address,
         ]);
 
-        $contact->forceFill(['is_active' => true])->save();
+        $contact->forceFill([
+            'is_active' => true,
+            'fayda_verified' => true,
+        ])->save();
 
         $membership = app(CompanyMembershipService::class);
 

@@ -52,6 +52,7 @@ class Contact extends Authenticatable
         'legacy_mvas_id',
         'is_active',
         'is_banned',
+        'fayda_verified',
         'profile_completed_at',
     ];
 
@@ -75,8 +76,21 @@ class Contact extends Authenticatable
             'birthdate' => 'date',
             'is_active' => 'boolean',
             'is_banned' => 'boolean',
+            'fayda_verified' => 'boolean',
             'profile_completed_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Mark identity as verified via Fayda. Sticky — later OTP logins do not clear it.
+     */
+    public function markFaydaVerified(): void
+    {
+        if ($this->fayda_verified) {
+            return;
+        }
+
+        $this->forceFill(['fayda_verified' => true])->save();
     }
 
     protected static function booted(): void
@@ -181,6 +195,7 @@ class Contact extends Authenticatable
             ...self::FAYDA_ATTRIBUTES,
             'is_active',
             'is_banned',
+            'fayda_verified',
             'legacy_mvas_id',
             'company_name',
             'company_tin',
