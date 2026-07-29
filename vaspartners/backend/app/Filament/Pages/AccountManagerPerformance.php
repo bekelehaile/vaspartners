@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Filament\Widgets\AccountManagerPerformanceOverview;
+use App\Filament\Resources\Tickets\TicketResource;
 use App\Models\Service;
 use App\Models\User;
 use App\Services\AccountManagerPerformanceService;
@@ -245,12 +246,29 @@ class AccountManagerPerformance extends Page implements HasSchemas, HasTable
                     ->label('Completed')
                     ->state(fn (User $record): int => (int) ($this->metric($record)['completed'] ?? 0))
                     ->color('success')
-                    ->alignEnd(),
+                    ->alignEnd()
+                    ->url(fn (User $record): string => TicketResource::getUrl('index').'?tab=completed&'.http_build_query([
+                        'tableFilters' => ['assigned_to_user_id' => ['value' => $record->id]],
+                    ]))
+                    ->tooltip('Completed in selected period — click to open'),
+                TextColumn::make('closed')
+                    ->label('Closed')
+                    ->state(fn (User $record): int => (int) ($this->metric($record)['closed'] ?? 0))
+                    ->color('gray')
+                    ->alignEnd()
+                    ->url(fn (User $record): string => TicketResource::getUrl('index').'?tab=closed&'.http_build_query([
+                        'tableFilters' => ['assigned_to_user_id' => ['value' => $record->id]],
+                    ]))
+                    ->tooltip('Closed in selected period — click to open'),
                 TextColumn::make('rejected')
                     ->label('Rejected')
                     ->state(fn (User $record): int => (int) ($this->metric($record)['rejected'] ?? 0))
                     ->color(fn (int $state): string => $state > 0 ? 'danger' : 'gray')
                     ->alignEnd()
+                    ->url(fn (User $record): string => TicketResource::getUrl('index').'?tab=rejected&'.http_build_query([
+                        'tableFilters' => ['assigned_to_user_id' => ['value' => $record->id]],
+                    ]))
+                    ->tooltip('Rejected in selected period — click to open')
                     ->toggleable(),
                 TextColumn::make('completion_rate')
                     ->label('Complete %')

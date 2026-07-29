@@ -18,7 +18,7 @@ class AccountManagerPerformanceOverview extends StatsOverviewWidget
 
     protected ?string $heading = 'Team performance';
 
-    protected ?string $description = 'Account handlers — click a card to open the matching list';
+    protected ?string $description = 'Per-handler Completed / Closed are in the leaderboard below — click a card to open the matching list';
 
     protected function getStats(): array
     {
@@ -47,10 +47,15 @@ class AccountManagerPerformanceOverview extends StatsOverviewWidget
                 ->color($summary['backlog'] > 0 ? 'warning' : 'success')
                 ->url($this->ticketsUrl('backlog', $handlerId)),
             Stat::make('Completed', $summary['completed'])
-                ->description('Finished in period')
+                ->description('Completed in period (team)')
                 ->descriptionIcon(Heroicon::OutlinedCheckCircle)
                 ->color('success')
                 ->url($this->ticketsUrl('completed', $handlerId)),
+            Stat::make('Closed', $summary['closed'] ?? 0)
+                ->description('Closed in period (team)')
+                ->descriptionIcon(Heroicon::OutlinedArchiveBox)
+                ->color('gray')
+                ->url($this->ticketsUrl('closed', $handlerId)),
             Stat::make('Avg cycle', $cycle !== null ? $cycle.' h' : '—')
                 ->description('Assign → complete')
                 ->color($cycle !== null && $cycle > 72 ? 'danger' : 'gray'),
@@ -69,7 +74,6 @@ class AccountManagerPerformanceOverview extends StatsOverviewWidget
         $url = TicketResource::getUrl('index').'?tab='.urlencode($tab);
 
         if ($handlerId) {
-            // Filament table filter query string for assignee (added below on TicketResource).
             $url .= '&'.http_build_query([
                 'tableFilters' => [
                     'assigned_to_user_id' => ['value' => $handlerId],
