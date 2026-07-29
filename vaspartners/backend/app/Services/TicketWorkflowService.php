@@ -246,7 +246,23 @@ class TicketWorkflowService
     }
 
     /**
-     * System / schedule / on-read: if an active request is missing hard-required docs, force Rejected.
+     * Statuses that must not remain active/finished while hard-required docs are missing.
+     *
+     * @return list<TicketStatus>
+     */
+    public function statusesThatMustRejectWhenIncomplete(): array
+    {
+        return [
+            TicketStatus::Open,
+            TicketStatus::InProgress,
+            TicketStatus::Closed,
+            TicketStatus::Completed,
+        ];
+    }
+
+    /**
+     * System / schedule / on-read: if a request is missing hard-required docs, force Rejected
+     * (including Closed / Completed — partners must resubmit with a complete set).
      *
      * @return array{rejected: bool, skipped: bool, reason?: string, missing_names?: list<string>}
      */
@@ -255,7 +271,7 @@ class TicketWorkflowService
         return DB::transaction(function () use ($ticket, $notify) {
             $ticket->refresh();
 
-            if (! in_array($ticket->status, [TicketStatus::Open, TicketStatus::InProgress], true)) {
+            if (! in_array($ticket->status, $this->statusesThatMustRejectWhenIncomplete(), true)) {
                 return [
                     'rejected' => false,
                     'skipped' => true,
@@ -309,7 +325,7 @@ class TicketWorkflowService
     }
 
     /**
-     * Keep status consistent: active tickets with missing required docs become Rejected.
+     * Keep status consistent: incomplete hard-required docs → Rejected.
      * Safe to call on portal/admin reads.
      */
     public function enforceIncompleteMustBeRejected(Ticket $ticket, bool $notify = true): Ticket

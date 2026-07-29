@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Enums\TicketStatus;
 use App\Models\Ticket;
 use App\Services\TicketWorkflowService;
 use Illuminate\Console\Command;
@@ -16,7 +15,7 @@ class ScanDocumentMissingCommand extends Command
                             {--limit=0 : Max tickets to process (0 = no limit)}
                             {--chunk=100 : Tickets loaded per batch}';
 
-    protected $description = 'Reject open/in-progress service requests missing any hard-required document and notify partners (automated document check)';
+    protected $description = 'Reject open/in-progress/closed/completed requests missing any hard-required document and notify partners';
 
     public function handle(TicketWorkflowService $workflow): int
     {
@@ -24,10 +23,11 @@ class ScanDocumentMissingCommand extends Command
         $notify = ! (bool) $this->option('no-sms');
         $limit = max(0, (int) $this->option('limit'));
         $chunk = max(1, (int) $this->option('chunk'));
+        $statuses = $workflow->statusesThatMustRejectWhenIncomplete();
 
         $query = Ticket::query()
             ->with(['contact:id,name,phone_number', 'service:id,name', 'requisition:id,name', 'documents:id,ticket_id,document_type_id'])
-            ->whereIn('status', [TicketStatus::Open, TicketStatus::InProgress])
+            ->whereIn('status', $statuses)
             ->orderBy('id');
 
         $scanned = 0;
@@ -36,7 +36,7 @@ class ScanDocumentMissingCommand extends Command
         $skipped = 0;
         $errors = 0;
 
-        $this->info(($dryRun ? '[dry-run] ' : '').'Scanning open/in-progress requests for missing required documents…');
+        $this->info(($dryRun ? '[dry-run] ' : '').'Scanning requests for missing required documents (incl. closed)…');
 
         $query->chunkById($chunk, function ($tickets) use (
             $workflow,
