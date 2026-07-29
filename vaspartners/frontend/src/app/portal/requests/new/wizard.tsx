@@ -183,10 +183,16 @@ export default function NewRequestWizard() {
       let created;
       try {
         setUploadingDocs(true);
+        // Stable key for this submit — network retries return the same ticket, not duplicates.
+        const idempotencyKey =
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `ticket-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         // Backend asserts every hard-required doc in one transaction — incomplete create is rejected.
         created = await createTicket.mutateAsync({
           values: parsed,
           files,
+          idempotencyKey,
         });
         setStagedFiles({});
       } catch (err) {
