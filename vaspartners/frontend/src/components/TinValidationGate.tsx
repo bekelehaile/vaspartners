@@ -101,7 +101,7 @@ export function TinValidationGate({ children }: { children: React.ReactNode }) {
                   <button
                     key={m.company_public_id!}
                     type="button"
-                    className="btn"
+                    className="btn-ghost"
                     disabled={switchCompany.isPending}
                     onClick={() =>
                       void switchCompany.mutateAsync(m.company_public_id!)
@@ -164,7 +164,11 @@ export function TinValidationGate({ children }: { children: React.ReactNode }) {
                 </p>
               )}
               <div className="portal-modal-actions">
-                <button type="submit" className="btn" disabled={submitTin.isPending}>
+                <button
+                  type="submit"
+                  className="btn-primary tin-gate-submit"
+                  disabled={submitTin.isPending}
+                >
                   {submitTin.isPending ? "Submitting…" : "Submit TIN for this company"}
                 </button>
                 <Link href="/portal/company" className="btn-ghost">

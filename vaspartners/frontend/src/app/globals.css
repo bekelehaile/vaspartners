@@ -4293,10 +4293,19 @@ button.portal-mobile-card-hit {
 }
 
 .portal-modal-actions > .btn,
+.portal-modal-actions > .btn-primary,
 .portal-modal-actions > .btn-ghost,
 .portal-modal-actions > a,
 .portal-modal-actions > button {
   min-height: 2.75rem;
+}
+
+.tin-gate-submit {
+  min-width: min(100%, 16rem);
+  font-size: 0.95rem;
+  font-weight: 700;
+  padding: 0.7rem 1.25rem;
+  box-shadow: 0 2px 8px color-mix(in oklab, var(--primary) 28%, transparent);
 }
 
 @media (max-width: 639.98px) {
@@ -4317,6 +4326,7 @@ button.portal-mobile-card-hit {
   }
 
   .portal-modal-actions > .btn,
+  .portal-modal-actions > .btn-primary,
   .portal-modal-actions > .btn-ghost,
   .portal-modal-actions > a,
   .portal-modal-actions > button {
@@ -4325,9 +4335,9 @@ button.portal-mobile-card-hit {
     text-align: center;
   }
 
-  .tin-gate-switch .btn {
+  .tin-gate-switch .btn-ghost,
+  .tin-gate-submit {
     width: 100%;
-    min-height: 2.75rem;
   }
 
   .portal-modal .field,
