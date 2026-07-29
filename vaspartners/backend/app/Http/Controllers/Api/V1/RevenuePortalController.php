@@ -18,8 +18,8 @@ class RevenuePortalController extends Controller
 {
     /**
      * Partner-facing revenue ledger for the current company.
-     * Matched via revenue_partners.company_id or company phone (last 9).
-     * SMS status comes from the linked bulk-message campaign (for failed retries visibility).
+     * Scoped strictly by the company phone (last 9 digits) so partners only see
+     * their own revenue rows. SMS status comes from linked bulk-message campaigns.
      */
     public function index(Request $request, CompanyMembershipService $membership)
     {
@@ -45,11 +45,19 @@ class RevenuePortalController extends Controller
             return response()->json(['data' => [], 'message' => 'Company not found.']);
         }
 
-        $partnerIds = $this->partnerIdsForCompany($company);
+        $companyPhone = PhoneNumber::normalizeNullable($company->phone);
+        if ($companyPhone === null) {
+            return response()->json([
+                'data' => [],
+                'message' => 'This company has no phone on file. Revenue is matched by company phone — ask an administrator to set it.',
+            ]);
+        }
+
+        $partnerIds = $this->partnerIdsForCompanyPhone($companyPhone);
         if ($partnerIds === []) {
             return response()->json([
                 'data' => [],
-                'message' => 'No revenue partners are linked to this company yet.',
+                'message' => 'No revenue partners match this company phone yet.',
             ]);
         }
 
@@ -61,6 +69,16 @@ class RevenuePortalController extends Controller
                 'vasService:id,name',
             ])
             ->whereIn('revenue_partner_id', $partnerIds)
+            ->whereHas('partner', function ($q) use ($companyPhone): void {
+                // Defense in depth: never return a row whose partner phone does not match.
+                $q->where(function ($phoneQ) use ($companyPhone): void {
+                    $phoneQ->where('phone', $companyPhone)
+                        ->orWhereRaw(
+                            "RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9) = ?",
+                            [$companyPhone],
+                        );
+                });
+            })
             ->whereNotNull('amount')
             ->where('amount', '>', 0)
             ->whereHas('import', function ($q): void {
@@ -76,7 +94,7 @@ class RevenuePortalController extends Controller
             ->limit(500)
             ->get();
 
-        $smsByKey = $this->smsStatusIndex($rows);
+        $smsByKey = $this->smsStatusIndex($rows, $companyPhone);
 
         $data = $rows->map(function (RevenueImportRow $row) use ($smsByKey) {
             $import = $row->import;
@@ -110,19 +128,20 @@ class RevenuePortalController extends Controller
     }
 
     /**
+     * Revenue partners visible to a portal company — matched by company phone only.
+     *
      * @return list<int>
      */
-    protected function partnerIdsForCompany(Company $company): array
+    protected function partnerIdsForCompanyPhone(string $companyPhone): array
     {
-        $phone = PhoneNumber::normalizeNullable($company->phone);
-
         return RevenuePartner::query()
             ->where('is_active', true)
-            ->where(function ($q) use ($company, $phone): void {
-                $q->where('company_id', $company->id);
-                if ($phone !== null) {
-                    $q->orWhere('phone', $phone);
-                }
+            ->where(function ($q) use ($companyPhone): void {
+                $q->where('phone', $companyPhone)
+                    ->orWhereRaw(
+                        "RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9) = ?",
+                        [$companyPhone],
+                    );
             })
             ->pluck('id')
             ->map(fn ($id) => (int) $id)
@@ -133,7 +152,7 @@ class RevenuePortalController extends Controller
      * @param  \Illuminate\Support\Collection<int, RevenueImportRow>  $rows
      * @return array<string, array{status: string, error: ?string, sent_at: ?string}>
      */
-    protected function smsStatusIndex($rows): array
+    protected function smsStatusIndex($rows, string $companyPhone): array
     {
         $campaignIds = $rows
             ->map(fn (RevenueImportRow $r) => $r->import?->bulk_message_id)
@@ -155,6 +174,13 @@ class RevenuePortalController extends Controller
 
         $recipients = BulkMessageRecipient::query()
             ->whereIn('campaign_id', $campaignIds)
+            ->where(function ($q) use ($companyPhone): void {
+                $q->where('phone_normalized', $companyPhone)
+                    ->orWhereRaw(
+                        "RIGHT(REGEXP_REPLACE(COALESCE(phone_normalized, phone_raw, ''), '[^0-9]', '', 'g'), 9) = ?",
+                        [$companyPhone],
+                    );
+            })
             ->get(['campaign_id', 'status', 'error', 'sent_at', 'variables', 'phone_normalized']);
 
         $index = [];
