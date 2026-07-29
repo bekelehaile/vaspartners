@@ -47,23 +47,28 @@ class AccountManagerPerformanceOverview extends StatsOverviewWidget
                 ->color($summary['backlog'] > 0 ? 'warning' : 'success')
                 ->url($this->ticketsUrl('backlog', $handlerId)),
             Stat::make('Completed', $summary['completed'])
-                ->description('completed_at in period')
+                ->description('Completed in period')
                 ->descriptionIcon(Heroicon::OutlinedCheckCircle)
                 ->color('success')
                 ->url($this->ticketsUrl('completed', $handlerId)),
             Stat::make('Closed', $summary['closed'] ?? 0)
-                ->description('closed_at in period')
+                ->description('Closed in period')
                 ->descriptionIcon(Heroicon::OutlinedArchiveBox)
                 ->color('gray')
                 ->url($this->ticketsUrl('closed', $handlerId)),
+            Stat::make('Rejected', $summary['rejected'] ?? 0)
+                ->description('Rejected in period')
+                ->descriptionIcon(Heroicon::OutlinedExclamationTriangle)
+                ->color(($summary['rejected'] ?? 0) > 0 ? 'danger' : 'gray')
+                ->url($this->ticketsUrl('rejected', $handlerId)),
             Stat::make('Avg cycle', $cycle !== null ? $cycle.' h' : '—')
-                ->description('assigned_at → outcome stamp')
+                ->description('Assign → outcome')
                 ->color($cycle !== null && $cycle > 72 ? 'danger' : 'gray'),
             Stat::make('Avg pickup', $pickup !== null ? $pickup.' h' : '—')
-                ->description('created_at → assigned_at')
+                ->description('Create → assign')
                 ->color($pickup !== null && $pickup > 24 ? 'warning' : 'gray'),
             Stat::make('Rejection rate', $reject !== null ? $reject.'%' : '—')
-                ->description('rejected_at outcomes in period')
+                ->description('Of closed + rejected in period')
                 ->color($reject !== null && $reject >= 20 ? 'danger' : 'gray')
                 ->url($this->ticketsUrl('rejected', $handlerId)),
         ];

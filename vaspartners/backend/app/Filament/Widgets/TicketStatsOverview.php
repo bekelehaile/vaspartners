@@ -9,7 +9,6 @@ use App\Models\Ticket;
 use Filament\Support\Icons\Heroicon;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
-use Illuminate\Database\Eloquent\Builder;
 
 class TicketStatsOverview extends StatsOverviewWidget
 {
@@ -19,7 +18,7 @@ class TicketStatsOverview extends StatsOverviewWidget
 
     protected ?string $heading = 'Service requests';
 
-    protected ?string $description = 'Each card uses its status event time: Pending→opened_at · In progress→in_progress_at · Completed/Closed/Rejected→*_at — click to open';
+    protected ?string $description = 'Operational queue — click a card to open the list';
 
     protected ?string $pollingInterval = '60s';
 
@@ -43,7 +42,6 @@ class TicketStatsOverview extends StatsOverviewWidget
             ->whereNotIn('status', [TicketStatus::Completed, TicketStatus::Closed]);
         $this->applyDashboardServiceFilter($escalatedQuery);
         if ($this->hasCustomDateRange()) {
-            // Escalation age in the selected window uses escalated_at.
             $this->applyDashboardDateFilter($escalatedQuery, 'escalated_at');
         }
         $escalated = $escalatedQuery->count();
@@ -54,100 +52,49 @@ class TicketStatsOverview extends StatsOverviewWidget
         $this->applyDashboardLiveTicketFilters($myApproval);
         $myApprovalCount = $myApproval->count();
 
-        [$completedCount, $completedLabel, $completedDescription] = $this->outcomeStat(
-            TicketStatus::Completed,
-            'completed_at',
-            'Completed today',
-            'Completed in range',
-            'completed_at today',
-            'completed_at in range',
-        );
-
-        [$closedCount, $closedLabel, $closedDescription] = $this->outcomeStat(
-            TicketStatus::Closed,
-            'closed_at',
-            'Closed today',
-            'Closed in range',
-            'closed_at today',
-            'closed_at in range',
-        );
-
-        [$rejectedCount, $rejectedLabel, $rejectedDescription] = $this->outcomeStat(
-            TicketStatus::Rejected,
-            'rejected_at',
-            'Rejected today',
-            'Rejected in range',
-            'rejected_at today',
-            'rejected_at in range',
-        );
-
-        $dated = $this->hasCustomDateRange();
-        $pendingDescription = $dated ? 'opened_at in range' : 'Open queue (opened_at)';
-        $unassignedDescription = $dated ? 'Open · opened_at in range' : 'Open — needs an owner';
-        $inProgressDescription = $escalated > 0
-            ? $escalated.' escalated'
-            : ($dated ? 'in_progress_at in range' : 'Being handled');
+        $completedCount = $this->outcomeCount(TicketStatus::Completed, 'completed_at');
+        $closedCount = $this->outcomeCount(TicketStatus::Closed, 'closed_at');
+        $rejectedCount = $this->outcomeCount(TicketStatus::Rejected, 'rejected_at');
 
         return [
             Stat::make('Unassigned', $unassigned)
-                ->description($unassignedDescription)
                 ->descriptionIcon(Heroicon::OutlinedInbox)
                 ->color($unassigned > 0 ? 'warning' : 'gray')
                 ->url(TicketResource::getUrl('index').'?tab=unassigned'),
             Stat::make('Pending', $open)
-                ->description($pendingDescription)
                 ->descriptionIcon(Heroicon::OutlinedClock)
                 ->color($open > 0 ? 'warning' : 'gray')
                 ->url(TicketResource::getUrl('index').'?tab=open'),
             Stat::make('In progress', $inProgress)
-                ->description($inProgressDescription)
+                ->description($escalated > 0 ? $escalated.' escalated' : null)
                 ->descriptionIcon(Heroicon::OutlinedArrowPath)
                 ->color($escalated > 0 ? 'danger' : 'info')
                 ->url(TicketResource::getUrl('index').'?tab=in_progress'),
             Stat::make('My approvals', $myApprovalCount)
-                ->description('Waiting on you (live)')
                 ->descriptionIcon(Heroicon::OutlinedCheckBadge)
                 ->color($myApprovalCount > 0 ? 'primary' : 'gray')
                 ->url(\App\Filament\Pages\MyTickets::getUrl().'?tab=approval'),
-            Stat::make($rejectedLabel, $rejectedCount)
-                ->description($rejectedDescription)
+            Stat::make('Rejected', $rejectedCount)
                 ->descriptionIcon(Heroicon::OutlinedExclamationTriangle)
                 ->color($rejectedCount > 0 ? 'danger' : 'gray')
                 ->url(TicketResource::getUrl('index').'?tab=rejected'),
-            Stat::make($completedLabel, $completedCount)
-                ->description($completedDescription)
+            Stat::make('Completed', $completedCount)
                 ->descriptionIcon(Heroicon::OutlinedCheckCircle)
                 ->color('success')
                 ->url(TicketResource::getUrl('index').'?tab=completed'),
-            Stat::make($closedLabel, $closedCount)
-                ->description($closedDescription)
+            Stat::make('Closed', $closedCount)
                 ->descriptionIcon(Heroicon::OutlinedArchiveBox)
                 ->color('gray')
                 ->url(TicketResource::getUrl('index').'?tab=closed'),
         ];
     }
 
-    /**
-     * @return array{0: int, 1: string, 2: string}
-     */
-    protected function outcomeStat(
-        TicketStatus $status,
-        string $column,
-        string $todayLabel,
-        string $rangeLabel,
-        string $todayDescription,
-        string $rangeDescription,
-    ): array {
+    protected function outcomeCount(TicketStatus $status, string $column): int
+    {
         $query = TicketResource::getEloquentQuery()->where('status', $status);
         $this->applyDashboardServiceFilter($query);
         $this->applyDashboardEventDateFilter($query, $column, defaultToToday: true);
 
-        $inRange = $this->hasCustomDateRange();
-
-        return [
-            $query->count(),
-            $inRange ? $rangeLabel : $todayLabel,
-            $inRange ? $rangeDescription : $todayDescription,
-        ];
+        return $query->count();
     }
 }

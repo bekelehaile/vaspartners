@@ -48,26 +48,20 @@ class PendingCompanyRequestsStats extends StatsOverviewWidget
         $this->applyDashboardEventDateFilter($approvedQuery, 'reviewed_at', defaultToToday: true);
         $approvedLabel = $this->hasCustomDateRange() ? 'Approved in range' : 'Approved today';
 
-        $pendingHint = $this->hasCustomDateRange() ? 'created_at in range' : 'Pending queue';
-
         return [
             Stat::make('Ownership transfers', $pendingTransfers)
-                ->description($pendingHint.' — admin must decide')
                 ->descriptionIcon(Heroicon::OutlinedBuildingOffice2)
                 ->color($pendingTransfers > 0 ? 'warning' : 'gray')
                 ->url(CompanyChangeRequestResource::getUrl('index').'?tab=ownership'),
             Stat::make('Membership joins', $pendingJoins)
-                ->description($pendingHint.' — owner decides in portal')
                 ->descriptionIcon(Heroicon::OutlinedUserPlus)
                 ->color($pendingJoins > 0 ? 'info' : 'gray')
                 ->url(CompanyChangeRequestResource::getUrl('index').'?tab=membership'),
             Stat::make('Leave company', $pendingLeave)
-                ->description($pendingHint.' — detach requests')
                 ->descriptionIcon(Heroicon::OutlinedArrowRightStartOnRectangle)
                 ->color($pendingLeave > 0 ? 'warning' : 'gray')
                 ->url(CompanyChangeRequestResource::getUrl('index').'?tab=leave'),
             Stat::make($approvedLabel, $approvedQuery->count())
-                ->description($this->hasCustomDateRange() ? 'reviewed_at in range' : 'reviewed_at today')
                 ->descriptionIcon(Heroicon::OutlinedCheckCircle)
                 ->color('success')
                 ->url(CompanyChangeRequestResource::getUrl('index').'?tab=approved'),

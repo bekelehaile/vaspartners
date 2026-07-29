@@ -64,22 +64,18 @@ class TicketsByStatusChart extends ChartWidget
     public function getHeading(): ?string
     {
         if ($this->hasCustomDateRange()) {
-            return 'Tickets by status (event time in range)';
+            return 'Tickets by status (filtered)';
         }
 
         if (filled($this->dashboardFilters()['service_id'] ?? null)) {
-            return 'Tickets by status (live · service filtered)';
+            return 'Tickets by status (service filtered)';
         }
 
-        return 'Tickets by status (live)';
+        return 'Tickets by status';
     }
 
     public function getDescription(): ?string
     {
-        if (! $this->hasCustomDateRange()) {
-            return 'Current queue by status. Set a date range to use opened_at / in_progress_at / completed_at / closed_at / rejected_at per status.';
-        }
-
-        return 'Open→opened_at · In progress→in_progress_at · Completed→completed_at · Closed→closed_at · Rejected→rejected_at';
+        return null;
     }
 }

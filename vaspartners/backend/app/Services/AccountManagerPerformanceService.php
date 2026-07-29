@@ -14,14 +14,14 @@ use Illuminate\Support\Collection;
  *
  * Grain: current ticket assignee (`assigned_to_user_id`).
  *
- * Each KPI uses its matching status + event timestamp (no double counting):
+ * Each KPI uses its matching event timestamp:
  * - Assigned  → assigned_at
- * - Completed → status=completed + completed_at
- * - Closed    → status=closed + closed_at
- * - Rejected  → status=rejected + rejected_at
+ * - Completed → completed_at (status completed or closed — Completed is often transient before Close)
+ * - Closed    → closed_at (status closed)
+ * - Rejected  → rejected_at (status rejected)
  * - Cycle     → outcome timestamp − assigned_at (per outcome type)
  * - Pickup    → assigned_at − created_at
- * - Backlog   → live open/in_progress (age from assigned_at, else created_at)
+ * - Backlog   → live open/in_progress
  */
 class AccountManagerPerformanceService
 {
@@ -80,17 +80,27 @@ class AccountManagerPerformanceService
                 ) as assigned_in_period',
                 [$start, $end],
             )
-            // Completed in period → status + completed_at (never credit closed rows here).
+            // Completed in period → completed_at (include already-closed; Completed is transient).
+            ->selectRaw(
+                'count(*) filter (
+                    where status in (?, ?)
+                      and completed_at is not null
+                      and completed_at >= ?
+                      and completed_at < ?
+                ) as completed',
+                [$completed, $closed, $start, $end],
+            )
+            // Still Completed (not closed yet) — for rates without double-counting closes.
             ->selectRaw(
                 'count(*) filter (
                     where status = ?
                       and completed_at is not null
                       and completed_at >= ?
                       and completed_at < ?
-                ) as completed',
+                ) as completed_open',
                 [$completed, $start, $end],
             )
-            // Closed in period → status + closed_at.
+            // Closed in period → status closed + closed_at.
             ->selectRaw(
                 'count(*) filter (
                     where status = ?
@@ -197,13 +207,15 @@ class AccountManagerPerformanceService
                 }
 
                 $completedCount = (int) $row->completed;
+                $completedOpen = (int) ($row->completed_open ?? 0);
                 $rejectedCount = (int) $row->rejected;
                 $closedCount = (int) $row->closed;
-                $outcomes = $completedCount + $rejectedCount + $closedCount;
-                $positive = $completedCount + $closedCount;
+                // Rates: closed + still-completed + rejected (don't double-count closed-as-completed).
+                $positive = $closedCount + $completedOpen;
+                $outcomes = $positive + $rejectedCount;
                 $docsReviewed = (int) $row->docs_passed + (int) $row->docs_failed;
 
-                // Positive resolution = completed or closed (rejected is the only negative outcome).
+                // Positive resolution = closed or still completed (rejected is the only negative outcome).
                 $completionRate = $outcomes > 0 ? round(($positive / $outcomes) * 100, 1) : null;
                 $rejectionRate = $outcomes > 0 ? round(($rejectedCount / $outcomes) * 100, 1) : null;
                 $docPassRate = $docsReviewed > 0
@@ -269,19 +281,21 @@ class AccountManagerPerformanceService
         $completed = (int) $rows->sum('completed');
         $rejected = (int) $rows->sum('rejected');
         $closed = (int) $rows->sum('closed');
-        $outcomes = $completed + $rejected + $closed;
+        // Avoid double-counting: closed tickets may also appear in completed (completed_at).
+        $outcomes = $closed + $rejected;
+        $positive = $closed;
 
-        $cycleWeightKey = fn (array $r): int => $r['completed'] + $r['closed'] + $r['rejected'];
+        $cycleWeightKey = fn (array $r): int => $r['closed'] + $r['rejected'] + ($r['completed'] > $r['closed'] ? $r['completed'] - $r['closed'] : 0);
         $cycleSamples = $rows->filter(
-            fn (array $r) => $r['avg_cycle_hours'] !== null && $cycleWeightKey($r) > 0,
+            fn (array $r) => $r['avg_cycle_hours'] !== null && ($r['closed'] + $r['rejected'] + $r['completed']) > 0,
         );
         $pickupSamples = $rows->filter(fn (array $r) => $r['avg_pickup_hours'] !== null && $r['assigned_in_period'] > 0);
 
         $weightedCycle = null;
         if ($cycleSamples->isNotEmpty()) {
-            $weight = $cycleSamples->sum($cycleWeightKey);
+            $weight = $cycleSamples->sum(fn (array $r) => max(1, $r['closed'] + $r['rejected']));
             $weightedCycle = $weight > 0
-                ? round($cycleSamples->sum(fn (array $r) => $r['avg_cycle_hours'] * $cycleWeightKey($r)) / $weight, 1)
+                ? round($cycleSamples->sum(fn (array $r) => $r['avg_cycle_hours'] * max(1, $r['closed'] + $r['rejected'])) / $weight, 1)
                 : null;
         }
 
@@ -305,9 +319,11 @@ class AccountManagerPerformanceService
             'backlog' => (int) $rows->sum('backlog'),
             'completed' => $completed,
             'closed' => $closed,
+            'rejected' => $rejected,
             'avg_cycle_hours' => $weightedCycle,
             'avg_pickup_hours' => $weightedPickup,
             'rejection_rate' => $outcomes > 0 ? round(($rejected / $outcomes) * 100, 1) : null,
+            'completion_rate' => $outcomes > 0 ? round(($positive / $outcomes) * 100, 1) : null,
             'unassigned_open' => $unassigned,
         ];
     }

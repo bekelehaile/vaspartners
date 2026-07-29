@@ -30,7 +30,7 @@ class StatusHistoryRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->description('Each status change records its own event stamp (opened_at / in_progress_at / completed_at / closed_at / rejected_at).')
+            ->description('Full lifecycle trail of status changes with actor and timestamp.')
             ->modifyQueryUsing(fn ($query) => $query->with('actor'))
             ->columns([
                 TextColumn::make('created_at')
