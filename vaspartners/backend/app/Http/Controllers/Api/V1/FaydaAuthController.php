@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AppSetting;
 use App\Services\CompanyMembershipService;
 use App\Services\EsignetService;
+use App\Support\PortalAccessToken;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 
@@ -67,13 +68,14 @@ class FaydaAuthController extends Controller
             return redirect()->away($frontend.'?error=company_inactive');
         }
 
-        $accessToken = $contact->createToken('fayda')->plainTextToken;
+        $accessToken = PortalAccessToken::issue($contact, PortalAccessToken::NAME_FAYDA);
         $target = $pkce['frontend_redirect'] ?? $frontend;
         $sep = str_contains($target, '?') ? '&' : '?';
 
         return redirect()->away($target.$sep.http_build_query([
             'token' => $accessToken,
             'contact_id' => $contact->public_id,
+            'expires_in' => PortalAccessToken::ttlMinutes() * 60,
         ]));
     }
 

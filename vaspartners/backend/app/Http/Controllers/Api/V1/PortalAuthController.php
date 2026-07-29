@@ -87,6 +87,7 @@ class PortalAuthController extends Controller
             'data' => [
                 'token' => $result['token'],
                 'is_new' => $result['is_new'],
+                'expires_in' => $result['expires_in'],
                 'contact' => $membership->serializeContact($result['contact']),
             ],
         ]);

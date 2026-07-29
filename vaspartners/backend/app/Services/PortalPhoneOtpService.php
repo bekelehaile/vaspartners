@@ -6,6 +6,7 @@ use App\Models\AppSetting;
 use App\Models\Contact;
 use App\Support\EmailAddress;
 use App\Support\PhoneNumber;
+use App\Support\PortalAccessToken;
 use App\Support\PortalProfileOptions;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -170,12 +171,13 @@ class PortalPhoneOtpService
             );
         }
 
-        $token = $contact->createToken('phone_otp')->plainTextToken;
+        $token = PortalAccessToken::issue($contact, PortalAccessToken::NAME_OTP);
 
         return [
             'contact' => $contact,
             'token' => $token,
             'is_new' => $result['is_new'],
+            'expires_in' => PortalAccessToken::ttlMinutes() * 60,
         ];
     }
 
