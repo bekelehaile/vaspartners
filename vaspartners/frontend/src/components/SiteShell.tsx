@@ -124,6 +124,7 @@ export function SiteShell({
               alt="Ethio telecom"
               className="brand-logo"
             />
+            <span className="brand-product">VAS Partners</span>
           </Link>
 
           <nav className="topnav" aria-label="Primary">
@@ -150,15 +151,17 @@ export function SiteShell({
                     </Link>
                   )
                 )}
-                <LoginLink className="btn-login">
-                  <LogInIcon />
-                  <span>Login</span>
-                </LoginLink>
               </>
             )}
           </nav>
 
           <div className="topbar-end">
+            {!me ? (
+              <LoginLink className="btn-login topbar-login">
+                <LogInIcon />
+                <span>Login</span>
+              </LoginLink>
+            ) : null}
             {me ? (
               <>
                 <div className="portal-desktop-tools" aria-label="Account tools">

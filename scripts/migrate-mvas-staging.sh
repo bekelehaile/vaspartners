@@ -19,7 +19,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 CTR="${VASPARTNERS_APP_CONTAINER:-vaspartners-app}"
-DUMP="${MVAS_DUMP_PATH:-/mvas-dumps/mvas_20260729_080126.dump}"
+DUMP="${MVAS_DUMP_PATH:-/mvas-dumps/mvas_20260729_125415.dump}"
 STORAGE="${MVAS_STORAGE_PATH:-/mvas-storage}"
 
 FRESH=1

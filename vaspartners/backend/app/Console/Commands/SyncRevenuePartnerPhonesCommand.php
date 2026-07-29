@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Models\User;
 use App\Services\RevenuePartnerPhoneSyncService;
 use Illuminate\Console\Command;
 
@@ -11,6 +10,8 @@ class SyncRevenuePartnerPhonesCommand extends Command
     protected $signature = 'vas:sync-revenue-partner-phones
         {path : JSON or CSV path (Service ID + Phone)}
         {--overwrite : Replace phones that are already set}
+        {--create-missing : Create revenue partners for Service IDs / short codes not in the DB}
+        {--vas-service= : Default catalog service id or slug when creating (default: api)}
         {--account-manager= : Assign matched partners to this user id or name}';
 
     protected $description = 'Fill revenue partner phones by Service ID / Short code from a JSON or CSV file';
@@ -41,21 +42,42 @@ class SyncRevenuePartnerPhonesCommand extends Command
             return self::FAILURE;
         }
 
-        $stats = $sync->syncFromRows($rows, (bool) $this->option('overwrite'), $amId);
+        $defaultVas = $this->resolveDefaultVasServiceId();
+        if ($this->option('create-missing') && $this->option('vas-service') && ! $defaultVas) {
+            $this->error('Catalog service not found: '.$this->option('vas-service'));
+
+            return self::FAILURE;
+        }
+
+        $stats = $sync->syncFromRows(
+            $rows,
+            (bool) $this->option('overwrite'),
+            $amId,
+            (bool) $this->option('create-missing'),
+            $defaultVas,
+        );
 
         $this->info("Processed {$stats['total']} rows.");
         $this->line("  Updated phones: {$stats['updated']}");
         $this->line("  Already had phone: {$stats['already_had_phone']}");
+        $this->line("  Created partners: {$stats['created']}");
         $this->line("  Assigned account manager: {$stats['assigned_am']}");
+        $this->line("  Unknown account manager: {$stats['unknown_am']}");
         $this->line("  Skipped NA/blank: {$stats['skipped_na']}");
         $this->line("  Invalid phone: {$stats['invalid_phone']}");
         $this->line("  Not found: {$stats['not_found']}");
 
+        if (($stats['created_keys'] ?? []) !== []) {
+            $this->info('Created: '.implode(', ', array_slice($stats['created_keys'], 0, 40)));
+        }
         if ($stats['not_found_keys'] !== []) {
             $this->warn('Not found keys: '.implode(', ', array_slice($stats['not_found_keys'], 0, 30)));
         }
         if ($stats['invalid_keys'] !== []) {
             $this->warn('Invalid phone keys: '.implode(', ', $stats['invalid_keys']));
+        }
+        if (($stats['unknown_am_names'] ?? []) !== []) {
+            $this->warn('Unknown AM names: '.implode(', ', $stats['unknown_am_names']));
         }
 
         return self::SUCCESS;
@@ -68,32 +90,28 @@ class SyncRevenuePartnerPhonesCommand extends Command
             return null;
         }
 
+        return app(RevenuePartnerPhoneSyncService::class)->resolveAccountManagerId($raw);
+    }
+
+    protected function resolveDefaultVasServiceId(): ?int
+    {
+        $raw = trim((string) $this->option('vas-service'));
+        if ($raw === '') {
+            return null;
+        }
+
         if (ctype_digit($raw)) {
-            $user = User::query()->find((int) $raw);
-
-            return $user?->id;
+            return \App\Models\Service::query()->whereKey((int) $raw)->value('id');
         }
 
-        $user = User::query()
-            ->whereRaw('lower(name) = ?', [mb_strtolower($raw)])
-            ->orWhere('email', $raw)
-            ->orWhere('username', $raw)
-            ->first();
-
-        if ($user) {
-            return (int) $user->id;
-        }
-
-        $user = User::query()
-            ->where('name', 'ilike', '%'.$raw.'%')
-            ->orderBy('id')
-            ->first();
-
-        return $user?->id;
+        return \App\Models\Service::query()
+            ->where('slug', $raw)
+            ->orWhereRaw('lower(name) = ?', [mb_strtolower($raw)])
+            ->value('id');
     }
 
     /**
-     * @return list<array{service_id: ?string, short_code: ?string, phone: ?string}>
+     * @return list<array{service_id: ?string, short_code: ?string, phone: ?string, account_manager: ?string}>
      */
     protected function readJson(string $path): array
     {
@@ -111,6 +129,9 @@ class SyncRevenuePartnerPhonesCommand extends Command
                 'service_id' => $row['service_id'] ?? $row['Service ID'] ?? null,
                 'short_code' => $row['short_code'] ?? $row['Short code'] ?? null,
                 'phone' => $row['phone'] ?? $row['phone_raw'] ?? $row['Phone Number'] ?? $row['Phone'] ?? null,
+                'account_manager' => $row['account_manager'] ?? $row['am'] ?? $row['AM'] ?? null,
+                'partner_name' => $row['partner_name'] ?? $row['Partner Name'] ?? $row['partner name'] ?? null,
+                'service' => $row['service'] ?? $row['Service'] ?? null,
             ];
         }
 
@@ -118,7 +139,7 @@ class SyncRevenuePartnerPhonesCommand extends Command
     }
 
     /**
-     * @return list<array{service_id: ?string, short_code: ?string, phone: ?string}>
+     * @return list<array{service_id: ?string, short_code: ?string, phone: ?string, account_manager: ?string}>
      */
     protected function readCsv(string $path): array
     {
@@ -142,7 +163,20 @@ class SyncRevenuePartnerPhonesCommand extends Command
             $rows[] = [
                 'service_id' => $assoc['service_id'] ?? $assoc['service id'] ?? null,
                 'short_code' => $assoc['short_code'] ?? $assoc['short code'] ?? null,
-                'phone' => $assoc['phone'] ?? $assoc['phone number'] ?? $assoc['phone_number'] ?? null,
+                'phone' => $assoc['phone']
+                    ?? $assoc['phone number']
+                    ?? $assoc['phone_number']
+                    ?? $assoc['phone no.']
+                    ?? $assoc['phone no']
+                    ?? null,
+                'account_manager' => $assoc['account_manager']
+                    ?? $assoc['account manager']
+                    ?? $assoc['am']
+                    ?? null,
+                'partner_name' => $assoc['partner_name']
+                    ?? $assoc['partner name']
+                    ?? null,
+                'service' => $assoc['service'] ?? $assoc['catalog_service'] ?? null,
             ];
         }
         fclose($fh);

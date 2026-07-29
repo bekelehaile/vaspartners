@@ -347,6 +347,8 @@ textarea {
   align-items: center;
   gap: 0.85rem;
   min-width: 0;
+  flex-shrink: 0;
+  text-decoration: none;
 }
 
 .brand-logo {
@@ -357,13 +359,14 @@ textarea {
 
 .brand-product {
   display: none;
-  font-size: 0.95rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-size: 1rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
   color: var(--et-ink);
   border-left: 1px solid var(--et-line);
   padding-left: 0.85rem;
   line-height: 1.2;
+  white-space: nowrap;
 }
 
 @media (min-width: 640px) {
@@ -375,17 +378,35 @@ textarea {
 .topnav {
   display: none;
   align-items: center;
-  gap: 1.5rem;
-  font-size: 1rem;
+  gap: 1.75rem;
+  font-size: 0.98rem;
   font-weight: 500;
   flex: 1;
   min-width: 0;
-  justify-content: flex-start;
+  justify-content: flex-end;
+  padding-inline: 1rem 1.25rem;
 }
 
 @media (min-width: 768px) {
   .topnav {
     display: flex;
+  }
+}
+
+@media (min-width: 1024px) {
+  .topnav {
+    gap: 2.15rem;
+    padding-inline: 1.5rem 1.75rem;
+  }
+}
+
+.topbar-login {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .topbar-login {
+    display: inline-flex;
   }
 }
 
