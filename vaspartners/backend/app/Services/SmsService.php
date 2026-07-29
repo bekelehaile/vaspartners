@@ -43,7 +43,7 @@ class SmsService
             return;
         }
 
-        SendSmsJob::dispatch($normalized, $message);
+        SendSmsJob::dispatch($normalized, $this->normalizeSmsBody($message));
     }
 
     /**
@@ -86,7 +86,7 @@ class SmsService
             return false;
         }
 
-        $url = $this->buildSmsUrl($normalized, $message);
+        $url = $this->buildSmsUrl($normalized, $this->normalizeSmsBody($message));
 
         try {
             $response = Http::timeout(15)->get($url);
@@ -138,6 +138,18 @@ class SmsService
             urlencode($msisdn),
             urlencode($message)
         );
+    }
+
+    /**
+     * Ethio telecom SMS gateway often mangles newlines (phones show "_" before the next line).
+     * Collapse all line breaks / odd whitespace to single spaces.
+     */
+    public function normalizeSmsBody(string $message): string
+    {
+        $message = str_replace(["\r\n", "\r", "\n", "\t"], ' ', $message);
+        $message = preg_replace('/[ ]{2,}/u', ' ', $message) ?? $message;
+
+        return trim($message);
     }
 
     public function normalizePhone(string|int|null $phone): string

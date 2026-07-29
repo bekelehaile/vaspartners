@@ -44,8 +44,8 @@ class AdminPasswordOtpService
         $otp = $this->generateOtp();
         $this->store($normalized, $otp);
 
-        $message = "VAS Partners admin password reset.\n"
-            ."Your verification code is {$otp}. It expires in ".self::EXPIRY_MINUTES." minutes.\n"
+        $message = 'VAS Partners admin password reset. '
+            ."Your verification code is {$otp}. It expires in ".self::EXPIRY_MINUTES.' minutes. '
             .'If you did not request this, ignore this message. Ethio telecom';
 
         $this->sms->send($normalized, $message);

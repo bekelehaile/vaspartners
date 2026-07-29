@@ -65,8 +65,8 @@ class PortalPhoneOtpService
         $otp = $this->generateOtp();
         $this->store($phone, $otp);
 
-        $message = "VAS Partners portal sign-in.\n"
-            ."Your verification code is {$otp}. It expires in ".self::EXPIRY_MINUTES." minutes.\n"
+        $message = 'VAS Partners portal sign-in. '
+            ."Your verification code is {$otp}. It expires in ".self::EXPIRY_MINUTES.' minutes. '
             .'If you did not request this, ignore this message. Ethio telecom';
 
         $this->sms->send($phone, $message);
