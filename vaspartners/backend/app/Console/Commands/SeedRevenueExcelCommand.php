@@ -16,7 +16,8 @@ class SeedRevenueExcelCommand extends Command
 {
     protected $signature = 'vas:seed-revenue-excel
         {--partners-only : Seed partner master list only}
-        {--monthly-only : Seed monthly import batches only}';
+        {--monthly-only : Seed monthly import batches only}
+        {--link-companies : Also link partners to portal companies by phone}';
 
     protected $description = 'Seed revenue partners and monthly imports from database/data/revenue Excel snapshots';
 
@@ -40,6 +41,15 @@ class SeedRevenueExcelCommand extends Command
             $this->table(
                 ['Imports upserted', 'Rows written', 'Skipped (already sent)'],
                 [[$stats['imports'], $stats['rows'], $stats['skipped_sent']]],
+            );
+        }
+
+        if ($this->option('link-companies') || (! $partnersOnly && ! $monthlyOnly)) {
+            $this->info('Linking revenue partners to companies by phone…');
+            $link = $seeder->linkPartnersToCompanies();
+            $this->table(
+                ['Linked', 'Already linked', 'No company match'],
+                [[$link['linked'], $link['already'], $link['noMatch']]],
             );
         }
 

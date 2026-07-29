@@ -4,12 +4,15 @@ namespace App\Services\Migration;
 
 use App\Enums\RevenueImportRowStatus;
 use App\Enums\RevenueImportStatus;
+use App\Models\Company;
 use App\Models\RevenueImport;
 use App\Models\RevenueImportRow;
 use App\Models\RevenuePartner;
 use App\Models\Service;
 use App\Services\BulkMessageService;
+use App\Services\RevenuePartnerPhoneSyncService;
 use App\Services\RevenuePartnerResolver;
+use App\Support\PhoneNumber;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 
@@ -71,23 +74,35 @@ class SeedRevenueExcelSnapshotService
 
                 if (! $partner) {
                     $core = ltrim($serviceId, '0') ?: '0';
-                    $partner = RevenuePartner::query()
-                        ->whereNull('created_by_user_id')
-                        ->whereRaw("TRIM(LEADING '0' FROM service_id) = ?", [$core])
-                        ->first();
+                    $partner = app(RevenuePartnerPhoneSyncService::class)->findPartner($serviceId, $shortCode);
                 }
 
                 if (! $partner && $shortCode) {
                     $partner = RevenuePartner::query()
                         ->where('short_code', $shortCode)
-                        ->whereNull('created_by_user_id')
+                        ->orderBy('id')
                         ->first();
                 }
 
                 if (! $partner) {
+                    // Avoid unique collisions when Excel uses short code as service_id.
+                    $createShort = $shortCode;
+                    if ($createShort && RevenuePartner::query()->where('short_code', $createShort)->exists()) {
+                        $createShort = null;
+                    }
+                    if ($createShort === $serviceId) {
+                        // Prefer keeping short_code column empty when the ID is clearly a short code duplicate.
+                        $ownedByShort = RevenuePartner::query()->where('short_code', $serviceId)->exists();
+                        if ($ownedByShort) {
+                            $skipped++;
+
+                            continue;
+                        }
+                    }
+
                     RevenuePartner::query()->create([
                         'service_id' => $serviceId,
-                        'short_code' => $shortCode,
+                        'short_code' => $createShort,
                         'partner_name' => $name,
                         'vas_service_id' => $vasServiceId,
                         'phone' => null,
@@ -309,14 +324,11 @@ class SeedRevenueExcelSnapshotService
                 $n = 0;
                 foreach ($group as $item) {
                     $n++;
-                    $partner = RevenuePartner::query()
-                        ->where('service_id', $item['service_id'])
-                        ->first();
-                    if (! $partner && $item['short_code']) {
-                        $partner = RevenuePartner::query()
-                            ->where('short_code', $item['short_code'])
-                            ->first();
-                    }
+                    $partner = app(RevenuePartnerPhoneSyncService::class)
+                        ->findPartner(
+                            is_string($item['service_id']) ? $item['service_id'] : null,
+                            is_string($item['short_code']) ? $item['short_code'] : null,
+                        );
 
                     $status = RevenueImportRowStatus::MissingPartner;
                     $error = 'Unresolved: service ID / short code not in partner master list.';
@@ -354,7 +366,11 @@ class SeedRevenueExcelSnapshotService
                     $rowCount++;
                 }
 
-                $import->resolveStatusFromRows();
+                // Historical Excel seed — visible in partner portal (not a draft SMS campaign).
+                $import->forceFill([
+                    'status' => RevenueImportStatus::Completed,
+                    'imported_at' => $import->imported_at ?? now(),
+                ])->save();
                 $importCount++;
             }
         });
@@ -364,6 +380,60 @@ class SeedRevenueExcelSnapshotService
             'rows' => $rowCount,
             'skipped_sent' => $skippedSent,
         ];
+    }
+
+    /**
+     * Link revenue partners to portal companies by shared phone (last 9 digits).
+     *
+     * @return array{linked: int, already: int, no_match: int}
+     */
+    public function linkPartnersToCompanies(): array
+    {
+        $linked = 0;
+        $already = 0;
+        $noMatch = 0;
+
+        RevenuePartner::query()
+            ->where('is_active', true)
+            ->whereNotNull('phone')
+            ->where('phone', '!=', '')
+            ->orderBy('id')
+            ->chunkById(200, function ($partners) use (&$linked, &$already, &$noMatch): void {
+                foreach ($partners as $partner) {
+                    if ($partner->company_id) {
+                        $already++;
+
+                        continue;
+                    }
+
+                    $phone = PhoneNumber::normalizeNullable($partner->phone);
+                    if ($phone === null) {
+                        $noMatch++;
+
+                        continue;
+                    }
+
+                    $company = Company::query()
+                        ->whereRaw(
+                            "RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9) = ?",
+                            [$phone]
+                        )
+                        ->orderByRaw('CASE WHEN tin_validated THEN 0 ELSE 1 END')
+                        ->orderBy('id')
+                        ->first();
+
+                    if (! $company) {
+                        $noMatch++;
+
+                        continue;
+                    }
+
+                    $partner->forceFill(['company_id' => $company->id])->save();
+                    $linked++;
+                }
+            });
+
+        return compact('linked', 'already', 'noMatch');
     }
 
     /**

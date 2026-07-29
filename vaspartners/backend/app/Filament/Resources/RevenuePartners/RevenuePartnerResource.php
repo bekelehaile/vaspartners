@@ -71,7 +71,16 @@ class RevenuePartnerResource extends Resource
                             fn (): array => Company::query()
                                 ->where('is_active', true)
                                 ->orderBy('name')
-                                ->pluck('name', 'id')
+                                ->get(['id', 'name', 'phone', 'tin'])
+                                ->mapWithKeys(function (Company $company): array {
+                                    $bits = array_filter([
+                                        $company->name,
+                                        filled($company->phone) ? $company->phone : null,
+                                        filled($company->tin) ? 'TIN '.$company->tin : null,
+                                    ]);
+
+                                    return [$company->id => implode(' · ', $bits)];
+                                })
                                 ->all()
                         )
                         ->searchable()
@@ -90,7 +99,7 @@ class RevenuePartnerResource extends Resource
                                 $set('phone', PhoneNumber::normalizeNullable($company->phone));
                             }
                         })
-                        ->helperText('Optional validated portal company. Used for linking; does not replace partner name.')
+                        ->helperText('Optional validated portal company. Search by name, phone, or TIN.')
                         ->columnSpanFull(),
                     TextInput::make('phone')
                         ->label('Phone')
