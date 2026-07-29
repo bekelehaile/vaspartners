@@ -36,6 +36,7 @@ class MigrateMvasDumpCommand extends Command
         {--skip-attachments : Skip attachment copy}
         {--skip-approvers : Skip final-approver import}
         {--skip-subscriptions : Skip subscription derivation}
+        {--skip-assignees : Skip backfill of legacy ticket assignees}
         {--link-memberships : Link contacts as owners during seed (default off)}
         {--dry-run : Report without writing}';
 
@@ -110,7 +111,7 @@ class MigrateMvasDumpCommand extends Command
             'link_memberships' => (bool) $this->option('link-memberships'),
         ]);
 
-        $this->info($dryRun ? '[3/3] Enrich (dry-run)' : '[3/3] Enrich subscriptions / approvers / attachments');
+        $this->info($dryRun ? '[3/3] Enrich (dry-run)' : '[3/3] Enrich assignees / subscriptions / approvers / attachments');
         $enrichStats = $enrichment->enrich([
             'dump' => $dump,
             'storage' => $storage !== '' ? $storage : null,
@@ -118,6 +119,7 @@ class MigrateMvasDumpCommand extends Command
             'skip_subscriptions' => (bool) $this->option('skip-subscriptions'),
             'skip_approvers' => (bool) $this->option('skip-approvers'),
             'skip_attachments' => (bool) $this->option('skip-attachments'),
+            'skip_assignees' => (bool) $this->option('skip-assignees'),
             'attachment_limit' => $attachmentLimit !== null && $attachmentLimit !== ''
                 ? (int) $attachmentLimit
                 : null,
@@ -128,7 +130,8 @@ class MigrateMvasDumpCommand extends Command
             [
                 ['companies', $stats['companies']['imported'], $stats['companies']['skipped'], 'selected '.$stats['companies']['selected']],
                 ['contacts', $stats['contacts']['imported'], $stats['contacts']['skipped'], 'portal_activated '.($stats['contacts']['portal_activated'] ?? 0)],
-                ['tickets', $stats['tickets']['imported'], $stats['tickets']['skipped'], 'orphaned '.$stats['tickets']['orphaned']],
+                ['tickets', $stats['tickets']['imported'], $stats['tickets']['skipped'], 'orphaned '.$stats['tickets']['orphaned'].'; assigned '.($stats['tickets']['assigned'] ?? 0)],
+                ['assignees', $enrichStats['assignees']['updated'], $enrichStats['assignees']['skipped'], 'unmapped '.$enrichStats['assignees']['unmapped'].'; none '.$enrichStats['assignees']['no_legacy_user']],
                 ['subscriptions', $enrichStats['subscriptions']['imported'], $enrichStats['subscriptions']['skipped'], 'linked '.$enrichStats['subscriptions']['linked_tickets']],
                 ['approvers', $enrichStats['approvers']['imported'], $enrichStats['approvers']['skipped'], ''],
                 ['attachments', $enrichStats['attachments']['imported'], $enrichStats['attachments']['skipped'], 'missing '.$enrichStats['attachments']['missing_file']],

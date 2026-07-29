@@ -39,6 +39,7 @@ class MvasDumpEnrichmentService
      *   skip_subscriptions?: bool,
      *   skip_approvers?: bool,
      *   skip_attachments?: bool,
+     *   skip_assignees?: bool,
      *   attachment_limit?: int|null
      * }  $options
      * @return array<string, mixed>
@@ -54,11 +55,16 @@ class MvasDumpEnrichmentService
             'subscriptions' => ['imported' => 0, 'skipped' => 0, 'terminated' => 0, 'linked_tickets' => 0],
             'approvers' => ['imported' => 0, 'skipped' => 0],
             'attachments' => ['imported' => 0, 'skipped' => 0, 'missing_file' => 0, 'unmapped_type' => 0, 'orphaned' => 0],
+            'assignees' => ['updated' => 0, 'skipped' => 0, 'unmapped' => 0, 'no_legacy_user' => 0],
             'dry_run' => $dryRun,
         ];
 
         $catalog = $this->buildCatalogMaps();
         $userByLegacy = $this->buildUserLegacyMap();
+
+        if (! ($options['skip_assignees'] ?? false)) {
+            $this->importTicketAssignees($dump, $userByLegacy, $dryRun, $stats);
+        }
 
         if (! ($options['skip_subscriptions'] ?? false)) {
             $this->importSubscriptions($dryRun, $stats);
@@ -81,6 +87,82 @@ class MvasDumpEnrichmentService
         Log::info('MVAS dump enrichment finished', $stats);
 
         return $stats;
+    }
+
+    /**
+     * Backfill assigned_to_user_id on legacy tickets from dump assigned_to / handler columns.
+     * Only fills tickets that are still unassigned (does not overwrite manual reassignment).
+     *
+     * @param  array<int, int>  $userByLegacy
+     * @param  array<string, mixed>  $stats
+     */
+    private function importTicketAssignees(string $dump, array $userByLegacy, bool $dryRun, array &$stats): void
+    {
+        /** @var array<int, Ticket> */
+        $ticketsByLegacy = Ticket::query()
+            ->whereNotNull('legacy_mvas_ticket_id')
+            ->whereNull('assigned_to_user_id')
+            ->get(['id', 'legacy_mvas_ticket_id', 'assigned_to_user_id', 'assigned_at', 'updated_at', 'created_at'])
+            ->keyBy(fn (Ticket $t): int => (int) $t->legacy_mvas_ticket_id)
+            ->all();
+
+        if ($ticketsByLegacy === []) {
+            return;
+        }
+
+        foreach ($this->tableReader->rows($dump, 'tickets') as $row) {
+            $legacyTicketId = isset($row[0]) && $row[0] !== '' ? (int) $row[0] : 0;
+            if ($legacyTicketId < 1 || ! isset($ticketsByLegacy[$legacyTicketId])) {
+                continue;
+            }
+
+            // Soft-deleted in dump — leave unassigned.
+            if (($row[27] ?? null) !== null && $row[27] !== '') {
+                $stats['assignees']['skipped']++;
+
+                continue;
+            }
+
+            $legacyAssignee = null;
+            if (($row[13] ?? null) !== null && $row[13] !== '') {
+                $legacyAssignee = (int) $row[13];
+            } elseif (($row[14] ?? null) !== null && $row[14] !== '') {
+                $legacyAssignee = (int) $row[14];
+            }
+
+            if ($legacyAssignee === null) {
+                $stats['assignees']['no_legacy_user']++;
+
+                continue;
+            }
+
+            $localUserId = $userByLegacy[$legacyAssignee] ?? null;
+            if ($localUserId === null) {
+                $stats['assignees']['unmapped']++;
+
+                continue;
+            }
+
+            if ($dryRun) {
+                $stats['assignees']['updated']++;
+
+                continue;
+            }
+
+            $ticket = $ticketsByLegacy[$legacyTicketId];
+            $ticket->forceFill([
+                'assigned_to_user_id' => $localUserId,
+                'assigned_at' => $ticket->assigned_at
+                    ?? $row[26]
+                    ?? $row[25]
+                    ?? $ticket->updated_at
+                    ?? $ticket->created_at
+                    ?? now(),
+            ])->save();
+
+            unset($ticketsByLegacy[$legacyTicketId]);
+            $stats['assignees']['updated']++;
+        }
     }
 
     /**
@@ -109,7 +191,7 @@ class MvasDumpEnrichmentService
             ->whereNotNull('legacy_mvas_ticket_id')
             ->whereIn('requisition_id', $createReqIds)
             ->whereIn('status', $doneStatuses)
-            ->orderByRaw('COALESCE(completed_at, closed_at, created_at, id)')
+            ->orderByRaw('COALESCE(completed_at, closed_at, created_at)')
             ->orderBy('id')
             ->get();
 

@@ -14,9 +14,11 @@ use App\Models\Priority;
 use App\Models\Requisition;
 use App\Models\Service;
 use App\Models\Ticket;
+use App\Models\User;
 use App\Services\SmsService;
 use App\Support\Migration\MvasDumpPartnerReader;
 use App\Support\Migration\MvasDumpTableReader;
+use App\Support\Migration\MvasStaffLegacyMap;
 use App\Support\TimestampPublicId;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -74,6 +76,7 @@ class MvasDumpMigrationService
         $linkMemberships = (bool) ($options['link_memberships'] ?? false);
 
         $catalog = $this->buildCatalogMaps();
+        $userByLegacy = $this->buildStaffUserLegacyMap();
         $fallbackServiceId = (int) (Service::query()->orderBy('id')->value('id') ?? 0);
         $fallbackRequisitionId = (int) (Requisition::query()->orderBy('id')->value('id') ?? 0);
         $fallbackCategoryId = (int) (Category::query()->orderBy('id')->value('id') ?? 0);
@@ -87,7 +90,7 @@ class MvasDumpMigrationService
         $stats = [
             'companies' => ['imported' => 0, 'skipped' => 0, 'selected' => 0],
             'contacts' => ['imported' => 0, 'skipped' => 0, 'selected' => 0, 'portal_activated' => 0],
-            'tickets' => ['imported' => 0, 'skipped' => 0, 'selected' => 0, 'orphaned' => 0],
+            'tickets' => ['imported' => 0, 'skipped' => 0, 'selected' => 0, 'orphaned' => 0, 'assigned' => 0, 'unmapped_assignee' => 0],
             'memberships' => ['linked' => 0, 'skipped' => 0],
             'dry_run' => $dryRun,
         ];
@@ -243,8 +246,19 @@ class MvasDumpMigrationService
                     continue;
                 }
 
+                $legacyAssigneeId = $ticket['assigned_to_user_id'] ?? $ticket['handler_user_id'] ?? null;
+                $assigneeUserId = $legacyAssigneeId !== null
+                    ? ($userByLegacy[$legacyAssigneeId] ?? null)
+                    : null;
+                if ($legacyAssigneeId !== null && $assigneeUserId === null) {
+                    $stats['tickets']['unmapped_assignee']++;
+                }
+
                 if ($dryRun) {
                     $stats['tickets']['imported']++;
+                    if ($assigneeUserId !== null) {
+                        $stats['tickets']['assigned']++;
+                    }
 
                     continue;
                 }
@@ -257,6 +271,7 @@ class MvasDumpMigrationService
                     $categoryId,
                     $status,
                     $priorityId,
+                    $assigneeUserId,
                 ): void {
                     $createdAt = $ticket['created_at'] ?? now();
                     // Map old MVAS hex ids (e.g. 11B4BA6760) → YmdH + 2 random digits from created_at.
@@ -287,8 +302,9 @@ class MvasDumpMigrationService
                         'completed_at' => $status === TicketStatus::Closed
                             ? $finishedAt
                             : null,
-                        'assigned_at' => $status === TicketStatus::InProgress
-                            ? ($ticket['updated_at'] ?? now())
+                        'assigned_to_user_id' => $assigneeUserId,
+                        'assigned_at' => $assigneeUserId !== null
+                            ? ($ticket['updated_at'] ?? $ticket['created_at'] ?? now())
                             : null,
                     ]);
                     $model->created_at = $createdAt;
@@ -297,6 +313,9 @@ class MvasDumpMigrationService
                 });
 
                 $stats['tickets']['imported']++;
+                if ($assigneeUserId !== null) {
+                    $stats['tickets']['assigned']++;
+                }
             }
         }
 
@@ -580,6 +599,8 @@ class MvasDumpMigrationService
             'status_id' => (int) ($row[10] ?? 1),
             'priority_id' => $row[11] !== null ? (int) $row[11] : null,
             'category_id' => (int) ($row[12] ?? 0),
+            'assigned_to_user_id' => $row[13] !== null && $row[13] !== '' ? (int) $row[13] : null,
+            'handler_user_id' => $row[14] !== null && $row[14] !== '' ? (int) $row[14] : null,
             'tt_number' => $ttNumber,
             'escalated_at' => $row[16],
             'rejected_at' => $row[17],
@@ -651,5 +672,21 @@ class MvasDumpMigrationService
         }
 
         return compact('services', 'requisitions', 'categories');
+    }
+
+    /**
+     * @return array<int, int> legacy MVAS users.id → local users.id
+     */
+    private function buildStaffUserLegacyMap(): array
+    {
+        $map = [];
+        foreach (MvasStaffLegacyMap::emailsByLegacyId() as $legacyId => $email) {
+            $userId = User::query()->whereRaw('LOWER(email) = ?', [strtolower($email)])->value('id');
+            if ($userId) {
+                $map[$legacyId] = (int) $userId;
+            }
+        }
+
+        return $map;
     }
 }
