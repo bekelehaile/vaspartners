@@ -129,6 +129,11 @@ export type PartnerRevenueRow = {
   service_id?: string | null;
   partner_name?: string | null;
   service_type?: string | null;
+  /** Partner master-list phone (last 9). */
+  phone?: string | null;
+  /** Phone used / intended for revenue SMS. */
+  sms_phone?: string | null;
+  sms_phone_display?: string | null;
   amount?: number | null;
   amount_formatted?: string | null;
   imported_at?: string | null;

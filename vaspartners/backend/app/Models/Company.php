@@ -245,6 +245,23 @@ class Company extends Model
         );
     }
 
+    /**
+     * Partner submitted a 10-digit TIN NUMBER that still needs admin Approve TIN NUMBER.
+     */
+    public function scopeAwaitingTinApproval(Builder $query): Builder
+    {
+        return $query
+            ->where('tin_validated', false)
+            ->whereNotNull('tin')
+            ->where('tin', '!=', '')
+            ->whereRaw("length(regexp_replace(coalesce(tin, ''), '[^0-9]', '', 'g')) = 10");
+    }
+
+    public function scopeTinApproved(Builder $query): Builder
+    {
+        return $query->where('tin_validated', true);
+    }
+
     public function ownerContact(): ?Contact
     {
         return $this->owner()->first();

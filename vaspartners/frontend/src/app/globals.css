@@ -3520,6 +3520,16 @@ button.portal-mobile-card-hit {
   gap: 0.5rem;
 }
 
+.data-table-pager .btn-secondary {
+  padding: 0.45rem 0.85rem;
+  font-size: 0.875rem;
+}
+
+.data-table-pager .btn-secondary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .status-chip {
   display: inline-flex;
   align-items: center;

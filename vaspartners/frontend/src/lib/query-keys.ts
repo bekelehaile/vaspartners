@@ -23,6 +23,8 @@ export const queryKeys = {
   },
   subscriptions: ["contact", "subscriptions"] as const,
   revenue: ["contact", "revenue"] as const,
+  revenueFiltered: (filters: Record<string, unknown>) =>
+    ["contact", "revenue", filters] as const,
   feedback: ["contact", "feedback"] as const,
   ticket: (publicId: string) => ["ticket", publicId] as const,
   ticketMessages: (publicId: string) => ["ticket", publicId, "messages"] as const,

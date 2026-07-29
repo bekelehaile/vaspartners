@@ -134,16 +134,59 @@ export function useSubscriptions(options?: { enabled?: boolean }) {
   });
 }
 
-export function usePartnerRevenue(options?: { enabled?: boolean }) {
+export type RevenueFilters = {
+  page?: number;
+  per_page?: number;
+  sms_status?: "all" | "failed" | "sent" | "not_sent";
+};
+
+export type RevenuePage = {
+  items: PartnerRevenueRow[];
+  message?: string;
+  total: number;
+  currentPage: number;
+  lastPage: number;
+  perPage: number;
+};
+
+export function usePartnerRevenue(
+  filters: RevenueFilters = {},
+  options?: { enabled?: boolean }
+) {
   const enabled = options?.enabled ?? true;
+  const normalized = {
+    page: filters.page || 1,
+    per_page: filters.per_page || 15,
+    sms_status: filters.sms_status || "all",
+  };
+
   return useQuery({
-    queryKey: queryKeys.revenue,
+    queryKey: queryKeys.revenueFiltered(normalized),
     enabled: enabled && !!getToken(),
-    queryFn: async () => {
-      const res = await api<{ data: PartnerRevenueRow[]; message?: string }>("/revenue");
+    queryFn: async (): Promise<RevenuePage> => {
+      const qs = new URLSearchParams();
+      qs.set("page", String(normalized.page));
+      qs.set("per_page", String(normalized.per_page));
+      if (normalized.sms_status && normalized.sms_status !== "all") {
+        qs.set("sms_status", normalized.sms_status);
+      }
+
+      const res = await api<{
+        data: PartnerRevenueRow[];
+        message?: string;
+        total?: number;
+        current_page?: number;
+        last_page?: number;
+        per_page?: number;
+      }>(`/revenue?${qs.toString()}`);
+
       return {
         items: Array.isArray(res.data) ? res.data : [],
         message: res.message,
+        total: res.total ?? 0,
+        currentPage: res.current_page ?? 1,
+        lastPage: res.last_page ?? 1,
+        perPage: res.per_page ?? normalized.per_page,
       };
     },
   });

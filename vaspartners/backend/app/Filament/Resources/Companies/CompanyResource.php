@@ -277,7 +277,37 @@ class CompanyResource extends Resource
                     CompanyApprovalStatus::Rejected->value => CompanyApprovalStatus::Rejected->label(),
                 ]),
                 TernaryFilter::make('is_active')->label('Active'),
-                TernaryFilter::make('tin_validated')->label('TIN validated'),
+                SelectFilter::make('tin_number_status')
+                    ->label('TIN NUMBER')
+                    ->options([
+                        'awaiting' => 'Awaiting approval',
+                        'approved' => 'Approved',
+                        'missing' => 'Missing / not 10 digits',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return match ($data['value'] ?? null) {
+                            'awaiting' => $query->awaitingTinApproval(),
+                            'approved' => $query->tinApproved(),
+                            'missing' => $query
+                                ->where('tin_validated', false)
+                                ->where(function (Builder $q): void {
+                                    $q->whereNull('tin')
+                                        ->orWhere('tin', '')
+                                        ->orWhereRaw("length(regexp_replace(coalesce(tin, ''), '[^0-9]', '', 'g')) <> 10");
+                                }),
+                            default => $query,
+                        };
+                    }),
+                TernaryFilter::make('tin_validated')
+                    ->label('TIN approved (simple)')
+                    ->placeholder('Any TIN approval')
+                    ->trueLabel('TIN approved')
+                    ->falseLabel('TIN not approved')
+                    ->queries(
+                        true: fn ($query) => $query->where('tin_validated', true),
+                        false: fn ($query) => $query->where('tin_validated', false),
+                        blank: fn ($query) => $query,
+                    ),
                 TernaryFilter::make('no_owner')
                     ->label('No owner')
                     ->placeholder('All ownership')

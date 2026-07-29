@@ -42,19 +42,25 @@ function smsChipClass(status: string): string {
   }
 }
 
+function displayPhone(row: PartnerRevenueRow): string {
+  return row.sms_phone_display || row.sms_phone || row.phone || "—";
+}
+
 export function PartnerRevenueTable() {
-  const { data, isLoading, isFetching, isError, error } = usePartnerRevenue();
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(15);
   const [smsFilter, setSmsFilter] = useState<"all" | "failed" | "sent" | "not_sent">("all");
 
-  const items = data?.items ?? [];
+  const { data, isLoading, isFetching, isError, error } = usePartnerRevenue({
+    page,
+    per_page: perPage,
+    sms_status: smsFilter,
+  });
 
-  const filtered = useMemo(() => {
-    if (smsFilter === "all") return items;
-    if (smsFilter === "not_sent") {
-      return items.filter((r) => r.sms_status === "not_sent" || r.sms_status === "pending");
-    }
-    return items.filter((r) => r.sms_status === smsFilter);
-  }, [items, smsFilter]);
+  const items = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const currentPage = data?.currentPage ?? page;
+  const lastPage = data?.lastPage ?? 1;
 
   const columns = useMemo(
     () => [
@@ -73,6 +79,12 @@ export function PartnerRevenueTable() {
       columnHelper.accessor("partner_name", {
         header: "Partner",
         cell: (info) => info.getValue() || "—",
+      }),
+      columnHelper.accessor("sms_phone_display", {
+        header: "SMS phone",
+        cell: (info) => (
+          <span className="table-mono">{displayPhone(info.row.original)}</span>
+        ),
       }),
       columnHelper.accessor("amount_formatted", {
         header: "Amount (ETB)",
@@ -103,9 +115,11 @@ export function PartnerRevenueTable() {
   );
 
   const table = useReactTable({
-    data: filtered,
+    data: items,
     columns,
     getCoreRowModel: getCoreRowModel(),
+    manualPagination: true,
+    pageCount: lastPage,
   });
 
   return (
@@ -118,12 +132,32 @@ export function PartnerRevenueTable() {
           <select
             id="revenue-sms-filter"
             value={smsFilter}
-            onChange={(e) => setSmsFilter(e.target.value as typeof smsFilter)}
+            onChange={(e) => {
+              setSmsFilter(e.target.value as typeof smsFilter);
+              setPage(1);
+            }}
           >
             <option value="all">All rows</option>
             <option value="failed">SMS failed</option>
             <option value="sent">SMS sent</option>
             <option value="not_sent">Not sent / pending</option>
+          </select>
+
+          <label className="sr-only" htmlFor="revenue-per-page">
+            Rows per page
+          </label>
+          <select
+            id="revenue-per-page"
+            value={perPage}
+            onChange={(e) => {
+              setPerPage(Number(e.target.value));
+              setPage(1);
+            }}
+          >
+            <option value={10}>10 / page</option>
+            <option value={15}>15 / page</option>
+            <option value={25}>25 / page</option>
+            <option value={50}>50 / page</option>
           </select>
         </div>
         {isFetching && !isLoading ? <span className="data-table-hint">Refreshing…</span> : null}
@@ -141,12 +175,12 @@ export function PartnerRevenueTable() {
 
       {isLoading ? (
         <p className="portal-mobile-empty">Loading revenue…</p>
-      ) : filtered.length === 0 ? (
+      ) : items.length === 0 ? (
         <p className="portal-mobile-empty">No revenue rows for this company yet.</p>
       ) : (
         <>
           <ul className="portal-mobile-list">
-            {filtered.map((row) => (
+            {items.map((row) => (
               <li key={row.id}>
                 <div
                   className={`portal-mobile-card${
@@ -172,6 +206,10 @@ export function PartnerRevenueTable() {
                   <div className="portal-mobile-card-row">
                     <span className="table-mono">{row.service_id || "—"}</span>
                     <span>{row.partner_name || "—"}</span>
+                  </div>
+                  <div className="portal-mobile-card-row">
+                    <span className="portal-mobile-card-meta">SMS phone</span>
+                    <span className="table-mono">{displayPhone(row)}</span>
                   </div>
                   {row.sms_error && (
                     <p className="portal-mobile-card-meta">{row.sms_error}</p>
@@ -218,6 +256,33 @@ export function PartnerRevenueTable() {
           </div>
         </>
       )}
+
+      {!isLoading && total > 0 ? (
+        <div className="data-table-footer">
+          <p className="muted">
+            {`Page ${currentPage} of ${lastPage} · ${total} row${total === 1 ? "" : "s"}`}
+            {isFetching && !isLoading ? " · Updating…" : ""}
+          </p>
+          <div className="data-table-pager">
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={currentPage <= 1 || isFetching}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={currentPage >= lastPage || isFetching}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

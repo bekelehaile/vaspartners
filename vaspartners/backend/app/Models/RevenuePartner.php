@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\PartnerCompanyNameMatcher;
 use App\Support\PhoneNumber;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
@@ -46,17 +47,36 @@ class RevenuePartner extends Model
                 $partner->phone = PhoneNumber::normalizeNullable($partner->phone);
             }
 
-            // Auto-link company by phone when none is set; keep finance partner_name as-is.
+            // Auto-link only when phone matches AND partner_name ≈ company name.
+            // Abay contact phones are often reused across unrelated partners.
             if (! $partner->company_id && filled($partner->phone)) {
-                $company = Company::query()
+                $candidates = Company::query()
                     ->whereRaw(
                         "RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9) = ?",
                         [(string) $partner->phone]
                     )
                     ->orderBy('id')
-                    ->first();
-                if ($company) {
-                    $partner->company_id = $company->id;
+                    ->get(['id', 'name', 'phone']);
+
+                $match = $candidates->first(
+                    fn (Company $company) => PartnerCompanyNameMatcher::matches(
+                        $partner->partner_name,
+                        $company->name,
+                    )
+                );
+
+                if ($match) {
+                    $partner->company_id = $match->id;
+                } elseif ($candidates->count() === 1 && RevenuePartner::query()
+                    ->where('is_active', true)
+                    ->where('id', '!=', (int) ($partner->id ?: 0))
+                    ->whereRaw(
+                        "RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9) = ?",
+                        [(string) $partner->phone]
+                    )
+                    ->doesntExist()) {
+                    // Unique phone on companies + unique among other partners.
+                    $partner->company_id = $candidates->first()->id;
                 }
             }
         });

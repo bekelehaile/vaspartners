@@ -95,6 +95,10 @@ class ListCompanies extends ListRecords
 
         return [
             'all' => Tab::make('All')->badge(fn (): int => $base()->count()),
+            'tin_awaiting' => Tab::make('TIN awaiting approval')
+                ->badge(fn (): int => $base()->awaitingTinApproval()->count())
+                ->badgeColor('warning')
+                ->modifyQueryUsing(fn (Builder $query) => $query->awaitingTinApproval()),
             'pending' => Tab::make('Pending approval')
                 ->badge(fn (): int => $base()->where('approval_status', CompanyApprovalStatus::Pending)->count())
                 ->badgeColor('warning')
