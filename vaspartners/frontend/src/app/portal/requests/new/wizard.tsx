@@ -801,7 +801,7 @@ export default function NewRequestWizard() {
                         </button>
                       </div>
                     ) : (
-                      <div className="journey-option-list">
+                      <div className="journey-option-list journey-option-list-cols">
                         {aliveSubs.map((s) => {
                           const selected = String(s.id) === String(subscriptionId);
                           return (

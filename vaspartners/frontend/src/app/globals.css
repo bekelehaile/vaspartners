@@ -192,16 +192,24 @@ textarea {
   height: 4rem;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .topbar-end {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.35rem;
+  gap: 0.65rem;
   margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* Desktop: company + bell + account pinned to the right edge */
+.portal-desktop-tools {
+  display: none;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
   flex-shrink: 0;
 }
 
@@ -210,8 +218,13 @@ textarea {
   align-items: center;
   justify-content: flex-end;
   gap: 0.4rem;
-  margin-left: auto;
-  order: 0;
+  flex-shrink: 0;
+}
+
+@media (min-width: 768px) {
+  .portal-desktop-tools {
+    display: inline-flex;
+  }
 }
 
 @media (max-width: 767.98px) {
@@ -224,13 +237,22 @@ textarea {
   }
 }
 
+/* Portal admin keeps hamburger until sidebar (960px); use mobile tools until then */
 @media (max-width: 959.98px) {
+  .site-portal-admin .portal-desktop-tools {
+    display: none;
+  }
+
   .site-portal-admin .portal-mobile-tools {
     display: inline-flex;
   }
 }
 
 @media (min-width: 960px) {
+  .site-portal-admin .portal-desktop-tools {
+    display: inline-flex;
+  }
+
   .site-portal-admin .portal-mobile-tools {
     display: none;
   }
@@ -356,6 +378,9 @@ textarea {
   gap: 1.5rem;
   font-size: 1rem;
   font-weight: 500;
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-start;
 }
 
 @media (min-width: 768px) {
@@ -505,8 +530,29 @@ textarea {
 .portal-header-actions {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
-  flex-wrap: wrap;
+  gap: 0.75rem;
+  flex-wrap: nowrap;
+}
+
+.portal-desktop-tools .company-switcher-header {
+  max-width: 16rem;
+}
+
+.portal-desktop-tools .company-switcher-select-header {
+  max-width: 16rem;
+  min-height: 2.25rem;
+}
+
+.portal-desktop-tools .portal-account-btn {
+  height: 2.25rem;
+  min-height: 2.25rem;
+  padding-inline: 0.75rem;
+  gap: 0.4rem;
+}
+
+.portal-desktop-tools .notif-bell-btn {
+  width: 2.25rem;
+  height: 2.25rem;
 }
 
 .portal-header-actions-mobile {
@@ -728,8 +774,8 @@ textarea {
     max-height: none;
   }
 
-  .notif-panel-portal .notif-item {
-    padding: 0.95rem 1.15rem;
+  .notif-panel-portal .notif-item-link {
+    padding: 0.95rem 0.4rem 0.95rem 1.15rem;
   }
 }
 
@@ -875,6 +921,41 @@ textarea {
   cursor: default;
 }
 
+.notif-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.notif-clear-all {
+  flex-shrink: 0;
+  margin-top: 0.05rem;
+  border: 1px solid var(--et-line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--et-muted);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 650;
+  cursor: pointer;
+  padding: 0.3rem 0.65rem;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.notif-clear-all:hover {
+  background: color-mix(in oklab, #b91c1c 6%, white);
+  border-color: color-mix(in oklab, #b91c1c 28%, var(--et-line));
+  color: #b91c1c;
+  text-decoration: none;
+}
+
+.notif-clear-all:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .notif-panel-body {
   max-height: 24rem;
   overflow: auto;
@@ -909,10 +990,12 @@ textarea {
 }
 
 .notif-item {
+  position: relative;
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.75rem;
-  padding: 0.95rem 1.1rem;
+  grid-template-columns: 1fr auto;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
   border: 0 !important;
   border-bottom: 1px solid var(--et-line) !important;
   border-radius: 0;
@@ -933,6 +1016,55 @@ textarea {
 
 .notif-item.is-unread {
   background: color-mix(in oklab, var(--primary) 7%, white);
+}
+
+.notif-item-link {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.95rem 0.35rem 0.95rem 1.1rem;
+  text-decoration: none;
+  color: inherit;
+}
+
+.notif-clear-one {
+  align-self: start;
+  flex-shrink: 0;
+  margin: 0.65rem 0.65rem 0 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--et-muted);
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.55;
+  transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+}
+
+.notif-clear-one svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.notif-item:hover .notif-clear-one,
+.notif-clear-one:focus-visible {
+  opacity: 1;
+}
+
+.notif-clear-one:hover {
+  background: color-mix(in oklab, #b91c1c 10%, white);
+  color: #b91c1c;
+}
+
+.notif-clear-one:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .settings-block {
@@ -1580,9 +1712,15 @@ textarea {
   background: color-mix(in oklab, var(--et-red) 8%, white);
 }
 
-/* Account dropdown is desktop-only; mobile uses sidebar + Sign out */
+/* Account dropdown: hide on small screens where the sheet provides Sign out */
+@media (max-width: 767.98px) {
+  .portal-mobile-tools .portal-settings {
+    display: none;
+  }
+}
+
 @media (max-width: 959.98px) {
-  .portal-settings {
+  .site-portal-admin .portal-mobile-tools .portal-settings {
     display: none;
   }
 }

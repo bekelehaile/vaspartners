@@ -49,7 +49,9 @@ Route::prefix('v1')->group(function () {
 
         Route::get('notifications', [NotificationController::class, 'index']);
         Route::post('notifications/read-all', [NotificationController::class, 'markAllRead']);
+        Route::delete('notifications', [NotificationController::class, 'clearAll']);
         Route::post('notifications/{id}/read', [NotificationController::class, 'markRead']);
+        Route::delete('notifications/{id}', [NotificationController::class, 'destroy']);
 
         Route::get('tickets', [ContactPortalController::class, 'tickets']);
         Route::post('tickets', [ContactPortalController::class, 'storeTicket']);

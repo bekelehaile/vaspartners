@@ -233,11 +233,13 @@ class ContactPortalController extends Controller
 
     /**
      * Partner updates request details while status is open or rejected (sent back).
+     * Rejected requests return to Pending (open) after a successful submit.
      */
     public function updateTicket(
         Request $request,
         Ticket $ticket,
         CompanyMembershipService $membership,
+        TicketWorkflowService $workflow,
     ) {
         $membership->assertCanAccessCompanyTicket($request->user(), $ticket);
 
@@ -253,6 +255,8 @@ class ContactPortalController extends Controller
             'location' => ['nullable', 'string', 'max:255'],
         ]);
 
+        $wasRejected = $ticket->status === \App\Enums\TicketStatus::Rejected;
+
         $ticket->forceFill([
             'description' => trim((string) $data['description']),
             'building' => array_key_exists('building', $data)
@@ -262,6 +266,10 @@ class ContactPortalController extends Controller
                 ? (filled($data['location'] ?? null) ? trim((string) $data['location']) : null)
                 : $ticket->location,
         ])->save();
+
+        if ($wasRejected) {
+            $ticket = $workflow->resubmitByContact($ticket, $request->user());
+        }
 
         $ticket->load([
             'service',
@@ -280,7 +288,7 @@ class ContactPortalController extends Controller
         $payload['documents_locked'] = $ticket->status->locksContactDocuments();
         $payload['contact_can_edit'] = $ticket->status->allowsContactEdits();
         $payload['can_delete'] = app(\App\Services\TicketPurgeService::class)->partnerMayDelete($ticket);
-        $attachment = app(\App\Services\TicketWorkflowService::class)->attachmentStatus($ticket);
+        $attachment = $workflow->attachmentStatus($ticket);
         $payload['attachment_status'] = [
             'state' => $attachment['state'],
             'label' => $attachment['label'],
@@ -296,7 +304,9 @@ class ContactPortalController extends Controller
         })->values()->all();
 
         return response()->json([
-            'message' => 'Request updated.',
+            'message' => $wasRejected
+                ? 'Request submitted. Status is now Pending for re-check.'
+                : 'Request updated.',
             'data' => $payload,
         ]);
     }

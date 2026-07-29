@@ -5,6 +5,8 @@ import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import {
   type AppNotification,
+  useClearAllNotifications,
+  useClearNotification,
   useMarkAllNotificationsRead,
   useMarkNotificationRead,
   useNotifications,
@@ -100,6 +102,8 @@ export function NotificationBell() {
   const { data, isLoading, isError, error } = useNotifications({ enabled: true });
   const markRead = useMarkNotificationRead();
   const markAll = useMarkAllNotificationsRead();
+  const clearOne = useClearNotification();
+  const clearAll = useClearAllNotifications();
 
   const items = data?.items ?? [];
   const unread = data?.unreadCount ?? 0;
@@ -188,15 +192,29 @@ export function NotificationBell() {
                       : "You are up to date"}
                 </p>
               </div>
-              {unread > 0 && (
-                <button
-                  type="button"
-                  className="notif-mark-all"
-                  disabled={markAll.isPending}
-                  onClick={() => markAll.mutate()}
-                >
-                  Mark all read
-                </button>
+              {(unread > 0 || items.length > 0) && (
+                <div className="notif-panel-actions">
+                  {unread > 0 && (
+                    <button
+                      type="button"
+                      className="notif-mark-all"
+                      disabled={markAll.isPending || clearAll.isPending}
+                      onClick={() => markAll.mutate()}
+                    >
+                      Mark all read
+                    </button>
+                  )}
+                  {items.length > 0 && (
+                    <button
+                      type="button"
+                      className="notif-clear-all"
+                      disabled={clearAll.isPending || markAll.isPending}
+                      onClick={() => clearAll.mutate()}
+                    >
+                      Clear all
+                    </button>
+                  )}
+                </div>
               )}
             </div>
 
@@ -220,10 +238,12 @@ export function NotificationBell() {
                 <NotificationRow
                   key={n.id}
                   notification={n}
+                  clearing={clearOne.isPending && clearOne.variables === n.id}
                   onOpen={() => {
                     if (!n.read_at) markRead.mutate(n.id);
                     setOpen(false);
                   }}
+                  onClear={() => clearOne.mutate(n.id)}
                 />
               ))}
             </div>
@@ -255,37 +275,56 @@ export function NotificationBell() {
 
 function NotificationRow({
   notification: n,
+  clearing,
   onOpen,
+  onClear,
 }: {
   notification: AppNotification;
+  clearing?: boolean;
   onOpen: () => void;
+  onClear: () => void;
 }) {
   const unreadItem = !n.read_at;
 
   return (
-    <Link
-      href={n.url || "/portal"}
-      className={`notif-item${unreadItem ? " is-unread" : ""}`}
-      onClick={onOpen}
-    >
-      <IconFor template={n.template} />
-      <div className="notif-item-main">
-        <div className="notif-item-top">
-          <span className="notif-title">
-            {unreadItem && <i className="notif-dot" aria-hidden />}
-            {n.title}
-          </span>
-          <time className="notif-time" dateTime={n.created_at || undefined}>
-            {formatRelativeTime(n.created_at)}
-          </time>
+    <div className={`notif-item${unreadItem ? " is-unread" : ""}`}>
+      <Link href={n.url || "/portal"} className="notif-item-link" onClick={onOpen}>
+        <IconFor template={n.template} />
+        <div className="notif-item-main">
+          <div className="notif-item-top">
+            <span className="notif-title">
+              {unreadItem && <i className="notif-dot" aria-hidden />}
+              {n.title}
+            </span>
+            <time className="notif-time" dateTime={n.created_at || undefined}>
+              {formatRelativeTime(n.created_at)}
+            </time>
+          </div>
+          <p className="notif-body">{n.body}</p>
+          <div className="notif-item-meta">
+            {n.tt_number && <span className="notif-ref">{n.tt_number}</span>}
+            <span className="notif-cta">View details</span>
+          </div>
         </div>
-        <p className="notif-body">{n.body}</p>
-        <div className="notif-item-meta">
-          {n.tt_number && <span className="notif-ref">{n.tt_number}</span>}
-          <span className="notif-cta">View details</span>
-        </div>
-      </div>
-    </Link>
+      </Link>
+      <button
+        type="button"
+        className="notif-clear-one"
+        aria-label="Clear notification"
+        title="Clear"
+        disabled={clearing}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onClear();
+        }}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+          <path d="M18 6 6 18" strokeLinecap="round" />
+          <path d="m6 6 12 12" strokeLinecap="round" />
+        </svg>
+      </button>
+    </div>
   );
 }
 

@@ -78,6 +78,42 @@ class TicketWorkflowService
         });
     }
 
+    /**
+     * Partner corrected a rejected request — return it to Pending (open) for re-check.
+     */
+    public function resubmitByContact(Ticket $ticket, Contact $contact): Ticket
+    {
+        return DB::transaction(function () use ($ticket, $contact) {
+            $ticket->refresh();
+
+            if ($ticket->status !== TicketStatus::Rejected) {
+                return $ticket;
+            }
+
+            $this->assertRequiredDocumentsUploaded($ticket);
+
+            $ticket->document_review_status = DocumentReviewStatus::Pending;
+            $ticket->needs_reverification = false;
+            $ticket->current_approver_user_id = null;
+            $ticket->rejected_at = null;
+            $ticket->save();
+
+            $this->transition(
+                $ticket,
+                TicketStatus::Open,
+                $contact,
+                'Partner updated the request and submitted it for re-check',
+            );
+
+            $fresh = $ticket->fresh(['contact', 'service', 'requisition', 'assignee']);
+            DB::afterCommit(function () use ($fresh) {
+                $this->notifications->ticketResubmitted($fresh);
+            });
+
+            return $fresh;
+        });
+    }
+
     public function requiredDocumentTypeIds(int $serviceId, int $requisitionId): array
     {
         return $this->hardRequiredDocumentRows($serviceId, $requisitionId)
@@ -432,14 +468,15 @@ class TicketWorkflowService
             // (SMS Premium, Voice Premium, VISP, Collocation, etc.).
             $this->assertRequiredDocumentsUploaded($ticket);
 
-            // Passed — start the same approval chain for every requisition type
-            // (new subscription, maintenance, renew, terminate), whether or not docs were required.
-            if ($ticket->status === TicketStatus::Rejected) {
+            // Passed — resume handling after partner resubmit (open) or correction (rejected).
+            if (in_array($ticket->status, [TicketStatus::Open, TicketStatus::Rejected], true)) {
                 $this->transition(
                     $ticket,
                     TicketStatus::InProgress,
                     $reviewer,
-                    $note ?? 'Documents re-verified — continuing review',
+                    $note ?? ($ticket->status === TicketStatus::Open
+                        ? 'Documents verified after partner resubmit — continuing review'
+                        : 'Documents re-verified — continuing review'),
                 );
             }
 

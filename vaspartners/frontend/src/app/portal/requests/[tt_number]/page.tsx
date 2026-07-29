@@ -111,7 +111,7 @@ export default function RequestDetailPage() {
     router.replace(`/portal/requests/${ticket.tt_number}`, { scroll: false });
   }
 
-  async function onSaveEdit(e: FormEvent) {
+    async function onSaveEdit(e: FormEvent) {
     e.preventDefault();
     if (!ticket || !canEdit) return;
     const next = description.trim();
@@ -119,14 +119,27 @@ export default function RequestDetailPage() {
       setEditError("Please enter a description.");
       return;
     }
+    if (
+      ticket.status === "rejected" &&
+      ticket.attachment_status?.state === "incomplete"
+    ) {
+      setEditError(
+        ticket.attachment_status.missing_names?.length
+          ? `Upload required documents first: ${ticket.attachment_status.missing_names.join(", ")}.`
+          : "Upload all required documents before submitting.",
+      );
+      setTab("documents");
+      return;
+    }
     setEditError(null);
     try {
+      const wasRejected = ticket.status === "rejected";
       await updateTicket.mutateAsync({ description: next });
       setEditing(false);
       setEditSaved(true);
       router.replace(`/portal/requests/${ticket.tt_number}`, { scroll: false });
-      if (ticket.status === "rejected") {
-        setTab("documents");
+      if (wasRejected) {
+        setTab("overview");
       }
     } catch (err) {
       setEditError(err instanceof Error ? err.message : "Could not save changes.");
@@ -184,10 +197,9 @@ export default function RequestDetailPage() {
 
         {editSaved && (
           <div className="alert" role="status" style={{ marginBottom: "1rem" }}>
-            Request details saved.
-            {ticket?.status === "rejected"
-              ? " Update documents below, then wait for our team to re-check."
-              : null}
+            {ticket?.status === "open"
+              ? "Request submitted. Status is now Pending for re-check."
+              : "Request details saved."}
           </div>
         )}
 
@@ -336,7 +348,7 @@ export default function RequestDetailPage() {
                         </h3>
                         <p className="muted" style={{ marginTop: 0, marginBottom: "0.75rem" }}>
                           {ticket.status === "rejected"
-                            ? "Update your request notes, then fix documents below so the account manager can re-check."
+                            ? "Update your notes and documents, then submit. Status will return to Pending for re-check."
                             : "You can update this request while it is still pending."}
                         </p>
                         {editError && (
@@ -359,7 +371,13 @@ export default function RequestDetailPage() {
                             className="min-h-11"
                             disabled={updateTicket.isPending}
                           >
-                            {updateTicket.isPending ? "Saving…" : "Save changes"}
+                            {updateTicket.isPending
+                              ? ticket.status === "rejected"
+                                ? "Submitting…"
+                                : "Saving…"
+                              : ticket.status === "rejected"
+                                ? "Submit"
+                                : "Save changes"}
                           </Button>
                           <Button
                             type="button"
@@ -462,7 +480,47 @@ export default function RequestDetailPage() {
                 </CardContent>
                 {(canEdit || canDelete) && (
                   <CardFooter className="flex flex-wrap items-center gap-2 border-t bg-muted/20 py-3">
-                    {canEdit && !editing && (
+                    {ticket.status === "rejected" && (
+                      <Button
+                        type="button"
+                        className="min-h-11"
+                        disabled={
+                          updateTicket.isPending ||
+                          ticket.attachment_status?.state === "incomplete"
+                        }
+                        onClick={() => {
+                          setDescription(ticket.description ?? "");
+                          setEditing(true);
+                          setTab("overview");
+                          void (async () => {
+                            try {
+                              if (ticket.attachment_status?.state === "incomplete") {
+                                setEditError(
+                                  "Upload all required documents before submitting.",
+                                );
+                                return;
+                              }
+                              await updateTicket.mutateAsync({
+                                description: (ticket.description ?? "").trim() || "Updated request",
+                              });
+                              setEditing(false);
+                              setEditSaved(true);
+                            } catch (err) {
+                              setEditError(
+                                err instanceof Error
+                                  ? err.message
+                                  : "Could not submit request.",
+                              );
+                              setEditing(true);
+                              setTab("overview");
+                            }
+                          })();
+                        }}
+                      >
+                        {updateTicket.isPending ? "Submitting…" : "Submit for re-check"}
+                      </Button>
+                    )}
+                    {canEdit && !editing && ticket.status !== "rejected" && (
                       <Button
                         type="button"
                         variant="outline"

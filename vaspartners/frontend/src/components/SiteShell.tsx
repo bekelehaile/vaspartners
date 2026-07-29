@@ -128,24 +128,13 @@ export function SiteShell({
 
           <nav className="topnav" aria-label="Primary">
             {me ? (
-              portalAdmin ? (
-                <div className="portal-header-actions">
-                  <CompanySwitcher me={me} variant="header" />
-                  <NotificationBell />
-                  <PortalSettingsMenu onLogout={onLogout} />
-                </div>
-              ) : (
+              portalAdmin ? null : (
                 <>
                   {portalNav.map((item) => (
                     <Link key={item.href} href={item.href}>
                       {item.label}
                     </Link>
                   ))}
-                  <div className="portal-header-actions">
-                    <CompanySwitcher me={me} variant="header" />
-                    <NotificationBell />
-                    <PortalSettingsMenu onLogout={onLogout} />
-                  </div>
                 </>
               )
             ) : (
@@ -171,10 +160,17 @@ export function SiteShell({
 
           <div className="topbar-end">
             {me ? (
-              <div className="portal-mobile-tools" aria-label="Account tools">
-                <NotificationBell />
-                <PortalSettingsMenu onLogout={onLogout} />
-              </div>
+              <>
+                <div className="portal-desktop-tools" aria-label="Account tools">
+                  <CompanySwitcher me={me} variant="header" />
+                  <NotificationBell />
+                  <PortalSettingsMenu onLogout={onLogout} />
+                </div>
+                <div className="portal-mobile-tools" aria-label="Account tools">
+                  <NotificationBell />
+                  <PortalSettingsMenu onLogout={onLogout} />
+                </div>
+              </>
             ) : null}
             <button
               type="button"

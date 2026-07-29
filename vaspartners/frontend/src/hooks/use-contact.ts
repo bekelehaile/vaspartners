@@ -1017,6 +1017,30 @@ export function useMarkAllNotificationsRead() {
   });
 }
 
+export function useClearNotification() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await api(`/notifications/${id}`, { method: "DELETE" });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.notifications });
+    },
+  });
+}
+
+export function useClearAllNotifications() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      await api("/notifications", { method: "DELETE" });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.notifications });
+    },
+  });
+}
+
 export function useLogout() {
   const queryClient = useQueryClient();
 

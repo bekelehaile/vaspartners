@@ -73,6 +73,7 @@ class AdminPanelProvider extends PanelProvider
                     ->navigationSort(2),
             ])
             ->databaseNotifications()
+            ->databaseNotificationsPolling('10s')
             ->spa((bool) env('FILAMENT_SPA', false))
             ->sidebarCollapsibleOnDesktop()
             ->navigationGroups([

@@ -42,6 +42,30 @@ class PartnerNotificationService
         );
     }
 
+    /** Partner fixed a rejected request — staff should re-check (Pending again). */
+    public function ticketResubmitted(Ticket $ticket): void
+    {
+        $ticket->loadMissing(['contact', 'service', 'assignee']);
+        $body = sprintf(
+            '%s updated and resubmitted request number %s for %s. Status is Pending.',
+            $ticket->contact?->name ?: 'A partner',
+            $ticket->tt_number,
+            $ticket->service?->name ?: 'a service',
+        );
+
+        $recipients = $this->managementUsers();
+        if ($ticket->assignee) {
+            $recipients = $recipients->push($ticket->assignee)->unique('id');
+        }
+
+        $this->notifyStaffDatabase(
+            $recipients,
+            'Request resubmitted',
+            $body,
+            $ticket,
+        );
+    }
+
     public function ticketStatusChanged(Ticket $ticket, ?TicketStatus $from, TicketStatus $to, ?string $note = null): void
     {
         $template = match (true) {
@@ -89,38 +113,60 @@ class PartnerNotificationService
         );
     }
 
-    /** Notify the other party when a public chat message is posted (debounced for rapid back-and-forth). */
+    /** Notify the other party when a public chat message is posted. */
     public function ticketMessagePosted(Ticket $ticket, Contact|User $author, TicketComment $comment): void
     {
-        if (! $this->shouldNotifyForChatMessage($ticket, $author, $comment)) {
-            return;
-        }
-
-        $ticket->loadMissing(['contact', 'service', 'assignee']);
+        $ticket->loadMissing(['contact', 'service', 'assignee', 'currentApprover']);
         $preview = Str::limit(trim((string) $comment->body), 120);
         if ($comment->hasAttachment()) {
             $preview = trim($preview.' [PDF: '.($comment->attachment_original_name ?: 'attachment').']');
         }
 
+        // Partner → account manager (admin in-app). Always notify so AMs see portal replies.
         if ($author instanceof Contact) {
             $recipients = collect();
             if ($ticket->assignee) {
                 $recipients->push($ticket->assignee);
-            } else {
-                $recipients = $this->managementUsers();
+            }
+            if ($ticket->currentApprover
+                && (! $ticket->assignee || (int) $ticket->currentApprover->id !== (int) $ticket->assignee->id)) {
+                $recipients->push($ticket->currentApprover);
+            }
+            if ($recipients->isEmpty()) {
+                // Unassigned: alert managers who can take this group's tickets (+ supervisors).
+                $categoryId = (int) ($ticket->category_id ?: $ticket->service?->category_id ?: 0);
+                $managerIds = User::assignableManagersForCategory($categoryId > 0 ? $categoryId : null)->keys();
+                if ($managerIds->isNotEmpty()) {
+                    $recipients = User::query()
+                        ->whereIn('id', $managerIds)
+                        ->where('is_active', true)
+                        ->get();
+                }
+                $recipients = $recipients->merge($this->managementUsers());
             }
 
             $this->notifyStaffDatabase(
-                $recipients,
+                $recipients->unique('id')->filter(fn ($u) => $u instanceof User && $u->is_active),
                 'Partner message',
-                sprintf('%s on request number %s: %s', $author->name ?: 'Partner', $ticket->tt_number, $preview),
+                sprintf(
+                    '%s messaged on request %s (%s): %s',
+                    $author->name ?: 'Partner',
+                    $ticket->tt_number,
+                    $ticket->service?->name ?: 'VAS',
+                    $preview !== '' ? $preview : 'Sent an attachment',
+                ),
                 $ticket,
+                icon: 'heroicon-o-chat-bubble-left-right',
             );
 
             return;
         }
 
-        // Staff → partner (portal notification only — avoid SMS spam on every reply)
+        // Staff → partner (portal notification only — debounced to avoid spam)
+        if (! $this->shouldNotifyForChatMessage($ticket, $author, $comment)) {
+            return;
+        }
+
         $ticket->loadMissing(['contact', 'service', 'requisition']);
         $contact = $ticket->contact;
         if (! $contact) {
@@ -541,6 +587,7 @@ class PartnerNotificationService
         string $body,
         ?Ticket $ticket = null,
         ?string $url = null,
+        string $icon = 'heroicon-o-building-office-2',
     ): void {
         $actionUrl = $url;
         if (! $actionUrl && $ticket) {
@@ -555,13 +602,15 @@ class PartnerNotificationService
             $notification = FilamentNotification::make()
                 ->title($title)
                 ->body($body)
-                ->icon('heroicon-o-building-office-2');
+                ->icon($icon)
+                ->info();
 
             if ($actionUrl) {
                 $notification->actions([
                     Action::make('view')
                         ->label('Open')
-                        ->url($actionUrl),
+                        ->button()
+                        ->url($actionUrl, shouldOpenInNewTab: false),
                 ]);
             }
 

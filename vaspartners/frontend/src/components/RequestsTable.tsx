@@ -369,11 +369,7 @@ export function RequestsTable({
               {items.map((ticket) => (
                 <li key={ticket.public_id || ticket.tt_number}>
                   <div className="portal-mobile-card">
-                    <button
-                      type="button"
-                      className="portal-mobile-card-hit"
-                      onClick={() => router.push(`/portal/requests/${ticket.tt_number}`)}
-                    >
+                    <div className="portal-mobile-card-hit">
                       <div className="portal-mobile-card-top">
                         <div>
                           <p className="portal-mobile-card-title">{ticket.tt_number}</p>
@@ -396,43 +392,48 @@ export function RequestsTable({
                       {ticket.contact?.name && (
                         <p className="portal-mobile-card-meta">by {ticket.contact.name}</p>
                       )}
-                    </button>
-                    {(ticket.can_delete === true ||
-                      ticket.contact_can_edit === true ||
-                      ticket.status === "open" ||
-                      ticket.status === "rejected") && (
-                      <div className="portal-mobile-card-actions">
-                        {(ticket.contact_can_edit === true ||
-                          ticket.status === "open" ||
-                          ticket.status === "rejected") && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="min-h-11"
-                            onClick={() =>
-                              router.push(
-                                `/portal/requests/${ticket.tt_number}?edit=1`,
-                              )
-                            }
-                          >
-                            Edit
-                          </Button>
-                        )}
-                        {(ticket.can_delete === true ||
-                          ticket.status === "open" ||
-                          ticket.status === "rejected") && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="border-destructive/40 text-destructive min-h-11"
-                            disabled={deleteRejected.isPending}
-                            onClick={() => onDeleteRequest(ticket)}
-                          >
-                            Delete
-                          </Button>
-                        )}
-                      </div>
-                    )}
+                    </div>
+                    <div className="portal-mobile-card-actions">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="min-h-11"
+                        onClick={() =>
+                          router.push(`/portal/requests/${ticket.tt_number}`)
+                        }
+                      >
+                        View
+                      </Button>
+                      {(ticket.contact_can_edit === true ||
+                        ticket.status === "open" ||
+                        ticket.status === "rejected") && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="min-h-11"
+                          onClick={() =>
+                            router.push(
+                              `/portal/requests/${ticket.tt_number}?edit=1`,
+                            )
+                          }
+                        >
+                          Edit
+                        </Button>
+                      )}
+                      {(ticket.can_delete === true ||
+                        ticket.status === "open" ||
+                        ticket.status === "rejected") && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="border-destructive/40 text-destructive min-h-11"
+                          disabled={deleteRejected.isPending}
+                          onClick={() => onDeleteRequest(ticket)}
+                        >
+                          Delete
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </li>
               ))}
@@ -458,20 +459,7 @@ export function RequestsTable({
                 </TableHeader>
                 <TableBody>
                   {table.getRowModel().rows.map((row) => (
-                    <TableRow
-                      key={row.id}
-                      className="cursor-pointer"
-                      tabIndex={0}
-                      onClick={() =>
-                        router.push(`/portal/requests/${row.original.tt_number}`)
-                      }
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          router.push(`/portal/requests/${row.original.tt_number}`);
-                        }
-                      }}
-                    >
+                    <TableRow key={row.id}>
                       {row.getVisibleCells().map((cell) => (
                         <TableCell key={cell.id} className="px-4 py-3 whitespace-normal">
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}

@@ -95,7 +95,11 @@ class ViewTicket extends ViewRecord
                 ->label('Verify docs')
                 ->visible(fn (Ticket $record) => $record->assigned_to_user_id === auth()->id()
                     && blank($record->current_approver_user_id)
-                    && in_array($record->status, [TicketStatus::InProgress, TicketStatus::Rejected], true)
+                    && in_array($record->status, [
+                        TicketStatus::Open,
+                        TicketStatus::InProgress,
+                        TicketStatus::Rejected,
+                    ], true)
                     && $record->document_review_status !== DocumentReviewStatus::Passed)
                 ->form([
                     Select::make('result')->options([

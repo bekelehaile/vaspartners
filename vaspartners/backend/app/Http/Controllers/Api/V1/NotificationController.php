@@ -48,6 +48,32 @@ class NotificationController extends Controller
         ]);
     }
 
+    public function destroy(Request $request, string $id)
+    {
+        /** @var \App\Models\Contact $contact */
+        $contact = $request->user();
+
+        $notification = $contact->notifications()->where('id', $id)->firstOrFail();
+        $notification->delete();
+
+        return response()->json([
+            'data' => true,
+            'unread_count' => $contact->unreadNotifications()->count(),
+        ]);
+    }
+
+    public function clearAll(Request $request)
+    {
+        /** @var \App\Models\Contact $contact */
+        $contact = $request->user();
+        $contact->notifications()->delete();
+
+        return response()->json([
+            'data' => true,
+            'unread_count' => 0,
+        ]);
+    }
+
     protected function transform(DatabaseNotification $notification): array
     {
         $data = $notification->data;
