@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ETHIOPIAN_TIN_MESSAGE, isValidEthiopianTin, normalizeEthiopianTin } from "@/lib/tin";
 
 export const companyProfileSchema = z.object({
   company_name: z
@@ -9,8 +10,8 @@ export const companyProfileSchema = z.object({
   company_tin: z
     .string()
     .trim()
-    .min(5, "Enter a valid TIN")
-    .max(64, "TIN is too long"),
+    .transform((v) => normalizeEthiopianTin(v))
+    .refine((v) => isValidEthiopianTin(v), ETHIOPIAN_TIN_MESSAGE),
   company_address: z
     .string()
     .trim()

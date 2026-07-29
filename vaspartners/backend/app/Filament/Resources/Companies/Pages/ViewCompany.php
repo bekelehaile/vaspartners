@@ -83,6 +83,27 @@ class ViewCompany extends ViewRecord
                         $sms,
                     );
                 }),
+            Action::make('validate_tin')
+                ->label('Validate TIN')
+                ->icon('heroicon-o-identification')
+                ->color('success')
+                ->visible(fn (): bool => filled($this->getRecord()->tin) && ! $this->getRecord()->tin_validated)
+                ->requiresConfirmation()
+                ->modalHeading(fn (): string => 'Validate TIN '.$this->getRecord()->tin.'?')
+                ->modalDescription('Confirm this Ethiopian TIN was verified. Partners can submit service requests only after TIN validation.')
+                ->action(function (CompanyMembershipService $membership): void {
+                    try {
+                        $membership->markTinValidated($this->getRecord());
+                        Notification::make()->title('TIN validated')->success()->send();
+                        $this->refreshFormData(['tin_validated', 'tin']);
+                    } catch (Throwable $e) {
+                        Notification::make()
+                            ->title('Could not validate TIN')
+                            ->body($e->getMessage())
+                            ->danger()
+                            ->send();
+                    }
+                }),
             Action::make('assignOwner')
                 ->label('Assign owner')
                 ->color('primary')

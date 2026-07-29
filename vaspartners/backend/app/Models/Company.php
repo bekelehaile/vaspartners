@@ -6,6 +6,7 @@ use App\Enums\CompanyApprovalStatus;
 use App\Enums\CompanyRole;
 use App\Support\EmailAddress;
 use App\Support\PhoneNumber;
+use App\Support\TinNumber;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
@@ -23,6 +24,7 @@ class Company extends Model
         'public_id',
         'name',
         'tin',
+        'tin_validated',
         'phone',
         'email',
         'address',
@@ -39,6 +41,7 @@ class Company extends Model
     {
         return [
             'is_active' => 'boolean',
+            'tin_validated' => 'boolean',
             'approval_status' => CompanyApprovalStatus::class,
             'approved_at' => 'datetime',
         ];
@@ -58,6 +61,11 @@ class Company extends Model
                     $company->attributes['email'] ?? null,
                 );
             }
+
+            // Changing TIN requires admin to re-validate.
+            if ($company->isDirty('tin')) {
+                $company->tin_validated = false;
+            }
         });
     }
 
@@ -69,6 +77,29 @@ class Company extends Model
     public function setEmailAttribute(mixed $value): void
     {
         $this->attributes['email'] = EmailAddress::normalize($value);
+    }
+
+    public function setTinAttribute(?string $value): void
+    {
+        $digits = TinNumber::normalize($value);
+        if (TinNumber::isValid($digits)) {
+            $this->attributes['tin'] = $digits;
+
+            return;
+        }
+
+        // Legacy / placeholder TINs (e.g. migrated MVAS ids) until partner updates.
+        $this->attributes['tin'] = self::normalizeIdentityCode($value) ?? '';
+    }
+
+    public function hasValidEthiopianTin(): bool
+    {
+        return TinNumber::isValid($this->tin);
+    }
+
+    public function isTinValidated(): bool
+    {
+        return (bool) $this->tin_validated && $this->hasValidEthiopianTin();
     }
 
     public function uniqueIds(): array
@@ -227,10 +258,5 @@ class Company extends Model
         $normalized = strtoupper(preg_replace('/\s+/', '', trim($value)) ?? '');
 
         return $normalized === '' ? null : $normalized;
-    }
-
-    public function setTinAttribute(?string $value): void
-    {
-        $this->attributes['tin'] = self::normalizeIdentityCode($value) ?? '';
     }
 }

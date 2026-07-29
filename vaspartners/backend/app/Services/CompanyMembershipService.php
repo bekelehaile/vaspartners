@@ -13,6 +13,7 @@ use App\Models\CompanyMembership;
 use App\Models\Contact;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Support\TinNumber;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -46,7 +47,7 @@ class CompanyMembershipService
             ]);
         }
 
-        $tin = $this->normalizeCode($data['company_tin']);
+        $tin = $this->normalizeEthiopianTin($data['company_tin']);
         $this->assertUniqueTin($tin);
 
         $contact->loadMissing(['memberships.company', 'company']);
@@ -78,6 +79,7 @@ class CompanyMembershipService
             $company = Company::query()->create([
                 'name' => trim($data['company_name']),
                 'tin' => $tin,
+                'tin_validated' => false,
                 'phone' => $companyPhone,
                 'email' => $companyEmail,
                 'address' => trim($data['company_address']),
@@ -142,13 +144,14 @@ class CompanyMembershipService
             ]);
         }
 
-        $tin = $this->normalizeCode($data['company_tin']);
+        $tin = $this->normalizeEthiopianTin($data['company_tin']);
         $this->assertUniqueTin($tin, $company->id);
 
         return DB::transaction(function () use ($contact, $company, $data, $tin, $phone, $email) {
             $company->fill([
                 'name' => trim($data['company_name']),
                 'tin' => $tin,
+                'tin_validated' => false,
                 'phone' => $phone,
                 'email' => $email !== '' ? \App\Support\EmailAddress::normalize($email) : null,
                 'address' => trim($data['company_address']),
@@ -190,6 +193,12 @@ class CompanyMembershipService
                     $field => 'Company '.$field.' is required before approval.',
                 ]);
             }
+        }
+
+        if (! TinNumber::isValid($company->tin)) {
+            throw ValidationException::withMessages([
+                'tin' => TinNumber::message().' Ask the partner to enter a valid TIN before approval.',
+            ]);
         }
 
         if (! $company->hasOwner()) {
@@ -242,8 +251,8 @@ class CompanyMembershipService
 
     public function lookupByIdentity(string $tin): ?Company
     {
-        $tin = $this->normalizeCode($tin);
-        if ($tin === '') {
+        $tin = TinNumber::normalize($tin);
+        if ($tin === '' || ! TinNumber::isValid($tin)) {
             return null;
         }
 
@@ -1666,6 +1675,18 @@ class CompanyMembershipService
                 'company' => 'A valid company TIN is required before using VAS services.',
             ]);
         }
+
+        if (! TinNumber::isValid($contact->company->tin)) {
+            throw ValidationException::withMessages([
+                'company_tin' => TinNumber::message().' Update your company TIN before submitting service requests.',
+            ]);
+        }
+
+        if (! $contact->company->tin_validated) {
+            throw ValidationException::withMessages([
+                'company_tin' => 'Your company TIN is awaiting Ethio telecom validation. You cannot submit service requests until an administrator validates it.',
+            ]);
+        }
     }
 
     /**
@@ -1736,6 +1757,63 @@ class CompanyMembershipService
         }
 
         return $revoked;
+    }
+
+    /**
+     * Partner submits / corrects Ethiopian TIN (even after company approval).
+     * Clears tin_validated so admin must re-confirm.
+     */
+    public function submitCompanyTin(Contact $contact, string $rawTin): Contact
+    {
+        if (! $contact->current_company_id || ! $contact->hasActiveCompanyMembership()) {
+            throw ValidationException::withMessages([
+                'company' => 'Link an active company before submitting a TIN.',
+            ]);
+        }
+
+        $isOwner = $this->roleOf($contact) === CompanyRole::Owner;
+        if (! $isOwner && ! $this->contactHasPermission($contact, CompanyMemberPermission::EditCompanyProfile)) {
+            throw ValidationException::withMessages([
+                'company_tin' => 'Only the company owner (or a member with edit permission) can update the TIN.',
+            ]);
+        }
+
+        $company = $contact->company;
+        if (! $company) {
+            throw ValidationException::withMessages(['company' => 'Company not found.']);
+        }
+
+        $tin = $this->normalizeEthiopianTin($rawTin);
+        $this->assertUniqueTin($tin, $company->id);
+
+        $company->fill([
+            'tin' => $tin,
+            'tin_validated' => false,
+        ])->save();
+
+        $this->syncAllMembersDenormalizedFields($company);
+
+        return $contact->fresh(['company', 'memberships.company']);
+    }
+
+    /**
+     * Admin attests that the company TIN has been verified.
+     */
+    public function markTinValidated(Company $company): Company
+    {
+        if (! TinNumber::isValid($company->tin)) {
+            throw ValidationException::withMessages([
+                'tin' => TinNumber::message(),
+            ]);
+        }
+
+        if ($company->tin_validated) {
+            return $company->fresh();
+        }
+
+        $company->forceFill(['tin_validated' => true])->save();
+
+        return $company->fresh();
     }
 
     /**
@@ -1943,6 +2021,8 @@ class CompanyMembershipService
             'approval_status' => $approvalStatus?->value,
             'approval_note' => $company->approval_note,
             'is_approved' => $companyApproved,
+            'tin_validated' => (bool) $company->tin_validated,
+            'tin_format_valid' => TinNumber::isValid($company->tin),
         ] : null;
         $data['company_role'] = $contact->company_role;
         $data['company_membership_active'] = $membershipActive;
@@ -1971,6 +2051,7 @@ class CompanyMembershipService
                     'approval_status' => $c?->approval_status instanceof CompanyApprovalStatus
                         ? $c->approval_status->value
                         : ($c ? (string) $c->approval_status : null),
+                    'tin_validated' => (bool) ($c?->tin_validated),
                 ];
             })
             ->values()
@@ -2072,6 +2153,18 @@ class CompanyMembershipService
         throw ValidationException::withMessages([
             'company' => 'Company owner cannot leave. Transfer ownership to another active member first (letter required; admin must approve). After you are no longer the owner, you can leave as a member.',
         ]);
+    }
+
+    protected function normalizeEthiopianTin(string $value): string
+    {
+        $tin = TinNumber::normalize($value);
+        if (! TinNumber::isValid($tin)) {
+            throw ValidationException::withMessages([
+                'company_tin' => TinNumber::message(),
+            ]);
+        }
+
+        return $tin;
     }
 
     protected function normalizeCode(string $value): string

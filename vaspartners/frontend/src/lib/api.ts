@@ -29,6 +29,8 @@ export type Contact = {
     approval_status?: string | null;
     approval_note?: string | null;
     is_approved?: boolean;
+    tin_validated?: boolean;
+    tin_format_valid?: boolean;
   } | null;
   memberships?: Array<{
     company_public_id?: string | null;
@@ -39,6 +41,7 @@ export type Contact = {
     is_current?: boolean;
     is_approved?: boolean;
     approval_status?: string | null;
+    tin_validated?: boolean;
   }>;
   company_can_detach?: boolean;
   company_needs_ownership_transfer?: boolean;

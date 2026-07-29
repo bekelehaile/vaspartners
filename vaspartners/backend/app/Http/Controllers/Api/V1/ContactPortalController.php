@@ -427,7 +427,7 @@ class ContactPortalController extends Controller
 
         $data = $request->validate([
             'company_name' => ['required', 'string', 'min:2', 'max:255'],
-            'company_tin' => ['required', 'string', 'min:5', 'max:64'],
+            'company_tin' => ['required', 'string', 'max:32'],
             'company_address' => ['required', 'string', 'min:5', 'max:2000'],
             'create_new' => ['sometimes', 'boolean'],
         ]);
@@ -442,10 +442,32 @@ class ContactPortalController extends Controller
         return response()->json(['data' => $membership->serializeContact($fresh)]);
     }
 
+    public function submitCompanyTin(Request $request, CompanyMembershipService $membership)
+    {
+        /** @var \App\Models\Contact $contact */
+        $contact = $request->user();
+        if ($contact->current_company_id && ! $contact->hasActiveCompanyMembership()) {
+            return response()->json([
+                'message' => 'Your membership for this company is disabled. Contact an administrator.',
+            ], 403);
+        }
+
+        $data = $request->validate([
+            'company_tin' => ['required', 'string', 'max:32'],
+        ]);
+
+        $fresh = $membership->submitCompanyTin($contact, $data['company_tin']);
+
+        return response()->json([
+            'message' => 'TIN submitted. Ethio telecom will validate it before you can submit service requests.',
+            'data' => $membership->serializeContact($fresh),
+        ]);
+    }
+
     public function lookupCompany(Request $request, CompanyMembershipService $membership)
     {
         $data = $request->validate([
-            'tin' => ['required', 'string', 'min:5', 'max:64'],
+            'tin' => ['required', 'string', 'max:32'],
         ]);
 
         $company = $membership->lookupByIdentity($data['tin']);
@@ -465,7 +487,7 @@ class ContactPortalController extends Controller
     public function requestAttachCompany(Request $request, CompanyMembershipService $membership)
     {
         $data = $request->validate([
-            'company_tin' => ['required', 'string', 'min:5', 'max:64'],
+            'company_tin' => ['required', 'string', 'max:32'],
             'note' => ['nullable', 'string', 'max:2000'],
         ]);
 
