@@ -29,7 +29,8 @@ Route::prefix('v1')->group(function () {
         Route::get('auth/me', [FaydaAuthController::class, 'me']);
         Route::post('auth/logout', [FaydaAuthController::class, 'logout']);
         Route::post('profile/company', [ContactPortalController::class, 'completeCompanyProfile']);
-        Route::post('profile/company/tin', [ContactPortalController::class, 'submitCompanyTin']);
+        // TIN NUMBER submit — accept POST (portal) and PUT/PATCH for clients that use update verbs.
+        Route::match(['post', 'put', 'patch'], 'profile/company/tin', [ContactPortalController::class, 'submitCompanyTin']);
         Route::get('profile/company/lookup', [ContactPortalController::class, 'lookupCompany']);
         Route::post('profile/company/attach', [ContactPortalController::class, 'requestAttachCompany']);
         Route::post('profile/company/detach', [ContactPortalController::class, 'requestDetachCompany']);

@@ -422,17 +422,18 @@ class BulkMessageService
             ->orderBy('id')
             ->pluck('id');
 
-        // Stay under global SMS rate (~120/min): ~2 messages/second via Queue::later.
+        // Stay under SMS gateway capacity: ~2 messages/second on the sms queue.
         foreach ($ids->values() as $index => $id) {
             $delaySeconds = intdiv((int) $index, 2);
             $job = new SendBulkMessageRecipientJob((int) $id);
             if ($delaySeconds > 0) {
-                \Illuminate\Support\Facades\Queue::later(
+                \Illuminate\Support\Facades\Queue::laterOn(
+                    'sms',
                     now()->addSeconds($delaySeconds),
                     $job,
                 );
             } else {
-                \Illuminate\Support\Facades\Queue::push($job);
+                \Illuminate\Support\Facades\Queue::pushOn('sms', $job);
             }
         }
 
