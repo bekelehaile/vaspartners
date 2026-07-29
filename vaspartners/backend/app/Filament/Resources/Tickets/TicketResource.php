@@ -184,12 +184,14 @@ class TicketResource extends Resource
             Section::make('Assignment & timeline')->schema([
                 TextEntry::make('assignee.name')->label('Account manager')->placeholder('—'),
                 TextEntry::make('currentApprover.name')->label('Current approver')->placeholder('—'),
-                TextEntry::make('assigned_at')->dateTime()->placeholder('—'),
                 TextEntry::make('created_at')->label('Submitted')->dateTime()->placeholder('—'),
-                TextEntry::make('completed_at')->dateTime()->placeholder('—'),
-                TextEntry::make('closed_at')->dateTime()->placeholder('—'),
-                TextEntry::make('rejected_at')->dateTime()->placeholder('—'),
-                TextEntry::make('escalated_at')->dateTime()->placeholder('—'),
+                TextEntry::make('opened_at')->label('Pending at')->dateTime()->placeholder('—'),
+                TextEntry::make('assigned_at')->label('Assigned at')->dateTime()->placeholder('—'),
+                TextEntry::make('in_progress_at')->label('In progress at')->dateTime()->placeholder('—'),
+                TextEntry::make('completed_at')->label('Completed at')->dateTime()->placeholder('—'),
+                TextEntry::make('closed_at')->label('Closed at')->dateTime()->placeholder('—'),
+                TextEntry::make('rejected_at')->label('Rejected at')->dateTime()->placeholder('—'),
+                TextEntry::make('escalated_at')->label('Escalated at')->dateTime()->placeholder('—'),
             ])->columns(2),
 
             Section::make('Related')->schema([

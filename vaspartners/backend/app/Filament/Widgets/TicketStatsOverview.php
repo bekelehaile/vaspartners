@@ -19,7 +19,7 @@ class TicketStatsOverview extends StatsOverviewWidget
 
     protected ?string $heading = 'Service requests';
 
-    protected ?string $description = 'Each card uses its event time: Pending→created_at · In progress→assigned_at · Completed/Closed/Rejected→their *_at — click to open';
+    protected ?string $description = 'Each card uses its status event time: Pending→opened_at · In progress→in_progress_at · Completed/Closed/Rejected→*_at — click to open';
 
     protected ?string $pollingInterval = '60s';
 
@@ -82,11 +82,11 @@ class TicketStatsOverview extends StatsOverviewWidget
         );
 
         $dated = $this->hasCustomDateRange();
-        $pendingDescription = $dated ? 'created_at in range' : 'Open queue (created_at)';
-        $unassignedDescription = $dated ? 'Open · created_at in range' : 'Open — needs an owner';
+        $pendingDescription = $dated ? 'opened_at in range' : 'Open queue (opened_at)';
+        $unassignedDescription = $dated ? 'Open · opened_at in range' : 'Open — needs an owner';
         $inProgressDescription = $escalated > 0
             ? $escalated.' escalated'
-            : ($dated ? 'assigned_at in range' : 'Being handled');
+            : ($dated ? 'in_progress_at in range' : 'Being handled');
 
         return [
             Stat::make('Unassigned', $unassigned)

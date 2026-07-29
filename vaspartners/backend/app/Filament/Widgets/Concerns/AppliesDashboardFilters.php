@@ -23,8 +23,8 @@ trait AppliesDashboardFilters
     protected function ticketEventColumnForStatus(TicketStatus $status): string
     {
         return match ($status) {
-            TicketStatus::Open => 'created_at',
-            TicketStatus::InProgress => 'assigned_at',
+            TicketStatus::Open => 'opened_at',
+            TicketStatus::InProgress => 'in_progress_at',
             TicketStatus::Completed => 'completed_at',
             TicketStatus::Closed => 'closed_at',
             TicketStatus::Rejected => 'rejected_at',

@@ -19,7 +19,7 @@ class Ticket extends Model
         'parent_ticket_id', 'category_id', 'priority_id', 'region_id', 'zone_id', 'woreda_id',
         'assigned_to_user_id', 'current_approver_user_id', 'status', 'document_review_status',
         'needs_reverification', 'building', 'location', 'description', 'assigned_at',
-        'escalated_at', 'completed_at', 'rejected_at', 'closed_at',
+        'opened_at', 'in_progress_at', 'escalated_at', 'completed_at', 'rejected_at', 'closed_at',
     ];
 
     protected function casts(): array
@@ -29,6 +29,8 @@ class Ticket extends Model
             'document_review_status' => DocumentReviewStatus::class,
             'needs_reverification' => 'boolean',
             'assigned_at' => 'datetime',
+            'opened_at' => 'datetime',
+            'in_progress_at' => 'datetime',
             'escalated_at' => 'datetime',
             'completed_at' => 'datetime',
             'rejected_at' => 'datetime',

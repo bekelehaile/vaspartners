@@ -44,7 +44,7 @@ class Dashboard extends BaseDashboard
     {
         return $schema->components([
             Section::make('Filters')
-                ->description('Date uses each event stamp: Pending→created_at · In progress→assigned_at · Completed/Closed/Rejected→*_at · Approved changes→reviewed_at. My approvals stay live.')
+                ->description('Date uses each status stamp: Pending→opened_at · In progress→in_progress_at · Completed/Closed/Rejected→*_at · Approved changes→reviewed_at. My approvals stay live.')
                 ->schema([
                     DatePicker::make('start_date')
                         ->label('From')

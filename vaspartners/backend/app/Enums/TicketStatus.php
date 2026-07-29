@@ -65,4 +65,19 @@ enum TicketStatus: string implements HasColor, HasLabel
     {
         return in_array($this, [self::Completed, self::Closed], true);
     }
+
+    /**
+     * Denormalized ticket column stamped whenever this status is entered.
+     * (assigned_at is separate — handler assignment, not status entry.)
+     */
+    public function eventTimestampColumn(): string
+    {
+        return match ($this) {
+            self::Open => 'opened_at',
+            self::InProgress => 'in_progress_at',
+            self::Completed => 'completed_at',
+            self::Rejected => 'rejected_at',
+            self::Closed => 'closed_at',
+        };
+    }
 }

@@ -77,9 +77,9 @@ class TicketsByStatusChart extends ChartWidget
     public function getDescription(): ?string
     {
         if (! $this->hasCustomDateRange()) {
-            return 'Current queue by status. Set a date range to use created_at / assigned_at / completed_at / closed_at / rejected_at per status.';
+            return 'Current queue by status. Set a date range to use opened_at / in_progress_at / completed_at / closed_at / rejected_at per status.';
         }
 
-        return 'Open→created_at · In progress→assigned_at · Completed→completed_at · Closed→closed_at · Rejected→rejected_at';
+        return 'Open→opened_at · In progress→in_progress_at · Completed→completed_at · Closed→closed_at · Rejected→rejected_at';
     }
 }

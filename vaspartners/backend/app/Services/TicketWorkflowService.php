@@ -40,7 +40,8 @@ class TicketWorkflowService
     public function transition(Ticket $ticket, TicketStatus $to, mixed $actor = null, ?string $note = null, array $meta = []): void
     {
         $from = $ticket->status;
-        if ($from === $to) {
+        $isReassignment = ! empty($meta['reassignment']);
+        if ($from === $to && ! $isReassignment) {
             return;
         }
 
@@ -56,13 +57,7 @@ class TicketWorkflowService
         }
 
         $ticket->status = $to;
-        match ($to) {
-            TicketStatus::InProgress => $ticket->assigned_at ??= now(),
-            TicketStatus::Completed => $ticket->completed_at = now(),
-            TicketStatus::Rejected => $ticket->rejected_at = now(),
-            TicketStatus::Closed => $ticket->closed_at = now(),
-            default => null,
-        };
+        $stampedAt = $this->applyStatusEventTimestamp($ticket, $from, $to);
 
         // Terminal / approved outcomes with complete docs cannot remain "Pending" review.
         if (in_array($to, [TicketStatus::Completed, TicketStatus::Closed], true)) {
@@ -78,6 +73,10 @@ class TicketWorkflowService
 
         $ticket->save();
 
+        $historyMeta = $meta;
+        $historyMeta['status_stamp_column'] = $to->eventTimestampColumn();
+        $historyMeta['status_stamped_at'] = $stampedAt->toIso8601String();
+
         TicketStatusHistory::query()->create([
             'ticket_id' => $ticket->id,
             'from_status' => $from?->value,
@@ -85,8 +84,8 @@ class TicketWorkflowService
             'actor_type' => $actor ? $actor::class : null,
             'actor_id' => $actor?->id,
             'note' => $note,
-            'meta' => $meta ?: null,
-            'created_at' => now(),
+            'meta' => $historyMeta ?: null,
+            'created_at' => $stampedAt,
         ]);
 
         if ($to === TicketStatus::Completed
@@ -109,6 +108,40 @@ class TicketWorkflowService
     }
 
     /**
+     * Stamp the denormalized event column for the target status and clear stamps that
+     * no longer apply when a request is reopened.
+     *
+     * @return \Illuminate\Support\Carbon
+     */
+    protected function applyStatusEventTimestamp(Ticket $ticket, ?TicketStatus $from, TicketStatus $to): \Illuminate\Support\Carbon
+    {
+        $now = now();
+        $column = $to->eventTimestampColumn();
+        $ticket->{$column} = $now;
+
+        // Re-entering Pending after rejection (or any reopen): clear outcome stamps.
+        if ($to === TicketStatus::Open) {
+            $ticket->rejected_at = null;
+            $ticket->completed_at = null;
+            $ticket->closed_at = null;
+            // Keep assigned_at / in_progress_at history until a fresh assign overwrites them.
+        }
+
+        // Rejection supersedes a prior approval path on this cycle.
+        if ($to === TicketStatus::Rejected) {
+            $ticket->completed_at = null;
+            $ticket->closed_at = null;
+        }
+
+        // First time moving into In progress without an assign() call — seed assigned_at.
+        if ($to === TicketStatus::InProgress && $ticket->assigned_at === null) {
+            $ticket->assigned_at = $now;
+        }
+
+        return $now;
+    }
+
+    /**
      * Partner corrected a rejected request — return it to Pending (open) for re-check.
      */
     public function resubmitByContact(Ticket $ticket, Contact $contact): Ticket
@@ -125,7 +158,6 @@ class TicketWorkflowService
             $ticket->document_review_status = DocumentReviewStatus::Pending;
             $ticket->needs_reverification = false;
             $ticket->current_approver_user_id = null;
-            $ticket->rejected_at = null;
             $ticket->save();
 
             $this->transition(
@@ -459,6 +491,7 @@ class TicketWorkflowService
                         ->value('id');
                 }
 
+                $openedAt = now();
                 $ticket = Ticket::query()->create([
                     'tt_number' => $this->generateTtNumber(),
                     'contact_id' => $contact->id,
@@ -474,6 +507,7 @@ class TicketWorkflowService
                     'location' => $data['location'] ?? null,
                     'description' => $data['description'] ?? null,
                     'status' => TicketStatus::Open,
+                    'opened_at' => $openedAt,
                     'document_review_status' => DocumentReviewStatus::Pending,
                 ]);
 
@@ -484,7 +518,11 @@ class TicketWorkflowService
                     'actor_type' => Contact::class,
                     'actor_id' => $contact->id,
                     'note' => 'Ticket created',
-                    'created_at' => now(),
+                    'meta' => [
+                        'status_stamp_column' => TicketStatus::Open->eventTimestampColumn(),
+                        'status_stamped_at' => $openedAt->toIso8601String(),
+                    ],
+                    'created_at' => $openedAt,
                 ]);
 
                 $fresh = $ticket->fresh(['contact', 'service', 'requisition']);
@@ -677,7 +715,7 @@ class TicketWorkflowService
             $this->assertRequiredDocumentsUploaded($ticket);
 
             $ticket->assigned_to_user_id = $assignee->id;
-            // Handler clock starts on assign (reassignment resets for realistic pickup/cycle KPIs).
+            // Handler assignment clock (separate from in_progress_at status stamp).
             $ticket->assigned_at = now();
             $ticket->priority_id = $priorityId ?? $ticket->priority_id;
             $ticket->escalated_at = now();
@@ -694,6 +732,18 @@ class TicketWorkflowService
 
             if ($ticket->status === TicketStatus::Open) {
                 $this->transition($ticket, TicketStatus::InProgress, $assigner, $note ?? 'Assigned to account manager');
+            } elseif ($ticket->status === TicketStatus::InProgress) {
+                // Reassignment while already in progress: refresh in_progress_at with history.
+                $this->transition(
+                    $ticket,
+                    TicketStatus::InProgress,
+                    $assigner,
+                    $note ?? 'Reassigned to account manager',
+                    [
+                        'reassignment' => true,
+                        'skip_partner_notification' => true,
+                    ],
+                );
             }
 
             return $ticket->fresh();

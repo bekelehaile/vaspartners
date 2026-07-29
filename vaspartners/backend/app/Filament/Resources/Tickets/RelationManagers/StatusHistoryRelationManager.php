@@ -30,13 +30,33 @@ class StatusHistoryRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->description('Full lifecycle trail of status changes with actor and timestamp.')
+            ->description('Each status change records its own event stamp (opened_at / in_progress_at / completed_at / closed_at / rejected_at).')
             ->modifyQueryUsing(fn ($query) => $query->with('actor'))
             ->columns([
                 TextColumn::make('created_at')
                     ->label('When')
                     ->dateTime()
                     ->sortable(),
+                TextColumn::make('status_stamp')
+                    ->label('Stamp')
+                    ->state(function (TicketStatusHistory $record): string {
+                        $column = $record->meta['status_stamp_column'] ?? null;
+                        if (! is_string($column) || $column === '') {
+                            return '—';
+                        }
+
+                        return match ($column) {
+                            'opened_at' => 'opened_at',
+                            'in_progress_at' => 'in_progress_at',
+                            'completed_at' => 'completed_at',
+                            'closed_at' => 'closed_at',
+                            'rejected_at' => 'rejected_at',
+                            default => $column,
+                        };
+                    })
+                    ->badge()
+                    ->color('gray')
+                    ->toggleable(),
                 TextColumn::make('actor_name')
                     ->label('By')
                     ->state(function (TicketStatusHistory $record): string {

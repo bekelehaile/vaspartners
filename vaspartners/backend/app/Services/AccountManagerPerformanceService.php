@@ -148,9 +148,9 @@ class AccountManagerPerformanceService
             )
             // Oldest live backlog age from assigned_at (handler clock), else created_at.
             ->selectRaw(
-                'max(extract(epoch from (now() - coalesce(assigned_at, created_at))) / 3600.0) filter (
+                "max(extract(epoch from (now() - coalesce(assigned_at, in_progress_at, opened_at, created_at))) / 3600.0) filter (
                     where status in (?, ?)
-                ) as oldest_backlog_hours',
+                ) as oldest_backlog_hours",
                 [$open, $inProgress],
             )
             // Doc quality on terminal approvals in period (completed or closed — each uses own stamp).
