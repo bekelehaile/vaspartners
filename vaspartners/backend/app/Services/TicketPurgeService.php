@@ -33,18 +33,12 @@ class TicketPurgeService
     }
 
     /**
+     * Permanently remove a ticket and related rows (admin / ops use).
+     *
      * @return array{tt_number: string, documents: int, comments: int, files_removed: int}
      */
-    public function forcePurgeForContact(Ticket $ticket, Contact $actor): array
+    public function forcePurge(Ticket $ticket): array
     {
-        $this->membership->assertCanAccessCompanyTicket($actor, $ticket);
-
-        if (! $this->partnerMayDelete($ticket)) {
-            throw ValidationException::withMessages([
-                'ticket' => 'Only open (not yet handled) or rejected service requests can be deleted from the portal.',
-            ]);
-        }
-
         $ttNumber = (string) $ticket->tt_number;
         $stats = [
             'tt_number' => $ttNumber,
@@ -91,6 +85,22 @@ class TicketPurgeService
         });
 
         return $stats;
+    }
+
+    /**
+     * @return array{tt_number: string, documents: int, comments: int, files_removed: int}
+     */
+    public function forcePurgeForContact(Ticket $ticket, Contact $actor): array
+    {
+        $this->membership->assertCanAccessCompanyTicket($actor, $ticket);
+
+        if (! $this->partnerMayDelete($ticket)) {
+            throw ValidationException::withMessages([
+                'ticket' => 'Only open (not yet handled) or rejected service requests can be deleted from the portal.',
+            ]);
+        }
+
+        return $this->forcePurge($ticket);
     }
 
     /** @deprecated Use forcePurgeForContact() */
