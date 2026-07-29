@@ -148,15 +148,17 @@ export function CompanyProfileForm({
         <p className="muted">
           {isUpdate
             ? "Update your company details and resubmit for admin approval. After approval, only administrators can change company records."
-            : "Fayda verified your national ID. Submit organisation details for admin approval. Phone and email come from your Fayda identity. You become the company owner once approved."}
+            : createNew
+              ? "Register another company with a unique TIN. Your signed-in phone and email are used as company contact. You stay owner of your other companies."
+              : "Submit organisation details for admin approval. Your signed-in phone and email are used as company contact. Each company needs its own unique TIN."}
         </p>
       </div>
 
       {me && (
         <FaydaIdentityPanel
           id="fayda-identity"
-          title="Your Fayda identity"
-          description="Personal details from National ID (Fayda) — phone and email here are used as company contact. Contact Fayda if anything is wrong."
+          title="Your identity"
+          description="Phone and email from your account are applied to this company automatically. Contact support if anything is wrong."
           person={me}
           badge={
             me.company_role === "owner" ? (
@@ -180,7 +182,15 @@ export function CompanyProfileForm({
             <div className="settings-block-head">
               <h3>Company profile</h3>
               <p className="muted">
-                Organisation name, TIN, and address — separate from your Fayda identity.
+                Organisation name, unique TIN, and address. Phone{" "}
+                {me?.phone_number ? (
+                  <>
+                    <strong>{me.phone_number}</strong>
+                  </>
+                ) : (
+                  "from your account"
+                )}{" "}
+                is used for this company.
               </p>
             </div>
             <div className="form-grid">
@@ -202,7 +212,9 @@ export function CompanyProfileForm({
                     field={field}
                     label="TIN"
                     submissionAttempts={submissionAttempts}
-                    placeholder="Tax identification number"
+                    placeholder="e.g. 00012345"
+                    inputMode="numeric"
+                    autoComplete="off"
                   />
                 )}
               </form.Field>

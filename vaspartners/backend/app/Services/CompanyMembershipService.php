@@ -33,7 +33,8 @@ class CompanyMembershipService
 
     /**
      * Create a company profile as owner — stays pending until admin verifies required info.
-     * Phone/email come from the partner's Fayda identity. TIN uniquely identifies the company.
+     * Phone/email always come from the partner identity. TIN uniquely identifies the company
+     * (a contact may own multiple companies, each with a different TIN).
      *
      * @param  array{company_name: string, company_tin: string, company_address: string}  $data
      */
@@ -49,7 +50,7 @@ class CompanyMembershipService
         $email = trim((string) $contact->email);
         if ($phone === '' || ! \App\Support\PhoneNumber::isValidLocalMobile($phone)) {
             throw ValidationException::withMessages([
-                'company' => 'Your Fayda phone number is required to create a company. Sign in again with Fayda.',
+                'company' => 'Your signed-in phone number is required to create a company. Sign in again.',
             ]);
         }
 
@@ -59,17 +60,8 @@ class CompanyMembershipService
         $contact->loadMissing(['memberships', 'company']);
         $creatingAdditional = $contact->memberships->isNotEmpty();
 
-        // First company inherits Fayda phone/email. Additional companies leave those
-        // blank so unique company phone/email does not block multi-company owners.
-        $companyPhone = $creatingAdditional ? null : $phone;
-        $companyEmail = $creatingAdditional
-            ? null
-            : ($email !== '' ? \App\Support\EmailAddress::normalize($email) : null);
-
-        if (! $creatingAdditional) {
-            $this->assertUniqueCompanyPhone($phone);
-            $this->assertUniqueCompanyEmail($companyEmail);
-        }
+        $companyPhone = $phone;
+        $companyEmail = $email !== '' ? \App\Support\EmailAddress::normalize($email) : null;
 
         // Stay on an approved working company so the portal is not locked to a pending TIN.
         $keepApprovedContext = $creatingAdditional
@@ -154,8 +146,6 @@ class CompanyMembershipService
 
         $tin = $this->normalizeCode($data['company_tin']);
         $this->assertUniqueTin($tin, $company->id);
-        $this->assertUniqueCompanyPhone($phone, $company->id);
-        $this->assertUniqueCompanyEmail($email !== '' ? $email : null, $company->id);
 
         return DB::transaction(function () use ($contact, $company, $data, $tin, $phone, $email) {
             $company->fill([
