@@ -130,7 +130,155 @@ class BulkMessageService
 
         ImportBulkMessageJob::dispatch($campaign->id);
 
-        return $campaign;
+        return $campaign->fresh();
+    }
+
+    /**
+     * Build a draft campaign from companies matching admin filters (Active, approval, TIN, etc.).
+     * Deduplicates by normalized phone so each MSISDN gets one SMS.
+     *
+     * @param  array{
+     *   is_active?: bool|null,
+     *   approval_status?: string|null,
+     *   tin_validated?: bool|null,
+     *   legacy_only?: bool,
+     *   require_phone?: bool
+     * }  $filters
+     */
+    public function createFromCompanies(User $actor, string $title, string $message, array $filters = []): BulkMessage
+    {
+        $title = trim($title);
+        $message = trim($message);
+
+        if ($title === '' || $message === '') {
+            throw ValidationException::withMessages([
+                'title' => 'Title and message are required.',
+            ]);
+        }
+
+        if (mb_strlen($message) > 640) {
+            throw ValidationException::withMessages([
+                'message' => 'Message must be 640 characters or fewer.',
+            ]);
+        }
+
+        $requirePhone = array_key_exists('require_phone', $filters)
+            ? (bool) $filters['require_phone']
+            : true;
+
+        $query = Company::query()->orderBy('id');
+
+        if (array_key_exists('is_active', $filters) && $filters['is_active'] !== null) {
+            $query->where('is_active', (bool) $filters['is_active']);
+        }
+
+        if (filled($filters['approval_status'] ?? null)) {
+            $query->where('approval_status', (string) $filters['approval_status']);
+        }
+
+        if (array_key_exists('tin_validated', $filters) && $filters['tin_validated'] !== null) {
+            $query->where('tin_validated', (bool) $filters['tin_validated']);
+        }
+
+        if (! empty($filters['legacy_only'])) {
+            $query->whereNotNull('legacy_mvas_id');
+        }
+
+        if ($requirePhone) {
+            $query->whereNotNull('phone')->where('phone', '!=', '');
+        }
+
+        return DB::transaction(function () use ($actor, $title, $message, $query, $filters): BulkMessage {
+            $campaign = BulkMessage::query()->create([
+                'title' => $title,
+                'message' => $message,
+                'source_filename' => 'companies-filter',
+                'source_path' => null,
+                'status' => BulkMessageStatus::Draft,
+                'created_by_user_id' => $actor->id,
+            ]);
+
+            $seenPhones = [];
+            $row = 0;
+            $pending = 0;
+            $skipped = 0;
+            $matched = 0;
+
+            foreach ($query->cursor() as $company) {
+                if (! $company instanceof Company) {
+                    continue;
+                }
+
+                $row++;
+                $rawPhone = trim((string) ($company->phone ?? ''));
+                $normalized = $rawPhone !== '' && $this->sms->ensurePhoneIsLocal($rawPhone)
+                    ? $this->sms->normalizePhone($rawPhone)
+                    : null;
+
+                if ($normalized === null || $normalized === '' || isset($seenPhones[$normalized])) {
+                    BulkMessageRecipient::query()->create([
+                        'campaign_id' => $campaign->id,
+                        'company_id' => $company->id,
+                        'phone_raw' => $rawPhone !== '' ? $rawPhone : null,
+                        'phone_normalized' => $normalized,
+                        'company_name' => $company->name,
+                        'company_tin' => $company->tin,
+                        'variables' => [
+                            'company_name' => $company->name,
+                            'filters' => $filters,
+                        ],
+                        'row_number' => $row,
+                        'status' => BulkMessageRecipientStatus::Skipped,
+                        'error' => $normalized === null || $normalized === ''
+                            ? 'Missing or invalid phone'
+                            : 'Duplicate phone (already queued)',
+                    ]);
+                    $skipped++;
+
+                    continue;
+                }
+
+                $seenPhones[$normalized] = true;
+                BulkMessageRecipient::query()->create([
+                    'campaign_id' => $campaign->id,
+                    'company_id' => $company->id,
+                    'phone_raw' => $rawPhone,
+                    'phone_normalized' => $normalized,
+                    'company_name' => $company->name,
+                    'company_tin' => $company->tin,
+                    'variables' => [
+                        'company_name' => $company->name,
+                    ],
+                    'row_number' => $row,
+                    'status' => BulkMessageRecipientStatus::Pending,
+                ]);
+                $pending++;
+                $matched++;
+            }
+
+            if ($pending === 0) {
+                $campaign->forceFill([
+                    'status' => BulkMessageStatus::Failed,
+                    'completed_at' => now(),
+                ])->save();
+            }
+
+            $campaign->forceFill([
+                'total_count' => $row,
+                'matched_count' => $matched,
+                'sent_count' => 0,
+                'failed_count' => 0,
+                'skipped_count' => $skipped,
+            ])->save();
+
+            if ($pending === 0) {
+                throw ValidationException::withMessages([
+                    'companies' => 'No companies with a usable phone matched these filters.',
+                ]);
+            }
+
+            return $campaign->fresh('recipients');
+        });
     }
 
     /**
@@ -271,10 +419,13 @@ class BulkMessageService
         $ids = $campaign->recipients()
             ->where('status', BulkMessageRecipientStatus::Pending->value)
             ->whereNotNull('phone_normalized')
+            ->orderBy('id')
             ->pluck('id');
 
-        foreach ($ids as $id) {
-            SendBulkMessageRecipientJob::dispatch((int) $id);
+        // Stay under global SMS rate (~120/min): ~2 messages/second.
+        foreach ($ids->values() as $index => $id) {
+            SendBulkMessageRecipientJob::dispatch((int) $id)
+                ->delay(now()->addSeconds(intdiv((int) $index, 2)));
         }
 
         if ($ids->isEmpty()) {
@@ -301,12 +452,26 @@ class BulkMessageService
             return;
         }
 
+        // Soft-throttle: keep pending and retry later instead of burning as Failed.
+        if (! $this->sms->consumeRateLimits($phone)) {
+            $recipient->forceFill([
+                'status' => BulkMessageRecipientStatus::Pending,
+                'error' => 'Rate limited — waiting to retry',
+            ])->save();
+
+            SendBulkMessageRecipientJob::dispatch((int) $recipient->id)
+                ->delay(now()->addSeconds(30));
+
+            return;
+        }
+
         $recipient->forceFill(['attempts' => $recipient->attempts + 1])->save();
 
         $body = $this->renderMessage($campaign->message, $recipient);
 
         try {
-            $ok = $this->sms->sendNow($phone, $body);
+            // Rate limit already consumed above — send without double-hit.
+            $ok = $this->sms->sendNowBypassingRateLimit($phone, $body);
             if (! $ok) {
                 $recipient->forceFill([
                     'status' => BulkMessageRecipientStatus::Failed,

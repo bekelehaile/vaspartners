@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\BulkMessages;
 
 use App\Enums\BulkMessageStatus;
+use App\Filament\Resources\BulkMessages\Pages\ComposeBulkMessage;
 use App\Filament\Resources\BulkMessages\Pages\ImportBulkMessage;
 use App\Filament\Resources\BulkMessages\Pages\ListBulkMessages;
 use App\Filament\Resources\BulkMessages\Pages\ViewBulkMessage;
@@ -45,18 +46,19 @@ class BulkMessageResource extends Resource
 
     public static function shouldRegisterNavigation(): bool
     {
-        // Monthly Revenue owns partner messaging now; keep Bulk Messages off the nav.
-        return false;
+        return static::canAccess();
     }
 
     public static function canAccess(): bool
     {
-        return false;
+        $user = auth()->user();
+
+        return (bool) ($user?->can('ViewAny:BulkMessage') || $user?->canBulkSendCompanySms());
     }
 
     public static function getNavigationBadgeTooltip(): ?string
     {
-        return 'Special-case SMS campaigns imported from CSV/Excel';
+        return 'Bulk SMS campaigns — import CSV or compose from companies; retry failed recipients';
     }
 
     public static function form(Schema $schema): Schema
@@ -191,6 +193,7 @@ class BulkMessageResource extends Resource
         return [
             'index' => ListBulkMessages::route('/'),
             'import' => ImportBulkMessage::route('/import'),
+            'compose' => ComposeBulkMessage::route('/compose'),
             'view' => ViewBulkMessage::route('/{record}'),
         ];
     }

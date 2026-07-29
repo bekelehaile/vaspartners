@@ -51,6 +51,19 @@ class SmsService
      */
     public function sendNow(string|int $phone, string $message): bool
     {
+        return $this->sendNowInternal($phone, $message, consumeRateLimit: true);
+    }
+
+    /**
+     * Same as sendNow but skips rate-limit hit (caller already consumed a slot).
+     */
+    public function sendNowBypassingRateLimit(string|int $phone, string $message): bool
+    {
+        return $this->sendNowInternal($phone, $message, consumeRateLimit: false);
+    }
+
+    private function sendNowInternal(string|int $phone, string $message, bool $consumeRateLimit): bool
+    {
         if (! config('notifications.enabled', true)) {
             Log::info('SMS skipped (SMS_ENABLED=false)', [
                 'phone' => $this->normalizePhone($phone),
@@ -77,7 +90,7 @@ class SmsService
             return false;
         }
 
-        if (! $this->consumeRateLimits($normalized)) {
+        if ($consumeRateLimit && ! $this->consumeRateLimits($normalized)) {
             Log::warning('SMS rate limited', [
                 'phone' => $normalized,
                 'e164' => '+'.$msisdn,

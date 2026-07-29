@@ -19,7 +19,7 @@ class ListBulkMessages extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'Special-case campaigns: import a phone CSV/Excel, review recipients, then queue SMS. For event SMS by service/type, use Companies.';
+        return 'Compose from companies (Active / approval / TIN filters) or import a CSV. Review recipients, Send pending, then Re-send failed as needed.';
     }
 
     protected function getHeaderActions(): array
@@ -40,6 +40,10 @@ class ListBulkMessages extends ListRecords
                         ['Content-Type' => 'text/csv; charset=UTF-8'],
                     );
                 }),
+            Action::make('compose')
+                ->label('Compose from companies')
+                ->icon('heroicon-o-building-office-2')
+                ->url(BulkMessageResource::getUrl('compose')),
             Action::make('import')
                 ->label('Import special list')
                 ->icon('heroicon-o-arrow-up-tray')

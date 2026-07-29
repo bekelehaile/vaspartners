@@ -7,6 +7,7 @@ use App\Filament\Resources\Companies\CompanyResource;
 use App\Models\BulkMessageRecipient;
 use App\Models\Company;
 use App\Services\SmsService;
+use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
@@ -100,6 +101,33 @@ class RecipientsRelationManager extends RelationManager
                 )),
             ])
             ->recordActions([
+                Action::make('retry')
+                    ->label('Retry')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('warning')
+                    ->visible(fn (BulkMessageRecipient $record): bool => in_array(
+                        $record->status instanceof BulkMessageRecipientStatus
+                            ? $record->status
+                            : BulkMessageRecipientStatus::tryFrom((string) $record->status),
+                        [BulkMessageRecipientStatus::Failed, BulkMessageRecipientStatus::Pending],
+                        true,
+                    ))
+                    ->requiresConfirmation()
+                    ->action(function (BulkMessageRecipient $record): void {
+                        $record->forceFill([
+                            'status' => BulkMessageRecipientStatus::Pending,
+                            'error' => null,
+                        ])->save();
+
+                        \App\Jobs\SendBulkMessageRecipientJob::dispatch((int) $record->id);
+
+                        $this->getOwnerRecord()->refreshCounts();
+
+                        Notification::make()
+                            ->title('Recipient re-queued')
+                            ->success()
+                            ->send();
+                    }),
                 EditAction::make()
                     ->mutateFormDataUsing(function (array $data): array {
                         $sms = app(SmsService::class);
