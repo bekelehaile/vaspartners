@@ -1030,6 +1030,77 @@ textarea {
   margin-top: 0.65rem;
 }
 
+@media (max-width: 639.98px) {
+  .company-request-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .company-request-actions > .btn-primary,
+  .company-request-actions > .btn-ghost,
+  .company-request-actions > button {
+    width: 100%;
+    min-height: 2.75rem;
+    justify-content: center;
+  }
+
+  .data-table-toolbar .btn-primary,
+  .data-table-toolbar .btn-ghost {
+    width: 100%;
+    min-height: 2.75rem;
+  }
+
+  .company-add-member .field input {
+    width: 100%;
+    min-height: 2.75rem;
+    font-size: 16px;
+  }
+
+  .member-actions-trigger {
+    min-height: 2.75rem;
+    padding-inline: 0.9rem;
+  }
+}
+
+.company-member-mobile-actions {
+  flex-direction: column;
+}
+
+.company-member-mobile-actions > button {
+  width: 100%;
+  justify-content: center;
+}
+
+.company-member-mobile-expand {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--et-line);
+}
+
+.btn-ghost.is-danger-text,
+.is-danger-text {
+  color: var(--et-red);
+}
+
+.data-table-footer-note {
+  margin: 0;
+  max-width: 36rem;
+  text-align: right;
+}
+
+@media (max-width: 719.98px) {
+  .data-table-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .data-table-footer-note {
+    text-align: left;
+    max-width: none;
+  }
+}
+
 .settings-block-head {
   margin-bottom: 0.85rem;
 }
@@ -1250,7 +1321,10 @@ textarea {
   border: 0;
   color: var(--primary);
   cursor: pointer;
-  padding: 0;
+  padding: 0.35rem 0.15rem;
+  min-height: 2.5rem;
+  display: inline-flex;
+  align-items: center;
   font-weight: 600;
   text-decoration: none;
 }
@@ -1284,6 +1358,10 @@ textarea {
   border-top: 1px solid var(--et-line);
   background: color-mix(in oklab, var(--header-from) 90%, white);
   backdrop-filter: blur(8px);
+  max-height: calc(100dvh - 3.75rem);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 @media (min-width: 768px) {
@@ -2595,10 +2673,18 @@ textarea {
     min-width: 0;
     flex: 0 0 auto;
     padding: 0.65rem 0.85rem;
+    min-height: 2.75rem;
   }
 
   .portal-vtab.is-active {
     box-shadow: inset 0 -3px 0 var(--primary);
+  }
+
+  .portal-vtabs {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    padding-bottom: 0.15rem;
+    mask-image: linear-gradient(to right, #000 92%, transparent);
   }
 }
 
@@ -2689,6 +2775,40 @@ textarea {
 
   .site-portal-admin .brand-logo {
     height: 2.25rem;
+  }
+
+  .portal-page-header-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .portal-page-header-actions > * {
+    width: 100%;
+  }
+
+  .portal-page-header-actions .journey-launch {
+    width: 100%;
+  }
+
+  .portal-page-header-actions .journey-launch > * {
+    min-width: 0;
+    width: 100%;
+    min-height: 2.75rem;
+  }
+
+  .portal-request-toolbar {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+    width: 100%;
+  }
+
+  .portal-request-toolbar .btn,
+  .portal-request-toolbar [data-slot="button"] {
+    width: 100%;
+    min-height: 2.75rem;
+    justify-content: center;
   }
 }
 
@@ -2946,7 +3066,27 @@ button.portal-mobile-card {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin-top: 0.15rem;
+  margin-top: 0.65rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--et-line);
+}
+
+.portal-mobile-card-actions > button,
+.portal-mobile-card-actions [data-slot="button"] {
+  min-height: 2.75rem;
+  flex: 1 1 auto;
+}
+
+button.portal-mobile-card-hit {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
 }
 
 .portal-desktop-table {
@@ -3574,6 +3714,23 @@ button.portal-mobile-card {
   padding-top: 0.25rem;
 }
 
+@media (max-width: 639.98px) {
+  .form-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .form-actions > .btn,
+  .form-actions > .btn-primary,
+  .form-actions > .btn-ghost,
+  .form-actions > a,
+  .form-actions > button {
+    width: 100%;
+    min-height: 2.75rem;
+    justify-content: center;
+  }
+}
+
 .form-hint {
   margin: 0;
   font-size: 0.875rem;
@@ -3773,17 +3930,27 @@ button.portal-mobile-card {
   z-index: 80;
   display: grid;
   place-items: center;
-  padding: 1.25rem;
+  align-content: center;
+  padding: max(0.75rem, env(safe-area-inset-top, 0px))
+    max(0.75rem, env(safe-area-inset-right, 0px))
+    max(0.75rem, env(safe-area-inset-bottom, 0px))
+    max(0.75rem, env(safe-area-inset-left, 0px));
   background: rgba(15, 23, 42, 0.45);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .portal-modal {
   width: min(28rem, 100%);
+  max-height: min(90dvh, 40rem);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   border-radius: 0.75rem;
   padding: 1.25rem 1.35rem 1.1rem;
   background: #fff;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.22);
   color: #1f2937;
+  margin: auto;
 }
 
 .portal-modal h2 {
@@ -3807,8 +3974,62 @@ button.portal-mobile-card {
 
 .portal-modal-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  align-items: stretch;
+  gap: 0.65rem;
   margin-top: 1.15rem;
+}
+
+.portal-modal-actions > .btn,
+.portal-modal-actions > .btn-ghost,
+.portal-modal-actions > a,
+.portal-modal-actions > button {
+  min-height: 2.75rem;
+}
+
+@media (max-width: 639.98px) {
+  .portal-modal {
+    width: 100%;
+    max-height: min(92dvh, 100%);
+    padding: 1.1rem 1rem 1rem;
+    border-radius: 0.85rem;
+  }
+
+  .portal-modal h2 {
+    font-size: 1.05rem;
+  }
+
+  .portal-modal-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .portal-modal-actions > .btn,
+  .portal-modal-actions > .btn-ghost,
+  .portal-modal-actions > a,
+  .portal-modal-actions > button {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .tin-gate-switch .btn {
+    width: 100%;
+    min-height: 2.75rem;
+  }
+
+  .portal-modal .field,
+  .tin-gate-form .field {
+    width: 100%;
+  }
+
+  .portal-modal .field input,
+  .tin-gate-form input {
+    width: 100%;
+    min-height: 2.75rem;
+    font-size: 16px; /* avoid iOS focus zoom */
+  }
 }
 
 .success {
@@ -3948,11 +4169,27 @@ button.portal-mobile-card {
   .journey {
     grid-template-columns: 1fr 1fr;
   }
+
+  .journey:has(.is-alert) {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .journey-step {
+    font-size: 0.75rem;
+  }
+
   .user-chip span {
     max-width: 9rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+}
+
+@media (max-width: 419.98px) {
+  .journey,
+  .journey:has(.is-alert) {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -4187,6 +4424,22 @@ button.bg-primary:hover {
   padding: 1.35rem 1.4rem 1.5rem;
 }
 
+@media (max-width: 639.98px) {
+  .journey-panel {
+    padding: 1rem 0.85rem 1.15rem;
+  }
+
+  .intent-card-subscribe,
+  .intent-card-manage {
+    min-height: 0;
+  }
+
+  .journey-option {
+    padding: 0.85rem 0.8rem;
+    min-height: 3.25rem;
+  }
+}
+
 .journey-chooser .intent-grid {
   margin-top: 0.25rem;
 }
@@ -4228,6 +4481,14 @@ button.bg-primary:hover {
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 1rem;
+}
+
+@media (max-width: 639.98px) {
+  .journey-top {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
 }
 
 .journey-step-title {

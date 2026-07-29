@@ -51,6 +51,10 @@ SMS,
 Dear {contact_name}, documents for VAS request number {tt_number} need your attention. Please update them in the portal. {note} — Ethio telecom
 SMS,
 
+        'documents_passed' => <<<'SMS'
+Dear {contact_name}, documents for VAS request number {tt_number} ({service}) were accepted. Your request is under review. — Ethio telecom
+SMS,
+
         'ticket_completed' => <<<'SMS'
 Dear {contact_name}, VAS request number {tt_number} for {service} has been completed. — Ethio telecom
 SMS,
@@ -84,7 +88,11 @@ Dear {contact_name}, {applicant_name} requested to join {company_name}. Open the
 SMS,
 
         'company_profile_approved' => <<<'SMS'
-Dear {contact_name}, your company {company_name} was approved. You can now use the VAS Partners portal. — Ethio telecom
+Dear {contact_name}, your company {company_name} was approved. — Ethio telecom
+SMS,
+
+        'company_tin_validated' => <<<'SMS'
+Dear {contact_name}, the TIN for {company_name} is confirmed. Log in to the VAS Partners portal and submit service requests. — Ethio telecom
 SMS,
 
         'company_profile_rejected' => <<<'SMS'
@@ -121,6 +129,8 @@ SMS,
 
         'documents_need_attention' => 'Action needed on request number {tt_number}: please update the required documents in the portal.',
 
+        'documents_passed' => 'Documents for request number {tt_number} ({service}) were accepted. Your request is under review.',
+
         'ticket_completed' => 'Request number {tt_number} for {service} has been approved and completed.',
 
         'ticket_rejected' => 'Request number {tt_number} for {service} was not approved. Please review the request in the portal.',
@@ -137,7 +147,9 @@ SMS,
 
         'company_membership_requested' => '{applicant_name} requested to join {company_name}. Open Company to approve or reject.',
 
-        'company_profile_approved' => 'Your company {company_name} was approved. You can submit service requests.',
+        'company_profile_approved' => 'Your company {company_name} was approved. Ethio telecom will confirm your TIN before you can submit service requests.',
+
+        'company_tin_validated' => 'TIN for {company_name} is confirmed. Log in and submit service requests.',
 
         'company_profile_pending' => 'Your company {company_name} (TIN {company_tin}) was submitted and is waiting for Ethio telecom approval. You will be notified when it is reviewed.',
 

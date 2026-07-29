@@ -74,6 +74,11 @@ class PartnerNotificationService
         $this->notifyPartner($ticket, 'documents_need_attention', $note);
     }
 
+    public function documentsPassed(Ticket $ticket, ?string $note = null): void
+    {
+        $this->notifyPartner($ticket, 'documents_passed', $note);
+    }
+
     public function approvalNeeded(Ticket $ticket, User $approver): void
     {
         $this->notifyStaffDatabase(
@@ -346,6 +351,7 @@ class PartnerNotificationService
             'company_profile_pending',
             'company_profile_approved',
             'company_profile_rejected',
+            'company_tin_validated',
             'profile_completed',
         ];
 
@@ -391,9 +397,51 @@ class PartnerNotificationService
             template: $template,
             url: '/portal/company',
         ));
+    }
 
-        if ($approved) {
-            $this->profileCompleted($owner->fresh(['company']));
+    /**
+     * Milestone: admin confirmed company TIN — partners may submit service requests.
+     * Notifies active members (SMS + portal). Bulk “welcome back” campaigns stay separate.
+     */
+    public function companyTinValidated(Company $company): void
+    {
+        $company->loadMissing(['activeMembers']);
+
+        $recipients = $company->activeMembers;
+        if ($recipients->isEmpty()) {
+            $owner = $company->ownerContact();
+            $recipients = $owner ? collect([$owner]) : collect();
+        }
+
+        $template = 'company_tin_validated';
+        $sentPhones = [];
+
+        foreach ($recipients as $contact) {
+            if (! $contact instanceof Contact) {
+                continue;
+            }
+
+            $placeholders = [
+                'contact_name' => $contact->name ?: 'Partner',
+                'company_name' => $company->name ?: 'your organisation',
+                'company_tin' => $company->tin ?: '',
+            ];
+
+            $smsBody = $this->render('templates', $template, $placeholders);
+            $portalBody = $this->render('portal', $template, $placeholders);
+
+            $phone = trim((string) $contact->phone_number);
+            if ($phone !== '' && ! isset($sentPhones[$phone])) {
+                $this->sms->send($phone, $smsBody);
+                $sentPhones[$phone] = true;
+            }
+
+            $contact->notify(new PartnerPortalNotification(
+                title: $this->titleFor($template),
+                body: Str::limit($portalBody, 280),
+                template: $template,
+                url: '/portal',
+            ));
         }
     }
 
@@ -539,6 +587,7 @@ class PartnerNotificationService
             'ticket_submitted' => 'Request received',
             'ticket_in_progress' => 'Under review',
             'documents_need_attention' => 'Documents required',
+            'documents_passed' => 'Documents accepted',
             'ticket_completed' => 'Request completed',
             'ticket_rejected' => 'Request not approved',
             'ticket_closed' => 'Request closed',
@@ -551,6 +600,7 @@ class PartnerNotificationService
             'company_membership_requested' => 'Membership request',
             'company_profile_pending' => 'Company waiting for approval',
             'company_profile_approved' => 'Company approved',
+            'company_tin_validated' => 'TIN confirmed',
             'company_profile_rejected' => 'Company needs updates',
             'company_member_left' => 'Member left company',
             'company_transfer_approved' => 'Ownership transfer approved',

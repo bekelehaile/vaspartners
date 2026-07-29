@@ -54,6 +54,7 @@ Route::prefix('v1')->group(function () {
         Route::get('tickets', [ContactPortalController::class, 'tickets']);
         Route::post('tickets', [ContactPortalController::class, 'storeTicket']);
         Route::get('tickets/{ticket}', [ContactPortalController::class, 'showTicket']);
+        Route::delete('tickets/{ticket}', [ContactPortalController::class, 'destroyTicket']);
         Route::get('tickets/{ticket}/messages', [ContactPortalController::class, 'ticketMessages']);
         Route::post('tickets/{ticket}/documents', [ContactPortalController::class, 'uploadDocument']);
         Route::get('tickets/{ticket}/documents/{document}/download', [ContactPortalController::class, 'downloadDocument']);

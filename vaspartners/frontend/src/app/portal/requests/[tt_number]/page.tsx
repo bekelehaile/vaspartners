@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   FileTextIcon,
@@ -25,7 +25,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useTicket } from "@/hooks/use-contact";
+import { useTicket, useDeleteRejectedTicket } from "@/hooks/use-contact";
 import { statusCopy } from "@/lib/api";
 
 type DetailTab = "overview" | "documents" | "messages";
@@ -36,7 +36,9 @@ export default function RequestDetailPage() {
   const requestNumber = decodeURIComponent(
     Array.isArray(raw) ? raw[0] ?? "" : raw ?? "",
   );
+  const router = useRouter();
   const { data: ticket, isLoading, isError, error } = useTicket(requestNumber);
+  const deleteRejected = useDeleteRejectedTicket();
   const [tab, setTab] = useState<DetailTab>("overview");
   const [autoOpenedDocs, setAutoOpenedDocs] = useState(false);
 
@@ -71,8 +73,30 @@ export default function RequestDetailPage() {
         }
         actions={
           ticket ? (
-            <div className="flex flex-wrap items-center gap-3">
-              <StatusPill status={ticket.status} />
+            <div className="portal-request-toolbar">
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusPill status={ticket.status} />
+              </div>
+              {(ticket.can_delete || ticket.status === "rejected") && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-destructive/40 text-destructive hover:bg-destructive/10 min-h-11"
+                  disabled={deleteRejected.isPending}
+                  onClick={() => {
+                    const ok = window.confirm(
+                      `Permanently delete rejected request ${ticket.tt_number}? This removes the request, messages, and all uploaded documents from the system. This cannot be undone.`,
+                    );
+                    if (!ok) return;
+                    void deleteRejected
+                      .mutateAsync(ticket.tt_number)
+                      .then(() => router.replace("/portal"))
+                      .catch(() => undefined);
+                  }}
+                >
+                  {deleteRejected.isPending ? "Deleting…" : "Delete request"}
+                </Button>
+              )}
               <JourneyLaunchActions />
             </div>
           ) : (
@@ -85,6 +109,14 @@ export default function RequestDetailPage() {
         {isError && (
           <div className="alert">
             {error instanceof Error ? error.message : "Unable to load request"}
+          </div>
+        )}
+
+        {deleteRejected.isError && (
+          <div className="alert" role="alert" style={{ marginBottom: "1rem" }}>
+            {deleteRejected.error instanceof Error
+              ? deleteRejected.error.message
+              : "Could not delete this request"}
           </div>
         )}
 

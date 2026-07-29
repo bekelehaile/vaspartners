@@ -3,15 +3,18 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\Contact;
 use App\Models\Feedback;
+use App\Services\CompanyMembershipService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class FeedbackController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, CompanyMembershipService $membership)
     {
-        /** @var \App\Models\Contact $contact */
+        /** @var Contact $contact */
         $contact = $request->user();
 
         $items = Feedback::query()
@@ -35,17 +38,19 @@ class FeedbackController extends Controller
                     'quarter' => $quarter,
                     'label' => 'Q'.$quarter.' '.$year,
                     'feedback' => $current,
-                    'can_submit' => true,
+                    'can_submit' => $this->canSubmitFeedback($contact, $membership),
                 ],
                 'items' => $items->values(),
             ],
         ]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request, CompanyMembershipService $membership)
     {
-        /** @var \App\Models\Contact $contact */
+        /** @var Contact $contact */
         $contact = $request->user();
+
+        $membership->assertCanAccessCompany($contact);
 
         $data = $request->validate([
             'rating' => ['required', 'integer', 'min:1', 'max:5'],
@@ -85,6 +90,17 @@ class FeedbackController extends Controller
                 ? 'Feedback submitted for '.$feedback->quarterLabel().'.'
                 : 'Feedback updated for '.$feedback->quarterLabel().'.',
         ], $feedback->wasRecentlyCreated ? 201 : 200);
+    }
+
+    private function canSubmitFeedback(Contact $contact, CompanyMembershipService $membership): bool
+    {
+        try {
+            $membership->assertCanAccessCompany($contact);
+
+            return true;
+        } catch (ValidationException) {
+            return false;
+        }
     }
 
     /** @return array<string, mixed> */

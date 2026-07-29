@@ -369,6 +369,142 @@ export function CompanyMembersTable({ enabled }: { enabled: boolean }) {
 
   const rows = useMemo(() => members, [members]);
 
+  function memberActions(member: CompanyMemberOption): MemberAction[] {
+    const isYou = !!member.public_id && me?.public_id === member.public_id;
+    const isOwnerRow = member.role === "owner" || member.is_owner;
+    const active = member.is_active !== false;
+    const editing = editingId === member.public_id;
+    const editingPhone = phoneEditingId === member.public_id;
+    const showDetails = detailsId === member.public_id;
+
+    const actions: MemberAction[] = [
+      {
+        key: "details",
+        label: showDetails ? "Hide details" : "View details",
+        onSelect: () =>
+          setDetailsId(showDetails ? null : member.public_id || null),
+      },
+    ];
+
+    if (canManage && !isYou && !isOwnerRow && member.public_id) {
+      actions.push({
+        key: "phone",
+        label: editingPhone ? "Close phone" : "Change phone",
+        onSelect: () => {
+          setEditingId(null);
+          setPhoneEditingId(editingPhone ? null : member.public_id || null);
+        },
+      });
+      actions.push({
+        key: "permissions",
+        label: editing ? "Close permissions" : "Grant permissions",
+        onSelect: () => {
+          setPhoneEditingId(null);
+          setEditingId(editing ? null : member.public_id || null);
+        },
+      });
+      if (active) {
+        actions.push({
+          key: "disable",
+          label: "Disable access",
+          danger: true,
+          onSelect: () => {
+            if (
+              !window.confirm(
+                `Disable access for ${member.name || "this partner"}? They will not sync into this company on Fayda sign-in until re-enabled.`,
+              )
+            ) {
+              return;
+            }
+            void setActive.mutateAsync({
+              public_id: member.public_id!,
+              active: false,
+            });
+          },
+        });
+      } else {
+        actions.push({
+          key: "enable",
+          label: "Enable access",
+          onSelect: () => {
+            void setActive.mutateAsync({
+              public_id: member.public_id!,
+              active: true,
+            });
+          },
+        });
+      }
+    }
+
+    return actions;
+  }
+
+  function memberExpanded(member: CompanyMemberOption) {
+    const editing = editingId === member.public_id;
+    const editingPhone = phoneEditingId === member.public_id;
+    const showDetails = detailsId === member.public_id;
+
+    return (
+      <>
+        {showDetails ? (
+          <dl className="fayda-dl company-member-details-dl">
+            <div>
+              <dt>Gender</dt>
+              <dd>{member.gender || "—"}</dd>
+            </div>
+            <div>
+              <dt>Nationality</dt>
+              <dd>{member.nationality || "—"}</dd>
+            </div>
+            <div>
+              <dt>Birthdate</dt>
+              <dd>{member.birthdate || "—"}</dd>
+            </div>
+            <div>
+              <dt>ID type</dt>
+              <dd>{member.identification_type || "—"}</dd>
+            </div>
+            <div>
+              <dt>ID number</dt>
+              <dd>{member.identification_number || "—"}</dd>
+            </div>
+          </dl>
+        ) : null}
+        {editingPhone && member.public_id ? (
+          <PhoneEditor
+            member={member}
+            busy={busy}
+            onCancel={() => setPhoneEditingId(null)}
+            onSave={(phone_number) => {
+              void updatePhone
+                .mutateAsync({
+                  public_id: member.public_id!,
+                  phone_number,
+                })
+                .then(() => setPhoneEditingId(null));
+            }}
+          />
+        ) : null}
+        {editing && member.public_id ? (
+          <PermissionsEditor
+            member={member}
+            catalog={catalog}
+            busy={busy}
+            onCancel={() => setEditingId(null)}
+            onSave={(permissions) => {
+              void updatePermissions
+                .mutateAsync({
+                  public_id: member.public_id!,
+                  permissions,
+                })
+                .then(() => setEditingId(null));
+            }}
+          />
+        ) : null}
+      </>
+    );
+  }
+
   if (!enabled) {
     return null;
   }
@@ -397,237 +533,202 @@ export function CompanyMembersTable({ enabled }: { enabled: boolean }) {
         </div>
       )}
 
-      <div className="data-table-wrap">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Phone</th>
-              <th>Email</th>
-              <th>Role</th>
-              <th>Access</th>
-              <th>Fayda</th>
-              <th>Permissions</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {membersQuery.isLoading ? (
-              <tr>
-                <td colSpan={8} className="data-table-empty">
-                  Loading members…
-                </td>
-              </tr>
-            ) : rows.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="data-table-empty">
-                  No members found for this company yet.
-                </td>
-              </tr>
-            ) : (
-              rows.flatMap((member, index) => {
-                const id = member.public_id || `member-${index}`;
-                const isYou =
-                  !!member.public_id && me?.public_id === member.public_id;
-                const isOwnerRow = member.role === "owner" || member.is_owner;
-                const active = member.is_active !== false;
-                const editing = editingId === member.public_id;
-                const editingPhone = phoneEditingId === member.public_id;
-                const showDetails = detailsId === member.public_id;
+      {membersQuery.isLoading ? (
+        <p className="portal-mobile-empty">Loading members…</p>
+      ) : rows.length === 0 ? (
+        <p className="portal-mobile-empty">No members found for this company yet.</p>
+      ) : (
+        <ul className="portal-mobile-list">
+          {rows.map((member, index) => {
+            const id = member.public_id || `member-${index}`;
+            const isYou =
+              !!member.public_id && me?.public_id === member.public_id;
+            const isOwnerRow = member.role === "owner" || member.is_owner;
+            const active = member.is_active !== false;
+            const actions = memberActions(member);
+            const hasExpand =
+              detailsId === member.public_id ||
+              phoneEditingId === member.public_id ||
+              editingId === member.public_id;
 
-                const actions: MemberAction[] = [
-                  {
-                    key: "details",
-                    label: showDetails ? "Hide details" : "View details",
-                    onSelect: () =>
-                      setDetailsId(showDetails ? null : member.public_id || null),
-                  },
-                ];
+            return (
+              <li key={id}>
+                <div
+                  className={`portal-mobile-card${active ? "" : " is-attention"}`}
+                >
+                  <div className="portal-mobile-card-top">
+                    <div>
+                      <p className="portal-mobile-card-title">
+                        {member.name || "—"}
+                        {isYou ? <span className="service-meta"> You</span> : null}
+                      </p>
+                      <p className="portal-mobile-card-meta">
+                        {isOwnerRow ? "Owner" : "Member"}
+                        {member.phone_number ? ` · ${member.phone_number}` : ""}
+                      </p>
+                    </div>
+                    <span
+                      className={`company-request-status ${
+                        active ? "is-approved" : "is-rejected"
+                      }`}
+                    >
+                      {active ? "Enabled" : "Disabled"}
+                    </span>
+                  </div>
+                  <div className="portal-mobile-card-row">
+                    <span>{member.email || "No email"}</span>
+                    <span>
+                      {member.awaiting_fayda ? "Awaiting Fayda" : "Fayda linked"}
+                    </span>
+                  </div>
+                  <div className="portal-mobile-card-meta" style={{ marginTop: "0.35rem" }}>
+                    {isOwnerRow
+                      ? "Permissions: Full access"
+                      : (member.permissions?.length ?? 0) === 0
+                        ? "Permissions: None"
+                        : `Permissions: ${(member.permissions ?? [])
+                            .map((key) => permissionLabel(key, catalog))
+                            .join(", ")}`}
+                  </div>
+                  {actions.length > 0 ? (
+                    <div className="portal-mobile-card-actions company-member-mobile-actions">
+                      {actions.map((action) => (
+                        <button
+                          key={action.key}
+                          type="button"
+                          className={
+                            action.danger ? "btn-ghost is-danger-text" : "btn-ghost"
+                          }
+                          disabled={busy}
+                          onClick={action.onSelect}
+                        >
+                          {action.label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  {hasExpand ? (
+                    <div className="company-member-mobile-expand">
+                      {memberExpanded(member)}
+                    </div>
+                  ) : null}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
-                if (canManage && !isYou && !isOwnerRow && member.public_id) {
-                  actions.push({
-                    key: "phone",
-                    label: editingPhone ? "Close phone" : "Change phone",
-                    onSelect: () => {
-                      setEditingId(null);
-                      setPhoneEditingId(editingPhone ? null : member.public_id || null);
-                    },
-                  });
-                  actions.push({
-                    key: "permissions",
-                    label: editing ? "Close permissions" : "Grant permissions",
-                    onSelect: () => {
-                      setPhoneEditingId(null);
-                      setEditingId(editing ? null : member.public_id || null);
-                    },
-                  });
-                  if (active) {
-                    actions.push({
-                      key: "disable",
-                      label: "Disable access",
-                      danger: true,
-                      onSelect: () => {
-                        if (
-                          !window.confirm(
-                            `Disable access for ${member.name || "this partner"}? They will not sync into this company on Fayda sign-in until re-enabled.`,
-                          )
-                        ) {
-                          return;
-                        }
-                        void setActive.mutateAsync({
-                          public_id: member.public_id!,
-                          active: false,
-                        });
-                      },
-                    });
-                  } else {
-                    actions.push({
-                      key: "enable",
-                      label: "Enable access",
-                      onSelect: () => {
-                        void setActive.mutateAsync({
-                          public_id: member.public_id!,
-                          active: true,
-                        });
-                      },
-                    });
+      <div className="portal-desktop-table">
+        <div className="data-table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Access</th>
+                <th>Fayda</th>
+                <th>Permissions</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {membersQuery.isLoading ? (
+                <tr>
+                  <td colSpan={8} className="data-table-empty">
+                    Loading members…
+                  </td>
+                </tr>
+              ) : rows.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="data-table-empty">
+                    No members found for this company yet.
+                  </td>
+                </tr>
+              ) : (
+                rows.flatMap((member, index) => {
+                  const id = member.public_id || `member-${index}`;
+                  const isYou =
+                    !!member.public_id && me?.public_id === member.public_id;
+                  const isOwnerRow = member.role === "owner" || member.is_owner;
+                  const active = member.is_active !== false;
+                  const editing = editingId === member.public_id;
+                  const editingPhone = phoneEditingId === member.public_id;
+                  const actions = memberActions(member);
+
+                  const mainRow = (
+                    <tr
+                      key={id}
+                      className={editing || editingPhone ? "is-editing" : undefined}
+                    >
+                      <td>
+                        <strong>{member.name || "—"}</strong>
+                        {isYou ? <span className="service-meta"> You</span> : null}
+                      </td>
+                      <td>{member.phone_number || "—"}</td>
+                      <td>{member.email || "—"}</td>
+                      <td>{isOwnerRow ? "Owner" : "Member"}</td>
+                      <td>
+                        <span
+                          className={`company-request-status ${
+                            active ? "is-approved" : "is-rejected"
+                          }`}
+                        >
+                          {active ? "Enabled" : "Disabled"}
+                        </span>
+                      </td>
+                      <td>
+                        {member.awaiting_fayda ? (
+                          <span className="company-request-status is-pending">
+                            Awaiting sign-in
+                          </span>
+                        ) : (
+                          <span className="company-request-status is-approved">
+                            Linked
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        {isOwnerRow ? (
+                          <span className="muted">Full access</span>
+                        ) : (member.permissions?.length ?? 0) === 0 ? (
+                          <span className="muted">None</span>
+                        ) : (
+                          <ul className="company-member-perm-chips">
+                            {(member.permissions ?? []).map((key) => (
+                              <li key={key}>{permissionLabel(key, catalog)}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </td>
+                      <td>
+                        <MemberActionsMenu actions={actions} busy={busy} />
+                      </td>
+                    </tr>
+                  );
+
+                  const hasExpand =
+                    detailsId === member.public_id ||
+                    phoneEditingId === member.public_id ||
+                    editingId === member.public_id;
+
+                  if (!hasExpand) {
+                    return [mainRow];
                   }
-                }
 
-                const mainRow = (
-                  <tr
-                    key={id}
-                    className={editing || editingPhone ? "is-editing" : undefined}
-                  >
-                    <td>
-                      <strong>{member.name || "—"}</strong>
-                      {isYou ? <span className="service-meta"> You</span> : null}
-                    </td>
-                    <td>{member.phone_number || "—"}</td>
-                    <td>{member.email || "—"}</td>
-                    <td>{isOwnerRow ? "Owner" : "Member"}</td>
-                    <td>
-                      <span
-                        className={`company-request-status ${
-                          active ? "is-approved" : "is-rejected"
-                        }`}
-                      >
-                        {active ? "Enabled" : "Disabled"}
-                      </span>
-                    </td>
-                    <td>
-                      {member.awaiting_fayda ? (
-                        <span className="company-request-status is-pending">
-                          Awaiting sign-in
-                        </span>
-                      ) : (
-                        <span className="company-request-status is-approved">
-                          Linked
-                        </span>
-                      )}
-                    </td>
-                    <td>
-                      {isOwnerRow ? (
-                        <span className="muted">Full access</span>
-                      ) : (member.permissions?.length ?? 0) === 0 ? (
-                        <span className="muted">None</span>
-                      ) : (
-                        <ul className="company-member-perm-chips">
-                          {(member.permissions ?? []).map((key) => (
-                            <li key={key}>{permissionLabel(key, catalog)}</li>
-                          ))}
-                        </ul>
-                      )}
-                    </td>
-                    <td>
-                      <MemberActionsMenu actions={actions} busy={busy} />
-                    </td>
-                  </tr>
-                );
-
-                const extraRows = [];
-
-                if (showDetails) {
-                  extraRows.push(
-                    <tr key={`${id}-details`} className="company-member-expand-row">
-                      <td colSpan={8}>
-                        <dl className="fayda-dl company-member-details-dl">
-                          <div>
-                            <dt>Gender</dt>
-                            <dd>{member.gender || "—"}</dd>
-                          </div>
-                          <div>
-                            <dt>Nationality</dt>
-                            <dd>{member.nationality || "—"}</dd>
-                          </div>
-                          <div>
-                            <dt>Birthdate</dt>
-                            <dd>{member.birthdate || "—"}</dd>
-                          </div>
-                          <div>
-                            <dt>ID type</dt>
-                            <dd>{member.identification_type || "—"}</dd>
-                          </div>
-                          <div>
-                            <dt>ID number</dt>
-                            <dd>{member.identification_number || "—"}</dd>
-                          </div>
-                        </dl>
-                      </td>
+                  return [
+                    mainRow,
+                    <tr key={`${id}-expand`} className="company-member-expand-row">
+                      <td colSpan={8}>{memberExpanded(member)}</td>
                     </tr>,
-                  );
-                }
-
-                if (editingPhone && member.public_id) {
-                  extraRows.push(
-                    <tr key={`${id}-phone`} className="company-member-expand-row">
-                      <td colSpan={8}>
-                        <PhoneEditor
-                          member={member}
-                          busy={busy}
-                          onCancel={() => setPhoneEditingId(null)}
-                          onSave={(phone_number) => {
-                            void updatePhone
-                              .mutateAsync({
-                                public_id: member.public_id!,
-                                phone_number,
-                              })
-                              .then(() => setPhoneEditingId(null));
-                          }}
-                        />
-                      </td>
-                    </tr>,
-                  );
-                }
-
-                if (editing && member.public_id) {
-                  extraRows.push(
-                    <tr key={`${id}-perms`} className="company-member-expand-row">
-                      <td colSpan={8}>
-                        <PermissionsEditor
-                          member={member}
-                          catalog={catalog}
-                          busy={busy}
-                          onCancel={() => setEditingId(null)}
-                          onSave={(permissions) => {
-                            void updatePermissions
-                              .mutateAsync({
-                                public_id: member.public_id!,
-                                permissions,
-                              })
-                              .then(() => setEditingId(null));
-                          }}
-                        />
-                      </td>
-                    </tr>,
-                  );
-                }
-
-                return [mainRow, ...extraRows];
-              })
-            )}
-          </tbody>
-        </table>
+                  ];
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="data-table-footer">
@@ -637,7 +738,7 @@ export function CompanyMembersTable({ enabled }: { enabled: boolean }) {
             : `${rows.length} member${rows.length === 1 ? "" : "s"}`}
           {membersQuery.isFetching && !membersQuery.isLoading ? " · Updating…" : ""}
         </p>
-        <p className="muted" style={{ margin: 0, maxWidth: "36rem", textAlign: "right" }}>
+        <p className="muted data-table-footer-note">
           {canManage
             ? "One partner (unique phone/email) can belong to many companies. Only Enabled access unlocks this company."
             : "Partners may also belong to other companies."}

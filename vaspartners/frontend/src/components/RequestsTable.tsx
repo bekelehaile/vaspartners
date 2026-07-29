@@ -31,7 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useServices, useTickets, type TicketFilters } from "@/hooks/use-contact";
+import { useServices, useTickets, useDeleteRejectedTicket, type TicketFilters } from "@/hooks/use-contact";
 import { statusCopy, type Ticket } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -68,6 +68,7 @@ export function RequestsTable({
   const [status, setStatus] = useState("");
   const [serviceId, setServiceId] = useState("");
   const [page, setPage] = useState(1);
+  const deleteRejected = useDeleteRejectedTicket();
 
   const filters: TicketFilters = {
     search,
@@ -84,6 +85,14 @@ export function RequestsTable({
   const total = data?.total ?? 0;
   const lastPage = data?.lastPage ?? 1;
   const currentPage = data?.currentPage ?? 1;
+
+  const onDeleteRejected = (ticket: Ticket) => {
+    const ok = window.confirm(
+      `Permanently delete rejected request ${ticket.tt_number}? This removes the request, messages, and all uploaded documents. This cannot be undone.`,
+    );
+    if (!ok) return;
+    void deleteRejected.mutateAsync(ticket.tt_number).catch(() => undefined);
+  };
 
   const columns = useMemo(
     () => [
@@ -138,20 +147,41 @@ export function RequestsTable({
       columnHelper.display({
         id: "actions",
         header: "",
-        cell: (info) => (
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7"
-            render={<Link href={`/portal/requests/${info.row.original.tt_number}`} />}
-            onClick={(e) => e.stopPropagation()}
-          >
-            View
-          </Button>
-        ),
+        cell: (info) => {
+          const ticket = info.row.original;
+          const canDelete = ticket.status === "rejected";
+          return (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7"
+                render={<Link href={`/portal/requests/${ticket.tt_number}`} />}
+                onClick={(e) => e.stopPropagation()}
+              >
+                View
+              </Button>
+              {canDelete && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 min-h-8 border-destructive/40 text-destructive hover:bg-destructive/10 sm:h-7"
+                  disabled={deleteRejected.isPending}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteRejected(ticket);
+                  }}
+                >
+                  Delete
+                </Button>
+              )}
+            </div>
+          );
+        },
       }),
     ],
-    [],
+    [deleteRejected.isPending],
   );
 
   const table = useReactTable({
@@ -258,6 +288,14 @@ export function RequestsTable({
         </div>
       )}
 
+      {deleteRejected.isError && (
+        <div className="alert mx-4 my-3" role="alert">
+          {deleteRejected.error instanceof Error
+            ? deleteRejected.error.message
+            : "Could not delete rejected request"}
+        </div>
+      )}
+
       <CardContent className="px-0">
         {isLoading ? (
           <Empty className="border-0 py-12">
@@ -295,28 +333,43 @@ export function RequestsTable({
             <ul className="portal-mobile-list">
               {items.map((ticket) => (
                 <li key={ticket.public_id || ticket.tt_number}>
-                  <button
-                    type="button"
-                    className="portal-mobile-card"
-                    onClick={() => router.push(`/portal/requests/${ticket.tt_number}`)}
-                  >
-                    <div className="portal-mobile-card-top">
-                      <div>
-                        <p className="portal-mobile-card-title">{ticket.tt_number}</p>
-                        {ticket.requisition?.name && (
-                          <p className="portal-mobile-card-meta">{ticket.requisition.name}</p>
-                        )}
+                  <div className="portal-mobile-card">
+                    <button
+                      type="button"
+                      className="portal-mobile-card-hit"
+                      onClick={() => router.push(`/portal/requests/${ticket.tt_number}`)}
+                    >
+                      <div className="portal-mobile-card-top">
+                        <div>
+                          <p className="portal-mobile-card-title">{ticket.tt_number}</p>
+                          {ticket.requisition?.name && (
+                            <p className="portal-mobile-card-meta">{ticket.requisition.name}</p>
+                          )}
+                        </div>
+                        <StatusPill status={ticket.status} />
                       </div>
-                      <StatusPill status={ticket.status} />
-                    </div>
-                    <div className="portal-mobile-card-row">
-                      <span>{ticket.service?.name ?? "—"}</span>
-                      <span>{formatSubmitted(ticket.created_at)}</span>
-                    </div>
-                    {ticket.contact?.name && (
-                      <p className="portal-mobile-card-meta">by {ticket.contact.name}</p>
+                      <div className="portal-mobile-card-row">
+                        <span>{ticket.service?.name ?? "—"}</span>
+                        <span>{formatSubmitted(ticket.created_at)}</span>
+                      </div>
+                      {ticket.contact?.name && (
+                        <p className="portal-mobile-card-meta">by {ticket.contact.name}</p>
+                      )}
+                    </button>
+                    {ticket.status === "rejected" && (
+                      <div className="portal-mobile-card-actions">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="border-destructive/40 text-destructive min-h-11"
+                          disabled={deleteRejected.isPending}
+                          onClick={() => onDeleteRejected(ticket)}
+                        >
+                          Delete
+                        </Button>
+                      </div>
                     )}
-                  </button>
+                  </div>
                 </li>
               ))}
             </ul>

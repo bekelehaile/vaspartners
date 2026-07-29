@@ -186,8 +186,23 @@ class ContactPortalController extends Controller
             'missing_count' => $attachment['missing_count'],
             'missing_names' => $attachment['missing_names'],
         ];
+        $payload['can_delete'] = $ticket->status === \App\Enums\TicketStatus::Rejected;
 
         return response()->json(['data' => $payload]);
+    }
+
+    public function destroyTicket(
+        Request $request,
+        Ticket $ticket,
+        CompanyMembershipService $membership,
+        \App\Services\TicketPurgeService $purge,
+    ) {
+        $stats = $purge->forcePurgeRejectedForContact($ticket, $request->user());
+
+        return response()->json([
+            'message' => 'Rejected request permanently deleted.',
+            'data' => $stats,
+        ]);
     }
 
     public function ticketMessages(Request $request, Ticket $ticket, TicketCommentService $comments, CompanyMembershipService $membership)

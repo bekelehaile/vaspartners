@@ -198,6 +198,7 @@ export type Ticket = {
     missing_count?: number;
     missing_names?: string[];
   };
+  can_delete?: boolean;
   contact_can_edit?: boolean;
   documents?: {
     id: number;

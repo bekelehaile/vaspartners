@@ -673,6 +673,25 @@ export function useCreateTicket() {
   });
 }
 
+export function useDeleteRejectedTicket() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (ttNumber: string) => {
+      const res = await api<{
+        message?: string;
+        data: { tt_number: string; documents: number; comments: number; files_removed: number };
+      }>(`/tickets/${encodeURIComponent(ttNumber)}`, { method: "DELETE" });
+      return res;
+    },
+    onSuccess: (_res, ttNumber) => {
+      queryClient.removeQueries({ queryKey: queryKeys.ticket(ttNumber) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.contact.tickets });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions });
+    },
+  });
+}
+
 export async function uploadTicketDocumentFile(
   publicId: string,
   documentTypeId: number,

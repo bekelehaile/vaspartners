@@ -445,7 +445,10 @@ class TicketWorkflowService
 
             $fresh = $ticket->fresh(['contact', 'service', 'requisition']);
             $approverId = $nextApprover->id;
-            DB::afterCommit(function () use ($fresh, $approverId) {
+            $notifyNote = $note;
+            DB::afterCommit(function () use ($fresh, $approverId, $notifyNote) {
+                $this->notifications->documentsPassed($fresh, $notifyNote);
+
                 $approver = User::query()->find($approverId);
                 if ($approver) {
                     $this->notifications->approvalNeeded($fresh, $approver);

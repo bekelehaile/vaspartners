@@ -1813,7 +1813,10 @@ class CompanyMembershipService
 
         $company->forceFill(['tin_validated' => true])->save();
 
-        return $company->fresh();
+        $fresh = $company->fresh();
+        $this->notifications->companyTinValidated($fresh);
+
+        return $fresh;
     }
 
     /**

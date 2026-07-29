@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   useContact,
@@ -40,6 +40,15 @@ export function TinValidationGate({ children }: { children: React.ReactNode }) {
     () => (company?.tin ? isValidEthiopianTin(company.tin) : false),
     [company?.tin],
   );
+
+  useEffect(() => {
+    if (!needsGate) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [needsGate]);
 
   if (!needsGate) {
     return <>{children}</>;
