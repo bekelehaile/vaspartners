@@ -422,10 +422,18 @@ class BulkMessageService
             ->orderBy('id')
             ->pluck('id');
 
-        // Stay under global SMS rate (~120/min): ~2 messages/second.
+        // Stay under global SMS rate (~120/min): ~2 messages/second via Queue::later.
         foreach ($ids->values() as $index => $id) {
-            SendBulkMessageRecipientJob::dispatch((int) $id)
-                ->delay(now()->addSeconds(intdiv((int) $index, 2)));
+            $delaySeconds = intdiv((int) $index, 2);
+            $job = new SendBulkMessageRecipientJob((int) $id);
+            if ($delaySeconds > 0) {
+                \Illuminate\Support\Facades\Queue::later(
+                    now()->addSeconds($delaySeconds),
+                    $job,
+                );
+            } else {
+                \Illuminate\Support\Facades\Queue::push($job);
+            }
         }
 
         if ($ids->isEmpty()) {
