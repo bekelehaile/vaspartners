@@ -169,15 +169,23 @@ export function SiteShell({
             )}
           </nav>
 
-          <button
-            type="button"
-            className="mobile-toggle"
-            aria-expanded={open}
-            aria-label={open ? "Close menu" : "Open menu"}
-            onClick={() => setOpen((v) => !v)}
-          >
-            {open ? "✕" : "☰"}
-          </button>
+          <div className="topbar-end">
+            {me ? (
+              <div className="portal-mobile-tools" aria-label="Account tools">
+                {me.profile_completed && <NotificationBell />}
+                <PortalSettingsMenu onLogout={onLogout} />
+              </div>
+            ) : null}
+            <button
+              type="button"
+              className="mobile-toggle"
+              aria-expanded={open}
+              aria-label={open ? "Close menu" : "Open menu"}
+              onClick={() => setOpen((v) => !v)}
+            >
+              {open ? "✕" : "☰"}
+            </button>
+          </div>
         </div>
 
         {open && (
@@ -189,7 +197,6 @@ export function SiteShell({
                     <PortalSidebar onNavigate={() => setOpen(false)} />
                     <div className="portal-header-actions portal-header-actions-mobile">
                       <CompanySwitcher me={me} variant="header" />
-                      {me.profile_completed && <NotificationBell />}
                     </div>
                     {onLogout && (
                       <button
@@ -217,7 +224,6 @@ export function SiteShell({
                     ))}
                     <div className="portal-header-actions portal-header-actions-mobile">
                       <CompanySwitcher me={me} variant="header" />
-                      {me.profile_completed && <NotificationBell />}
                     </div>
                     {onLogout && (
                       <button

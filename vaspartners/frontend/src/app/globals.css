@@ -193,7 +193,119 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.75rem;
+}
+
+.topbar-end {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.portal-mobile-tools {
+  display: none;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  margin-left: auto;
+  order: 0;
+}
+
+@media (max-width: 767.98px) {
+  .portal-mobile-tools {
+    display: inline-flex;
+  }
+
+  .topbar-end {
+    gap: 0.45rem;
+  }
+}
+
+@media (max-width: 959.98px) {
+  .site-portal-admin .portal-mobile-tools {
+    display: inline-flex;
+  }
+}
+
+@media (min-width: 960px) {
+  .site-portal-admin .portal-mobile-tools {
+    display: none;
+  }
+}
+
+.portal-mobile-tools .portal-account-btn {
+  width: 2.75rem;
+  min-width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  justify-content: center;
+}
+
+.portal-mobile-tools .portal-account-btn span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.portal-mobile-tools .notif-bell-btn {
+  width: 2.75rem;
+  height: 2.75rem;
+}
+
+.portal-mobile-tools .notif-bell,
+.portal-mobile-tools .portal-settings {
+  position: relative;
+}
+
+/*
+ * Anchor account + notification menus to the right of the viewport on mobile
+ * (icons sit in the top-right cluster next to the hamburger).
+ */
+@media (max-width: 767.98px) {
+  .portal-mobile-tools .notif-panel,
+  .portal-mobile-tools .portal-settings-menu {
+    position: fixed;
+    top: calc(4rem + 0.35rem);
+    right: max(0.75rem, env(safe-area-inset-right, 0px));
+    left: auto;
+    width: min(24.5rem, calc(100vw - 1.5rem));
+    max-height: min(70dvh, 28rem);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    z-index: 80;
+  }
+
+  .portal-mobile-tools .notif-cta {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 959.98px) {
+  .site-portal-admin .portal-mobile-tools .notif-panel,
+  .site-portal-admin .portal-mobile-tools .portal-settings-menu {
+    position: fixed;
+    top: calc(4rem + 0.35rem);
+    right: max(0.75rem, env(safe-area-inset-right, 0px));
+    left: auto;
+    width: min(24.5rem, calc(100vw - 1.5rem));
+    max-height: min(70dvh, 28rem);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    z-index: 80;
+  }
+
+  .site-portal-admin .portal-mobile-tools .notif-cta {
+    opacity: 1;
+  }
 }
 
 @media (min-width: 640px) {
@@ -4567,6 +4679,12 @@ button.bg-primary:hover {
   .journey-option-list-cols {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.75rem;
+  }
+}
+
+@media (min-width: 960px) {
+  .journey-option-list-cols {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 

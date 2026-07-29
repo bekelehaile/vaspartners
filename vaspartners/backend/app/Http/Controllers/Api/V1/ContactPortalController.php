@@ -259,12 +259,9 @@ class ContactPortalController extends Controller
                 ]);
             }
             $data['category_id'] = $requestedGroupId;
-        } elseif ($groupIds->count() === 1) {
+        } elseif ($groupIds->isNotEmpty()) {
+            // Groups are internal routing — partners do not choose; use the first assigned group.
             $data['category_id'] = $groupIds->first();
-        } elseif ($groupIds->count() > 1) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
-                'category_id' => 'Select a group for this request (this service belongs to more than one group).',
-            ]);
         } else {
             $data['category_id'] = $service->category_id;
         }

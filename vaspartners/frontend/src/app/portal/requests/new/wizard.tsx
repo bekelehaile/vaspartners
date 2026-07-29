@@ -36,11 +36,6 @@ function serviceGroups(service?: Service | null): NonNullable<Service["categorie
   return service.category ? [service.category] : [];
 }
 
-function groupsLabel(service?: Service | null): string {
-  const names = serviceGroups(service).map((g) => g.name).filter(Boolean);
-  return names.length ? names.join(", ") : "";
-}
-
 function isAliveSubscription(sub: Subscription): boolean {
   return ALIVE_STATUSES.has(String(sub.status || "").toLowerCase());
 }
@@ -217,8 +212,6 @@ export default function NewRequestWizard() {
     services.find((s) => s.id === manageServiceId) ||
     manageOneOffServices.find((s) => String(s.id) === String(serviceId));
   const activeService = intent === "manage" ? selectedManage : selectedSubscribe;
-  const availableGroups = serviceGroups(activeService);
-  const needsGroupPick = availableGroups.length > 1;
   const managingOneOff = !!selectedManage && selectedManage.is_subscription_based === false;
   const starterTypes = selectedSubscribe ? starterRequisitions(selectedSubscribe) : [];
   const manageTypes = selectedManage ? manageRequisitions(selectedManage) : [];
@@ -237,21 +230,20 @@ export default function NewRequestWizard() {
       ? confirmDocsSuccess && !confirmDocsLoading && !confirmDocsError
       : true) && requiredAttachmentsReady(confirmRequirements, stagedFiles);
 
-  // Keep category_id aligned with the selected service's groups.
+  // Keep category_id aligned with the selected service's groups (internal routing only).
   useEffect(() => {
     if (!activeService) {
       if (categoryId) form.setFieldValue("category_id", "");
       return;
     }
     const groups = serviceGroups(activeService);
-    if (groups.length === 1) {
-      const only = String(groups[0].id);
-      if (categoryId !== only) form.setFieldValue("category_id", only);
+    if (!groups.length) {
+      if (categoryId) form.setFieldValue("category_id", "");
       return;
     }
-    if (groups.length > 1 && categoryId && !groups.some((g) => String(g.id) === String(categoryId))) {
-      form.setFieldValue("category_id", "");
-    }
+    // Partners never pick a group — default to the first assigned group.
+    const pick = String(groups[0].id);
+    if (categoryId !== pick) form.setFieldValue("category_id", pick);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sync group pick
   }, [activeService?.id, categoryId, intent, serviceId, subscriptionId]);
 
@@ -720,7 +712,6 @@ export default function NewRequestWizard() {
                                 {s.renewal_interval === "bi_yearly"
                                   ? "Bi-yearly renewal"
                                   : "Yearly renewal"}
-                                {groupsLabel(s) ? ` · ${groupsLabel(s)}` : ""}
                               </span>
                             </button>
                           );
@@ -757,41 +748,7 @@ export default function NewRequestWizard() {
                             ?.name || "New subscription"}
                         </dd>
                       </div>
-                      {availableGroups.length > 0 && (
-                        <div>
-                          <dt>Group</dt>
-                          <dd>{groupsLabel(selectedSubscribe) || "—"}</dd>
-                        </div>
-                      )}
                     </dl>
-                    {needsGroupPick && (
-                      <form.Field name="category_id">
-                        {(field) => (
-                          <div className="field field-span">
-                            <label>
-                              Handling group <span className="req">*</span>
-                            </label>
-                            <div className="journey-option-list" role="listbox" aria-label="Handling group">
-                              {availableGroups.map((g) => (
-                                <button
-                                  key={g.id}
-                                  type="button"
-                                  role="option"
-                                  aria-selected={String(field.state.value) === String(g.id)}
-                                  className={`journey-option${
-                                    String(field.state.value) === String(g.id) ? " is-selected" : ""
-                                  }`}
-                                  onClick={() => field.handleChange(String(g.id))}
-                                >
-                                  <strong>{g.name}</strong>
-                                  <span>Route this request to {g.name}</span>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </form.Field>
-                    )}
                     <form.Field name="description">
                       {(field) => (
                         <div className="field field-span">
@@ -825,7 +782,6 @@ export default function NewRequestWizard() {
                           !serviceId ||
                           !requisitionId ||
                           !description.trim() ||
-                          (needsGroupPick && !categoryId) ||
                           !attachmentsReady
                         }
                       >
@@ -934,10 +890,7 @@ export default function NewRequestWizard() {
                               }}
                             >
                               <strong>{s.name}</strong>
-                              <span>
-                                No subscription required
-                                {groupsLabel(s) ? ` · ${groupsLabel(s)}` : ""}
-                              </span>
+                              <span>No subscription required</span>
                             </button>
                           );
                         })}
@@ -1048,41 +1001,7 @@ export default function NewRequestWizard() {
                             ?.name || "—"}
                         </dd>
                       </div>
-                      {availableGroups.length > 0 && (
-                        <div>
-                          <dt>Group</dt>
-                          <dd>{groupsLabel(selectedManage) || "—"}</dd>
-                        </div>
-                      )}
                     </dl>
-                    {needsGroupPick && (
-                      <form.Field name="category_id">
-                        {(field) => (
-                          <div className="field field-span">
-                            <label>
-                              Handling group <span className="req">*</span>
-                            </label>
-                            <div className="journey-option-list" role="listbox" aria-label="Handling group">
-                              {availableGroups.map((g) => (
-                                <button
-                                  key={g.id}
-                                  type="button"
-                                  role="option"
-                                  aria-selected={String(field.state.value) === String(g.id)}
-                                  className={`journey-option${
-                                    String(field.state.value) === String(g.id) ? " is-selected" : ""
-                                  }`}
-                                  onClick={() => field.handleChange(String(g.id))}
-                                >
-                                  <strong>{g.name}</strong>
-                                  <span>Route this request to {g.name}</span>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </form.Field>
-                    )}
                     <form.Field name="description">
                       {(field) => (
                         <div className="field field-span">
@@ -1121,7 +1040,6 @@ export default function NewRequestWizard() {
                           !requisitionId ||
                           (!managingOneOff && !subscriptionId) ||
                           !description.trim() ||
-                          (needsGroupPick && !categoryId) ||
                           !attachmentsReady
                         }
                       >
