@@ -24,15 +24,16 @@ class TicketsByStatusChart extends ChartWidget
 
     protected function getData(): array
     {
-        $query = $this->applyDashboardTicketFilters(TicketResource::getEloquentQuery());
-
         $labels = [];
         $data = [];
         $colors = [];
 
         foreach (TicketStatus::cases() as $status) {
+            $query = TicketResource::getEloquentQuery();
+            $this->applyDashboardTicketStatusFilters($query, $status);
+
             $labels[] = $status->label();
-            $data[] = (clone $query)->where('status', $status)->count();
+            $data[] = $query->count();
             $colors[] = match ($status) {
                 TicketStatus::Open => '#f59e0b',
                 TicketStatus::InProgress => '#3b82f6',
@@ -62,13 +63,23 @@ class TicketsByStatusChart extends ChartWidget
 
     public function getHeading(): ?string
     {
-        $parts = ['Tickets by status'];
-        $filters = $this->dashboardFilters();
-
-        if (filled($filters['service_id'] ?? null) || $this->hasCustomDateRange()) {
-            $parts[] = '(filtered)';
+        if ($this->hasCustomDateRange()) {
+            return 'Tickets by status (event time in range)';
         }
 
-        return implode(' ', $parts);
+        if (filled($this->dashboardFilters()['service_id'] ?? null)) {
+            return 'Tickets by status (live · service filtered)';
+        }
+
+        return 'Tickets by status (live)';
+    }
+
+    public function getDescription(): ?string
+    {
+        if (! $this->hasCustomDateRange()) {
+            return 'Current queue by status. Set a date range to use created_at / assigned_at / completed_at / closed_at / rejected_at per status.';
+        }
+
+        return 'Open→created_at · In progress→assigned_at · Completed→completed_at · Closed→closed_at · Rejected→rejected_at';
     }
 }

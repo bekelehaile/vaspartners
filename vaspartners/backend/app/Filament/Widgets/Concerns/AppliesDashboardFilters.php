@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets\Concerns;
 
+use App\Enums\TicketStatus;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -14,6 +15,20 @@ trait AppliesDashboardFilters
     protected function dashboardFilters(): array
     {
         return $this->pageFilters ?? [];
+    }
+
+    /**
+     * Event timestamp that defines each ticket status for period KPIs.
+     */
+    protected function ticketEventColumnForStatus(TicketStatus $status): string
+    {
+        return match ($status) {
+            TicketStatus::Open => 'created_at',
+            TicketStatus::InProgress => 'assigned_at',
+            TicketStatus::Completed => 'completed_at',
+            TicketStatus::Closed => 'closed_at',
+            TicketStatus::Rejected => 'rejected_at',
+        };
     }
 
     protected function applyDashboardDateFilter(Builder $query, string $column = 'created_at'): Builder
@@ -42,6 +57,53 @@ trait AppliesDashboardFilters
         return $query;
     }
 
+    /**
+     * Service filter only — for live operational queues (open / in progress / awaiting approval).
+     */
+    protected function applyDashboardLiveTicketFilters(Builder $query): Builder
+    {
+        return $this->applyDashboardServiceFilter($query);
+    }
+
+    /**
+     * Period (or today) filter on a specific event timestamp.
+     * Requires the column to be set so rows without that event are excluded.
+     */
+    protected function applyDashboardEventDateFilter(Builder $query, string $column, bool $defaultToToday = true): Builder
+    {
+        $query->whereNotNull($column);
+
+        if ($this->hasCustomDateRange()) {
+            $this->applyDashboardDateFilter($query, $column);
+        } elseif ($defaultToToday) {
+            $query->whereDate($column, today());
+        }
+
+        return $query;
+    }
+
+    /**
+     * Count tickets in a status using that status's own event timestamp when a date range is set.
+     * Without a date range: live current status (no date filter).
+     */
+    protected function applyDashboardTicketStatusFilters(Builder $query, TicketStatus $status): Builder
+    {
+        $this->applyDashboardServiceFilter($query);
+        $query->where('status', $status);
+
+        if ($this->hasCustomDateRange()) {
+            $column = $this->ticketEventColumnForStatus($status);
+            $query->whereNotNull($column);
+            $this->applyDashboardDateFilter($query, $column);
+        }
+
+        return $query;
+    }
+
+    /**
+     * @deprecated Prefer applyDashboardLiveTicketFilters / applyDashboardTicketStatusFilters /
+     *             applyDashboardEventDateFilter so each KPI uses the correct timestamp.
+     */
     protected function applyDashboardTicketFilters(Builder $query, string $dateColumn = 'created_at'): Builder
     {
         $this->applyDashboardDateFilter($query, $dateColumn);

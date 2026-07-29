@@ -44,7 +44,7 @@ class Dashboard extends BaseDashboard
     {
         return $schema->components([
             Section::make('Filters')
-                ->description('Date & service narrow tickets and revenue. Partner / subscription / feedback cards stay current-period snapshots.')
+                ->description('Date uses each event stamp: Pending→created_at · In progress→assigned_at · Completed/Closed/Rejected→*_at · Approved changes→reviewed_at. My approvals stay live.')
                 ->schema([
                     DatePicker::make('start_date')
                         ->label('From')

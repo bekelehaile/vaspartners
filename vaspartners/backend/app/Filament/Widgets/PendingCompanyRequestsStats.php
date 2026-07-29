@@ -25,50 +25,49 @@ class PendingCompanyRequestsStats extends StatsOverviewWidget
 
     protected function getStats(): array
     {
-        $base = CompanyChangeRequest::query();
-        // Change requests are not service-scoped; date filter still applies.
-        $this->applyDashboardDateFilter($base, 'created_at');
+        // Pending change requests use created_at when a date range is set; otherwise live queue.
+        $pendingBase = CompanyChangeRequest::query()
+            ->where('status', CompanyChangeStatus::Pending);
+        if ($this->hasCustomDateRange()) {
+            $this->applyDashboardDateFilter($pendingBase, 'created_at');
+        }
 
-        $pendingTransfers = (clone $base)
-            ->where('status', CompanyChangeStatus::Pending)
+        $pendingTransfers = (clone $pendingBase)
             ->where('type', CompanyChangeType::TransferOwnership)
             ->count();
-        $pendingJoins = (clone $base)
-            ->where('status', CompanyChangeStatus::Pending)
+        $pendingJoins = (clone $pendingBase)
             ->where('type', CompanyChangeType::Attach)
             ->count();
-        $pendingLeave = (clone $base)
-            ->where('status', CompanyChangeStatus::Pending)
+        $pendingLeave = (clone $pendingBase)
             ->where('type', CompanyChangeType::Detach)
             ->count();
 
+        // Approved outcomes use reviewed_at (not created_at).
         $approvedQuery = CompanyChangeRequest::query()
             ->where('status', CompanyChangeStatus::Approved);
-        if ($this->hasCustomDateRange()) {
-            $this->applyDashboardDateFilter($approvedQuery, 'reviewed_at');
-            $approvedLabel = 'Approved in range';
-        } else {
-            $approvedQuery->whereDate('reviewed_at', today());
-            $approvedLabel = 'Approved today';
-        }
+        $this->applyDashboardEventDateFilter($approvedQuery, 'reviewed_at', defaultToToday: true);
+        $approvedLabel = $this->hasCustomDateRange() ? 'Approved in range' : 'Approved today';
+
+        $pendingHint = $this->hasCustomDateRange() ? 'created_at in range' : 'Pending queue';
 
         return [
             Stat::make('Ownership transfers', $pendingTransfers)
-                ->description('Pending — admin must decide')
+                ->description($pendingHint.' — admin must decide')
                 ->descriptionIcon(Heroicon::OutlinedBuildingOffice2)
                 ->color($pendingTransfers > 0 ? 'warning' : 'gray')
                 ->url(CompanyChangeRequestResource::getUrl('index').'?tab=ownership'),
             Stat::make('Membership joins', $pendingJoins)
-                ->description('Pending — owner decides in portal')
+                ->description($pendingHint.' — owner decides in portal')
                 ->descriptionIcon(Heroicon::OutlinedUserPlus)
                 ->color($pendingJoins > 0 ? 'info' : 'gray')
                 ->url(CompanyChangeRequestResource::getUrl('index').'?tab=membership'),
             Stat::make('Leave company', $pendingLeave)
-                ->description('Pending detach requests')
+                ->description($pendingHint.' — detach requests')
                 ->descriptionIcon(Heroicon::OutlinedArrowRightStartOnRectangle)
                 ->color($pendingLeave > 0 ? 'warning' : 'gray')
                 ->url(CompanyChangeRequestResource::getUrl('index').'?tab=leave'),
             Stat::make($approvedLabel, $approvedQuery->count())
+                ->description($this->hasCustomDateRange() ? 'reviewed_at in range' : 'reviewed_at today')
                 ->descriptionIcon(Heroicon::OutlinedCheckCircle)
                 ->color('success')
                 ->url(CompanyChangeRequestResource::getUrl('index').'?tab=approved'),
