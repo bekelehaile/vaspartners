@@ -13,7 +13,15 @@ use Illuminate\Support\Collection;
  * Account manager (handler) performance for the Reports section.
  *
  * Grain: current ticket assignee (`assigned_to_user_id`).
- * Period metrics use assigned_at / completed_at / rejected_at / closed_at.
+ *
+ * Each KPI uses its matching status + event timestamp (no double counting):
+ * - Assigned  → assigned_at
+ * - Completed → status=completed + completed_at
+ * - Closed    → status=closed + closed_at
+ * - Rejected  → status=rejected + rejected_at
+ * - Cycle     → outcome timestamp − assigned_at (per outcome type)
+ * - Pickup    → assigned_at − created_at
+ * - Backlog   → live open/in_progress (age from assigned_at, else created_at)
  */
 class AccountManagerPerformanceService
 {
@@ -43,10 +51,11 @@ class AccountManagerPerformanceService
         $serviceId = isset($filters['service_id']) ? (int) $filters['service_id'] : 0;
         $userId = isset($filters['user_id']) ? (int) $filters['user_id'] : 0;
 
-        $openStatuses = [
-            TicketStatus::Open->value,
-            TicketStatus::InProgress->value,
-        ];
+        $open = TicketStatus::Open->value;
+        $inProgress = TicketStatus::InProgress->value;
+        $completed = TicketStatus::Completed->value;
+        $closed = TicketStatus::Closed->value;
+        $rejected = TicketStatus::Rejected->value;
         $passed = DocumentReviewStatus::Passed->value;
         $failed = DocumentReviewStatus::Failed->value;
 
@@ -57,36 +66,77 @@ class AccountManagerPerformanceService
 
         $aggregates = $query
             ->select('assigned_to_user_id')
+            // Live workload — not period-bound.
             ->selectRaw(
-                "count(*) filter (where status in (?, ?)) as backlog",
-                $openStatuses,
+                'count(*) filter (where status in (?, ?)) as backlog',
+                [$open, $inProgress],
             )
+            // Assigned in period → assigned_at only.
             ->selectRaw(
-                'count(*) filter (where assigned_at is not null and assigned_at >= ? and assigned_at < ?) as assigned_in_period',
+                'count(*) filter (
+                    where assigned_at is not null
+                      and assigned_at >= ?
+                      and assigned_at < ?
+                ) as assigned_in_period',
                 [$start, $end],
             )
+            // Completed in period → status + completed_at (never credit closed rows here).
             ->selectRaw(
-                'count(*) filter (where completed_at is not null and completed_at >= ? and completed_at < ?) as completed',
-                [$start, $end],
-            )
-            ->selectRaw(
-                'count(*) filter (where closed_at is not null and closed_at >= ? and closed_at < ?) as closed',
-                [$start, $end],
-            )
-            ->selectRaw(
-                'count(*) filter (where rejected_at is not null and rejected_at >= ? and rejected_at < ?) as rejected',
-                [$start, $end],
-            )
-            ->selectRaw(
-                'avg(extract(epoch from (completed_at - assigned_at)) / 3600.0) filter (
-                    where completed_at is not null
-                      and assigned_at is not null
+                'count(*) filter (
+                    where status = ?
+                      and completed_at is not null
                       and completed_at >= ?
                       and completed_at < ?
-                      and completed_at > assigned_at
-                ) as avg_cycle_hours',
-                [$start, $end],
+                ) as completed',
+                [$completed, $start, $end],
             )
+            // Closed in period → status + closed_at.
+            ->selectRaw(
+                'count(*) filter (
+                    where status = ?
+                      and closed_at is not null
+                      and closed_at >= ?
+                      and closed_at < ?
+                ) as closed',
+                [$closed, $start, $end],
+            )
+            // Rejected in period → status + rejected_at.
+            ->selectRaw(
+                'count(*) filter (
+                    where status = ?
+                      and rejected_at is not null
+                      and rejected_at >= ?
+                      and rejected_at < ?
+                ) as rejected',
+                [$rejected, $start, $end],
+            )
+            // Cycle: each outcome uses its own end stamp vs assigned_at.
+            ->selectRaw(
+                'avg(
+                    extract(epoch from (
+                        case
+                            when status = ? then completed_at
+                            when status = ? then closed_at
+                            when status = ? then rejected_at
+                        end
+                        - assigned_at
+                    )) / 3600.0
+                ) filter (
+                    where assigned_at is not null
+                      and (
+                        (status = ? and completed_at is not null and completed_at >= ? and completed_at < ? and completed_at >= assigned_at)
+                        or (status = ? and closed_at is not null and closed_at >= ? and closed_at < ? and closed_at >= assigned_at)
+                        or (status = ? and rejected_at is not null and rejected_at >= ? and rejected_at < ? and rejected_at >= assigned_at)
+                      )
+                ) as avg_cycle_hours',
+                [
+                    $completed, $closed, $rejected,
+                    $completed, $start, $end,
+                    $closed, $start, $end,
+                    $rejected, $start, $end,
+                ],
+            )
+            // Pickup: create → assign (assigned_at window).
             ->selectRaw(
                 'avg(extract(epoch from (assigned_at - created_at)) / 3600.0) filter (
                     where assigned_at is not null
@@ -96,29 +146,33 @@ class AccountManagerPerformanceService
                 ) as avg_pickup_hours',
                 [$start, $end],
             )
+            // Oldest live backlog age from assigned_at (handler clock), else created_at.
             ->selectRaw(
-                "max(extract(epoch from (now() - coalesce(assigned_at, created_at))) / 3600.0) filter (
+                'max(extract(epoch from (now() - coalesce(assigned_at, created_at))) / 3600.0) filter (
                     where status in (?, ?)
-                ) as oldest_backlog_hours",
-                $openStatuses,
+                ) as oldest_backlog_hours',
+                [$open, $inProgress],
+            )
+            // Doc quality on terminal approvals in period (completed or closed — each uses own stamp).
+            ->selectRaw(
+                'count(*) filter (
+                    where document_review_status = ?
+                      and (
+                        (status = ? and completed_at is not null and completed_at >= ? and completed_at < ?)
+                        or (status = ? and closed_at is not null and closed_at >= ? and closed_at < ?)
+                      )
+                ) as docs_passed',
+                [$passed, $completed, $start, $end, $closed, $start, $end],
             )
             ->selectRaw(
-                "count(*) filter (
-                    where completed_at is not null
-                      and completed_at >= ?
-                      and completed_at < ?
-                      and document_review_status = ?
-                ) as docs_passed",
-                [$start, $end, $passed],
-            )
-            ->selectRaw(
-                "count(*) filter (
-                    where completed_at is not null
-                      and completed_at >= ?
-                      and completed_at < ?
-                      and document_review_status = ?
-                ) as docs_failed",
-                [$start, $end, $failed],
+                'count(*) filter (
+                    where document_review_status = ?
+                      and (
+                        (status = ? and completed_at is not null and completed_at >= ? and completed_at < ?)
+                        or (status = ? and closed_at is not null and closed_at >= ? and closed_at < ?)
+                      )
+                ) as docs_failed',
+                [$failed, $completed, $start, $end, $closed, $start, $end],
             )
             ->groupBy('assigned_to_user_id')
             ->get()
@@ -142,14 +196,16 @@ class AccountManagerPerformanceService
                     return null;
                 }
 
-                $completed = (int) $row->completed;
-                $rejected = (int) $row->rejected;
-                $closed = (int) $row->closed;
-                $outcomes = $completed + $rejected + $closed;
+                $completedCount = (int) $row->completed;
+                $rejectedCount = (int) $row->rejected;
+                $closedCount = (int) $row->closed;
+                $outcomes = $completedCount + $rejectedCount + $closedCount;
+                $positive = $completedCount + $closedCount;
                 $docsReviewed = (int) $row->docs_passed + (int) $row->docs_failed;
 
-                $completionRate = $outcomes > 0 ? round(($completed / $outcomes) * 100, 1) : null;
-                $rejectionRate = $outcomes > 0 ? round(($rejected / $outcomes) * 100, 1) : null;
+                // Positive resolution = completed or closed (rejected is the only negative outcome).
+                $completionRate = $outcomes > 0 ? round(($positive / $outcomes) * 100, 1) : null;
+                $rejectionRate = $outcomes > 0 ? round(($rejectedCount / $outcomes) * 100, 1) : null;
                 $docPassRate = $docsReviewed > 0
                     ? round(((int) $row->docs_passed / $docsReviewed) * 100, 1)
                     : null;
@@ -157,10 +213,9 @@ class AccountManagerPerformanceService
                 $avgCycle = $row->avg_cycle_hours !== null ? round((float) $row->avg_cycle_hours, 1) : null;
                 $avgPickup = $row->avg_pickup_hours !== null ? round((float) $row->avg_pickup_hours, 1) : null;
 
-                // Higher is better: reward throughput & completion; penalize backlog, slow cycle, rejections.
                 $throughputScore = $this->throughputScore(
                     backlog: (int) $row->backlog,
-                    completed: $completed,
+                    completed: $positive,
                     avgCycleHours: $avgCycle,
                     rejectionRate: $rejectionRate,
                     completionRate: $completionRate,
@@ -172,9 +227,9 @@ class AccountManagerPerformanceService
                     'email' => (string) ($user->email ?: ''),
                     'backlog' => (int) $row->backlog,
                     'assigned_in_period' => (int) $row->assigned_in_period,
-                    'completed' => $completed,
-                    'closed' => $closed,
-                    'rejected' => $rejected,
+                    'completed' => $completedCount,
+                    'closed' => $closedCount,
+                    'rejected' => $rejectedCount,
                     'avg_cycle_hours' => $avgCycle,
                     'avg_pickup_hours' => $avgPickup,
                     'oldest_backlog_hours' => $row->oldest_backlog_hours !== null
@@ -209,7 +264,6 @@ class AccountManagerPerformanceService
     public function teamSummary(array $filters = []): array
     {
         $rows = $this->rows($filters);
-        [$start, $end] = $this->resolvePeriod($filters['start'] ?? null, $filters['end'] ?? null);
         $serviceId = isset($filters['service_id']) ? (int) $filters['service_id'] : 0;
 
         $completed = (int) $rows->sum('completed');
@@ -217,14 +271,17 @@ class AccountManagerPerformanceService
         $closed = (int) $rows->sum('closed');
         $outcomes = $completed + $rejected + $closed;
 
-        $cycleSamples = $rows->filter(fn (array $r) => $r['avg_cycle_hours'] !== null && $r['completed'] > 0);
+        $cycleWeightKey = fn (array $r): int => $r['completed'] + $r['closed'] + $r['rejected'];
+        $cycleSamples = $rows->filter(
+            fn (array $r) => $r['avg_cycle_hours'] !== null && $cycleWeightKey($r) > 0,
+        );
         $pickupSamples = $rows->filter(fn (array $r) => $r['avg_pickup_hours'] !== null && $r['assigned_in_period'] > 0);
 
         $weightedCycle = null;
         if ($cycleSamples->isNotEmpty()) {
-            $weight = $cycleSamples->sum('completed');
+            $weight = $cycleSamples->sum($cycleWeightKey);
             $weightedCycle = $weight > 0
-                ? round($cycleSamples->sum(fn (array $r) => $r['avg_cycle_hours'] * $r['completed']) / $weight, 1)
+                ? round($cycleSamples->sum(fn (array $r) => $r['avg_cycle_hours'] * $cycleWeightKey($r)) / $weight, 1)
                 : null;
         }
 
@@ -236,14 +293,11 @@ class AccountManagerPerformanceService
                 : null;
         }
 
+        // Live unassigned open queue (not period-created — that skewed the KPI).
         $unassigned = Ticket::query()
             ->where('status', TicketStatus::Open)
             ->whereNull('assigned_to_user_id')
             ->when($serviceId > 0, fn ($q) => $q->where('service_id', $serviceId))
-            ->when(
-                true,
-                fn ($q) => $q->whereBetween('created_at', [$start, $end]),
-            )
             ->count();
 
         return [
@@ -272,14 +326,14 @@ class AccountManagerPerformanceService
             'Email',
             'Throughput score',
             'Backlog (open/in progress)',
-            'Assigned in period',
-            'Completed',
-            'Closed',
-            'Rejected',
+            'Assigned in period (assigned_at)',
+            'Completed (completed_at)',
+            'Closed (closed_at)',
+            'Rejected (rejected_at)',
             'Completion rate %',
             'Rejection rate %',
-            'Avg cycle hours',
-            'Avg pickup hours',
+            'Avg cycle hours (assign→outcome)',
+            'Avg pickup hours (create→assign)',
             'Oldest backlog hours',
             'Doc pass rate %',
         ]);

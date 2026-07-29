@@ -677,6 +677,8 @@ class TicketWorkflowService
             $this->assertRequiredDocumentsUploaded($ticket);
 
             $ticket->assigned_to_user_id = $assignee->id;
+            // Handler clock starts on assign (reassignment resets for realistic pickup/cycle KPIs).
+            $ticket->assigned_at = now();
             $ticket->priority_id = $priorityId ?? $ticket->priority_id;
             $ticket->escalated_at = now();
             $ticket->current_approver_user_id = null;

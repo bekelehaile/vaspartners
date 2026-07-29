@@ -47,23 +47,23 @@ class AccountManagerPerformanceOverview extends StatsOverviewWidget
                 ->color($summary['backlog'] > 0 ? 'warning' : 'success')
                 ->url($this->ticketsUrl('backlog', $handlerId)),
             Stat::make('Completed', $summary['completed'])
-                ->description('Completed in period (team)')
+                ->description('completed_at in period')
                 ->descriptionIcon(Heroicon::OutlinedCheckCircle)
                 ->color('success')
                 ->url($this->ticketsUrl('completed', $handlerId)),
             Stat::make('Closed', $summary['closed'] ?? 0)
-                ->description('Closed in period (team)')
+                ->description('closed_at in period')
                 ->descriptionIcon(Heroicon::OutlinedArchiveBox)
                 ->color('gray')
                 ->url($this->ticketsUrl('closed', $handlerId)),
             Stat::make('Avg cycle', $cycle !== null ? $cycle.' h' : '—')
-                ->description('Assign → complete')
+                ->description('assigned_at → outcome stamp')
                 ->color($cycle !== null && $cycle > 72 ? 'danger' : 'gray'),
             Stat::make('Avg pickup', $pickup !== null ? $pickup.' h' : '—')
-                ->description('Create → assign')
+                ->description('created_at → assigned_at')
                 ->color($pickup !== null && $pickup > 24 ? 'warning' : 'gray'),
             Stat::make('Rejection rate', $reject !== null ? $reject.'%' : '—')
-                ->description('Of period outcomes')
+                ->description('rejected_at outcomes in period')
                 ->color($reject !== null && $reject >= 20 ? 'danger' : 'gray')
                 ->url($this->ticketsUrl('rejected', $handlerId)),
         ];
