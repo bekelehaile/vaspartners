@@ -28,6 +28,7 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
+use Filament\Support\Enums\FontWeight;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -97,13 +98,45 @@ class TicketResource extends Resource
                         default => 'gray',
                     }),
                 TextEntry::make('document_review_status')
-                    ->label('Document review')
+                    ->label('Doc review')
                     ->badge()
-                    ->placeholder('—'),
+                    ->placeholder('—')
+                    ->formatStateUsing(function (Ticket $record, $state): string {
+                        if ($record->attachmentStatus()['state'] === 'none_required') {
+                            return 'Not needed';
+                        }
+
+                        if ($state instanceof DocumentReviewStatus) {
+                            return $state->label();
+                        }
+
+                        return DocumentReviewStatus::tryFrom((string) $state)?->label() ?? (string) ($state ?: '—');
+                    })
+                    ->color(function (Ticket $record, $state): string {
+                        if ($record->attachmentStatus()['state'] === 'none_required') {
+                            return 'gray';
+                        }
+
+                        $status = $state instanceof DocumentReviewStatus
+                            ? $state
+                            : DocumentReviewStatus::tryFrom((string) $state);
+
+                        return match ($status) {
+                            DocumentReviewStatus::Passed => 'success',
+                            DocumentReviewStatus::Failed => 'danger',
+                            DocumentReviewStatus::Pending => 'warning',
+                            default => 'gray',
+                        };
+                    }),
                 TextEntry::make('missing_attachments')
                     ->label('Missing required docs')
                     ->state(function (Ticket $record): string {
-                        $names = $record->attachmentStatus()['missing_names'] ?? [];
+                        $status = $record->attachmentStatus();
+                        if ($status['state'] === 'none_required') {
+                            return 'None — this request type has no required documents';
+                        }
+
+                        $names = $status['missing_names'] ?? [];
 
                         return $names === [] ? 'None — all required docs on file' : implode(', ', $names);
                     })
@@ -117,9 +150,20 @@ class TicketResource extends Resource
                 TextEntry::make('contact.name')
                     ->label('Contact')
                     ->placeholder('—')
+                    ->icon(fn (Ticket $record): ?string => $record->contact
+                        ? 'heroicon-m-arrow-top-right-on-square'
+                        : null)
+                    ->iconColor('primary')
+                    ->color(fn (Ticket $record): ?string => $record->contact ? 'primary' : null)
+                    ->weight(fn (Ticket $record): ?FontWeight => $record->contact
+                        ? FontWeight::SemiBold
+                        : null)
                     ->url(fn (Ticket $record): ?string => $record->contact
                         ? ContactResource::getUrl('view', ['record' => $record->contact])
-                        : null),
+                        : null)
+                    ->extraAttributes(fn (Ticket $record): array => $record->contact
+                        ? ['class' => '[&_a]:underline [&_a]:underline-offset-2']
+                        : []),
                 TextEntry::make('contact.phone_number')->label('Phone')->placeholder('—'),
                 TextEntry::make('company_name')
                     ->label('Company')
@@ -129,10 +173,33 @@ class TicketResource extends Resource
                             ?? $record->contact?->company?->name
                             ?? $record->contact?->company_name;
                     })
+                    ->icon(function (Ticket $record): ?string {
+                        $company = $record->subscription?->company ?? $record->contact?->company;
+
+                        return $company ? 'heroicon-m-arrow-top-right-on-square' : null;
+                    })
+                    ->iconColor('primary')
+                    ->color(function (Ticket $record): ?string {
+                        $company = $record->subscription?->company ?? $record->contact?->company;
+
+                        return $company ? 'primary' : null;
+                    })
+                    ->weight(function (Ticket $record): ?FontWeight {
+                        $company = $record->subscription?->company ?? $record->contact?->company;
+
+                        return $company ? FontWeight::SemiBold : null;
+                    })
                     ->url(function (Ticket $record): ?string {
                         $company = $record->subscription?->company ?? $record->contact?->company;
 
                         return $company ? CompanyResource::getUrl('view', ['record' => $company]) : null;
+                    })
+                    ->extraAttributes(function (Ticket $record): array {
+                        $company = $record->subscription?->company ?? $record->contact?->company;
+
+                        return $company
+                            ? ['class' => '[&_a]:underline [&_a]:underline-offset-2']
+                            : [];
                     }),
                 TextEntry::make('company_tin')
                     ->label('TIN')
@@ -211,7 +278,37 @@ class TicketResource extends Resource
 
                         return 'Missing: '.implode(', ', $status['missing_names']);
                     }),
-                TextColumn::make('document_review_status')->label('Review')->badge()->toggleable(),
+                TextColumn::make('document_review_status')
+                    ->label('Doc review')
+                    ->badge()
+                    ->toggleable()
+                    ->formatStateUsing(function (Ticket $record, $state): string {
+                        if ($record->attachmentStatus()['state'] === 'none_required') {
+                            return 'Not needed';
+                        }
+
+                        if ($state instanceof DocumentReviewStatus) {
+                            return $state->label();
+                        }
+
+                        return DocumentReviewStatus::tryFrom((string) $state)?->label() ?? (string) $state;
+                    })
+                    ->color(function (Ticket $record, $state): string {
+                        if ($record->attachmentStatus()['state'] === 'none_required') {
+                            return 'gray';
+                        }
+
+                        $status = $state instanceof DocumentReviewStatus
+                            ? $state
+                            : DocumentReviewStatus::tryFrom((string) $state);
+
+                        return match ($status) {
+                            DocumentReviewStatus::Passed => 'success',
+                            DocumentReviewStatus::Failed => 'danger',
+                            DocumentReviewStatus::Pending => 'warning',
+                            default => 'gray',
+                        };
+                    }),
                 TextColumn::make('assignee.name')->label('AM'),
                 TextColumn::make('currentApprover.name')->label('Approver'),
                 TextColumn::make('created_at')->dateTime()->sortable(),
