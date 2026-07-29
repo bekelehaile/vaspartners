@@ -18,33 +18,28 @@ class TicketStatsOverview extends StatsOverviewWidget
 
     protected ?string $heading = 'Service requests';
 
-    protected ?string $description = 'Operational queue — click a card to open the list';
+    protected ?string $description = 'Queue is live. Rejected uses the selected period (default last month). Click a card to open the list.';
 
     protected ?string $pollingInterval = '60s';
 
     protected function getStats(): array
     {
-        $pendingQuery = TicketResource::getEloquentQuery();
-        $this->applyDashboardTicketStatusFilters($pendingQuery, TicketStatus::Open);
-        $open = $pendingQuery->count();
+        // Live operational queue (not narrowed by date — otherwise empty periods look “broken”).
+        $live = $this->applyDashboardLiveTicketFilters(TicketResource::getEloquentQuery());
 
-        $unassignedQuery = TicketResource::getEloquentQuery()
-            ->whereNull('assigned_to_user_id');
-        $this->applyDashboardTicketStatusFilters($unassignedQuery, TicketStatus::Open);
-        $unassigned = $unassignedQuery->count();
-
-        $inProgressQuery = TicketResource::getEloquentQuery();
-        $this->applyDashboardTicketStatusFilters($inProgressQuery, TicketStatus::InProgress);
-        $inProgress = $inProgressQuery->count();
-
-        $escalatedQuery = TicketResource::getEloquentQuery()
+        $open = (clone $live)->where('status', TicketStatus::Open)->count();
+        $unassigned = (clone $live)
+            ->where('status', TicketStatus::Open)
+            ->whereNull('assigned_to_user_id')
+            ->count();
+        $inProgress = (clone $live)->where('status', TicketStatus::InProgress)->count();
+        $escalated = (clone $live)
             ->whereNotNull('escalated_at')
-            ->whereNotIn('status', [TicketStatus::Completed, TicketStatus::Closed]);
-        $this->applyDashboardServiceFilter($escalatedQuery);
-        if ($this->hasCustomDateRange()) {
-            $this->applyDashboardDateFilter($escalatedQuery, 'escalated_at');
-        }
-        $escalated = $escalatedQuery->count();
+            ->whereNotIn('status', [TicketStatus::Completed, TicketStatus::Closed])
+            ->count();
+        // Live totals — Completed is rarely a lasting status (tickets move to Closed).
+        $completed = (clone $live)->where('status', TicketStatus::Completed)->count();
+        $closed = (clone $live)->where('status', TicketStatus::Closed)->count();
 
         $myApproval = Ticket::query()
             ->where('current_approver_user_id', auth()->id())
@@ -52,9 +47,13 @@ class TicketStatsOverview extends StatsOverviewWidget
         $this->applyDashboardLiveTicketFilters($myApproval);
         $myApprovalCount = $myApproval->count();
 
-        $completedCount = $this->outcomeCount(TicketStatus::Completed, 'completed_at');
-        $closedCount = $this->outcomeCount(TicketStatus::Closed, 'closed_at');
-        $rejectedCount = $this->outcomeCount(TicketStatus::Rejected, 'rejected_at');
+        // Rejected in selected period (defaults to last month on the dashboard).
+        $rejectedQuery = TicketResource::getEloquentQuery()->where('status', TicketStatus::Rejected);
+        $this->applyDashboardServiceFilter($rejectedQuery);
+        if ($this->hasCustomDateRange()) {
+            $this->applyDashboardEventDateFilter($rejectedQuery, 'rejected_at', defaultToToday: false);
+        }
+        $rejectedCount = $rejectedQuery->count();
 
         return [
             Stat::make('Unassigned', $unassigned)
@@ -78,28 +77,14 @@ class TicketStatsOverview extends StatsOverviewWidget
                 ->descriptionIcon(Heroicon::OutlinedExclamationTriangle)
                 ->color($rejectedCount > 0 ? 'danger' : 'gray')
                 ->url(TicketResource::getUrl('index').'?tab=rejected'),
-            Stat::make('Completed', $completedCount)
+            Stat::make('Completed', $completed)
                 ->descriptionIcon(Heroicon::OutlinedCheckCircle)
                 ->color('success')
                 ->url(TicketResource::getUrl('index').'?tab=completed'),
-            Stat::make('Closed', $closedCount)
+            Stat::make('Closed', $closed)
                 ->descriptionIcon(Heroicon::OutlinedArchiveBox)
                 ->color('gray')
                 ->url(TicketResource::getUrl('index').'?tab=closed'),
         ];
-    }
-
-    protected function outcomeCount(TicketStatus $status, string $column): int
-    {
-        $query = TicketResource::getEloquentQuery()->where('status', $status);
-        $this->applyDashboardServiceFilter($query);
-
-        // No date range → live count by current status (same as Pending / In progress).
-        // With a date range → filter by that status's event timestamp.
-        if ($this->hasCustomDateRange()) {
-            $this->applyDashboardEventDateFilter($query, $column, defaultToToday: false);
-        }
-
-        return $query->count();
     }
 }

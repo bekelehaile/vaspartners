@@ -61,7 +61,7 @@ class AccountManagerPerformance extends Page implements HasSchemas, HasTable
     public function mount(): void
     {
         $this->filters = [
-            'start_date' => $this->filters['start_date'] ?? now()->subDays(30)->toDateString(),
+            'start_date' => $this->filters['start_date'] ?? now()->subMonth()->toDateString(),
             'end_date' => $this->filters['end_date'] ?? now()->toDateString(),
             'service_id' => $this->filters['service_id'] ?? null,
             'user_id' => $this->filters['user_id'] ?? null,
@@ -138,7 +138,7 @@ class AccountManagerPerformance extends Page implements HasSchemas, HasTable
         return $schema
             ->components([
                 Section::make('Filters')
-                    ->description('Default period is the last 30 days. Backlog is live; other metrics use the selected period.')
+                    ->description('Default period is the last month. Backlog is live; other metrics use the selected period.')
                     ->schema([
                         DatePicker::make('start_date')
                             ->label('From')

@@ -388,7 +388,7 @@ class AccountManagerPerformanceService
     {
         $from = filled($start)
             ? Carbon::parse($start)->startOfDay()
-            : now()->subDays(30)->startOfDay();
+            : now()->subMonth()->startOfDay();
         $toExclusive = filled($end)
             ? Carbon::parse($end)->addDay()->startOfDay()
             : now()->addDay()->startOfDay();

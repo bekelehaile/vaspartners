@@ -26,6 +26,32 @@ class Dashboard extends BaseDashboard
 
     protected static ?int $navigationSort = -10;
 
+    public function persistsFiltersInSession(): bool
+    {
+        return false;
+    }
+
+    public function mount(): void
+    {
+        $this->filters = array_merge([
+            'start_date' => now()->subMonth()->toDateString(),
+            'end_date' => now()->toDateString(),
+            'service_id' => null,
+        ], array_filter(
+            $this->filters ?? [],
+            fn (mixed $value): bool => $value !== null && $value !== '',
+        ));
+
+        if (blank($this->filters['start_date'] ?? null)) {
+            $this->filters['start_date'] = now()->subMonth()->toDateString();
+        }
+        if (blank($this->filters['end_date'] ?? null)) {
+            $this->filters['end_date'] = now()->toDateString();
+        }
+
+        $this->getFiltersForm()->fill($this->filters);
+    }
+
     public function getTitle(): string | \Illuminate\Contracts\Support\Htmlable
     {
         return 'Executive overview';
@@ -44,19 +70,19 @@ class Dashboard extends BaseDashboard
     {
         return $schema->components([
             Section::make('Filters')
-                ->description('Date and service narrow ticket and outcome cards. Partner, subscription, and feedback stay as live snapshots.')
+                ->description('Default range is the last month. Queue cards stay live; Rejected uses the date range.')
                 ->schema([
                     DatePicker::make('start_date')
                         ->label('From')
                         ->native(false)
                         ->displayFormat('Y-m-d')
-                        ->placeholder('Any start')
+                        ->default(fn (): string => now()->subMonth()->toDateString())
                         ->suffixIcon(Heroicon::Calendar, isInline: true),
                     DatePicker::make('end_date')
                         ->label('To')
                         ->native(false)
                         ->displayFormat('Y-m-d')
-                        ->placeholder('Any end')
+                        ->default(fn (): string => now()->toDateString())
                         ->suffixIcon(Heroicon::Calendar, isInline: true)
                         ->minDate(fn (callable $get): mixed => $get('start_date') ?: null),
                     Select::make('service_id')
