@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\RevenuePartners\Pages;
 
 use App\Filament\Imports\RevenuePartnerImporter;
+use App\Filament\Imports\RevenuePartnerPhoneImporter;
 use App\Filament\Resources\RevenuePartners\RevenuePartnerResource;
 use Filament\Actions\CreateAction;
 use Filament\Actions\ImportAction;
@@ -20,6 +21,11 @@ class ListRevenuePartners extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
+            ImportAction::make('syncPhones')
+                ->importer(RevenuePartnerPhoneImporter::class)
+                ->label('Sync phones')
+                ->color('gray')
+                ->authorize(fn (): bool => (bool) auth()->user()?->can('Update:RevenuePartner')),
             ImportAction::make()
                 ->importer(RevenuePartnerImporter::class)
                 ->label('Import CSV')
