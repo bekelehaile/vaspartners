@@ -3606,6 +3606,12 @@ button.portal-mobile-card {
   background: color-mix(in oklab, var(--primary) 6%, white);
 }
 
+.doc-slot.doc-slot-required:not(.is-done) {
+  border-color: color-mix(in oklab, var(--et-yellow, #c47b1a) 70%, var(--et-line, #ccc));
+  border-style: solid;
+  box-shadow: inset 3px 0 0 color-mix(in oklab, var(--et-yellow, #c47b1a) 85%, transparent);
+}
+
 .doc-slot.is-done {
   border-style: solid;
   border-color: color-mix(in oklab, var(--primary) 45%, transparent);

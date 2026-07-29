@@ -190,6 +190,14 @@ export type Ticket = {
   chat_locked?: boolean;
   chat_attachment_max_kb?: number;
   documents_locked?: boolean;
+  attachment_status?: {
+    state: "complete" | "incomplete" | "none_required" | string;
+    label?: string;
+    required_count?: number;
+    uploaded_count?: number;
+    missing_count?: number;
+    missing_names?: string[];
+  };
   contact_can_edit?: boolean;
   documents?: {
     id: number;

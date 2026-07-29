@@ -310,10 +310,13 @@ export function TicketDocumentsPanel({
         <div className="alert" style={{ marginTop: "0.85rem" }} role="status">
           <strong>Still needed before you can finish:</strong>{" "}
           {missingRequired.map((r) => r.document_type.name).join(", ")}.
-          <br />
-          <span className="muted">
-            Or choose “Upload later” to open the request and attach these from there.
-          </span>
+        </div>
+      )}
+      {mode === "manage" && !locked && missingRequired.length > 0 && (
+        <div className="alert" style={{ marginTop: "0.85rem" }} role="status">
+          <strong>Required documents missing:</strong>{" "}
+          {missingRequired.map((r) => r.document_type.name).join(", ")}. Upload them so Ethio
+          telecom can process this request.
         </div>
       )}
       {mode === "wizard" && !locked && requiredIds.length > 0 && missingRequired.length === 0 && (

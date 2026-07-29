@@ -13,6 +13,7 @@ use App\Models\TicketDocument;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 /**
@@ -35,6 +36,8 @@ class CompanyPurgeService
      */
     public function forcePurge(Company $company): array
     {
+        $this->assertCanForcePurge($company);
+
         $stats = [
             'company' => (string) ($company->name ?: $company->public_id),
             'memberships' => 0,
@@ -299,5 +302,22 @@ class CompanyPurgeService
         }
 
         return $removed;
+    }
+
+    /**
+     * Companies with an admin-validated TIN must not be permanently deleted.
+     */
+    public function assertCanForcePurge(Company $company): void
+    {
+        if ($company->tin_validated) {
+            throw ValidationException::withMessages([
+                'company' => 'This company has a validated TIN and cannot be deleted. Clear TIN validation first only if deletion is intentionally required.',
+            ]);
+        }
+    }
+
+    public function canForcePurge(Company $company): bool
+    {
+        return ! $company->tin_validated;
     }
 }

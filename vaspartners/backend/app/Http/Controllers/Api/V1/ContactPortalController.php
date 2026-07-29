@@ -177,6 +177,16 @@ class ContactPortalController extends Controller
             return $doc;
         })->values()->all();
 
+        $attachment = app(\App\Services\TicketWorkflowService::class)->attachmentStatus($ticket);
+        $payload['attachment_status'] = [
+            'state' => $attachment['state'],
+            'label' => $attachment['label'],
+            'required_count' => $attachment['required_count'],
+            'uploaded_count' => $attachment['uploaded_count'],
+            'missing_count' => $attachment['missing_count'],
+            'missing_names' => $attachment['missing_names'],
+        ];
+
         return response()->json(['data' => $payload]);
     }
 

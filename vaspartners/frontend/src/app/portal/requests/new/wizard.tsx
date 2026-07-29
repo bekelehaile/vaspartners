@@ -228,11 +228,13 @@ export default function NewRequestWizard() {
   const {
     data: confirmRequirements = [],
     isLoading: confirmDocsLoading,
-    isFetched: confirmDocsFetched,
+    isSuccess: confirmDocsSuccess,
+    isError: confirmDocsError,
   } = useDocumentRequirements(confirmServiceId, String(requisitionId || ""));
+  // Never treat a failed/empty load as "ready" — SMS Premium / VISP / etc. would skip uploads.
   const attachmentsReady =
     (!!confirmServiceId && !!requisitionId
-      ? confirmDocsFetched && !confirmDocsLoading
+      ? confirmDocsSuccess && !confirmDocsLoading && !confirmDocsError
       : true) && requiredAttachmentsReady(confirmRequirements, stagedFiles);
 
   // Keep category_id aligned with the selected service's groups.
@@ -1157,7 +1159,11 @@ function UploadStep({
   journey: string;
 }) {
   const { data: ticket } = useTicket(publicId);
-  const { data: requirements = [] } = useDocumentRequirements(serviceId, requisitionId);
+  const {
+    data: requirements = [],
+    isSuccess: requirementsReady,
+    isError: requirementsError,
+  } = useDocumentRequirements(serviceId, requisitionId);
   const requiredIds = requirements
     .filter((r) => {
       if (!r.is_required) return false;
@@ -1174,7 +1180,13 @@ function UploadStep({
   );
   const allRequiredUploaded = requiredIds.every((id) => uploadedTypes.has(id));
   const locked = documentsLockedStatus(ticket?.status, ticket?.documents_locked);
-  const canFinish = locked || allRequiredUploaded || !requiredIds.length;
+  const hasHardRequired = requiredIds.length > 0;
+  // Block finish until requirements are loaded and every hard-required file is present.
+  const canFinish =
+    locked ||
+    (requirementsReady &&
+      !requirementsError &&
+      (allRequiredUploaded || !hasHardRequired));
 
   const panelTicket: Ticket = {
     public_id: publicId,
@@ -1196,10 +1208,23 @@ function UploadStep({
         </span>
         <h2>Upload documents</h2>
         <p className="muted">
-          Your request <strong>{ttNumber}</strong> is already submitted. Attach the files marked{" "}
-          <strong>*</strong> so MVAS can process it. Optional files can wait.
+          Your request <strong>{ttNumber}</strong> is already submitted.{" "}
+          {hasHardRequired ? (
+            <>
+              Upload every file marked <strong>*</strong> before you finish — Ethio telecom
+              cannot process this request without them.
+            </>
+          ) : (
+            <>Optional files can be attached if you have them.</>
+          )}
         </p>
       </div>
+
+      {requirementsError && (
+        <div className="alert" role="alert">
+          Could not load required documents. Refresh and try again before finishing.
+        </div>
+      )}
 
       <TicketDocumentsPanel
         ticket={panelTicket}
@@ -1218,20 +1243,16 @@ function UploadStep({
             type="button"
             className="btn-primary"
             disabled
-            title="Upload every required file (marked *) first, or use Upload later"
+            title="Upload every required file (marked *) before finishing"
           >
             Finish and view request
           </button>
         )}
-        <Link href={`/portal/requests/${ttNumber}`} className="btn-ghost">
-          Upload later
-        </Link>
       </div>
-      {!canFinish && (
-        <p className="muted" style={{ marginTop: "0.75rem" }}>
-          <strong>Finish</strong> stays disabled until every required file (*) is uploaded.{" "}
-          <strong>Upload later</strong> opens the request so you can attach them anytime
-          before review.
+      {!canFinish && hasHardRequired && (
+        <p className="alert" style={{ marginTop: "0.75rem" }} role="status">
+          Upload all required documents (*) listed above to continue. This applies to services
+          such as SMS Premium, Voice Premium, VISP, and Collocation.
         </p>
       )}
     </div>

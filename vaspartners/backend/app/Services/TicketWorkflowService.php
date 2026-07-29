@@ -422,6 +422,10 @@ class TicketWorkflowService
                 return $ticket->fresh(['contact', 'service', 'requisition']);
             }
 
+            // Passed — partner must have uploaded every hard-required attachment first
+            // (SMS Premium, Voice Premium, VISP, Collocation, etc.).
+            $this->assertRequiredDocumentsUploaded($ticket);
+
             // Passed — start the same approval chain for every requisition type
             // (new subscription, maintenance, renew, terminate), whether or not docs were required.
             if ($ticket->status === TicketStatus::Rejected) {

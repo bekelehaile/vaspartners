@@ -96,7 +96,16 @@ export function RequirementsPreview({
 
   return (
     <div className="field doc-preview">
-      <label>Documents you will need next</label>
+      <label>
+        {required.length > 0
+          ? `Required documents (${required.length}) — attach each before submit`
+          : "Documents you will need next"}
+      </label>
+      {required.length > 0 && (
+        <p className="muted" style={{ marginTop: "0.35rem" }}>
+          Files marked <strong>*</strong> are mandatory for this service and request type.
+        </p>
+      )}
 
       {localError && <div className="alert">{localError}</div>}
 
@@ -107,7 +116,7 @@ export function RequirementsPreview({
           return (
             <div
               key={r.id}
-              className={`doc-slot${staged ? " is-done" : ""}`}
+              className={`doc-slot${staged ? " is-done" : ""}${!softOptional && !staged ? " doc-slot-required" : ""}`}
             >
               <label>
                 {r.document_type.name}

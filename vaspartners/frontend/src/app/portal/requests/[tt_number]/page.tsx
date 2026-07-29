@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   FileTextIcon,
   MessageSquareIcon,
@@ -38,6 +38,20 @@ export default function RequestDetailPage() {
   );
   const { data: ticket, isLoading, isError, error } = useTicket(requestNumber);
   const [tab, setTab] = useState<DetailTab>("overview");
+  const [autoOpenedDocs, setAutoOpenedDocs] = useState(false);
+
+  const docsIncomplete =
+    !!ticket &&
+    !ticket.documents_locked &&
+    ticket.attachment_status?.state === "incomplete";
+
+  useEffect(() => {
+    if (!ticket || autoOpenedDocs) return;
+    if (docsIncomplete) {
+      setTab("documents");
+      setAutoOpenedDocs(true);
+    }
+  }, [ticket, docsIncomplete, autoOpenedDocs]);
 
   return (
     <>
@@ -74,6 +88,27 @@ export default function RequestDetailPage() {
           </div>
         )}
 
+        {docsIncomplete && (
+          <div className="alert" role="status" style={{ marginBottom: "1rem" }}>
+            <strong>Upload required documents.</strong>{" "}
+            {ticket?.attachment_status?.missing_count
+              ? `${ticket.attachment_status.missing_count} still missing`
+              : "Some required files are missing"}
+            {ticket?.attachment_status?.missing_names?.length
+              ? `: ${ticket.attachment_status.missing_names.join(", ")}`
+              : ""}
+            . Open the Documents tab and attach every file marked *.
+            <button
+              type="button"
+              className="linkish"
+              style={{ marginLeft: "0.5rem" }}
+              onClick={() => setTab("documents")}
+            >
+              Go to documents
+            </button>
+          </div>
+        )}
+
         {isLoading || !ticket ? (
           <Card>
             <CardContent className="py-12 text-center text-muted-foreground">
@@ -96,8 +131,12 @@ export default function RequestDetailPage() {
                   },
                   {
                     id: "documents",
-                    label: "Documents",
-                    description: "Required attachments",
+                    label: docsIncomplete
+                      ? `Documents (${ticket.attachment_status?.missing_count ?? "!"})`
+                      : "Documents",
+                    description: docsIncomplete
+                      ? "Required attachments missing"
+                      : "Required attachments",
                     icon: <FileTextIcon className="size-4" />,
                   },
                   {

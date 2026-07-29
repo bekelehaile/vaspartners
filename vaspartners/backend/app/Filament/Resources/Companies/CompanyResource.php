@@ -261,9 +261,10 @@ class CompanyResource extends Resource
                     ->label('Delete permanently')
                     ->icon('heroicon-o-trash')
                     ->color('danger')
+                    ->visible(fn (Company $record): bool => ! $record->tin_validated)
                     ->requiresConfirmation()
                     ->modalHeading('Permanently delete company?')
-                    ->modalDescription('This permanently deletes the company, its memberships, subscriptions, service requests, attachments, and contacts that belong only to this company. Cannot be undone.')
+                    ->modalDescription('This permanently deletes the company, its memberships, subscriptions, service requests, attachments, and contacts that belong only to this company. Cannot be undone. Companies with a validated TIN cannot be deleted.')
                     ->action(function (Company $record, CompanyPurgeService $purge): void {
                         try {
                             $stats = $purge->forcePurge($record);
@@ -417,17 +418,24 @@ class CompanyResource extends Resource
                         ->color('danger')
                         ->requiresConfirmation()
                         ->modalHeading('Permanently delete selected companies?')
-                        ->modalDescription('Permanently deletes each company plus memberships, subscriptions, tickets, attachments, and exclusive contacts. Cannot be undone.')
+                        ->modalDescription('Permanently deletes each company plus memberships, subscriptions, tickets, attachments, and exclusive contacts. Companies with a validated TIN are skipped and cannot be deleted.')
                         ->deselectRecordsAfterCompletion()
                         ->visible(fn (): bool => static::canDeleteAny())
                         ->action(function (Collection $records, CompanyPurgeService $purge): void {
                             $deleted = 0;
                             $failed = 0;
+                            $skippedTin = 0;
                             $contacts = 0;
                             $docs = 0;
 
                             foreach ($records as $company) {
                                 if (! $company instanceof Company) {
+                                    continue;
+                                }
+
+                                if ($company->tin_validated) {
+                                    $skippedTin++;
+
                                     continue;
                                 }
 
@@ -449,6 +457,7 @@ class CompanyResource extends Resource
                                 ->body(trim(implode(' ', array_filter([
                                     $contacts > 0 ? "{$contacts} contact(s) removed." : null,
                                     $docs > 0 ? "{$docs} document(s) removed." : null,
+                                    $skippedTin > 0 ? "{$skippedTin} skipped (TIN validated)." : null,
                                     $failed > 0 ? "{$failed} failed." : null,
                                 ]))) ?: null)
                                 ->color($deleted > 0 ? 'success' : 'warning')
@@ -581,12 +590,12 @@ class CompanyResource extends Resource
 
     public static function canDelete($record): bool
     {
-        return $record instanceof Company;
+        return $record instanceof Company && ! $record->tin_validated;
     }
 
     public static function canForceDelete($record): bool
     {
-        return $record instanceof Company;
+        return $record instanceof Company && ! $record->tin_validated;
     }
 
     public static function canDeleteAny(): bool

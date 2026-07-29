@@ -90,6 +90,23 @@ class TicketDocumentService
         abort_unless($document->ticket_id === $ticket->id, 404);
         $this->assertContactCanMutateDocuments($ticket);
 
+        $typeId = (int) $document->document_type_id;
+        $siblings = TicketDocument::query()
+            ->where('ticket_id', $ticket->id)
+            ->where('document_type_id', $typeId)
+            ->where('id', '!=', $document->id)
+            ->exists();
+
+        if (! $siblings) {
+            $hardRequiredIds = app(TicketWorkflowService::class)
+                ->requiredDocumentTypeIds((int) $ticket->service_id, (int) $ticket->requisition_id);
+            if (in_array($typeId, $hardRequiredIds, true)) {
+                throw ValidationException::withMessages([
+                    'document' => 'This document is required for this service request. Upload a replacement before removing it.',
+                ]);
+            }
+        }
+
         $this->purgeStoredFile($document);
         $document->delete();
     }
