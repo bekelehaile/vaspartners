@@ -16,6 +16,7 @@ use App\Models\Service;
 use App\Services\CompanyMembershipService;
 use App\Services\CompanyPurgeService;
 use App\Services\SmsService;
+use App\Support\PhoneNumber;
 use App\Support\TinNumber;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
@@ -56,6 +57,23 @@ class CompanyResource extends Resource
     protected static ?string $recordTitleAttribute = 'name';
 
     protected static ?int $navigationSort = 2;
+
+    /**
+     * @return array<int, string>
+     */
+    public static function getGloballySearchableAttributes(): array
+    {
+        return ['name', 'tin', 'phone', 'email'];
+    }
+
+    public static function getGlobalSearchResultDetails(\Illuminate\Database\Eloquent\Model $record): array
+    {
+        /** @var Company $record */
+        return array_filter([
+            'TIN' => $record->tin,
+            'Phone' => $record->phone,
+        ]);
+    }
 
     public static function getNavigationBadge(): ?string
     {
@@ -179,8 +197,27 @@ class CompanyResource extends Resource
                     }),
                 TextColumn::make('tin')->label('TIN')->searchable()->sortable(),
                 IconColumn::make('tin_validated')->boolean()->label('TIN OK'),
-                TextColumn::make('phone')->label('Phone')->toggleable()->placeholder('—'),
-                TextColumn::make('email')->label('Email')->toggleable()->placeholder('—'),
+                TextColumn::make('phone')
+                    ->label('Phone')
+                    ->toggleable()
+                    ->placeholder('—')
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        $digits = preg_replace('/\D+/', '', $search) ?? '';
+                        if ($digits === '') {
+                            return $query->where('phone', 'ilike', '%'.$search.'%');
+                        }
+
+                        $normalized = PhoneNumber::normalizeNullable($digits) ?? $digits;
+                        $tail = strlen($digits) >= 9 ? substr($digits, -9) : $digits;
+
+                        return $query->where(function (Builder $q) use ($search, $digits, $normalized, $tail): void {
+                            $q->where('phone', 'ilike', '%'.$search.'%')
+                                ->orWhere('phone', 'ilike', '%'.$digits.'%')
+                                ->orWhere('phone', 'ilike', '%'.$normalized.'%')
+                                ->orWhere('phone', 'ilike', '%'.$tail.'%');
+                        });
+                    }),
+                TextColumn::make('email')->label('Email')->toggleable()->placeholder('—')->searchable(),
                 TextColumn::make('owner_name')
                     ->label('Owner')
                     ->state(fn (Company $record): ?string => $record->ownerContact()?->name)
