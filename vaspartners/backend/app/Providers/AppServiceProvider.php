@@ -23,6 +23,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureSmsRateLimiters();
+        $this->configurePortalOtpRateLimiters();
 
         // All admin tables: newest first, no clickable row navigation (use explicit actions).
         Table::configureUsing(function (Table $table): void {
@@ -67,6 +68,18 @@ class AppServiceProvider extends ServiceProvider
             $decay = max(1, (int) config('notifications.sms_rate.global.decay_seconds', 60));
 
             return Limit::perMinutes(max(1, (int) ceil($decay / 60)), $max)->by('sms-global');
+        });
+    }
+
+    private function configurePortalOtpRateLimiters(): void
+    {
+        // IP caps on top of per-phone limits inside PortalPhoneOtpService.
+        RateLimiter::for('portal-otp-request', function ($request) {
+            return Limit::perMinutes(5, 10)->by('portal-otp-req:'.$request->ip());
+        });
+
+        RateLimiter::for('portal-otp-verify', function ($request) {
+            return Limit::perMinutes(5, 30)->by('portal-otp-ver:'.$request->ip());
         });
     }
 }

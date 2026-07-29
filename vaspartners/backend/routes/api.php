@@ -11,8 +11,10 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
     Route::get('auth/config', [PortalAuthController::class, 'config']);
-    Route::post('auth/otp/request', [PortalAuthController::class, 'requestOtp']);
-    Route::post('auth/otp/verify', [PortalAuthController::class, 'verifyOtp']);
+    Route::post('auth/otp/request', [PortalAuthController::class, 'requestOtp'])
+        ->middleware('throttle:portal-otp-request');
+    Route::post('auth/otp/verify', [PortalAuthController::class, 'verifyOtp'])
+        ->middleware('throttle:portal-otp-verify');
 
     Route::get('auth/fayda/redirect', [FaydaAuthController::class, 'redirect']);
     Route::get('auth/fayda/callback', [FaydaAuthController::class, 'callback']);

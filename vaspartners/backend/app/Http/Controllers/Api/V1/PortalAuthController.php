@@ -35,7 +35,9 @@ class PortalAuthController extends Controller
         try {
             $result = $otp->request($data['phone']);
         } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            $status = str_contains(strtolower($e->getMessage()), 'too many') ? 429 : 422;
+
+            return response()->json(['message' => $e->getMessage()], $status);
         } catch (Throwable $e) {
             report($e);
 
@@ -71,7 +73,9 @@ class PortalAuthController extends Controller
                 ],
             );
         } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+            $status = str_contains(strtolower($e->getMessage()), 'too many') ? 429 : 422;
+
+            return response()->json(['message' => $e->getMessage()], $status);
         } catch (Throwable $e) {
             report($e);
 

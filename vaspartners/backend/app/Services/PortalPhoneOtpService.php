@@ -33,6 +33,11 @@ class PortalPhoneOtpService
 
     private const SEND_COOLDOWN_SECONDS = 60;
 
+    /** Wrong verify guesses allowed per phone before the OTP is invalidated. */
+    private const VERIFY_MAX_ATTEMPTS = 5;
+
+    private const VERIFY_DECAY_SECONDS = 300;
+
     public function __construct(
         private readonly SmsService $sms,
     ) {}
@@ -114,11 +119,16 @@ class PortalPhoneOtpService
             throw new RuntimeException('Enter the 6-digit verification code.');
         }
 
+        $this->assertVerifyNotLocked($phone);
+
         $record = $this->findValidRecord($phone, $code);
         if (! $record) {
+            $this->recordFailedVerify($phone);
+
             throw new RuntimeException('Invalid or expired verification code.');
         }
 
+        $this->clearVerifyAttempts($phone);
         $this->deleteRecord($phone);
 
         $result = $this->findOrCreateContact($phone, $profile ?? []);
@@ -264,6 +274,47 @@ class PortalPhoneOtpService
         RateLimiter::hit($key, self::OTP_RATE_DECAY_SECONDS);
     }
 
+    private function verifyAttemptKey(string $phone): string
+    {
+        return 'portal-otp:verify:'.$phone;
+    }
+
+    private function assertVerifyNotLocked(string $phone): void
+    {
+        if (! RateLimiter::tooManyAttempts($this->verifyAttemptKey($phone), self::VERIFY_MAX_ATTEMPTS)) {
+            return;
+        }
+
+        $seconds = RateLimiter::availableIn($this->verifyAttemptKey($phone));
+        $minutes = max(1, (int) ceil($seconds / 60));
+
+        throw new RuntimeException(
+            "Too many incorrect codes. Request a new verification code in about {$minutes} minute(s).",
+        );
+    }
+
+    private function recordFailedVerify(string $phone): void
+    {
+        $key = $this->verifyAttemptKey($phone);
+        RateLimiter::hit($key, self::VERIFY_DECAY_SECONDS);
+
+        if (! RateLimiter::tooManyAttempts($key, self::VERIFY_MAX_ATTEMPTS)) {
+            return;
+        }
+
+        // Burn the OTP so remaining guesses cannot continue after lockout.
+        $this->deleteRecord($phone);
+
+        Log::warning('Portal login OTP locked after failed verifies', [
+            'phone_masked' => $this->maskPhone($phone),
+        ]);
+    }
+
+    private function clearVerifyAttempts(string $phone): void
+    {
+        RateLimiter::clear($this->verifyAttemptKey($phone));
+    }
+
     private function generateOtp(int $length = 6): string
     {
         return str_pad(
@@ -291,6 +342,9 @@ class PortalPhoneOtpService
                 'updated_at' => now(),
             ]);
         });
+
+        // Fresh code → allow a new verify window (still subject to request rate limits).
+        $this->clearVerifyAttempts($phone);
     }
 
     private function hash(string $otp): string
