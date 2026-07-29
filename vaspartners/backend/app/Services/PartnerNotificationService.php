@@ -299,18 +299,38 @@ class PartnerNotificationService
     public function companyProfileSubmitted(Contact $contact): void
     {
         $contact->loadMissing('company');
+        $company = $contact->company;
+
         $this->notifyStaffDatabase(
             $this->managementUsers(),
             'Company profile pending',
             sprintf(
                 '%s submitted company %s (TIN %s) for approval.',
                 $contact->name ?: 'A partner',
-                $contact->company?->name ?: 'profile',
-                $contact->company?->tin ?: 'n/a',
+                $company?->name ?: 'profile',
+                $company?->tin ?: 'n/a',
             ),
             null,
-            \App\Filament\Resources\Companies\CompanyResource::getUrl('view', ['record' => $contact->company]),
+            $company
+                ? \App\Filament\Resources\Companies\CompanyResource::getUrl('view', ['record' => $company])
+                : null,
         );
+
+        // In-app notice to the partner while admin review is pending.
+        $template = 'company_profile_pending';
+        $placeholders = [
+            'contact_name' => $contact->name ?: 'Partner',
+            'company_name' => $company?->name ?: 'your organisation',
+            'company_tin' => $company?->tin ?: 'n/a',
+        ];
+        $portalBody = $this->render('portal', $template, $placeholders);
+
+        $contact->notify(new PartnerPortalNotification(
+            title: $this->titleFor($template),
+            body: Str::limit($portalBody, 280),
+            template: $template,
+            url: '/portal/company',
+        ));
     }
 
     public function companyProfileDecided(Company $company, Contact $owner, bool $approved): void
@@ -501,6 +521,7 @@ class PartnerNotificationService
             'company_detach_approved' => 'Company detach approved',
             'company_detach_rejected' => 'Company detach rejected',
             'company_membership_requested' => 'Membership request',
+            'company_profile_pending' => 'Company waiting for approval',
             'company_profile_approved' => 'Company approved',
             'company_profile_rejected' => 'Company needs updates',
             'company_member_left' => 'Member left company',

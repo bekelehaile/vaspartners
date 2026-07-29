@@ -38,9 +38,12 @@ function toneFor(template?: string | null): string {
   switch (template) {
     case "ticket_completed":
     case "profile_completed":
+    case "company_profile_approved":
       return "success";
     case "documents_need_attention":
     case "ticket_rejected":
+    case "company_profile_rejected":
+    case "company_profile_pending":
       return "warning";
     case "ticket_closed":
       return "muted";

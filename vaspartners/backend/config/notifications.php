@@ -139,6 +139,8 @@ SMS,
 
         'company_profile_approved' => 'Your company {company_name} was approved. You can submit service requests.',
 
+        'company_profile_pending' => 'Your company {company_name} (TIN {company_tin}) was submitted and is waiting for Ethio telecom approval. You will be notified when it is reviewed.',
+
         'company_profile_rejected' => 'Your company profile needs updates before approval.',
 
         'company_member_left' => '{applicant_name} left {company_name}.',
