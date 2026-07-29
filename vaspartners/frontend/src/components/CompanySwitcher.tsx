@@ -80,6 +80,7 @@ export function CompanySwitcher({
           {switchable.map((m) => (
             <option key={m.company_public_id!} value={m.company_public_id!}>
               {m.company_name || "Company"}
+              {m.tin_validated ? " · TIN OK" : m.is_approved ? " · TIN pending" : ""}
             </option>
           ))}
         </select>
@@ -109,9 +110,13 @@ export function CompanySwitcher({
             {[
               m.company_name || "Company",
               m.role,
-              m.approval_status && m.approval_status !== "approved"
-                ? m.approval_status
-                : null,
+              m.tin_validated
+                ? "TIN OK"
+                : m.is_approved
+                  ? "TIN pending"
+                  : m.approval_status && m.approval_status !== "approved"
+                    ? m.approval_status
+                    : null,
               m.is_current ? "current" : null,
             ]
               .filter(Boolean)

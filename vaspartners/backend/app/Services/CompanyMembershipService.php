@@ -1684,7 +1684,7 @@ class CompanyMembershipService
 
         if (! $contact->company->tin_validated) {
             throw ValidationException::withMessages([
-                'company_tin' => 'Your company TIN is awaiting Ethio telecom validation. You cannot submit service requests until an administrator validates it.',
+                'company_tin' => 'This company\'s TIN is awaiting Ethio telecom validation. Switch to another company with a validated TIN, or wait until an administrator validates this one.',
             ]);
         }
     }

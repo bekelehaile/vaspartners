@@ -679,7 +679,11 @@ export default function NewRequestWizard() {
                         No services are available to activate right now.
                       </div>
                     ) : (
-                      <div className="journey-option-list" role="listbox">
+                      <div
+                        className="journey-option-list journey-option-list-cols"
+                        role="listbox"
+                        aria-label="Services available to subscribe"
+                      >
                         {subscribeServices.map((s) => {
                           const selected = String(s.id) === String(serviceId);
                           return (

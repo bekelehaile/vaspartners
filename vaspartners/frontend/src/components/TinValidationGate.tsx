@@ -1,22 +1,40 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { useContact, useSubmitCompanyTin } from "@/hooks/use-contact";
+import Link from "next/link";
+import {
+  useContact,
+  useSubmitCompanyTin,
+  useSwitchCompany,
+} from "@/hooks/use-contact";
 import { isValidEthiopianTin, normalizeEthiopianTin } from "@/lib/tin";
 
 /**
- * Blocks service-request flows until the current company has an admin-validated TIN.
- * Partners with edit permission can submit / correct a 10-digit Ethiopian TIN here.
+ * Blocks service use only for the *current* company when its TIN is not
+ * admin-validated. Partners can switch to another company that already has
+ * a validated TIN and continue working.
  */
 export function TinValidationGate({ children }: { children: React.ReactNode }) {
   const { data: me } = useContact();
   const submitTin = useSubmitCompanyTin();
+  const switchCompany = useSwitchCompany();
   const [tin, setTin] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
 
   const company = me?.company;
   const needsGate = !!me?.profile_completed && !!company && !company.tin_validated;
   const canSubmitTin = me?.company_role === "owner" || !!me?.company_can_edit;
+
+  const otherValidated = useMemo(() => {
+    return (me?.memberships ?? []).filter(
+      (m) =>
+        m.company_public_id &&
+        m.is_active !== false &&
+        !m.is_current &&
+        m.tin_validated === true &&
+        m.is_approved === true,
+    );
+  }, [me?.memberships]);
 
   const formatOk = useMemo(
     () => (company?.tin ? isValidEthiopianTin(company.tin) : false),
@@ -57,28 +75,60 @@ export function TinValidationGate({ children }: { children: React.ReactNode }) {
           aria-describedby="tin-gate-desc"
           onClick={(e) => e.stopPropagation()}
         >
-          <h2 id="tin-gate-title">Company TIN required</h2>
+          <h2 id="tin-gate-title">This company needs TIN validation</h2>
           <p id="tin-gate-desc">
-            Before you can submit service requests, your company must have a valid Ethiopian TIN
-            that Ethio telecom has validated.
+            <strong>{company?.name || "This company"}</strong> cannot use VAS services until
+            Ethio telecom validates its TIN. Other companies with a validated TIN stay available
+            — switch below to continue.
           </p>
 
-          {formatOk && company?.tin ? (
-            <p className="portal-modal-hint">
-              Current TIN <strong>{company.tin}</strong> is awaiting admin validation. You can
-              correct it below if needed.
-            </p>
-          ) : (
-            <p className="portal-modal-hint">
-              Enter your 10-digit Ministry of Revenues (ERCA) TIN. Placeholders like MVAS codes
-              are not accepted.
-            </p>
+          {otherValidated.length > 0 && (
+            <div className="tin-gate-switch" style={{ marginBottom: "1rem" }}>
+              <p className="portal-modal-hint" style={{ marginBottom: "0.5rem" }}>
+                Switch to a company with a validated TIN:
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                {otherValidated.map((m) => (
+                  <button
+                    key={m.company_public_id!}
+                    type="button"
+                    className="btn"
+                    disabled={switchCompany.isPending}
+                    onClick={() =>
+                      void switchCompany.mutateAsync(m.company_public_id!)
+                    }
+                  >
+                    Use {m.company_name || "company"}
+                    {m.company_tin ? ` (TIN ${m.company_tin})` : ""}
+                  </button>
+                ))}
+              </div>
+              {switchCompany.isError && (
+                <p className="alert" role="alert" style={{ marginTop: "0.5rem" }}>
+                  {switchCompany.error instanceof Error
+                    ? switchCompany.error.message
+                    : "Could not switch company"}
+                </p>
+              )}
+            </div>
           )}
+
+          <p className="portal-modal-hint">
+            Or stay on this company and{" "}
+            {formatOk && company?.tin ? (
+              <>
+                wait for validation of TIN <strong>{company.tin}</strong> (you can correct it
+                below).
+              </>
+            ) : (
+              <>submit a valid 10-digit Ethiopian TIN below.</>
+            )}
+          </p>
 
           {canSubmitTin ? (
             <form onSubmit={onSubmit} className="tin-gate-form">
               <label className="field" htmlFor="tin-gate-input">
-                <span>Ethiopian TIN</span>
+                <span>Ethiopian TIN for {company?.name || "this company"}</span>
                 <input
                   id="tin-gate-input"
                   name="company_tin"
@@ -101,20 +151,30 @@ export function TinValidationGate({ children }: { children: React.ReactNode }) {
               )}
               {submitTin.isSuccess && (
                 <p className="portal-modal-hint" role="status">
-                  TIN submitted. Waiting for Ethio telecom to validate it.
+                  TIN submitted for this company. Waiting for Ethio telecom to validate it.
                 </p>
               )}
               <div className="portal-modal-actions">
                 <button type="submit" className="btn" disabled={submitTin.isPending}>
-                  {submitTin.isPending ? "Submitting…" : "Submit TIN"}
+                  {submitTin.isPending ? "Submitting…" : "Submit TIN for this company"}
                 </button>
+                <Link href="/portal/company" className="btn-ghost">
+                  Company settings
+                </Link>
               </div>
             </form>
           ) : (
-            <p className="portal-modal-hint">
-              Ask your company owner to submit a valid TIN. Service requests stay locked until
-              Ethio telecom validates it.
-            </p>
+            <>
+              <p className="portal-modal-hint">
+                Ask the owner of this company to submit a valid TIN. Meanwhile, switch to another
+                company with a validated TIN if you have one.
+              </p>
+              <div className="portal-modal-actions">
+                <Link href="/portal/company" className="btn-ghost">
+                  Company settings
+                </Link>
+              </div>
+            </>
           )}
         </div>
       </div>
