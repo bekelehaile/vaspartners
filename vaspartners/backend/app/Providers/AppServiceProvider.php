@@ -2,8 +2,11 @@
 
 namespace App\Providers;
 
+use App\Models\User;
 use Filament\Tables\Table;
+use Illuminate\Auth\Events\Login;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
@@ -26,6 +29,12 @@ class AppServiceProvider extends ServiceProvider
             $table
                 ->defaultSort('created_at', 'desc')
                 ->recordUrl(null);
+        });
+
+        Event::listen(Login::class, function (Login $event): void {
+            if ($event->user instanceof User) {
+                $event->user->recordLogin();
+            }
         });
 
         // Filament Shield / Spatie: allow super_admin everything once roles exist

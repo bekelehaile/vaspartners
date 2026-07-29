@@ -33,6 +33,7 @@ class User extends Authenticatable implements CanResetPasswordContract, Filament
         'manager_id',
         'is_management',
         'is_active',
+        'last_login_at',
     ];
 
     protected $hidden = [
@@ -44,11 +45,17 @@ class User extends Authenticatable implements CanResetPasswordContract, Filament
     {
         return [
             'email_verified_at' => 'datetime',
+            'last_login_at' => 'datetime',
             'password' => 'hashed',
             'must_change_password' => 'boolean',
             'is_management' => 'boolean',
             'is_active' => 'boolean',
         ];
+    }
+
+    public function recordLogin(): void
+    {
+        $this->forceFill(['last_login_at' => now()])->saveQuietly();
     }
 
     public function setPhoneAttribute(mixed $value): void
