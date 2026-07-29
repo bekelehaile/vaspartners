@@ -272,6 +272,18 @@ class TicketResource extends Resource
                 SelectFilter::make('status')->options(collect(TicketStatus::cases())->mapWithKeys(
                     fn (TicketStatus $s) => [$s->value => $s->label()]
                 )),
+                SelectFilter::make('assigned_to_user_id')
+                    ->label('Account handler')
+                    ->relationship(
+                        name: 'assignee',
+                        titleAttribute: 'name',
+                        modifyQueryUsing: fn (Builder $query) => $query
+                            ->where('is_active', true)
+                            ->where('is_management', false)
+                            ->orderBy('name'),
+                    )
+                    ->searchable()
+                    ->preload(),
                 SelectFilter::make('category_id')
                     ->label('Group')
                     ->relationship(

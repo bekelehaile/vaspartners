@@ -37,6 +37,15 @@ class ListTickets extends ListRecords
                 ->badge(fn (): int => $base()->where('status', TicketStatus::InProgress)->count())
                 ->badgeColor('info')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('status', TicketStatus::InProgress)),
+            'backlog' => Tab::make('Backlog')
+                ->badge(fn (): int => $base()
+                    ->whereIn('status', [TicketStatus::Open, TicketStatus::InProgress])
+                    ->whereNotNull('assigned_to_user_id')
+                    ->count())
+                ->badgeColor('warning')
+                ->modifyQueryUsing(fn (Builder $query) => $query
+                    ->whereIn('status', [TicketStatus::Open, TicketStatus::InProgress])
+                    ->whereNotNull('assigned_to_user_id')),
             'rejected' => Tab::make('Rejected')
                 ->badge(fn (): int => $base()->where('status', TicketStatus::Rejected)->count())
                 ->badgeColor('danger')
