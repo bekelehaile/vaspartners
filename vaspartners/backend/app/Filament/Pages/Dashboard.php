@@ -2,7 +2,10 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Widgets\CompanyStatsOverview;
+use App\Filament\Widgets\FeedbackStatsOverview;
 use App\Filament\Widgets\PendingCompanyRequestsStats;
+use App\Filament\Widgets\RevenueStatsOverview;
 use App\Filament\Widgets\SubscriptionStatsOverview;
 use App\Filament\Widgets\TicketStatsOverview;
 use App\Filament\Widgets\TicketsByStatusChart;
@@ -23,6 +26,11 @@ class Dashboard extends BaseDashboard
 
     protected static ?int $navigationSort = -10;
 
+    public function getTitle(): string | \Illuminate\Contracts\Support\Htmlable
+    {
+        return 'Executive overview';
+    }
+
     public function getColumns(): int | array
     {
         return [
@@ -36,7 +44,7 @@ class Dashboard extends BaseDashboard
     {
         return $schema->components([
             Section::make('Filters')
-                ->description('Narrow dashboard stats by submission date and service.')
+                ->description('Date & service narrow tickets and revenue. Partner / subscription / feedback cards stay current-period snapshots.')
                 ->schema([
                     DatePicker::make('start_date')
                         ->label('From')
@@ -76,9 +84,12 @@ class Dashboard extends BaseDashboard
     public function getWidgets(): array
     {
         return [
+            CompanyStatsOverview::class,
             TicketStatsOverview::class,
             SubscriptionStatsOverview::class,
             PendingCompanyRequestsStats::class,
+            FeedbackStatsOverview::class,
+            RevenueStatsOverview::class,
             TicketsByStatusChart::class,
         ];
     }

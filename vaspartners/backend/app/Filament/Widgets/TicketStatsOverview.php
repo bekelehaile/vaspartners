@@ -15,9 +15,11 @@ class TicketStatsOverview extends StatsOverviewWidget
 {
     use AppliesDashboardFilters;
 
-    protected static ?int $sort = 1;
+    protected static ?int $sort = 2;
 
     protected ?string $heading = 'Service requests';
+
+    protected ?string $description = 'Operational queue — click a card to open the list';
 
     protected ?string $pollingInterval = '60s';
 
@@ -31,6 +33,10 @@ class TicketStatsOverview extends StatsOverviewWidget
             ->whereNull('assigned_to_user_id')
             ->count();
         $inProgress = (clone $base)->where('status', TicketStatus::InProgress)->count();
+        $escalated = (clone $base)
+            ->whereNotNull('escalated_at')
+            ->whereNotIn('status', [TicketStatus::Completed, TicketStatus::Closed])
+            ->count();
         $rejected = (clone $base)->where('status', TicketStatus::Rejected)->count();
 
         $myApproval = Ticket::query()
@@ -54,26 +60,35 @@ class TicketStatsOverview extends StatsOverviewWidget
         }
         $completedCount = $completedQuery->count();
 
+        $inProgressDescription = $escalated > 0
+            ? $escalated.' escalated'
+            : 'Being handled';
+
         return [
-            Stat::make('Pending', $open)
-                ->description($unassigned.' unassigned')
+            Stat::make('Unassigned', $unassigned)
+                ->description('Open — needs an owner')
                 ->descriptionIcon(Heroicon::OutlinedInbox)
-                ->color('warning')
+                ->color($unassigned > 0 ? 'warning' : 'gray')
                 ->url(TicketResource::getUrl('index').'?tab=unassigned'),
+            Stat::make('Pending', $open)
+                ->description('Open queue')
+                ->descriptionIcon(Heroicon::OutlinedClock)
+                ->color($open > 0 ? 'warning' : 'gray')
+                ->url(TicketResource::getUrl('index').'?tab=open'),
             Stat::make('In progress', $inProgress)
-                ->description('Being handled')
+                ->description($inProgressDescription)
                 ->descriptionIcon(Heroicon::OutlinedArrowPath)
-                ->color('info')
+                ->color($escalated > 0 ? 'danger' : 'info')
                 ->url(TicketResource::getUrl('index').'?tab=in_progress'),
             Stat::make('Rejected', $rejected)
                 ->description('Sent back to partner')
                 ->descriptionIcon(Heroicon::OutlinedExclamationTriangle)
-                ->color('danger')
+                ->color($rejected > 0 ? 'danger' : 'gray')
                 ->url(TicketResource::getUrl('index').'?tab=rejected'),
             Stat::make('My approvals', $myApprovalCount)
                 ->description('Waiting on you')
                 ->descriptionIcon(Heroicon::OutlinedCheckBadge)
-                ->color('primary')
+                ->color($myApprovalCount > 0 ? 'primary' : 'gray')
                 ->url(\App\Filament\Pages\MyTickets::getUrl().'?tab=approval'),
             Stat::make($completedLabel, $completedCount)
                 ->description($completedDescription)

@@ -15,9 +15,11 @@ class PendingCompanyRequestsStats extends StatsOverviewWidget
 {
     use AppliesDashboardFilters;
 
-    protected static ?int $sort = 3;
+    protected static ?int $sort = 4;
 
     protected ?string $heading = 'Change requests';
+
+    protected ?string $description = 'Ownership, joins, and leave requests';
 
     protected ?string $pollingInterval = '60s';
 
@@ -34,6 +36,10 @@ class PendingCompanyRequestsStats extends StatsOverviewWidget
         $pendingJoins = (clone $base)
             ->where('status', CompanyChangeStatus::Pending)
             ->where('type', CompanyChangeType::Attach)
+            ->count();
+        $pendingLeave = (clone $base)
+            ->where('status', CompanyChangeStatus::Pending)
+            ->where('type', CompanyChangeType::Detach)
             ->count();
 
         $approvedQuery = CompanyChangeRequest::query()
@@ -57,6 +63,11 @@ class PendingCompanyRequestsStats extends StatsOverviewWidget
                 ->descriptionIcon(Heroicon::OutlinedUserPlus)
                 ->color($pendingJoins > 0 ? 'info' : 'gray')
                 ->url(CompanyChangeRequestResource::getUrl('index').'?tab=membership'),
+            Stat::make('Leave company', $pendingLeave)
+                ->description('Pending detach requests')
+                ->descriptionIcon(Heroicon::OutlinedArrowRightStartOnRectangle)
+                ->color($pendingLeave > 0 ? 'warning' : 'gray')
+                ->url(CompanyChangeRequestResource::getUrl('index').'?tab=leave'),
             Stat::make($approvedLabel, $approvedQuery->count())
                 ->descriptionIcon(Heroicon::OutlinedCheckCircle)
                 ->color('success')

@@ -14,22 +14,29 @@ class SubscriptionStatsOverview extends StatsOverviewWidget
 {
     use AppliesDashboardFilters;
 
-    protected static ?int $sort = 2;
+    protected static ?int $sort = 3;
 
     protected ?string $heading = 'Subscriptions';
+
+    protected ?string $description = 'Live portfolio health (service filter applies)';
 
     protected ?string $pollingInterval = '120s';
 
     protected function getStats(): array
     {
+        // Portfolio snapshot: ignore date range so filters don't hide live entitlements.
         $base = Subscription::query();
         $this->applyDashboardServiceFilter($base);
-        $this->applyDashboardDateFilter($base, 'started_at');
 
         $active = (clone $base)->where('status', SubscriptionStatus::Active)->count();
         $pendingRenewal = (clone $base)->where('status', SubscriptionStatus::PendingRenewal)->count();
+        $grace = (clone $base)->where('status', SubscriptionStatus::Grace)->count();
         $dueSoon = (clone $base)
-            ->whereIn('status', [SubscriptionStatus::Active, SubscriptionStatus::PendingRenewal, SubscriptionStatus::Grace])
+            ->whereIn('status', [
+                SubscriptionStatus::Active,
+                SubscriptionStatus::PendingRenewal,
+                SubscriptionStatus::Grace,
+            ])
             ->whereNotNull('current_period_end')
             ->whereDate('current_period_end', '<=', now()->addDays(30))
             ->count();
@@ -43,12 +50,17 @@ class SubscriptionStatsOverview extends StatsOverviewWidget
             Stat::make('Pending renewal', $pendingRenewal)
                 ->description('Renewal in flight')
                 ->descriptionIcon(Heroicon::OutlinedArrowPath)
-                ->color('warning')
+                ->color($pendingRenewal > 0 ? 'warning' : 'gray')
+                ->url(SubscriptionResource::getUrl('index')),
+            Stat::make('Grace', $grace)
+                ->description('Past due — still alive')
+                ->descriptionIcon(Heroicon::OutlinedExclamationTriangle)
+                ->color($grace > 0 ? 'warning' : 'gray')
                 ->url(SubscriptionResource::getUrl('index')),
             Stat::make('Due in 30 days', $dueSoon)
                 ->description('Period ending soon')
                 ->descriptionIcon(Heroicon::OutlinedCalendarDays)
-                ->color('danger')
+                ->color($dueSoon > 0 ? 'danger' : 'gray')
                 ->url(SubscriptionResource::getUrl('index')),
         ];
     }
