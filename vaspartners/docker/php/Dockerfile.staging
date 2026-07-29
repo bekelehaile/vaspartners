@@ -13,6 +13,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get purge -y --auto-remove $PHPIZE_DEPS \
     && rm -rf /var/lib/apt/lists/*
 
+COPY docker/php/vas-uploads.ini /usr/local/etc/php/conf.d/vas-uploads.ini
+
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 
 WORKDIR /var/www/html

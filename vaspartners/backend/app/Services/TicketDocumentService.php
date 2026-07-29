@@ -113,9 +113,18 @@ class TicketDocumentService
 
     public function resolveAllowedDocumentType(Ticket $ticket, int $documentTypeId): DocumentType
     {
+        return $this->resolveDocumentTypeForMatrix(
+            (int) $ticket->service_id,
+            (int) $ticket->requisition_id,
+            $documentTypeId,
+        );
+    }
+
+    public function resolveDocumentTypeForMatrix(int $serviceId, int $requisitionId, int $documentTypeId): DocumentType
+    {
         $allowed = ServiceRequisitionDocument::query()
-            ->where('service_id', $ticket->service_id)
-            ->where('requisition_id', $ticket->requisition_id)
+            ->where('service_id', $serviceId)
+            ->where('requisition_id', $requisitionId)
             ->where('document_type_id', $documentTypeId)
             ->exists();
 

@@ -230,6 +230,47 @@ class TicketWorkflowService
         ]);
     }
 
+    /**
+     * Hard gate before create: every hard-required matrix type must be present in the upload set.
+     *
+     * @param  list<int>  $providedDocumentTypeIds
+     */
+    public function assertProvidedDocumentsCoverRequirements(
+        int $serviceId,
+        int $requisitionId,
+        array $providedDocumentTypeIds,
+    ): void {
+        $required = $this->hardRequiredDocumentRows($serviceId, $requisitionId);
+        if ($required->isEmpty()) {
+            return;
+        }
+
+        $provided = [];
+        foreach ($providedDocumentTypeIds as $id) {
+            $provided[(int) $id] = true;
+        }
+
+        $missingNames = [];
+        $missingIds = [];
+        foreach ($required as $row) {
+            $typeId = (int) $row->document_type_id;
+            if (isset($provided[$typeId])) {
+                continue;
+            }
+            $missingIds[] = $typeId;
+            $missingNames[] = $row->documentType?->name ?: ('Document #'.$typeId);
+        }
+
+        if ($missingNames === []) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'documents' => 'Required documents are missing for this service request: '.implode(', ', $missingNames),
+            'missing_document_type_ids' => $missingIds,
+        ]);
+    }
+
     /** @return \Illuminate\Support\Collection<int, ServiceRequisitionDocument> */
     protected function hardRequiredDocumentRows(int $serviceId, int $requisitionId)
     {
@@ -324,6 +365,67 @@ class TicketWorkflowService
             ]);
 
             $fresh = $ticket->fresh(['contact', 'service', 'requisition']);
+
+            // Portal create-with-docs defers notify until all required files are stored.
+            if (empty($data['skip_notification'])) {
+                DB::afterCommit(function () use ($fresh) {
+                    $this->notifications->ticketSubmitted($fresh);
+                });
+            }
+
+            return $fresh;
+        });
+    }
+
+    /**
+     * Partner portal create: ticket + required documents in one transaction.
+     * Rolls back (no open orphan request) if any hard-required doc is missing or invalid.
+     *
+     * @param  array<string, mixed>  $data
+     * @param  list<array{document_type_id: int, file: \Illuminate\Http\UploadedFile}>  $uploads
+     */
+    public function createTicketWithDocuments(
+        Contact $contact,
+        array $data,
+        array $uploads,
+        TicketDocumentService $documents,
+    ): Ticket {
+        return DB::transaction(function () use ($contact, $data, $uploads, $documents) {
+            $serviceId = (int) $data['service_id'];
+            $requisitionId = (int) $data['requisition_id'];
+            $providedTypeIds = array_map(
+                static fn (array $row): int => (int) $row['document_type_id'],
+                $uploads,
+            );
+
+            // Fail before create so partners never see a Pending row without docs.
+            $this->assertProvidedDocumentsCoverRequirements($serviceId, $requisitionId, $providedTypeIds);
+
+            foreach ($uploads as $index => $upload) {
+                $type = $documents->resolveDocumentTypeForMatrix(
+                    $serviceId,
+                    $requisitionId,
+                    (int) $upload['document_type_id'],
+                );
+                $documents->assertFileMatchesDocumentType($upload['file'], $type);
+            }
+
+            $data['skip_notification'] = true;
+            $ticket = $this->createTicket($contact, $data);
+
+            foreach ($uploads as $upload) {
+                $documents->storeForContact(
+                    $ticket,
+                    $contact,
+                    (int) $upload['document_type_id'],
+                    $upload['file'],
+                );
+            }
+
+            $ticket->unsetRelation('documents');
+            $this->assertRequiredDocumentsUploaded($ticket->fresh(['documents.documentType']));
+
+            $fresh = $ticket->fresh(['contact', 'service', 'requisition', 'documents.documentType']);
 
             DB::afterCommit(function () use ($fresh) {
                 $this->notifications->ticketSubmitted($fresh);

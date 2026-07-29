@@ -690,22 +690,33 @@ export function useCreateTicket() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (values: TicketCreateValues) => {
-      const payload: Record<string, unknown> = {
-        service_id: Number(values.service_id),
-        requisition_id: Number(values.requisition_id),
-        description: values.description.trim(),
-      };
+    mutationFn: async ({
+      values,
+      files = {},
+    }: {
+      values: TicketCreateValues;
+      files?: Record<string, File>;
+    }) => {
+      const body = new FormData();
+      body.append("service_id", String(Number(values.service_id)));
+      body.append("requisition_id", String(Number(values.requisition_id)));
+      body.append("description", values.description.trim());
       if (values.subscription_id) {
-        payload.subscription_id = Number(values.subscription_id);
+        body.append("subscription_id", String(Number(values.subscription_id)));
       }
       if (values.category_id) {
-        payload.category_id = Number(values.category_id);
+        body.append("category_id", String(Number(values.category_id)));
       }
+
+      Object.entries(files).forEach(([documentTypeId, file], index) => {
+        if (!file) return;
+        body.append(`documents[${index}][document_type_id]`, String(Number(documentTypeId)));
+        body.append(`documents[${index}][file]`, file);
+      });
 
       const res = await api<{ data: Ticket }>("/tickets", {
         method: "POST",
-        body: JSON.stringify(payload),
+        body,
       });
       return res.data;
     },

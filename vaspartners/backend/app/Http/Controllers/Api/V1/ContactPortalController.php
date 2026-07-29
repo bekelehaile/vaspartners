@@ -333,7 +333,7 @@ class ContactPortalController extends Controller
         return response()->json($page);
     }
 
-    public function storeTicket(Request $request, TicketWorkflowService $workflow)
+    public function storeTicket(Request $request, TicketWorkflowService $workflow, TicketDocumentService $documents)
     {
         $data = $request->validate([
             'service_id' => ['required', 'exists:services,id'],
@@ -346,6 +346,9 @@ class ContactPortalController extends Controller
             'building' => ['nullable', 'string', 'max:255'],
             'location' => ['nullable', 'string', 'max:255'],
             'description' => ['required', 'string', 'min:1'],
+            'documents' => ['nullable', 'array'],
+            'documents.*.document_type_id' => ['required', 'integer', 'exists:document_types,id'],
+            'documents.*.file' => ['required', 'file'],
         ]);
 
         $service = Service::query()->with('categories')->findOrFail($data['service_id']);
@@ -373,7 +376,37 @@ class ContactPortalController extends Controller
             $data['category_id'] = $service->category_id;
         }
 
-        $ticket = $workflow->createTicket($request->user(), $data);
+        $uploads = [];
+        $documentFiles = $request->file('documents', []) ?: [];
+        $documentMeta = $request->input('documents', []) ?: [];
+        foreach ($documentMeta as $index => $row) {
+            $file = $documentFiles[$index]['file'] ?? null;
+            if (! $file instanceof \Illuminate\Http\UploadedFile) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    "documents.{$index}.file" => 'Each document entry must include a file.',
+                ]);
+            }
+            $uploads[] = [
+                'document_type_id' => (int) $row['document_type_id'],
+                'file' => $file,
+            ];
+        }
+
+        // Deduplicate by document type — last file wins (same as replace-on-upload).
+        $byType = [];
+        foreach ($uploads as $upload) {
+            $byType[(int) $upload['document_type_id']] = $upload;
+        }
+        $uploads = array_values($byType);
+
+        unset($data['documents']);
+
+        $ticket = $workflow->createTicketWithDocuments(
+            $request->user(),
+            $data,
+            $uploads,
+            $documents,
+        );
 
         return response()->json(['data' => $ticket], 201);
     }

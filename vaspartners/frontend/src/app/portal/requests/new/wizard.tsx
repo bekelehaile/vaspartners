@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useForm, useStore } from "@tanstack/react-form";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PortalPageHeader } from "@/components/PortalPageHeader";
 import {
@@ -11,7 +11,6 @@ import {
   useDocumentRequirements,
   useServices,
   useSubscriptions,
-  uploadTicketDocumentFile,
 } from "@/hooks/use-contact";
 import type { Service, Subscription } from "@/lib/api";
 import { contactCanCreateSubscriptions, contactCanManageServices } from "@/lib/company-permissions";
@@ -157,6 +156,8 @@ export default function NewRequestWizard() {
     aliveSubs.length > 0 || manageOneOffServices.length > 0;
 
   const [stagedFiles, setStagedFiles] = useState<StagedAttachments>({});
+  const stagedFilesRef = useRef(stagedFiles);
+  stagedFilesRef.current = stagedFiles;
   const [attachError, setAttachError] = useState<string | null>(null);
   const [uploadingDocs, setUploadingDocs] = useState(false);
   const [approverPopup, setApproverPopup] = useState<string | null>(null);
@@ -177,34 +178,26 @@ export default function NewRequestWizard() {
       setAttachError(null);
       setApproverPopup(null);
       const parsed = ticketCreateSchema.parse(value);
+      const files = stagedFilesRef.current;
+
       let created;
       try {
-        created = await createTicket.mutateAsync(parsed);
+        setUploadingDocs(true);
+        // Backend asserts every hard-required doc in one transaction — incomplete create is rejected.
+        created = await createTicket.mutateAsync({
+          values: parsed,
+          files,
+        });
+        setStagedFiles({});
       } catch (err) {
         if (isApproverMissingError(err) && err instanceof Error) {
           setApproverPopup(err.message);
+        } else if (err instanceof Error) {
+          setAttachError(err.message);
         }
         throw err;
-      }
-
-      const entries = Object.entries(stagedFiles);
-      if (entries.length) {
-        setUploadingDocs(true);
-        try {
-          for (const [documentTypeId, file] of entries) {
-            await uploadTicketDocumentFile(created.tt_number, Number(documentTypeId), file);
-          }
-          setStagedFiles({});
-        } catch (err) {
-          // Request already exists — open it so the partner can finish docs or delete.
-          setAttachError(
-            err instanceof Error
-              ? err.message
-              : "Request created, but some documents failed to upload.",
-          );
-        } finally {
-          setUploadingDocs(false);
-        }
+      } finally {
+        setUploadingDocs(false);
       }
 
       router.push(`/portal/requests/${created.tt_number}`);
