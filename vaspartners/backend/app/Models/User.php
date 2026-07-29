@@ -77,12 +77,21 @@ class User extends Authenticatable implements CanResetPasswordContract, Filament
     }
 
     /**
-     * Super admin and admin see all revenue data (unscoped).
-     * Account managers use resource permissions; monthly imports they created remain theirs.
+     * Super admin / management admins see all revenue data (unscoped).
+     * Operational account managers stay scoped to partners they own —
+     * even if they also have the admin role.
      */
     public function canAccessAllRevenue(): bool
     {
-        return $this->hasAnyRole(['super_admin', 'admin']);
+        if ($this->hasRole('super_admin')) {
+            return true;
+        }
+
+        if ($this->hasRole('account_manager') && ! $this->is_management) {
+            return false;
+        }
+
+        return $this->hasRole('admin');
     }
 
     /**

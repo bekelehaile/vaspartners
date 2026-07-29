@@ -117,7 +117,11 @@ class RevenuePartnerResource extends Resource
                         ->required()
                         ->native(false)
                         ->default(fn (): ?int => auth()->id())
-                        ->helperText('Staff user who owns this partner.')
+                        ->disabled(fn (): bool => ! static::viewerCanAccessAllRevenue())
+                        ->dehydrated()
+                        ->helperText(fn (): string => static::viewerCanAccessAllRevenue()
+                            ? 'Staff user who owns this partner.'
+                            : 'Assigned to you. Only managers can reassign ownership.')
                         ->columnSpanFull(),
                     Toggle::make('is_active')
                         ->label('Active')
@@ -179,7 +183,10 @@ class RevenuePartnerResource extends Resource
                 TextEntry::make('vasService.name')->label('Catalog service'),
                 TextEntry::make('service_id')->label('Service ID')->placeholder('—')->copyable(),
                 TextEntry::make('short_code')->label('Short code')->placeholder('—'),
-                TextEntry::make('creator.name')->label('Account manager')->placeholder('—'),
+                TextEntry::make('creator.name')
+                    ->label('Account manager')
+                    ->placeholder('—')
+                    ->visible(fn (): bool => static::viewerCanAccessAllRevenue()),
                 TextEntry::make('notes')->placeholder('—')->columnSpanFull(),
                 TextEntry::make('created_at')->dateTime(),
                 TextEntry::make('updated_at')->dateTime(),
@@ -213,7 +220,8 @@ class RevenuePartnerResource extends Resource
                 TextColumn::make('creator.name')
                     ->label('Account manager')
                     ->toggleable()
-                    ->sortable(),
+                    ->sortable()
+                    ->visible(fn (): bool => static::viewerCanAccessAllRevenue()),
                 IconColumn::make('is_active')->boolean()->label('Active'),
                 TextColumn::make('updated_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
@@ -226,7 +234,8 @@ class RevenuePartnerResource extends Resource
                     ->label('Account manager')
                     ->options(fn (): array => static::accountManagerOptions())
                     ->searchable()
-                    ->preload(),
+                    ->preload()
+                    ->visible(fn (): bool => static::viewerCanAccessAllRevenue()),
                 TernaryFilter::make('phone')
                     ->label('Phone')
                     ->placeholder('All')
@@ -292,8 +301,15 @@ class RevenuePartnerResource extends Resource
             return $query;
         }
 
-        // AMs: only partners they imported / created.
+        // Account managers: only partners assigned to them.
         return $query->where('created_by_user_id', $user->id);
+    }
+
+    public static function viewerCanAccessAllRevenue(): bool
+    {
+        $user = auth()->user();
+
+        return $user instanceof User && $user->canAccessAllRevenue();
     }
 
     public static function canCreate(): bool

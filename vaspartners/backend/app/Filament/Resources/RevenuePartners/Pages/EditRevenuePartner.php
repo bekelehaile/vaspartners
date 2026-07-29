@@ -17,4 +17,17 @@ class EditRevenuePartner extends EditRecord
                 ->url(fn (): string => RevenuePartnerResource::getUrl('view', ['record' => $this->getRecord()])),
         ];
     }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        if (! RevenuePartnerResource::viewerCanAccessAllRevenue()) {
+            $data['created_by_user_id'] = auth()->id();
+        }
+
+        return $data;
+    }
 }

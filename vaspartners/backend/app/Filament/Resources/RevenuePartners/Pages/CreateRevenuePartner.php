@@ -18,4 +18,17 @@ class CreateRevenuePartner extends CreateRecord
     {
         return 'Partner name is from finance/Excel. Optionally link a validated portal company for phone / membership.';
     }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    protected function mutateFormDataBeforeCreate(array $data): array
+    {
+        if (! RevenuePartnerResource::viewerCanAccessAllRevenue()) {
+            $data['created_by_user_id'] = auth()->id();
+        }
+
+        return $data;
+    }
 }

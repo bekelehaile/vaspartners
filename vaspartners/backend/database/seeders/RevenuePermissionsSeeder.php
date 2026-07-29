@@ -9,8 +9,8 @@ use Spatie\Permission\PermissionRegistrar;
 
 /**
  * Shield-style permissions for RevenuePartner + RevenueImport.
- * - super_admin / admin: full access (unscoped)
- * - account_manager: view/update partners + view imports (Filament scopes by assigned families)
+ * - super_admin / management admin: full access (unscoped)
+ * - account_manager (operational): view/update own partners + own imports (Filament scopes by created_by_user_id)
  */
 class RevenuePermissionsSeeder extends Seeder
 {
