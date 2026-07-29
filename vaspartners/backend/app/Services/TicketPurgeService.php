@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Enums\CompanyRole;
 use App\Enums\TicketStatus;
+use App\Models\CompanyMembership;
 use App\Models\Contact;
 use App\Models\Ticket;
 use App\Models\TicketApprovalStep;
@@ -20,6 +22,8 @@ use Throwable;
 /**
  * Permanently remove a partner portal ticket that is still unhandled (open)
  * or was sent back (rejected), plus all related data.
+ *
+ * Portal delete is restricted to the company owner.
  */
 class TicketPurgeService
 {
@@ -27,9 +31,41 @@ class TicketPurgeService
         protected CompanyMembershipService $membership,
     ) {}
 
-    public function partnerMayDelete(Ticket $ticket): bool
+    public function partnerMayDelete(Ticket $ticket, ?Contact $actor = null): bool
     {
-        return in_array($ticket->status, [TicketStatus::Open, TicketStatus::Rejected], true);
+        if (! in_array($ticket->status, [TicketStatus::Open, TicketStatus::Rejected], true)) {
+            return false;
+        }
+
+        if ($actor === null) {
+            return false;
+        }
+
+        return $this->actorIsCompanyOwner($actor, $ticket);
+    }
+
+    public function actorIsCompanyOwner(Contact $actor, Ticket $ticket): bool
+    {
+        $companyId = (int) ($ticket->company_id ?: 0);
+        if ($companyId <= 0) {
+            return false;
+        }
+
+        $membership = CompanyMembership::query()
+            ->where('contact_id', $actor->id)
+            ->where('company_id', $companyId)
+            ->where('is_active', true)
+            ->first();
+
+        if (! $membership) {
+            return false;
+        }
+
+        $role = $membership->role instanceof CompanyRole
+            ? $membership->role
+            : CompanyRole::tryFrom((string) $membership->role);
+
+        return $role === CompanyRole::Owner;
     }
 
     /**
@@ -94,9 +130,9 @@ class TicketPurgeService
     {
         $this->membership->assertCanAccessCompanyTicket($actor, $ticket);
 
-        if (! $this->partnerMayDelete($ticket)) {
+        if (! $this->partnerMayDelete($ticket, $actor)) {
             throw ValidationException::withMessages([
-                'ticket' => 'Only open (not yet handled) or rejected service requests can be deleted from the portal.',
+                'ticket' => 'Only the company owner can delete open or rejected service requests.',
             ]);
         }
 

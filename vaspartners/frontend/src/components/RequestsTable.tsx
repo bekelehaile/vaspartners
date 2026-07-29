@@ -164,10 +164,7 @@ export function RequestsTable({
         header: "",
         cell: (info) => {
           const ticket = info.row.original;
-          const canDelete =
-            ticket.can_delete === true ||
-            ticket.status === "open" ||
-            ticket.status === "rejected";
+          const canDelete = ticket.can_delete === true;
           const canEdit =
             ticket.contact_can_edit === true ||
             ticket.status === "open" ||
@@ -420,9 +417,7 @@ export function RequestsTable({
                           Edit
                         </Button>
                       )}
-                      {(ticket.can_delete === true ||
-                        ticket.status === "open" ||
-                        ticket.status === "rejected") && (
+                      {ticket.can_delete === true && (
                         <Button
                           type="button"
                           variant="outline"

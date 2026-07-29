@@ -58,11 +58,7 @@ export default function RequestDetailPage() {
       ticket.status === "open" ||
       ticket.status === "rejected");
 
-  const canDelete =
-    !!ticket &&
-    (ticket.can_delete === true ||
-      ticket.status === "open" ||
-      ticket.status === "rejected");
+  const canDelete = !!ticket && ticket.can_delete === true;
 
   const docsIncomplete =
     !!ticket &&

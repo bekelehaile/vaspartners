@@ -154,11 +154,12 @@ class ContactPortalController extends Controller
             ->paginate((int) ($filters['per_page'] ?? 15));
 
         $purge = app(\App\Services\TicketPurgeService::class);
-        $tickets->getCollection()->transform(function (Ticket $ticket) use ($purge) {
+        $actor = $request->user();
+        $tickets->getCollection()->transform(function (Ticket $ticket) use ($purge, $actor) {
             $handlerName = $ticket->assignee?->name;
             $ticket->unsetRelation('assignee');
             $ticket->setAttribute('assignee', $handlerName ? ['name' => $handlerName] : null);
-            $ticket->setAttribute('can_delete', $purge->partnerMayDelete($ticket));
+            $ticket->setAttribute('can_delete', $purge->partnerMayDelete($ticket, $actor));
             $ticket->setAttribute('contact_can_edit', $ticket->status->allowsContactEdits());
             $ticket->makeHidden([
                 'assigned_to_user_id',
@@ -212,7 +213,7 @@ class ContactPortalController extends Controller
             'missing_count' => $attachment['missing_count'],
             'missing_names' => $attachment['missing_names'],
         ];
-        $payload['can_delete'] = app(\App\Services\TicketPurgeService::class)->partnerMayDelete($ticket);
+        $payload['can_delete'] = app(\App\Services\TicketPurgeService::class)->partnerMayDelete($ticket, $request->user());
 
         return response()->json(['data' => $payload]);
     }
@@ -287,7 +288,7 @@ class ContactPortalController extends Controller
             : null;
         $payload['documents_locked'] = $ticket->status->locksContactDocuments();
         $payload['contact_can_edit'] = $ticket->status->allowsContactEdits();
-        $payload['can_delete'] = app(\App\Services\TicketPurgeService::class)->partnerMayDelete($ticket);
+        $payload['can_delete'] = app(\App\Services\TicketPurgeService::class)->partnerMayDelete($ticket, $request->user());
         $attachment = $workflow->attachmentStatus($ticket);
         $payload['attachment_status'] = [
             'state' => $attachment['state'],
