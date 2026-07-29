@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import {
   type AppNotification,
@@ -93,6 +93,7 @@ function IconFor({ template }: { template?: string | null }) {
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [panelStyle, setPanelStyle] = useState<CSSProperties | undefined>();
   const rootRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
@@ -106,6 +107,43 @@ export function NotificationBell() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const placePanel = () => {
+      const bell = rootRef.current;
+      if (!bell) return;
+      const rect = bell.getBoundingClientRect();
+      const gutter = window.innerWidth < 768 ? 12 : window.innerWidth < 1024 ? 24 : 32;
+      const panelWidth = Math.min(
+        window.innerWidth < 768 ? window.innerWidth - gutter * 2 : 420,
+        window.innerWidth - gutter * 2,
+      );
+      // Keep the panel flush to the bell's right edge (rightmost tools cluster).
+      const right = Math.max(gutter, window.innerWidth - rect.right);
+      const top = Math.min(
+        rect.bottom + 8,
+        Math.max(gutter, window.innerHeight - 120),
+      );
+      setPanelStyle({
+        position: "fixed",
+        top,
+        right,
+        left: "auto",
+        width: panelWidth,
+        maxHeight: `min(${window.innerWidth < 768 ? "70dvh" : "75vh"}, 32rem)`,
+      });
+    };
+
+    placePanel();
+    window.addEventListener("resize", placePanel);
+    window.addEventListener("scroll", placePanel, true);
+    return () => {
+      window.removeEventListener("resize", placePanel);
+      window.removeEventListener("scroll", placePanel, true);
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -137,6 +175,7 @@ export function NotificationBell() {
             role="dialog"
             aria-label="Notifications"
             id={panelId}
+            style={panelStyle}
           >
             <div className="notif-panel-head">
               <div>

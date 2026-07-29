@@ -693,21 +693,44 @@ textarea {
   animation: detail-in 0.18s ease both;
 }
 
-/* Rendered on document.body so sticky topbar does not clip/trap the panel on mobile */
+/* Portaled to document.body so sticky topbar does not clip/trap the panel.
+   Inline style from NotificationBell anchors right edge to the bell (desktop + mobile). */
 .notif-panel-portal {
   position: fixed;
-  top: calc(4rem + 0.35rem);
-  right: max(0.75rem, env(safe-area-inset-right, 0px));
-  left: auto;
   z-index: 120;
-  width: min(24.5rem, calc(100vw - 1.5rem));
-  max-height: min(70dvh, 28rem);
+  left: auto;
+  background: #fff;
+  border: 1px solid color-mix(in oklab, var(--et-line) 85%, #9ca3af);
+  border-radius: 0.75rem;
+  box-shadow:
+    0 4px 6px -1px rgba(15, 23, 42, 0.06),
+    0 18px 40px -12px rgba(15, 23, 42, 0.18);
+  overflow: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  animation: detail-in 0.18s ease both;
 }
 
 .notif-panel-portal .notif-cta {
   opacity: 1;
+}
+
+@media (min-width: 768px) {
+  .notif-panel-portal {
+    border-radius: 0.85rem;
+  }
+
+  .notif-panel-portal .notif-panel-head {
+    padding: 1.1rem 1.2rem 1rem;
+  }
+
+  .notif-panel-portal .notif-panel-body {
+    max-height: none;
+  }
+
+  .notif-panel-portal .notif-item {
+    padding: 0.95rem 1.15rem;
+  }
 }
 
 .portal-settings-menu {

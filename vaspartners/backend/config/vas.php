@@ -2,8 +2,9 @@
 
 return [
     'frontend_url' => env('FRONTEND_URL', 'http://localhost:3000'),
-    // Cap on concurrent *new subscription* (creates_subscription) open tickets only.
-    // Manage / renew / terminate requests are not limited by this value.
+    // Cap on concurrent *new subscription* (creates_subscription) open tickets
+    // per company + service. Other services are unaffected. Manage / renew /
+    // terminate requests are not limited by this value.
     'max_open_tickets' => (int) env('MAX_OPEN_TICKETS', 1),
     // Comma-separated last-9 phone digits that may exceed max_open_tickets (test accounts).
     'open_ticket_limit_exempt_phones' => array_values(array_filter(array_map(

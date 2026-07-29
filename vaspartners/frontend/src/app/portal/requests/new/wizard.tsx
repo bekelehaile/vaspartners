@@ -771,7 +771,7 @@ export default function NewRequestWizard() {
                           ? uploadingDocs
                             ? "Uploading documents…"
                             : "Creating…"
-                          : "Submit subscription request"}
+                          : "Submit"}
                       </button>
                       <button type="button" className="btn-ghost" onClick={() => setStep(0)}>
                         Back

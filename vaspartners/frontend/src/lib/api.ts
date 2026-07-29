@@ -75,6 +75,8 @@ export type Contact = {
   } | null;
   profile_completed_at?: string | null;
   profile_completed?: boolean;
+  /** True after at least one successful Fayda (National ID) sign-in; sticky across OTP logins. */
+  fayda_verified?: boolean;
 };
 
 export type ServiceGroup = {
@@ -175,6 +177,8 @@ export type Ticket = {
   building?: string | null;
   location?: string | null;
   contact?: { id?: number; public_id?: string; name?: string | null } | null;
+  /** Assigned account manager (name only) once the request is being handled. */
+  assignee?: { name?: string | null } | null;
   service?: { id: number; name: string };
   requisition?: { id: number; name: string };
   created_at: string;

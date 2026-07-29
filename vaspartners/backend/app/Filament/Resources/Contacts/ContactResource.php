@@ -125,10 +125,15 @@ class ContactResource extends Resource
                     Toggle::make('is_banned')
                         ->label('Banned')
                         ->helperText('Banned contacts are blocked from signing in.'),
+                    Toggle::make('fayda_verified')
+                        ->label('Identity verified via Fayda')
+                        ->disabled()
+                        ->dehydrated(false)
+                        ->helperText('Set only when the partner signs in with Fayda. Admins cannot change this.'),
                     TextInput::make('legacy_mvas_id')
                         ->label('Legacy MVAS ID')
                         ->maxLength(64),
-                ])->columns(3),
+                ])->columns(2),
         ]);
     }
 
@@ -136,10 +141,15 @@ class ContactResource extends Resource
     {
         return $schema->components([
             Section::make('Fayda identity')
-                ->description('Verified by Fayda (National ID). Admins can edit these on the Edit page; Fayda login may refresh them again.')
+                ->description('Partner identity fields. “Verified via Fayda” is set only when they sign in with National ID — not editable by admin.')
                 ->schema([
                     TextEntry::make('public_id'),
                     TextEntry::make('sub')->label('Fayda sub'),
+                    TextEntry::make('fayda_verified')
+                        ->label('Verified via Fayda')
+                        ->badge()
+                        ->formatStateUsing(fn ($state): string => $state ? 'Yes' : 'No')
+                        ->color(fn ($state): string => $state ? 'success' : 'warning'),
                     TextEntry::make('name'),
                     TextEntry::make('phone_number'),
                     TextEntry::make('email'),
@@ -174,8 +184,13 @@ class ContactResource extends Resource
             Section::make('Status')->schema([
                 TextEntry::make('is_active')->badge(),
                 TextEntry::make('is_banned')->badge(),
+                TextEntry::make('fayda_verified')
+                    ->label('Fayda verified')
+                    ->badge()
+                    ->formatStateUsing(fn ($state): string => $state ? 'Yes' : 'No')
+                    ->color(fn ($state): string => $state ? 'success' : 'warning'),
                 TextEntry::make('created_at')->dateTime(),
-            ])->columns(3),
+            ])->columns(4),
         ]);
     }
 
@@ -206,6 +221,7 @@ class ContactResource extends Resource
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
                 IconColumn::make('profile_completed')->boolean()->label('Company OK'),
+                IconColumn::make('fayda_verified')->boolean()->label('Fayda'),
                 ToggleColumn::make('is_active')
                     ->label('Active')
                     ->onColor('success')
@@ -253,6 +269,12 @@ class ContactResource extends Resource
                             default => $query,
                         };
                     }),
+                TernaryFilter::make('fayda_verified')
+                    ->label('Fayda verified')
+                    ->boolean()
+                    ->placeholder('Any')
+                    ->trueLabel('Verified via Fayda')
+                    ->falseLabel('Not Fayda-verified'),
                 TernaryFilter::make('profile_completed_at')
                     ->label('Profile completed')
                     ->nullable()

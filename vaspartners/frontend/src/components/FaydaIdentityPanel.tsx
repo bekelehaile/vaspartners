@@ -48,9 +48,10 @@ export function FaydaIdentityPanel({
           {description && <p className="muted">{description}</p>}
         </div>
       )}
-      {!showHeading && badge && (
-        <div className="settings-block-title-row" style={{ marginBottom: "0.75rem" }}>
-          {badge}
+      {!showHeading && (badge || description) && (
+        <div className="settings-block-head" style={{ marginBottom: "0.75rem" }}>
+          {badge && <div className="settings-block-title-row">{badge}</div>}
+          {description && <p className="muted">{description}</p>}
         </div>
       )}
       <dl className="fayda-dl">

@@ -505,6 +505,7 @@ export type CompanyMemberOption = {
   is_active?: boolean;
   is_owner?: boolean;
   awaiting_fayda?: boolean;
+  fayda_verified?: boolean;
   permissions?: string[];
 };
 
@@ -688,6 +689,31 @@ export function useDeleteRejectedTicket() {
       queryClient.removeQueries({ queryKey: queryKeys.ticket(ttNumber) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.contact.tickets });
       void queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions });
+    },
+  });
+}
+
+export function useUpdateTicket(ttNumber: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (values: {
+      description: string;
+      building?: string | null;
+      location?: string | null;
+    }) => {
+      const res = await api<{ data: Ticket; message?: string }>(
+        `/tickets/${encodeURIComponent(ttNumber)}`,
+        {
+          method: "PUT",
+          body: JSON.stringify(values),
+        },
+      );
+      return res.data;
+    },
+    onSuccess: (ticket) => {
+      queryClient.setQueryData(queryKeys.ticket(ticket.tt_number), ticket);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.contact.tickets });
     },
   });
 }

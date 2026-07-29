@@ -578,7 +578,11 @@ export function CompanyMembersTable({ enabled }: { enabled: boolean }) {
                   <div className="portal-mobile-card-row">
                     <span>{member.email || "No email"}</span>
                     <span>
-                      {member.awaiting_fayda ? "Awaiting Fayda" : "Fayda linked"}
+                      {member.awaiting_fayda
+                        ? "Awaiting sign-in"
+                        : member.fayda_verified
+                          ? "Fayda verified"
+                          : "Phone OTP"}
                     </span>
                   </div>
                   <div className="portal-mobile-card-meta" style={{ marginTop: "0.35rem" }}>
@@ -684,9 +688,13 @@ export function CompanyMembersTable({ enabled }: { enabled: boolean }) {
                           <span className="company-request-status is-pending">
                             Awaiting sign-in
                           </span>
-                        ) : (
+                        ) : member.fayda_verified ? (
                           <span className="company-request-status is-approved">
-                            Linked
+                            Fayda verified
+                          </span>
+                        ) : (
+                          <span className="company-request-status is-pending">
+                            Phone OTP
                           </span>
                         )}
                       </td>

@@ -52,7 +52,6 @@ class Contact extends Authenticatable
         'legacy_mvas_id',
         'is_active',
         'is_banned',
-        'fayda_verified',
         'profile_completed_at',
     ];
 
@@ -195,7 +194,6 @@ class Contact extends Authenticatable
             ...self::FAYDA_ATTRIBUTES,
             'is_active',
             'is_banned',
-            'fayda_verified',
             'legacy_mvas_id',
             'company_name',
             'company_tin',
@@ -209,6 +207,7 @@ class Contact extends Authenticatable
         $payload = array_intersect_key($attributes, array_flip($allowed));
         // Fayda subject is the SSO key — never change via admin form.
         unset($payload['sub']);
+        // fayda_verified is set only by Fayda sign-in — never via admin.
 
         if ($payload === []) {
             return;

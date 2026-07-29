@@ -114,6 +114,7 @@ class ContactPortalController extends Controller
                 'service:id,name',
                 'requisition:id,name',
                 'contact:id,public_id,name',
+                'assignee:id,name',
             ]);
 
         if ($contact->current_company_id && $contact->hasActiveCompanyMembership()) {
@@ -143,7 +144,8 @@ class ContactPortalController extends Controller
                     ->orWhere('building', 'ilike', "%{$search}%")
                     ->orWhereHas('service', fn ($sq) => $sq->where('name', 'ilike', "%{$search}%"))
                     ->orWhereHas('requisition', fn ($rq) => $rq->where('name', 'ilike', "%{$search}%"))
-                    ->orWhereHas('contact', fn ($cq) => $cq->where('name', 'ilike', "%{$search}%"));
+                    ->orWhereHas('contact', fn ($cq) => $cq->where('name', 'ilike', "%{$search}%"))
+                    ->orWhereHas('assignee', fn ($aq) => $aq->where('name', 'ilike', "%{$search}%"));
             });
         }
 
@@ -153,7 +155,15 @@ class ContactPortalController extends Controller
 
         $purge = app(\App\Services\TicketPurgeService::class);
         $tickets->getCollection()->transform(function (Ticket $ticket) use ($purge) {
+            $handlerName = $ticket->assignee?->name;
+            $ticket->unsetRelation('assignee');
+            $ticket->setAttribute('assignee', $handlerName ? ['name' => $handlerName] : null);
             $ticket->setAttribute('can_delete', $purge->partnerMayDelete($ticket));
+            $ticket->setAttribute('contact_can_edit', $ticket->status->allowsContactEdits());
+            $ticket->makeHidden([
+                'assigned_to_user_id',
+                'current_approver_user_id',
+            ]);
 
             return $ticket;
         });
@@ -165,11 +175,21 @@ class ContactPortalController extends Controller
     {
         $membership->assertCanAccessCompanyTicket($request->user(), $ticket);
 
-        $ticket->load(['service', 'requisition', 'subscription', 'documents.documentType', 'contact:id,public_id,name']);
+        $ticket->load([
+            'service',
+            'requisition',
+            'subscription',
+            'documents.documentType',
+            'contact:id,public_id,name',
+            'assignee:id,name',
+        ]);
 
         $payload = $ticket->toArray();
         // Operational groups are internal — do not surface to partners.
-        unset($payload['category'], $payload['category_id']);
+        unset($payload['category'], $payload['category_id'], $payload['assigned_to_user_id'], $payload['current_approver_user_id']);
+        $payload['assignee'] = $ticket->assignee
+            ? ['name' => $ticket->assignee->name]
+            : null;
         $thread = $comments->paginateThread($ticket, $request->user(), null, null, 40);
         $payload['messages'] = $thread['data'];
         $payload['messages_meta'] = $thread['meta'];
@@ -208,6 +228,76 @@ class ContactPortalController extends Controller
         return response()->json([
             'message' => 'Request permanently deleted.',
             'data' => $stats,
+        ]);
+    }
+
+    /**
+     * Partner updates request details while status is open or rejected (sent back).
+     */
+    public function updateTicket(
+        Request $request,
+        Ticket $ticket,
+        CompanyMembershipService $membership,
+    ) {
+        $membership->assertCanAccessCompanyTicket($request->user(), $ticket);
+
+        if (! $ticket->status->allowsContactEdits()) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'ticket' => 'This request cannot be edited while Ethio telecom is handling it. You can edit again if it is sent back for corrections.',
+            ]);
+        }
+
+        $data = $request->validate([
+            'description' => ['required', 'string', 'min:1', 'max:5000'],
+            'building' => ['nullable', 'string', 'max:255'],
+            'location' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $ticket->forceFill([
+            'description' => trim((string) $data['description']),
+            'building' => array_key_exists('building', $data)
+                ? (filled($data['building'] ?? null) ? trim((string) $data['building']) : null)
+                : $ticket->building,
+            'location' => array_key_exists('location', $data)
+                ? (filled($data['location'] ?? null) ? trim((string) $data['location']) : null)
+                : $ticket->location,
+        ])->save();
+
+        $ticket->load([
+            'service',
+            'requisition',
+            'subscription',
+            'documents.documentType',
+            'contact:id,public_id,name',
+            'assignee:id,name',
+        ]);
+
+        $payload = $ticket->toArray();
+        unset($payload['category'], $payload['category_id'], $payload['assigned_to_user_id'], $payload['current_approver_user_id']);
+        $payload['assignee'] = $ticket->assignee
+            ? ['name' => $ticket->assignee->name]
+            : null;
+        $payload['documents_locked'] = $ticket->status->locksContactDocuments();
+        $payload['contact_can_edit'] = $ticket->status->allowsContactEdits();
+        $payload['can_delete'] = app(\App\Services\TicketPurgeService::class)->partnerMayDelete($ticket);
+        $attachment = app(\App\Services\TicketWorkflowService::class)->attachmentStatus($ticket);
+        $payload['attachment_status'] = [
+            'state' => $attachment['state'],
+            'label' => $attachment['label'],
+            'required_count' => $attachment['required_count'],
+            'uploaded_count' => $attachment['uploaded_count'],
+            'missing_count' => $attachment['missing_count'],
+            'missing_names' => $attachment['missing_names'],
+        ];
+        $payload['documents'] = collect($payload['documents'] ?? [])->map(function (array $doc) use ($ticket) {
+            $doc['download_url'] = url("/api/v1/tickets/{$ticket->tt_number}/documents/{$doc['id']}/download");
+
+            return $doc;
+        })->values()->all();
+
+        return response()->json([
+            'message' => 'Request updated.',
+            'data' => $payload,
         ]);
     }
 

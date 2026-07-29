@@ -298,8 +298,8 @@ class TicketWorkflowService
     }
 
     /**
-     * One open new-subscription ticket max. Manage / renew / terminate can coexist
-     * (and multiple manage tickets for different services are allowed).
+     * Cap concurrent *new subscription* tickets per company + service.
+     * Manage / renew / terminate are not limited here. Other services stay available.
      *
      * @param  array<string, mixed>  $data
      */
@@ -318,9 +318,15 @@ class TicketWorkflowService
             return;
         }
 
+        $serviceId = (int) ($data['service_id'] ?? 0);
+        if ($serviceId < 1) {
+            return;
+        }
+
         $maxOpen = (int) config('vas.max_open_tickets', 1);
         $companyId = (int) $contact->company_id;
         $openCount = Ticket::query()
+            ->where('service_id', $serviceId)
             ->where('status', TicketStatus::Open)
             ->whereHas('requisition', fn ($q) => $q->where('creates_subscription', true))
             ->when(
@@ -332,7 +338,7 @@ class TicketWorkflowService
 
         if ($openCount >= $maxOpen) {
             throw ValidationException::withMessages([
-                'ticket' => "Your company already has the maximum of {$maxOpen} open subscription request(s). You can still submit manage requests for other services.",
+                'ticket' => "Your company already has the maximum of {$maxOpen} open subscription request(s) for this service. You can still submit a new subscription for other services, or manage requests for this one.",
             ]);
         }
     }

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import {
   FileTextIcon,
   MessageSquareIcon,
@@ -22,10 +22,15 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useTicket, useDeleteRejectedTicket } from "@/hooks/use-contact";
+import {
+  useTicket,
+  useDeleteRejectedTicket,
+  useUpdateTicket,
+} from "@/hooks/use-contact";
 import { statusCopy } from "@/lib/api";
 
 type DetailTab = "overview" | "documents" | "messages";
@@ -39,8 +44,25 @@ export default function RequestDetailPage() {
   const router = useRouter();
   const { data: ticket, isLoading, isError, error } = useTicket(requestNumber);
   const deleteRejected = useDeleteRejectedTicket();
+  const updateTicket = useUpdateTicket(requestNumber);
   const [tab, setTab] = useState<DetailTab>("overview");
   const [autoOpenedDocs, setAutoOpenedDocs] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [description, setDescription] = useState("");
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editSaved, setEditSaved] = useState(false);
+
+  const canEdit =
+    !!ticket &&
+    (ticket.contact_can_edit === true ||
+      ticket.status === "open" ||
+      ticket.status === "rejected");
+
+  const canDelete =
+    !!ticket &&
+    (ticket.can_delete === true ||
+      ticket.status === "open" ||
+      ticket.status === "rejected");
 
   const docsIncomplete =
     !!ticket &&
@@ -54,6 +76,77 @@ export default function RequestDetailPage() {
       setAutoOpenedDocs(true);
     }
   }, [ticket, docsIncomplete, autoOpenedDocs]);
+
+  useEffect(() => {
+    if (!ticket) return;
+    setDescription(ticket.description ?? "");
+  }, [ticket?.tt_number, ticket?.description]);
+
+  useEffect(() => {
+    if (!ticket || !canEdit || typeof window === "undefined") return;
+    if (new URLSearchParams(window.location.search).get("edit") === "1") {
+      setEditing(true);
+      setTab("overview");
+      setEditSaved(false);
+      setEditError(null);
+    }
+  }, [ticket?.tt_number, canEdit]);
+
+  function startEdit() {
+    if (!ticket || !canEdit) return;
+    setDescription(ticket.description ?? "");
+    setEditing(true);
+    setEditError(null);
+    setEditSaved(false);
+    setTab("overview");
+    router.replace(`/portal/requests/${ticket.tt_number}?edit=1`, { scroll: false });
+  }
+
+  function cancelEdit() {
+    if (!ticket) return;
+    setEditing(false);
+    setDescription(ticket.description ?? "");
+    setEditError(null);
+    setEditSaved(false);
+    router.replace(`/portal/requests/${ticket.tt_number}`, { scroll: false });
+  }
+
+  async function onSaveEdit(e: FormEvent) {
+    e.preventDefault();
+    if (!ticket || !canEdit) return;
+    const next = description.trim();
+    if (!next) {
+      setEditError("Please enter a description.");
+      return;
+    }
+    setEditError(null);
+    try {
+      await updateTicket.mutateAsync({ description: next });
+      setEditing(false);
+      setEditSaved(true);
+      router.replace(`/portal/requests/${ticket.tt_number}`, { scroll: false });
+      if (ticket.status === "rejected") {
+        setTab("documents");
+      }
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Could not save changes.");
+    }
+  }
+
+  function onDeleteRequest() {
+    if (!ticket || !canDelete) return;
+    const open = ticket.status === "open";
+    const ok = window.confirm(
+      open
+        ? `Permanently delete request ${ticket.tt_number}? Ethio telecom has not started handling it yet. This removes the request and uploaded documents. This cannot be undone.`
+        : `Permanently delete rejected request ${ticket.tt_number}? This removes the request, messages, and all uploaded documents from the system. This cannot be undone.`,
+    );
+    if (!ok) return;
+    void deleteRejected
+      .mutateAsync(ticket.tt_number)
+      .then(() => router.replace("/portal"))
+      .catch(() => undefined);
+  }
 
   return (
     <>
@@ -71,43 +164,7 @@ export default function RequestDetailPage() {
                 .join(" · ") || "Service request details"
             : "Loading request details…"
         }
-        actions={
-          ticket ? (
-            <div className="portal-request-toolbar">
-              <div className="flex flex-wrap items-center gap-2">
-                <StatusPill status={ticket.status} />
-              </div>
-              {(ticket.can_delete ||
-                ticket.status === "open" ||
-                ticket.status === "rejected") && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="border-destructive/40 text-destructive hover:bg-destructive/10 min-h-11"
-                  disabled={deleteRejected.isPending}
-                  onClick={() => {
-                    const open = ticket.status === "open";
-                    const ok = window.confirm(
-                      open
-                        ? `Permanently delete request ${ticket.tt_number}? Ethio telecom has not started handling it yet. This removes the request and uploaded documents. This cannot be undone.`
-                        : `Permanently delete rejected request ${ticket.tt_number}? This removes the request, messages, and all uploaded documents from the system. This cannot be undone.`,
-                    );
-                    if (!ok) return;
-                    void deleteRejected
-                      .mutateAsync(ticket.tt_number)
-                      .then(() => router.replace("/portal"))
-                      .catch(() => undefined);
-                  }}
-                >
-                  {deleteRejected.isPending ? "Deleting…" : "Delete request"}
-                </Button>
-              )}
-              <JourneyLaunchActions />
-            </div>
-          ) : (
-            <JourneyLaunchActions />
-          )
-        }
+        actions={<JourneyLaunchActions />}
       />
 
       <div className="section section-flush">
@@ -122,6 +179,15 @@ export default function RequestDetailPage() {
             {deleteRejected.error instanceof Error
               ? deleteRejected.error.message
               : "Could not delete this request"}
+          </div>
+        )}
+
+        {editSaved && (
+          <div className="alert" role="status" style={{ marginBottom: "1rem" }}>
+            Request details saved.
+            {ticket?.status === "rejected"
+              ? " Update documents below, then wait for our team to re-check."
+              : null}
           </div>
         )}
 
@@ -194,7 +260,7 @@ export default function RequestDetailPage() {
               <div className="flex flex-col gap-5">
                 <Card size="sm">
                   <CardContent className="pt-(--card-spacing)">
-                    <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                       <div>
                         <dt className="text-[0.72rem] font-bold tracking-wide text-muted-foreground uppercase">
                           Service
@@ -209,6 +275,14 @@ export default function RequestDetailPage() {
                         </dt>
                         <dd className="mt-1 font-semibold text-foreground">
                           {ticket.requisition?.name || "—"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-[0.72rem] font-bold tracking-wide text-muted-foreground uppercase">
+                          Handled by
+                        </dt>
+                        <dd className="mt-1 font-semibold text-foreground">
+                          {ticket.assignee?.name || "Awaiting assignment"}
                         </dd>
                       </div>
                       <div>
@@ -241,16 +315,74 @@ export default function RequestDetailPage() {
 
                 <Card>
                   <CardHeader className="border-b">
-                    <CardTitle>Progress</CardTitle>
-                    <CardDescription>
-                      {statusCopy[ticket.status]?.hint ||
-                        "Track where this request is in the review flow."}
-                    </CardDescription>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0 space-y-1.5">
+                        <CardTitle>Progress</CardTitle>
+                        <CardDescription>
+                          {statusCopy[ticket.status]?.hint ||
+                            "Track where this request is in the review flow."}
+                        </CardDescription>
+                      </div>
+                      <StatusPill status={ticket.status} />
+                    </div>
                   </CardHeader>
                   <CardContent className="flex flex-col gap-5 pt-(--card-spacing)">
                     <StatusJourney status={ticket.status} />
 
-                    {ticket.description && (
+                    {editing && canEdit ? (
+                      <form className="rounded-lg border bg-muted/30 px-4 py-3" onSubmit={onSaveEdit}>
+                        <h3 className="mb-1 text-[0.72rem] font-bold tracking-wide text-muted-foreground uppercase">
+                          Description
+                        </h3>
+                        <p className="muted" style={{ marginTop: 0, marginBottom: "0.75rem" }}>
+                          {ticket.status === "rejected"
+                            ? "Update your request notes, then fix documents below so the account manager can re-check."
+                            : "You can update this request while it is still pending."}
+                        </p>
+                        {editError && (
+                          <div className="alert" role="alert" style={{ marginBottom: "0.75rem" }}>
+                            {editError}
+                          </div>
+                        )}
+                        <textarea
+                          rows={5}
+                          value={description}
+                          onChange={(e) => setDescription(e.target.value)}
+                          disabled={updateTicket.isPending}
+                          placeholder="Describe why you need this service"
+                          required
+                          style={{ width: "100%" }}
+                        />
+                        <div className="form-actions" style={{ marginTop: "0.75rem" }}>
+                          <Button
+                            type="submit"
+                            className="min-h-11"
+                            disabled={updateTicket.isPending}
+                          >
+                            {updateTicket.isPending ? "Saving…" : "Save changes"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="min-h-11"
+                            disabled={updateTicket.isPending}
+                            onClick={cancelEdit}
+                          >
+                            Cancel
+                          </Button>
+                          {ticket.status === "rejected" && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="min-h-11"
+                              onClick={() => setTab("documents")}
+                            >
+                              Go to documents
+                            </Button>
+                          )}
+                        </div>
+                      </form>
+                    ) : ticket.description ? (
                       <div className="rounded-lg border bg-muted/30 px-4 py-3">
                         <h3 className="mb-1 text-[0.72rem] font-bold tracking-wide text-muted-foreground uppercase">
                           Description
@@ -259,8 +391,43 @@ export default function RequestDetailPage() {
                           {ticket.description}
                         </p>
                       </div>
-                    )}
+                    ) : null}
                   </CardContent>
+                  {(canEdit || canDelete) && (
+                    <CardFooter className="flex flex-wrap items-center gap-2 border-t bg-muted/20 py-3">
+                      {canEdit && !editing && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="min-h-11"
+                          onClick={startEdit}
+                        >
+                          Edit request
+                        </Button>
+                      )}
+                      {ticket.status === "rejected" && !editing && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="min-h-11"
+                          onClick={() => setTab("documents")}
+                        >
+                          Update documents
+                        </Button>
+                      )}
+                      {canDelete && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="border-destructive/40 text-destructive hover:bg-destructive/10 min-h-11"
+                          disabled={deleteRejected.isPending}
+                          onClick={onDeleteRequest}
+                        >
+                          {deleteRejected.isPending ? "Deleting…" : "Delete request"}
+                        </Button>
+                      )}
+                    </CardFooter>
+                  )}
                 </Card>
               </div>
             </VerticalTabPanel>
@@ -274,7 +441,9 @@ export default function RequestDetailPage() {
                 <CardHeader className="border-b">
                   <CardTitle>Documents</CardTitle>
                   <CardDescription>
-                    Required attachments for this request type.
+                    {ticket.status === "rejected"
+                      ? "Update documents below, then wait for our team to re-check."
+                      : "Required attachments for this request type."}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="pt-(--card-spacing)">
@@ -291,6 +460,31 @@ export default function RequestDetailPage() {
                     }
                   />
                 </CardContent>
+                {(canEdit || canDelete) && (
+                  <CardFooter className="flex flex-wrap items-center gap-2 border-t bg-muted/20 py-3">
+                    {canEdit && !editing && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="min-h-11"
+                        onClick={startEdit}
+                      >
+                        Edit request
+                      </Button>
+                    )}
+                    {canDelete && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="border-destructive/40 text-destructive hover:bg-destructive/10 min-h-11"
+                        disabled={deleteRejected.isPending}
+                        onClick={onDeleteRequest}
+                      >
+                        {deleteRejected.isPending ? "Deleting…" : "Delete request"}
+                      </Button>
+                    )}
+                  </CardFooter>
+                )}
               </Card>
             </VerticalTabPanel>
 

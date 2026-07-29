@@ -290,13 +290,25 @@ export default function CompanyProfilePage() {
                   <FaydaIdentityPanel
                     id="fayda-identity"
                     showHeading={false}
+                    description={
+                      me?.fayda_verified
+                        ? "Verified via Fayda (National ID)."
+                        : "Not yet verified via Fayda — phone OTP sign-in only so far."
+                    }
                     person={me ?? {}}
                     badge={
-                      me?.company_role === "owner" ? (
-                        <span className="service-meta">Owner</span>
-                      ) : (
-                        <span className="service-meta">Member</span>
-                      )
+                      <>
+                        {me?.fayda_verified ? (
+                          <span className="service-meta">Fayda verified</span>
+                        ) : (
+                          <span className="service-meta">Not Fayda-verified</span>
+                        )}
+                        {me?.company_role === "owner" ? (
+                          <span className="service-meta">Owner</span>
+                        ) : (
+                          <span className="service-meta">Member</span>
+                        )}
+                      </>
                     }
                   />
                 </div>

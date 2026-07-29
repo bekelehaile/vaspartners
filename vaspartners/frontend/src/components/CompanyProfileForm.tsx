@@ -158,12 +158,23 @@ export function CompanyProfileForm({
         <FaydaIdentityPanel
           id="fayda-identity"
           title="Your identity"
-          description="Phone and email from your account are applied to this company automatically. Contact support if anything is wrong."
+          description={
+            me.fayda_verified
+              ? "Verified via Fayda (National ID). Phone and email from your account are applied to this company automatically."
+              : "Signed in with phone OTP — not yet verified via Fayda. Phone and email from your account are applied to this company."
+          }
           person={me}
           badge={
-            me.company_role === "owner" ? (
-              <span className="service-meta">Company owner</span>
-            ) : undefined
+            <>
+              {me.fayda_verified ? (
+                <span className="service-meta">Fayda verified</span>
+              ) : (
+                <span className="service-meta">Not Fayda-verified</span>
+              )}
+              {me.company_role === "owner" ? (
+                <span className="service-meta">Company owner</span>
+              ) : null}
+            </>
           }
         />
       )}

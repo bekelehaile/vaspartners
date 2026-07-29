@@ -139,6 +139,18 @@ export function RequestsTable({
         header: "Status",
         cell: (info) => <StatusPill status={info.getValue()} />,
       }),
+      columnHelper.accessor((row) => row.assignee?.name ?? null, {
+        id: "assignee",
+        header: "Handled by",
+        cell: (info) => {
+          const name = info.getValue();
+          return (
+            <span className={name ? "text-foreground" : "text-muted-foreground"}>
+              {name || "Awaiting assignment"}
+            </span>
+          );
+        },
+      }),
       columnHelper.accessor("created_at", {
         header: "Submitted",
         cell: (info) => (
@@ -156,6 +168,10 @@ export function RequestsTable({
             ticket.can_delete === true ||
             ticket.status === "open" ||
             ticket.status === "rejected";
+          const canEdit =
+            ticket.contact_can_edit === true ||
+            ticket.status === "open" ||
+            ticket.status === "rejected";
           return (
             <div className="flex flex-wrap items-center gap-2">
               <Button
@@ -167,6 +183,19 @@ export function RequestsTable({
               >
                 View
               </Button>
+              {canEdit && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7"
+                  render={
+                    <Link href={`/portal/requests/${ticket.tt_number}?edit=1`} />
+                  }
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Edit
+                </Button>
+              )}
               {canDelete && (
                 <Button
                   type="button"
@@ -358,23 +387,50 @@ export function RequestsTable({
                         <span>{ticket.service?.name ?? "—"}</span>
                         <span>{formatSubmitted(ticket.created_at)}</span>
                       </div>
+                      <p className="portal-mobile-card-meta">
+                        Handled by{" "}
+                        {ticket.assignee?.name
+                          ? ticket.assignee.name
+                          : "Awaiting assignment"}
+                      </p>
                       {ticket.contact?.name && (
                         <p className="portal-mobile-card-meta">by {ticket.contact.name}</p>
                       )}
                     </button>
                     {(ticket.can_delete === true ||
+                      ticket.contact_can_edit === true ||
                       ticket.status === "open" ||
                       ticket.status === "rejected") && (
                       <div className="portal-mobile-card-actions">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="border-destructive/40 text-destructive min-h-11"
-                          disabled={deleteRejected.isPending}
-                          onClick={() => onDeleteRequest(ticket)}
-                        >
-                          Delete
-                        </Button>
+                        {(ticket.contact_can_edit === true ||
+                          ticket.status === "open" ||
+                          ticket.status === "rejected") && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="min-h-11"
+                            onClick={() =>
+                              router.push(
+                                `/portal/requests/${ticket.tt_number}?edit=1`,
+                              )
+                            }
+                          >
+                            Edit
+                          </Button>
+                        )}
+                        {(ticket.can_delete === true ||
+                          ticket.status === "open" ||
+                          ticket.status === "rejected") && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="border-destructive/40 text-destructive min-h-11"
+                            disabled={deleteRejected.isPending}
+                            onClick={() => onDeleteRequest(ticket)}
+                          >
+                            Delete
+                          </Button>
+                        )}
                       </div>
                     )}
                   </div>
