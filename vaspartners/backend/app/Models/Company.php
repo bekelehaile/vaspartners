@@ -107,6 +107,27 @@ class Company extends Model
         return (bool) $this->tin_validated && $this->hasValidEthiopianTin();
     }
 
+    /**
+     * Do not permanently delete companies that have an owner, a valid approved TIN,
+     * and at least one subscription.
+     */
+    public function isForcePurgeProtected(): bool
+    {
+        if (! $this->hasOwner() || ! $this->isTinValidated()) {
+            return false;
+        }
+
+        if (array_key_exists('subscriptions_count', $this->attributes)) {
+            return (int) $this->attributes['subscriptions_count'] > 0;
+        }
+
+        if (isset($this->subscriptions_count)) {
+            return (int) $this->subscriptions_count > 0;
+        }
+
+        return $this->subscriptions()->exists();
+    }
+
     public function uniqueIds(): array
     {
         return ['public_id'];

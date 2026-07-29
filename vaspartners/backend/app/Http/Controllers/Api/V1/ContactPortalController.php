@@ -15,6 +15,7 @@ use App\Services\TicketCommentService;
 use App\Services\TicketDocumentService;
 use App\Services\TicketWorkflowService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -338,6 +339,30 @@ class ContactPortalController extends Controller
 
     public function storeTicket(Request $request, TicketWorkflowService $workflow, TicketDocumentService $documents)
     {
+        /** @var \App\Models\Contact $contact */
+        $contact = $request->user();
+
+        $idempotencyKey = $this->normalizeTicketIdempotencyKey(
+            $request->header('Idempotency-Key') ?? $request->input('idempotency_key'),
+        );
+
+        if ($idempotencyKey !== null) {
+            $cachedTicketId = Cache::get($this->ticketIdempotencyCacheKey($contact->id, $idempotencyKey));
+            if ($cachedTicketId) {
+                $existing = Ticket::query()
+                    ->whereKey($cachedTicketId)
+                    ->where('contact_id', $contact->id)
+                    ->with(['contact', 'service', 'requisition', 'documents.documentType'])
+                    ->first();
+                if ($existing) {
+                    return response()->json([
+                        'data' => $existing,
+                        'idempotent_replay' => true,
+                    ]);
+                }
+            }
+        }
+
         $data = $request->validate([
             'service_id' => ['required', 'exists:services,id'],
             'requisition_id' => ['required', 'exists:requisitions,id'],
@@ -352,6 +377,7 @@ class ContactPortalController extends Controller
             'documents' => ['nullable', 'array'],
             'documents.*.document_type_id' => ['required', 'integer', 'exists:document_types,id'],
             'documents.*.file' => ['required', 'file'],
+            'idempotency_key' => ['nullable', 'string', 'max:128'],
         ]);
 
         $service = Service::query()->with('categories')->findOrFail($data['service_id']);
@@ -402,16 +428,90 @@ class ContactPortalController extends Controller
         }
         $uploads = array_values($byType);
 
-        unset($data['documents']);
+        unset($data['documents'], $data['idempotency_key']);
 
-        $ticket = $workflow->createTicketWithDocuments(
-            $request->user(),
-            $data,
-            $uploads,
-            $documents,
-        );
+        $create = function () use ($workflow, $contact, $data, $uploads, $documents, $idempotencyKey) {
+            $ticket = $workflow->createTicketWithDocuments(
+                $contact,
+                $data,
+                $uploads,
+                $documents,
+            );
+
+            if ($idempotencyKey !== null) {
+                Cache::put(
+                    $this->ticketIdempotencyCacheKey($contact->id, $idempotencyKey),
+                    $ticket->id,
+                    now()->addHours(max(1, (int) config('vas.ticket_create.idempotency_ttl_hours', 24))),
+                );
+            }
+
+            return $ticket;
+        };
+
+        // Serialize concurrent retries that share the same Idempotency-Key.
+        if ($idempotencyKey !== null) {
+            $idemLock = Cache::lock(
+                'ticket-idem-lock:'.$contact->id.':'.hash('sha256', $idempotencyKey),
+                max(5, (int) config('vas.ticket_create.lock_seconds', 20)),
+            );
+
+            try {
+                $idemLock->block(max(1, (int) config('vas.ticket_create.lock_wait_seconds', 8)));
+            } catch (\Illuminate\Contracts\Cache\LockTimeoutException) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'ticket' => 'Your previous submit is still processing. Please wait a moment.',
+                ]);
+            }
+
+            try {
+                $cachedTicketId = Cache::get($this->ticketIdempotencyCacheKey($contact->id, $idempotencyKey));
+                if ($cachedTicketId) {
+                    $existing = Ticket::query()
+                        ->whereKey($cachedTicketId)
+                        ->where('contact_id', $contact->id)
+                        ->with(['contact', 'service', 'requisition', 'documents.documentType'])
+                        ->first();
+                    if ($existing) {
+                        return response()->json([
+                            'data' => $existing,
+                            'idempotent_replay' => true,
+                        ]);
+                    }
+                }
+
+                $ticket = $create();
+            } finally {
+                optional($idemLock)->release();
+            }
+        } else {
+            $ticket = $create();
+        }
 
         return response()->json(['data' => $ticket], 201);
+    }
+
+    protected function normalizeTicketIdempotencyKey(mixed $raw): ?string
+    {
+        if (! is_string($raw)) {
+            return null;
+        }
+
+        $key = trim($raw);
+        if ($key === '' || strlen($key) > 128) {
+            return null;
+        }
+
+        if (! preg_match('/^[A-Za-z0-9._:-]+$/', $key)) {
+            return null;
+        }
+
+        return $key;
+    }
+
+    protected function ticketIdempotencyCacheKey(int $contactId, string $idempotencyKey): string
+    {
+        return 'ticket-idem:'.$contactId.':'.hash('sha256', $idempotencyKey);
     }
 
     public function subscriptions(Request $request, CompanyMembershipService $membership)

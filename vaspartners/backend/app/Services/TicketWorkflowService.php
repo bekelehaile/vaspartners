@@ -17,6 +17,8 @@ use App\Models\TicketDocumentReview;
 use App\Models\TicketStatusHistory;
 use App\Models\User;
 use App\Support\TimestampPublicId;
+use Illuminate\Contracts\Cache\LockTimeoutException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
@@ -405,83 +407,96 @@ class TicketWorkflowService
 
     public function createTicket(Contact $contact, array $data): Ticket
     {
-        return DB::transaction(function () use ($contact, $data) {
-            $service = Service::query()->findOrFail($data['service_id']);
-            $requisition = Requisition::query()->findOrFail($data['requisition_id']);
+        $run = function () use ($contact, $data): Ticket {
+            return DB::transaction(function () use ($contact, $data) {
+                $service = Service::query()->findOrFail($data['service_id']);
+                $requisition = Requisition::query()->findOrFail($data['requisition_id']);
 
-            // Hard gate: no VAS service requests until the company TIN is admin-approved.
-            if (empty($data['skip_open_limit'])) {
-                $this->membership->assertCanAccessCompany($contact);
-                $this->membership->assertHasPermission(
-                    $contact,
-                    $requisition->creates_subscription
-                        ? \App\Enums\CompanyMemberPermission::CreateSubscriptions
-                        : \App\Enums\CompanyMemberPermission::ManageServices,
-                );
-            }
+                // Hard gate: no VAS service requests until the company TIN is admin-approved.
+                if (empty($data['skip_open_limit'])) {
+                    $this->membership->assertCanAccessCompany($contact);
+                    $this->membership->assertHasPermission(
+                        $contact,
+                        $requisition->creates_subscription
+                            ? \App\Enums\CompanyMemberPermission::CreateSubscriptions
+                            : \App\Enums\CompanyMemberPermission::ManageServices,
+                    );
+                }
 
-            if (! $service->requisitions()->where('requisitions.id', $requisition->id)->exists()) {
-                throw ValidationException::withMessages([
-                    'requisition_id' => 'This request type is not enabled for the selected service.',
+                if (! $service->requisitions()->where('requisitions.id', $requisition->id)->exists()) {
+                    throw ValidationException::withMessages([
+                        'requisition_id' => 'This request type is not enabled for the selected service.',
+                    ]);
+                }
+
+                $this->assertOpenTicketLimit($contact, $requisition, $data);
+
+                $this->subscriptions->assertTicketAllowed($contact, $data, $requisition, $service);
+
+                // Same path for new / maintain / renew / terminate: final approver must exist.
+                $this->assertFinalApproverConfigured((int) $service->id, (int) $requisition->id);
+
+                $subscriptionId = $data['subscription_id'] ?? null;
+                if (! $subscriptionId && ($requisition->requires_active_subscription || $requisition->renews_subscription || $requisition->terminates_subscription)) {
+                    $subscriptionId = \App\Models\Subscription::query()
+                        ->where('company_id', $contact->company_id)
+                        ->where('service_id', $service->id)
+                        ->whereIn('status', ['active', 'pending_renewal', 'grace'])
+                        ->latest('id')
+                        ->value('id');
+                }
+
+                $ticket = Ticket::query()->create([
+                    'tt_number' => $this->generateTtNumber(),
+                    'contact_id' => $contact->id,
+                    'service_id' => $data['service_id'],
+                    'requisition_id' => $data['requisition_id'],
+                    'subscription_id' => $subscriptionId,
+                    'parent_ticket_id' => $data['parent_ticket_id'] ?? null,
+                    'category_id' => $data['category_id'] ?? $service->category_id,
+                    'region_id' => $data['region_id'] ?? null,
+                    'zone_id' => $data['zone_id'] ?? null,
+                    'woreda_id' => $data['woreda_id'] ?? null,
+                    'building' => $data['building'] ?? null,
+                    'location' => $data['location'] ?? null,
+                    'description' => $data['description'] ?? null,
+                    'status' => TicketStatus::Open,
+                    'document_review_status' => DocumentReviewStatus::Pending,
                 ]);
-            }
 
-            $this->assertOpenTicketLimit($contact, $requisition, $data);
+                TicketStatusHistory::query()->create([
+                    'ticket_id' => $ticket->id,
+                    'from_status' => null,
+                    'to_status' => TicketStatus::Open->value,
+                    'actor_type' => Contact::class,
+                    'actor_id' => $contact->id,
+                    'note' => 'Ticket created',
+                    'created_at' => now(),
+                ]);
 
-            $this->subscriptions->assertTicketAllowed($contact, $data, $requisition, $service);
+                $fresh = $ticket->fresh(['contact', 'service', 'requisition']);
 
-            // Same path for new / maintain / renew / terminate: final approver must exist.
-            $this->assertFinalApproverConfigured((int) $service->id, (int) $requisition->id);
+                // Portal create-with-docs defers notify until all required files are stored.
+                if (empty($data['skip_notification'])) {
+                    DB::afterCommit(function () use ($fresh) {
+                        $this->notifications->ticketSubmitted($fresh);
+                    });
+                }
 
-            $subscriptionId = $data['subscription_id'] ?? null;
-            if (! $subscriptionId && ($requisition->requires_active_subscription || $requisition->renews_subscription || $requisition->terminates_subscription)) {
-                $subscriptionId = \App\Models\Subscription::query()
-                    ->where('company_id', $contact->company_id)
-                    ->where('service_id', $service->id)
-                    ->whereIn('status', ['active', 'pending_renewal', 'grace'])
-                    ->latest('id')
-                    ->value('id');
-            }
+                return $fresh;
+            });
+        };
 
-            $ticket = Ticket::query()->create([
-                'tt_number' => $this->generateTtNumber(),
-                'contact_id' => $contact->id,
-                'service_id' => $data['service_id'],
-                'requisition_id' => $data['requisition_id'],
-                'subscription_id' => $subscriptionId,
-                'parent_ticket_id' => $data['parent_ticket_id'] ?? null,
-                'category_id' => $data['category_id'] ?? $service->category_id,
-                'region_id' => $data['region_id'] ?? null,
-                'zone_id' => $data['zone_id'] ?? null,
-                'woreda_id' => $data['woreda_id'] ?? null,
-                'building' => $data['building'] ?? null,
-                'location' => $data['location'] ?? null,
-                'description' => $data['description'] ?? null,
-                'status' => TicketStatus::Open,
-                'document_review_status' => DocumentReviewStatus::Pending,
-            ]);
+        if (! empty($data['skip_create_lock'])) {
+            return $run();
+        }
 
-            TicketStatusHistory::query()->create([
-                'ticket_id' => $ticket->id,
-                'from_status' => null,
-                'to_status' => TicketStatus::Open->value,
-                'actor_type' => Contact::class,
-                'actor_id' => $contact->id,
-                'note' => 'Ticket created',
-                'created_at' => now(),
-            ]);
-
-            $fresh = $ticket->fresh(['contact', 'service', 'requisition']);
-
-            // Portal create-with-docs defers notify until all required files are stored.
-            if (empty($data['skip_notification'])) {
-                DB::afterCommit(function () use ($fresh) {
-                    $this->notifications->ticketSubmitted($fresh);
-                });
-            }
-
-            return $fresh;
-        });
+        return $this->withTicketCreateLock(
+            $contact,
+            (int) ($data['service_id'] ?? 0),
+            (int) ($data['requisition_id'] ?? 0),
+            $run,
+        );
     }
 
     /**
@@ -497,49 +512,89 @@ class TicketWorkflowService
         array $uploads,
         TicketDocumentService $documents,
     ): Ticket {
-        return DB::transaction(function () use ($contact, $data, $uploads, $documents) {
-            $serviceId = (int) $data['service_id'];
-            $requisitionId = (int) $data['requisition_id'];
-            $providedTypeIds = array_map(
-                static fn (array $row): int => (int) $row['document_type_id'],
-                $uploads,
-            );
+        $serviceId = (int) $data['service_id'];
+        $requisitionId = (int) $data['requisition_id'];
 
-            // Fail before create so partners never see a Pending row without docs.
-            $this->assertProvidedDocumentsCoverRequirements($serviceId, $requisitionId, $providedTypeIds);
-
-            foreach ($uploads as $index => $upload) {
-                $type = $documents->resolveDocumentTypeForMatrix(
-                    $serviceId,
-                    $requisitionId,
-                    (int) $upload['document_type_id'],
+        return $this->withTicketCreateLock($contact, $serviceId, $requisitionId, function () use ($contact, $data, $uploads, $documents) {
+            return DB::transaction(function () use ($contact, $data, $uploads, $documents) {
+                $serviceId = (int) $data['service_id'];
+                $requisitionId = (int) $data['requisition_id'];
+                $providedTypeIds = array_map(
+                    static fn (array $row): int => (int) $row['document_type_id'],
+                    $uploads,
                 );
-                $documents->assertFileMatchesDocumentType($upload['file'], $type);
-            }
 
-            $data['skip_notification'] = true;
-            $ticket = $this->createTicket($contact, $data);
+                // Fail before create so partners never see a Pending row without docs.
+                $this->assertProvidedDocumentsCoverRequirements($serviceId, $requisitionId, $providedTypeIds);
 
-            foreach ($uploads as $upload) {
-                $documents->storeForContact(
-                    $ticket,
-                    $contact,
-                    (int) $upload['document_type_id'],
-                    $upload['file'],
-                );
-            }
+                foreach ($uploads as $index => $upload) {
+                    $type = $documents->resolveDocumentTypeForMatrix(
+                        $serviceId,
+                        $requisitionId,
+                        (int) $upload['document_type_id'],
+                    );
+                    $documents->assertFileMatchesDocumentType($upload['file'], $type);
+                }
 
-            $ticket->unsetRelation('documents');
-            $this->assertRequiredDocumentsUploaded($ticket->fresh(['documents.documentType']));
+                $data['skip_notification'] = true;
+                $data['skip_create_lock'] = true;
+                $ticket = $this->createTicket($contact, $data);
 
-            $fresh = $ticket->fresh(['contact', 'service', 'requisition', 'documents.documentType']);
+                foreach ($uploads as $upload) {
+                    $documents->storeForContact(
+                        $ticket,
+                        $contact,
+                        (int) $upload['document_type_id'],
+                        $upload['file'],
+                    );
+                }
 
-            DB::afterCommit(function () use ($fresh) {
-                $this->notifications->ticketSubmitted($fresh);
+                $ticket->unsetRelation('documents');
+                $this->assertRequiredDocumentsUploaded($ticket->fresh(['documents.documentType']));
+
+                $fresh = $ticket->fresh(['contact', 'service', 'requisition', 'documents.documentType']);
+
+                DB::afterCommit(function () use ($fresh) {
+                    $this->notifications->ticketSubmitted($fresh);
+                });
+
+                return $fresh;
             });
-
-            return $fresh;
         });
+    }
+
+    /**
+     * Serialize creates for the same company + service + request type (anti race / double-submit).
+     *
+     * @template T
+     *
+     * @param  callable(): T  $callback
+     * @return T
+     */
+    protected function withTicketCreateLock(Contact $contact, int $serviceId, int $requisitionId, callable $callback): mixed
+    {
+        $companyId = (int) ($contact->current_company_id ?? $contact->company_id ?? 0);
+        if ($companyId < 1 || $serviceId < 1 || $requisitionId < 1) {
+            return $callback();
+        }
+
+        $seconds = max(5, (int) config('vas.ticket_create.lock_seconds', 20));
+        $wait = max(1, (int) config('vas.ticket_create.lock_wait_seconds', 8));
+        $lock = Cache::lock("ticket-create:{$companyId}:{$serviceId}:{$requisitionId}", $seconds);
+
+        try {
+            $lock->block($wait);
+        } catch (LockTimeoutException) {
+            throw ValidationException::withMessages([
+                'ticket' => 'Another request for this service is being submitted. Please wait a moment and try again.',
+            ]);
+        }
+
+        try {
+            return $callback();
+        } finally {
+            optional($lock)->release();
+        }
     }
 
     /**

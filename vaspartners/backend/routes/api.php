@@ -57,7 +57,8 @@ Route::prefix('v1')->group(function () {
         Route::delete('notifications/{id}', [NotificationController::class, 'destroy']);
 
         Route::get('tickets', [ContactPortalController::class, 'tickets']);
-        Route::post('tickets', [ContactPortalController::class, 'storeTicket']);
+        Route::post('tickets', [ContactPortalController::class, 'storeTicket'])
+            ->middleware('throttle:portal-ticket-create');
         Route::get('tickets/{ticket}', [ContactPortalController::class, 'showTicket']);
         Route::put('tickets/{ticket}', [ContactPortalController::class, 'updateTicket']);
         Route::delete('tickets/{ticket}', [ContactPortalController::class, 'destroyTicket']);

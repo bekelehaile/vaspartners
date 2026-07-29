@@ -211,10 +211,10 @@ class ViewCompany extends ViewRecord
                     ->label('Delete permanently')
                     ->icon('heroicon-o-trash')
                     ->color('danger')
-                    ->visible(fn (): bool => ! $this->getRecord()->tin_validated)
+                    ->visible(fn (): bool => app(CompanyPurgeService::class)->canForcePurge($this->getRecord()))
                     ->requiresConfirmation()
                     ->modalHeading('Permanently delete company?')
-                    ->modalDescription('Permanently deletes this company, memberships, subscriptions, service requests, attachments, and contacts that only belong here. Cannot be undone. Companies with a validated TIN cannot be deleted.')
+                    ->modalDescription('Permanently deletes this company, memberships, subscriptions, service requests, attachments, and contacts that only belong here. Cannot be undone. Companies with an owner, approved valid TIN, and at least one subscription cannot be deleted.')
                     ->action(function (CompanyPurgeService $purge): void {
                         try {
                             $stats = $purge->forcePurge($this->getRecord());

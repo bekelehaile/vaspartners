@@ -24,6 +24,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureSmsRateLimiters();
         $this->configurePortalOtpRateLimiters();
+        $this->configurePortalTicketCreateRateLimiters();
 
         // All admin tables: newest first, no clickable row navigation (use explicit actions).
         Table::configureUsing(function (Table $table): void {
@@ -80,6 +81,30 @@ class AppServiceProvider extends ServiceProvider
 
         RateLimiter::for('portal-otp-verify', function ($request) {
             return Limit::perMinutes(5, 30)->by('portal-otp-ver:'.$request->ip());
+        });
+    }
+
+    private function configurePortalTicketCreateRateLimiters(): void
+    {
+        RateLimiter::for('portal-ticket-create', function ($request) {
+            $contact = $request->user();
+            $contactId = $contact?->id ?? 'guest';
+            $companyId = (int) ($contact?->current_company_id ?? $contact?->company_id ?? 0);
+
+            $perContact = max(1, (int) config('vas.ticket_create.per_contact_per_minute', 5));
+            $perCompany = max(1, (int) config('vas.ticket_create.per_company_per_minute', 10));
+            $perIp = max(1, (int) config('vas.ticket_create.per_ip_per_minute', 20));
+
+            $limits = [
+                Limit::perMinute($perContact)->by('portal-ticket-contact:'.$contactId),
+                Limit::perMinute($perIp)->by('portal-ticket-ip:'.$request->ip()),
+            ];
+
+            if ($companyId > 0) {
+                $limits[] = Limit::perMinute($perCompany)->by('portal-ticket-company:'.$companyId);
+            }
+
+            return $limits;
         });
     }
 }

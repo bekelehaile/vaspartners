@@ -366,10 +366,10 @@ class CompanyResource extends Resource
                     ->label('Delete permanently')
                     ->icon('heroicon-o-trash')
                     ->color('danger')
-                    ->visible(fn (Company $record): bool => ! $record->tin_validated)
+                    ->visible(fn (Company $record): bool => app(CompanyPurgeService::class)->canForcePurge($record))
                     ->requiresConfirmation()
                     ->modalHeading('Permanently delete company?')
-                    ->modalDescription('This permanently deletes the company, its memberships, subscriptions, service requests, attachments, and contacts that belong only to this company. Cannot be undone. Companies with a validated TIN cannot be deleted.')
+                    ->modalDescription('This permanently deletes the company, its memberships, subscriptions, service requests, attachments, and contacts that belong only to this company. Cannot be undone. Companies with an owner, approved valid TIN, and at least one subscription cannot be deleted.')
                     ->action(function (Company $record, CompanyPurgeService $purge): void {
                         try {
                             $stats = $purge->forcePurge($record);
@@ -523,7 +523,7 @@ class CompanyResource extends Resource
                         ->color('danger')
                         ->requiresConfirmation()
                         ->modalHeading('Permanently delete selected companies?')
-                        ->modalDescription('Permanently deletes each company plus memberships, subscriptions, tickets, attachments, and exclusive contacts. Companies with a validated TIN are skipped and cannot be deleted.')
+                        ->modalDescription('Permanently deletes each company plus memberships, subscriptions, tickets, attachments, and exclusive contacts. Companies with an owner, approved valid TIN, and at least one subscription are skipped.')
                         ->deselectRecordsAfterCompletion()
                         ->visible(fn (): bool => static::canDeleteAny())
                         ->action(function (Collection $records, CompanyPurgeService $purge): void {
@@ -538,7 +538,7 @@ class CompanyResource extends Resource
                                     continue;
                                 }
 
-                                if ($company->tin_validated) {
+                                if (! $purge->canForcePurge($company)) {
                                     $skippedTin++;
 
                                     continue;
@@ -562,7 +562,7 @@ class CompanyResource extends Resource
                                 ->body(trim(implode(' ', array_filter([
                                     $contacts > 0 ? "{$contacts} contact(s) removed." : null,
                                     $docs > 0 ? "{$docs} document(s) removed." : null,
-                                    $skippedTin > 0 ? "{$skippedTin} skipped (TIN validated)." : null,
+                                    $skippedTin > 0 ? "{$skippedTin} skipped (owner + approved TIN + subscription)." : null,
                                     $failed > 0 ? "{$failed} failed." : null,
                                 ]))) ?: null)
                                 ->color($deleted > 0 ? 'success' : 'warning')
@@ -696,12 +696,12 @@ class CompanyResource extends Resource
 
     public static function canDelete($record): bool
     {
-        return $record instanceof Company && ! $record->tin_validated;
+        return $record instanceof Company && app(CompanyPurgeService::class)->canForcePurge($record);
     }
 
     public static function canForceDelete($record): bool
     {
-        return $record instanceof Company && ! $record->tin_validated;
+        return $record instanceof Company && app(CompanyPurgeService::class)->canForcePurge($record);
     }
 
     public static function canDeleteAny(): bool

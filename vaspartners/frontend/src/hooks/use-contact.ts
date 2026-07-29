@@ -693,9 +693,12 @@ export function useCreateTicket() {
     mutationFn: async ({
       values,
       files = {},
+      idempotencyKey,
     }: {
       values: TicketCreateValues;
       files?: Record<string, File>;
+      /** Stable UUID for this submit attempt — retries reuse the same key. */
+      idempotencyKey?: string;
     }) => {
       const body = new FormData();
       body.append("service_id", String(Number(values.service_id)));
@@ -714,9 +717,17 @@ export function useCreateTicket() {
         body.append(`documents[${index}][file]`, file);
       });
 
-      const res = await api<{ data: Ticket }>("/tickets", {
+      const key =
+        idempotencyKey && idempotencyKey.trim() !== ""
+          ? idempotencyKey.trim()
+          : typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `ticket-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+      const res = await api<{ data: Ticket; idempotent_replay?: boolean }>("/tickets", {
         method: "POST",
         body,
+        headers: { "Idempotency-Key": key },
       });
       return res.data;
     },

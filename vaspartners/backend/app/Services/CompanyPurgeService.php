@@ -305,19 +305,19 @@ class CompanyPurgeService
     }
 
     /**
-     * Companies with an admin-validated TIN must not be permanently deleted.
+     * Established companies (owner + approved valid TIN + ≥1 subscription) cannot be purged.
      */
     public function assertCanForcePurge(Company $company): void
     {
-        if ($company->tin_validated) {
+        if ($company->isForcePurgeProtected()) {
             throw ValidationException::withMessages([
-                'company' => 'This company has a validated TIN and cannot be deleted. Clear TIN validation first only if deletion is intentionally required.',
+                'company' => 'This company has an owner, an approved valid TIN NUMBER, and at least one subscription, so it cannot be deleted.',
             ]);
         }
     }
 
     public function canForcePurge(Company $company): bool
     {
-        return ! $company->tin_validated;
+        return ! $company->isForcePurgeProtected();
     }
 }

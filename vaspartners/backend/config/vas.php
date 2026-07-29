@@ -19,4 +19,22 @@ return [
     'chat_notify_quiet_minutes' => (int) env('CHAT_NOTIFY_QUIET_MINUTES', 10),
     // Max size for company attach/detach PDF docs (KB)
     'company_change_doc_max_kb' => (int) env('COMPANY_CHANGE_DOC_MAX_KB', 5120),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Portal ticket create (anti-abuse)
+    |--------------------------------------------------------------------------
+    |
+    | Rate limits + short locks stop concurrent / scripted bulk creation.
+    | Idempotency-Key replays return the same ticket for 24h (safe client retries).
+    |
+    */
+    'ticket_create' => [
+        'per_contact_per_minute' => (int) env('TICKET_CREATE_PER_CONTACT_PER_MINUTE', 5),
+        'per_company_per_minute' => (int) env('TICKET_CREATE_PER_COMPANY_PER_MINUTE', 10),
+        'per_ip_per_minute' => (int) env('TICKET_CREATE_PER_IP_PER_MINUTE', 20),
+        'lock_seconds' => (int) env('TICKET_CREATE_LOCK_SECONDS', 20),
+        'lock_wait_seconds' => (int) env('TICKET_CREATE_LOCK_WAIT_SECONDS', 8),
+        'idempotency_ttl_hours' => (int) env('TICKET_CREATE_IDEMPOTENCY_TTL_HOURS', 24),
+    ],
 ];
