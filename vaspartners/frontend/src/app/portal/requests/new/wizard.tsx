@@ -30,12 +30,6 @@ type Intent = "subscribe" | "manage";
 
 const ALIVE_STATUSES = new Set(["active", "pending_renewal", "grace"]);
 
-function serviceGroups(service?: Service | null): NonNullable<Service["categories"]> {
-  if (!service) return [];
-  if (service.categories?.length) return service.categories;
-  return service.category ? [service.category] : [];
-}
-
 function isAliveSubscription(sub: Subscription): boolean {
   return ALIVE_STATUSES.has(String(sub.status || "").toLowerCase());
 }
@@ -43,7 +37,30 @@ function isAliveSubscription(sub: Subscription): boolean {
 function starterRequisitions(service: Service): Requisition[] {
   // Subscribe journey is only for subscription-based products
   if (service.is_subscription_based === false) return [];
-  return (service.requisitions ?? []).filter((r) => !!r.creates_subscription);
+  const creators = (service.requisitions ?? []).filter((r) => !!r.creates_subscription);
+  if (!creators.length) return [];
+
+  // Prefer the partner-facing onboarding type. Extra creates_subscription links
+  // (Revenue Request, Additional Services, …) are internal/alternate paths and
+  // must not leave requisition_id empty — that hides the attachment uploader.
+  const rank = (name: string): number => {
+    const n = name.trim().toLowerCase();
+    if (n === "new subscription") return 0;
+    if (n === "additional services") return 1;
+    if (n === "revenue request") return 2;
+    if (n.includes("merchant")) return 3;
+    return 50;
+  };
+
+  const bestRank = Math.min(...creators.map((r) => rank(String(r.name || ""))));
+  const pool = creators.filter((r) => rank(String(r.name || "")) === bestRank);
+
+  return [...pool].sort((a, b) => a.id - b.id);
+}
+
+function primaryStarterRequisitionId(service: Service): string {
+  const starters = starterRequisitions(service);
+  return starters.length ? String(starters[0].id) : "";
 }
 
 function manageRequisitions(service: Service): Requisition[] {
@@ -201,7 +218,6 @@ export default function NewRequestWizard() {
   const subscriptionId = values.subscription_id;
   const requisitionId = values.requisition_id;
   const description = values.description;
-  const categoryId = values.category_id;
 
   const selectedSubscribe = subscribeServices.find((s) => String(s.id) === String(serviceId));
   const selectedSub = aliveSubs.find((s) => String(s.id) === String(subscriptionId));
@@ -211,7 +227,6 @@ export default function NewRequestWizard() {
   const selectedManage =
     services.find((s) => s.id === manageServiceId) ||
     manageOneOffServices.find((s) => String(s.id) === String(serviceId));
-  const activeService = intent === "manage" ? selectedManage : selectedSubscribe;
   const managingOneOff = !!selectedManage && selectedManage.is_subscription_based === false;
   const starterTypes = selectedSubscribe ? starterRequisitions(selectedSubscribe) : [];
   const manageTypes = selectedManage ? manageRequisitions(selectedManage) : [];
@@ -229,23 +244,6 @@ export default function NewRequestWizard() {
     (!!confirmServiceId && !!requisitionId
       ? confirmDocsSuccess && !confirmDocsLoading && !confirmDocsError
       : true) && requiredAttachmentsReady(confirmRequirements, stagedFiles);
-
-  // Keep category_id aligned with the selected service's groups (internal routing only).
-  useEffect(() => {
-    if (!activeService) {
-      if (categoryId) form.setFieldValue("category_id", "");
-      return;
-    }
-    const groups = serviceGroups(activeService);
-    if (!groups.length) {
-      if (categoryId) form.setFieldValue("category_id", "");
-      return;
-    }
-    // Partners never pick a group — default to the first assigned group.
-    const pick = String(groups[0].id);
-    if (categoryId !== pick) form.setFieldValue("category_id", pick);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync group pick
-  }, [activeService?.id, categoryId, intent, serviceId, subscriptionId]);
 
   // Clear staged files when the request type / service changes
   useEffect(() => {
@@ -271,14 +269,16 @@ export default function NewRequestWizard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- deep-link only
   }, [presetIntent, presetService, ticket]);
 
-  // Auto-pick sole requisition for subscribe path
+  // Auto-pick primary starter requisition for subscribe path (e.g. "New subscription")
   useEffect(() => {
     if (intent !== "subscribe" || !serviceId) return;
-    if (starterTypes.length === 1 && requisitionId !== String(starterTypes[0].id)) {
-      form.setFieldValue("requisition_id", String(starterTypes[0].id));
+    if (!starterTypes.length) return;
+    const primary = String(starterTypes[0].id);
+    if (requisitionId !== primary) {
+      form.setFieldValue("requisition_id", primary);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selection only
-  }, [intent, serviceId, starterTypes.length, requisitionId]);
+  }, [intent, serviceId, starterTypes.length, starterTypes[0]?.id, requisitionId]);
 
   // Auto-pick sole requisition for one-off manage path
   useEffect(() => {
@@ -304,19 +304,13 @@ export default function NewRequestWizard() {
       if (presetService) {
         const svc = subscribeServices.find((s) => String(s.id) === presetService);
         if (svc) {
-          const starters = starterRequisitions(svc);
-          if (starters.length === 1) {
-            form.setFieldValue("requisition_id", String(starters[0].id));
-          }
+          form.setFieldValue("requisition_id", primaryStarterRequisitionId(svc));
           setStep(1);
         }
       } else if (subscribeServices.length === 1) {
         const only = subscribeServices[0];
         form.setFieldValue("service_id", String(only.id));
-        const starters = starterRequisitions(only);
-        if (starters.length === 1) {
-          form.setFieldValue("requisition_id", String(starters[0].id));
-        }
+        form.setFieldValue("requisition_id", primaryStarterRequisitionId(only));
       }
     }
 
@@ -691,18 +685,16 @@ export default function NewRequestWizard() {
                                   return;
                                 }
                                 form.setFieldValue("service_id", String(s.id));
-                                const starters = starterRequisitions(s);
                                 form.setFieldValue(
                                   "requisition_id",
-                                  starters.length === 1 ? String(starters[0].id) : ""
+                                  primaryStarterRequisitionId(s),
                                 );
                               }}
                               onDoubleClick={() => {
                                 form.setFieldValue("service_id", String(s.id));
-                                const starters = starterRequisitions(s);
                                 form.setFieldValue(
                                   "requisition_id",
-                                  starters.length === 1 ? String(starters[0].id) : ""
+                                  primaryStarterRequisitionId(s),
                                 );
                                 setStep(1);
                               }}

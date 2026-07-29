@@ -118,7 +118,7 @@ export default function FeedbackPage() {
 
             {!inbox.isLoading && !inbox.isError && !canSubmit && (
               <div className="alert" role="status">
-                Feedback is locked until this company's TIN is validated by Ethio telecom.
+                Feedback is locked until this company&apos;s TIN is validated by Ethio telecom.
                 Switch to a company with a validated TIN, or wait for validation.{" "}
                 <Link href="/portal/company">Open company settings</Link>
               </div>

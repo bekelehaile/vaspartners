@@ -26,10 +26,7 @@ class ContactPortalController extends Controller
 
         $services = Service::query()
             ->with([
-                'category:id,name,slug,key',
-                'categories' => fn ($q) => $q
-                    ->operationalGroups()
-                    ->select(['categories.id', 'categories.name', 'categories.slug', 'categories.key', 'categories.sort_order']),
+                // Groups stay internal for routing; do not expose names to the portal UI.
                 'requisitions' => fn ($q) => $q
                     ->where('requisitions.is_active', true)
                     ->orderBy('requisitions.sort_order')
@@ -53,7 +50,7 @@ class ContactPortalController extends Controller
             })
             ->where('is_active', true)
             ->orderBy('sort_order')
-            ->get(['id', 'category_id', 'name', 'slug', 'description', 'type', 'is_subscription_based', 'renewal_interval', 'renewal_lead_days', 'sort_order']);
+            ->get(['id', 'name', 'slug', 'description', 'type', 'is_subscription_based', 'renewal_interval', 'renewal_lead_days', 'sort_order']);
 
         return response()->json(['data' => $services]);
     }
@@ -164,6 +161,8 @@ class ContactPortalController extends Controller
         $ticket->load(['service', 'requisition', 'subscription', 'documents.documentType', 'contact:id,public_id,name']);
 
         $payload = $ticket->toArray();
+        // Operational groups are internal — do not surface to partners.
+        unset($payload['category'], $payload['category_id']);
         $thread = $comments->paginateThread($ticket, $request->user(), null, null, 40);
         $payload['messages'] = $thread['data'];
         $payload['messages_meta'] = $thread['meta'];
