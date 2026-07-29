@@ -42,6 +42,17 @@ class TicketWorkflowService
             return;
         }
 
+        // Open / In progress are not allowed while hard-required documents are missing.
+        if (in_array($to, [TicketStatus::Open, TicketStatus::InProgress], true)
+            && empty($meta['skip_document_assert'])) {
+            $this->assertRequiredDocumentsUploaded($ticket);
+        }
+
+        // Completed approvals also require a full required document set.
+        if ($to === TicketStatus::Completed && empty($meta['skip_document_assert'])) {
+            $this->assertRequiredDocumentsUploaded($ticket);
+        }
+
         $ticket->status = $to;
         match ($to) {
             TicketStatus::InProgress => $ticket->assigned_at ??= now(),
@@ -235,7 +246,7 @@ class TicketWorkflowService
     }
 
     /**
-     * System / schedule: return open or in-progress requests that are missing hard-required docs.
+     * System / schedule / on-read: if an active request is missing hard-required docs, force Rejected.
      *
      * @return array{rejected: bool, skipped: bool, reason?: string, missing_names?: list<string>}
      */
@@ -276,6 +287,7 @@ class TicketWorkflowService
                 $note,
                 [
                     'skip_partner_notification' => true,
+                    'skip_document_assert' => true,
                     'source' => 'vas:scan-document-missing',
                     'missing_document_type_ids' => $status['missing_ids'],
                 ],
@@ -294,6 +306,19 @@ class TicketWorkflowService
                 'missing_names' => $missingNames,
             ];
         });
+    }
+
+    /**
+     * Keep status consistent: active tickets with missing required docs become Rejected.
+     * Safe to call on portal/admin reads.
+     */
+    public function enforceIncompleteMustBeRejected(Ticket $ticket, bool $notify = true): Ticket
+    {
+        $result = $this->rejectForIncompleteDocuments($ticket, $notify);
+
+        return $result['rejected']
+            ? $ticket->fresh(['contact', 'service', 'requisition', 'documents.documentType']) ?? $ticket
+            : $ticket;
     }
 
     /**
@@ -565,6 +590,8 @@ class TicketWorkflowService
     public function assign(Ticket $ticket, User $assigner, User $assignee, ?int $priorityId = null, ?string $note = null): Ticket
     {
         return DB::transaction(function () use ($ticket, $assigner, $assignee, $priorityId, $note) {
+            $this->assertRequiredDocumentsUploaded($ticket);
+
             $ticket->assigned_to_user_id = $assignee->id;
             $ticket->priority_id = $priorityId ?? $ticket->priority_id;
             $ticket->escalated_at = now();
@@ -690,6 +717,8 @@ class TicketWorkflowService
             $nextStatus = null;
 
             if ($action === ApprovalAction::Approved && $docStatus === DocumentReviewStatus::Passed) {
+                $this->assertRequiredDocumentsUploaded($ticket);
+
                 if ($isFinal) {
                     $nextStatus = TicketStatus::Completed;
                     $ticket->current_approver_user_id = null;
@@ -709,17 +738,11 @@ class TicketWorkflowService
                 $ticket->current_approver_user_id = null;
                 $ticket->needs_reverification = true;
                 $nextStatus = TicketStatus::Rejected;
-            } else { // Rejected + Failed
-                if ($isFinal) {
-                    // Accept with missed docs path → complete (legacy matrix)
-                    $nextStatus = TicketStatus::Completed;
-                    $ticket->current_approver_user_id = null;
-                } else {
-                    $next = $this->resolveNextApprover($approver, $ticket);
-                    $escalatedTo = $next->id;
-                    $ticket->current_approver_user_id = $escalatedTo;
-                    $nextStatus = TicketStatus::InProgress;
-                }
+            } else {
+                // Rejected + Failed (or any incomplete-docs path): never complete without required docs.
+                $ticket->current_approver_user_id = null;
+                $ticket->needs_reverification = true;
+                $nextStatus = TicketStatus::Rejected;
             }
 
             TicketApprovalStep::query()->create([

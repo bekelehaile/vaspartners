@@ -24,7 +24,7 @@ class ViewTicket extends ViewRecord
 
     protected function resolveRecord(int|string $key): Model
     {
-        return parent::resolveRecord($key)->loadMissing([
+        $record = parent::resolveRecord($key)->loadMissing([
             'contact.company',
             'service',
             'requisition',
@@ -36,6 +36,24 @@ class ViewTicket extends ViewRecord
             'subscription.service',
             'parentTicket',
         ]);
+
+        if ($record instanceof Ticket) {
+            $record = app(TicketWorkflowService::class)->enforceIncompleteMustBeRejected($record);
+            $record->loadMissing([
+                'contact.company',
+                'service',
+                'requisition',
+                'category',
+                'priority',
+                'assignee',
+                'currentApprover',
+                'subscription.company',
+                'subscription.service',
+                'parentTicket',
+            ]);
+        }
+
+        return $record;
     }
 
     public function getTitle(): string|Htmlable

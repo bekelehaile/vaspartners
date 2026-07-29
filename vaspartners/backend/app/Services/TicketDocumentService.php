@@ -109,6 +109,9 @@ class TicketDocumentService
 
         $this->purgeStoredFile($document);
         $document->delete();
+
+        // If a required matrix row was added later (or soft-optional edge cases), keep status consistent.
+        app(TicketWorkflowService::class)->rejectForIncompleteDocuments($ticket->fresh() ?? $ticket, notify: true);
     }
 
     public function resolveAllowedDocumentType(Ticket $ticket, int $documentTypeId): DocumentType

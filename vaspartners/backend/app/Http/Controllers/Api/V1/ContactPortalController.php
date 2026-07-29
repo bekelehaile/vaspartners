@@ -176,6 +176,9 @@ class ContactPortalController extends Controller
     {
         $membership->assertCanAccessCompanyTicket($request->user(), $ticket);
 
+        $workflow = app(TicketWorkflowService::class);
+        $ticket = $workflow->enforceIncompleteMustBeRejected($ticket);
+
         $ticket->load([
             'service',
             'requisition',
@@ -204,7 +207,7 @@ class ContactPortalController extends Controller
             return $doc;
         })->values()->all();
 
-        $attachment = app(\App\Services\TicketWorkflowService::class)->attachmentStatus($ticket);
+        $attachment = $workflow->attachmentStatus($ticket);
         $payload['attachment_status'] = [
             'state' => $attachment['state'],
             'label' => $attachment['label'],
