@@ -86,9 +86,12 @@ export function RequestsTable({
   const lastPage = data?.lastPage ?? 1;
   const currentPage = data?.currentPage ?? 1;
 
-  const onDeleteRejected = (ticket: Ticket) => {
+  const onDeleteRequest = (ticket: Ticket) => {
+    const open = ticket.status === "open";
     const ok = window.confirm(
-      `Permanently delete rejected request ${ticket.tt_number}? This removes the request, messages, and all uploaded documents. This cannot be undone.`,
+      open
+        ? `Permanently delete request ${ticket.tt_number}? Ethio telecom has not started handling it yet. This removes the request and uploaded documents. This cannot be undone.`
+        : `Permanently delete rejected request ${ticket.tt_number}? This removes the request, messages, and all uploaded documents. This cannot be undone.`,
     );
     if (!ok) return;
     void deleteRejected.mutateAsync(ticket.tt_number).catch(() => undefined);
@@ -149,7 +152,10 @@ export function RequestsTable({
         header: "",
         cell: (info) => {
           const ticket = info.row.original;
-          const canDelete = ticket.status === "rejected";
+          const canDelete =
+            ticket.can_delete === true ||
+            ticket.status === "open" ||
+            ticket.status === "rejected";
           return (
             <div className="flex flex-wrap items-center gap-2">
               <Button
@@ -170,7 +176,7 @@ export function RequestsTable({
                   disabled={deleteRejected.isPending}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onDeleteRejected(ticket);
+                    onDeleteRequest(ticket);
                   }}
                 >
                   Delete
@@ -356,14 +362,16 @@ export function RequestsTable({
                         <p className="portal-mobile-card-meta">by {ticket.contact.name}</p>
                       )}
                     </button>
-                    {ticket.status === "rejected" && (
+                    {(ticket.can_delete === true ||
+                      ticket.status === "open" ||
+                      ticket.status === "rejected") && (
                       <div className="portal-mobile-card-actions">
                         <Button
                           type="button"
                           variant="outline"
                           className="border-destructive/40 text-destructive min-h-11"
                           disabled={deleteRejected.isPending}
-                          onClick={() => onDeleteRejected(ticket)}
+                          onClick={() => onDeleteRequest(ticket)}
                         >
                           Delete
                         </Button>

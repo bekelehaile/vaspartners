@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useForm, useStore } from "@tanstack/react-form";
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { PortalPageHeader } from "@/components/PortalPageHeader";
 import {
   useContact,
@@ -11,14 +11,11 @@ import {
   useDocumentRequirements,
   useServices,
   useSubscriptions,
-  useTicket,
   uploadTicketDocumentFile,
 } from "@/hooks/use-contact";
-import type { Service, Subscription, Ticket } from "@/lib/api";
+import type { Service, Subscription } from "@/lib/api";
 import { contactCanCreateSubscriptions, contactCanManageServices } from "@/lib/company-permissions";
-import { documentsLockedStatus } from "@/lib/document-upload";
 import { ticketCreateSchema } from "@/lib/schemas/ticket";
-import { TicketDocumentsPanel } from "@/components/TicketDocumentsPanel";
 import {
   RequirementsPreview,
   requiredAttachmentsReady,
@@ -79,11 +76,12 @@ function manageRequisitions(service: Service): Requisition[] {
 
 function stepLabels(intent: Intent): string[] {
   return intent === "subscribe"
-    ? ["Service", "Confirm", "Documents"]
-    : ["Service", "Change type", "Confirm", "Documents"];
+    ? ["Service", "Confirm"]
+    : ["Service", "Change type", "Confirm"];
 }
 
 export default function NewRequestWizard() {
+  const router = useRouter();
   const params = useSearchParams();
   const presetService = params.get("service") || "";
   const presetSubscription = params.get("subscription_id") || "";
@@ -179,7 +177,7 @@ export default function NewRequestWizard() {
       setAttachError(null);
       setApproverPopup(null);
       const parsed = ticketCreateSchema.parse(value);
-      let created: Ticket;
+      let created;
       try {
         created = await createTicket.mutateAsync(parsed);
       } catch (err) {
@@ -198,15 +196,18 @@ export default function NewRequestWizard() {
           }
           setStagedFiles({});
         } catch (err) {
+          // Request already exists — open it so the partner can finish docs or delete.
           setAttachError(
             err instanceof Error
               ? err.message
-              : "Request created, but some documents failed to upload. You can retry on the next step."
+              : "Request created, but some documents failed to upload.",
           );
         } finally {
           setUploadingDocs(false);
         }
       }
+
+      router.push(`/portal/requests/${created.tt_number}`);
     },
   });
 
@@ -533,18 +534,7 @@ export default function NewRequestWizard() {
           </div>
         )}
 
-        {ticket ? (
-          <UploadStep
-            publicId={ticket.tt_number}
-            ttNumber={ticket.tt_number}
-            serviceId={String(ticket.service?.id ?? form.state.values.service_id)}
-            requisitionId={String(
-              ticket.requisition?.id ?? form.state.values.requisition_id
-            )}
-            journey={intent || "subscribe"}
-          />
-        ) : (
-          <div className="panel form-panel journey-panel">
+        <div className="panel form-panel journey-panel">
             {!intent ? (
               <div className="journey-chooser">
                 <div className="form-panel-head">
@@ -625,9 +615,9 @@ export default function NewRequestWizard() {
                     </span>
                     <h2 className="journey-step-title">
                       {intent === "subscribe"
-                        ? ["Select service", "Review & submit"][step] || "Documents"
+                        ? ["Select service", "Review & submit"][step] || "Review & submit"
                         : ["Select service", "Choose change", "Review & submit"][step] ||
-                          "Documents"}
+                          "Review & submit"}
                     </h2>
                   </div>
                   <button type="button" className="linkish" onClick={resetIntent}>
@@ -636,7 +626,7 @@ export default function NewRequestWizard() {
                 </div>
 
                 <ol className="journey-steps" aria-label="Progress">
-                  {labels.slice(0, -1).map((label, i) => (
+                  {labels.map((label, i) => (
                     <li
                       key={label}
                       className={
@@ -1052,123 +1042,8 @@ export default function NewRequestWizard() {
               </form>
             )}
           </div>
-        )}
       </div>
       )}
     </>
-  );
-}
-
-function UploadStep({
-  publicId,
-  ttNumber,
-  serviceId,
-  requisitionId,
-  journey,
-}: {
-  publicId: string;
-  ttNumber: string;
-  serviceId: string;
-  requisitionId: string;
-  journey: string;
-}) {
-  const { data: ticket } = useTicket(publicId);
-  const {
-    data: requirements = [],
-    isSuccess: requirementsReady,
-    isError: requirementsError,
-  } = useDocumentRequirements(serviceId, requisitionId);
-  const requiredIds = requirements
-    .filter((r) => {
-      if (!r.is_required) return false;
-      // "Document if any" is attachable but must not block Finish.
-      if (r.document_type.code === "document-if-any") return false;
-      if (/if any/i.test(r.document_type.name)) return false;
-      return true;
-    })
-    .map((r) => r.document_type.id);
-  const uploadedTypes = new Set(
-    (ticket?.documents || [])
-      .map((d) => d.document_type_id ?? d.document_type?.id)
-      .filter(Boolean)
-  );
-  const allRequiredUploaded = requiredIds.every((id) => uploadedTypes.has(id));
-  const locked = documentsLockedStatus(ticket?.status, ticket?.documents_locked);
-  const hasHardRequired = requiredIds.length > 0;
-  // Block finish until requirements are loaded and every hard-required file is present.
-  const canFinish =
-    locked ||
-    (requirementsReady &&
-      !requirementsError &&
-      (allRequiredUploaded || !hasHardRequired));
-
-  const panelTicket: Ticket = {
-    public_id: publicId,
-    tt_number: ttNumber,
-    status: ticket?.status ?? "open",
-    documents_locked: ticket?.documents_locked ?? false,
-    documents: ticket?.documents ?? [],
-    service: ticket?.service ?? { id: Number(serviceId) || 0, name: "" },
-    requisition: ticket?.requisition ?? { id: Number(requisitionId) || 0, name: "" },
-    created_at: ticket?.created_at ?? "",
-    id: ticket?.id ?? 0,
-  };
-
-  return (
-    <div className="panel form-panel">
-      <div className="form-panel-head">
-        <span className="intent-kicker">
-          {journey === "manage" ? "Journey B" : "Journey A"} · Documents
-        </span>
-        <h2>Upload documents</h2>
-        <p className="muted">
-          Your request <strong>{ttNumber}</strong> is already submitted.{" "}
-          {hasHardRequired ? (
-            <>
-              Upload every file marked <strong>*</strong> before you finish — Ethio telecom
-              cannot process this request without them.
-            </>
-          ) : (
-            <>Optional files can be attached if you have them.</>
-          )}
-        </p>
-      </div>
-
-      {requirementsError && (
-        <div className="alert" role="alert">
-          Could not load required documents. Refresh and try again before finishing.
-        </div>
-      )}
-
-      <TicketDocumentsPanel
-        ticket={panelTicket}
-        mode="wizard"
-        serviceId={serviceId}
-        requisitionId={requisitionId}
-      />
-
-      <div className="form-actions">
-        {canFinish ? (
-          <Link href={`/portal/requests/${ttNumber}`} className="btn-primary">
-            Finish and view request
-          </Link>
-        ) : (
-          <button
-            type="button"
-            className="btn-primary"
-            disabled
-            title="Upload every required file (marked *) before finishing"
-          >
-            Finish and view request
-          </button>
-        )}
-      </div>
-      {!canFinish && hasHardRequired && (
-        <p className="alert" style={{ marginTop: "0.75rem" }} role="status">
-          Upload all required documents (*) listed above to continue. This applies to services
-          such as SMS Premium, Voice Premium, VISP, and Collocation.
-        </p>
-      )}
-    </div>
   );
 }

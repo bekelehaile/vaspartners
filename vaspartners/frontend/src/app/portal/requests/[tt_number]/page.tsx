@@ -77,15 +77,20 @@ export default function RequestDetailPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <StatusPill status={ticket.status} />
               </div>
-              {(ticket.can_delete || ticket.status === "rejected") && (
+              {(ticket.can_delete ||
+                ticket.status === "open" ||
+                ticket.status === "rejected") && (
                 <Button
                   type="button"
                   variant="outline"
                   className="border-destructive/40 text-destructive hover:bg-destructive/10 min-h-11"
                   disabled={deleteRejected.isPending}
                   onClick={() => {
+                    const open = ticket.status === "open";
                     const ok = window.confirm(
-                      `Permanently delete rejected request ${ticket.tt_number}? This removes the request, messages, and all uploaded documents from the system. This cannot be undone.`,
+                      open
+                        ? `Permanently delete request ${ticket.tt_number}? Ethio telecom has not started handling it yet. This removes the request and uploaded documents. This cannot be undone.`
+                        : `Permanently delete rejected request ${ticket.tt_number}? This removes the request, messages, and all uploaded documents from the system. This cannot be undone.`,
                     );
                     if (!ok) return;
                     void deleteRejected

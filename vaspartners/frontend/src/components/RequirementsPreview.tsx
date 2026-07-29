@@ -64,7 +64,7 @@ export function RequirementsPreview({
   if (isLoading) {
     return (
       <div className="field doc-preview">
-        <label>Documents you will need next</label>
+        <label>Required documents</label>
         <p className="muted">Loading required documents…</p>
       </div>
     );
@@ -73,7 +73,7 @@ export function RequirementsPreview({
   if (isError) {
     return (
       <div className="field doc-preview">
-        <label>Documents you will need next</label>
+        <label>Required documents</label>
         <p className="alert" style={{ margin: 0 }}>
           {error instanceof Error
             ? error.message
@@ -86,9 +86,9 @@ export function RequirementsPreview({
   if (!requirements.length) {
     return (
       <div className="field doc-preview">
-        <label>Documents you will need next</label>
+        <label>Required documents</label>
         <p className="muted">
-          No documents are configured for this service and request type yet.
+          No documents are required for this service and request type.
         </p>
       </div>
     );
@@ -98,12 +98,13 @@ export function RequirementsPreview({
     <div className="field doc-preview">
       <label>
         {required.length > 0
-          ? `Required documents (${required.length}) — attach each before submit`
-          : "Documents you will need next"}
+          ? `Required documents (${required.length})`
+          : "Optional documents"}
       </label>
       {required.length > 0 && (
         <p className="muted" style={{ marginTop: "0.35rem" }}>
-          Files marked <strong>*</strong> are mandatory for this service and request type.
+          Attach every file marked <strong>*</strong>, then submit. You can delete the
+          request later if Ethio telecom has not started handling it yet.
         </p>
       )}
 

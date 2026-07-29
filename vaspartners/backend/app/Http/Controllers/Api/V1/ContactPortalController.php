@@ -151,6 +151,13 @@ class ContactPortalController extends Controller
             ->latest('id')
             ->paginate((int) ($filters['per_page'] ?? 15));
 
+        $purge = app(\App\Services\TicketPurgeService::class);
+        $tickets->getCollection()->transform(function (Ticket $ticket) use ($purge) {
+            $ticket->setAttribute('can_delete', $purge->partnerMayDelete($ticket));
+
+            return $ticket;
+        });
+
         return response()->json($tickets);
     }
 
@@ -185,7 +192,7 @@ class ContactPortalController extends Controller
             'missing_count' => $attachment['missing_count'],
             'missing_names' => $attachment['missing_names'],
         ];
-        $payload['can_delete'] = $ticket->status === \App\Enums\TicketStatus::Rejected;
+        $payload['can_delete'] = app(\App\Services\TicketPurgeService::class)->partnerMayDelete($ticket);
 
         return response()->json(['data' => $payload]);
     }
@@ -196,10 +203,10 @@ class ContactPortalController extends Controller
         CompanyMembershipService $membership,
         \App\Services\TicketPurgeService $purge,
     ) {
-        $stats = $purge->forcePurgeRejectedForContact($ticket, $request->user());
+        $stats = $purge->forcePurgeForContact($ticket, $request->user());
 
         return response()->json([
-            'message' => 'Rejected request permanently deleted.',
+            'message' => 'Request permanently deleted.',
             'data' => $stats,
         ]);
     }

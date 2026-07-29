@@ -18,7 +18,8 @@ use Illuminate\Validation\ValidationException;
 use Throwable;
 
 /**
- * Permanently remove a partner portal ticket (rejected only) and all related data.
+ * Permanently remove a partner portal ticket that is still unhandled (open)
+ * or was sent back (rejected), plus all related data.
  */
 class TicketPurgeService
 {
@@ -26,16 +27,21 @@ class TicketPurgeService
         protected CompanyMembershipService $membership,
     ) {}
 
+    public function partnerMayDelete(Ticket $ticket): bool
+    {
+        return in_array($ticket->status, [TicketStatus::Open, TicketStatus::Rejected], true);
+    }
+
     /**
      * @return array{tt_number: string, documents: int, comments: int, files_removed: int}
      */
-    public function forcePurgeRejectedForContact(Ticket $ticket, Contact $actor): array
+    public function forcePurgeForContact(Ticket $ticket, Contact $actor): array
     {
         $this->membership->assertCanAccessCompanyTicket($actor, $ticket);
 
-        if ($ticket->status !== TicketStatus::Rejected) {
+        if (! $this->partnerMayDelete($ticket)) {
             throw ValidationException::withMessages([
-                'ticket' => 'Only rejected service requests can be deleted from the portal.',
+                'ticket' => 'Only open (not yet handled) or rejected service requests can be deleted from the portal.',
             ]);
         }
 
@@ -85,6 +91,12 @@ class TicketPurgeService
         });
 
         return $stats;
+    }
+
+    /** @deprecated Use forcePurgeForContact() */
+    public function forcePurgeRejectedForContact(Ticket $ticket, Contact $actor): array
+    {
+        return $this->forcePurgeForContact($ticket, $actor);
     }
 
     /**
