@@ -58,7 +58,7 @@ DOCKER_BUILDKIT=1 "${COMPOSE[@]}" build \
   --build-arg NEXT_PUBLIC_API_URL=https://vaspartnersportal.ethiotelecom.et/api/v1 \
   --build-arg NEXT_PUBLIC_SITE_URL=https://vaspartnersportal.ethiotelecom.et
 
-echo "==> Starting staging stack (Postgres + PgBouncer + Redis + app + queue + web + nginx)..."
+echo "==> Starting staging stack (Postgres + PgBouncer + Redis + app + OTP/SMS workers + web + nginx)..."
 "${COMPOSE[@]}" up -d --remove-orphans
 
 # Nginx caches upstream IPs unless config uses Docker DNS variables; always

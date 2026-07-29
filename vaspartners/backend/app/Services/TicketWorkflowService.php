@@ -68,6 +68,10 @@ class TicketWorkflowService
             $this->subscriptions->applyFromTicket($ticket->fresh(['requisition', 'service', 'subscription']));
         }
 
+        if (! empty($meta['skip_partner_notification'])) {
+            return;
+        }
+
         DB::afterCommit(function () use ($ticket, $from, $to, $note) {
             $this->notifications->ticketStatusChanged(
                 $ticket->fresh(['contact', 'service', 'requisition']),
@@ -228,6 +232,68 @@ class TicketWorkflowService
             'documents' => 'Required documents are missing for this service request: '.implode(', ', $status['missing_names']),
             'missing_document_type_ids' => $status['missing_ids'],
         ]);
+    }
+
+    /**
+     * System / schedule: return open or in-progress requests that are missing hard-required docs.
+     *
+     * @return array{rejected: bool, skipped: bool, reason?: string, missing_names?: list<string>}
+     */
+    public function rejectForIncompleteDocuments(Ticket $ticket, bool $notify = true): array
+    {
+        return DB::transaction(function () use ($ticket, $notify) {
+            $ticket->refresh();
+
+            if (! in_array($ticket->status, [TicketStatus::Open, TicketStatus::InProgress], true)) {
+                return [
+                    'rejected' => false,
+                    'skipped' => true,
+                    'reason' => 'status_'.$ticket->status?->value,
+                ];
+            }
+
+            $status = $this->attachmentStatus($ticket);
+            if ($status['state'] !== 'incomplete') {
+                return [
+                    'rejected' => false,
+                    'skipped' => true,
+                    'reason' => $status['state'],
+                ];
+            }
+
+            $missingNames = $status['missing_names'];
+            $note = 'Automated document check: missing required documents — '.implode(', ', $missingNames);
+
+            $ticket->document_review_status = DocumentReviewStatus::Failed;
+            $ticket->needs_reverification = true;
+            $ticket->current_approver_user_id = null;
+            $ticket->save();
+
+            $this->transition(
+                $ticket,
+                TicketStatus::Rejected,
+                null,
+                $note,
+                [
+                    'skip_partner_notification' => true,
+                    'source' => 'vas:scan-document-missing',
+                    'missing_document_type_ids' => $status['missing_ids'],
+                ],
+            );
+
+            if ($notify) {
+                $fresh = $ticket->fresh(['contact', 'service', 'requisition']);
+                DB::afterCommit(function () use ($fresh) {
+                    $this->notifications->documentsIncompleteAutoRejected($fresh);
+                });
+            }
+
+            return [
+                'rejected' => true,
+                'skipped' => false,
+                'missing_names' => $missingNames,
+            ];
+        });
     }
 
     /**

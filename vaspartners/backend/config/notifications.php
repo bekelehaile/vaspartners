@@ -19,6 +19,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | SMS queue names
+    |--------------------------------------------------------------------------
+    |
+    | otp   — portal login + admin password OTP (dedicated worker, never blocked by bulk)
+    | bulk  — bulk campaigns + general partner SMS (multiple workers)
+    |
+    */
+    'sms_queues' => [
+        'otp' => env('SMS_QUEUE_OTP', 'sms-otp'),
+        'bulk' => env('SMS_QUEUE_BULK', 'sms'),
+        'default' => env('SMS_QUEUE_DEFAULT', 'sms'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | SMS rate limits (all gateway traffic)
     |--------------------------------------------------------------------------
     |
@@ -61,6 +76,10 @@ SMS,
 
         'ticket_rejected' => <<<'SMS'
 Dear {contact_name}, VAS request number {tt_number} for {service} was not approved. {note} Please review in the portal. — Ethio telecom
+SMS,
+
+        'documents_incomplete_auto' => <<<'SMS'
+Dear {contact_name}, an automated document check found missing required files on VAS request number {tt_number} ({service}). Your request was returned. Upload all required documents in the portal and resubmit. — Ethio telecom
 SMS,
 
         'ticket_closed' => <<<'SMS'
@@ -134,6 +153,8 @@ SMS,
         'ticket_completed' => 'Request number {tt_number} for {service} has been approved and completed.',
 
         'ticket_rejected' => 'Request number {tt_number} for {service} was not approved. Please review the request in the portal.',
+
+        'documents_incomplete_auto' => 'Automated document check: required files are missing on request number {tt_number} ({service}). Upload all required documents and resubmit.',
 
         'ticket_closed' => 'Request number {tt_number} for {service} is closed. Thank you for partnering with Ethio telecom.',
 

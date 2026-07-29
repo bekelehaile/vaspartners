@@ -16,7 +16,7 @@ use Throwable;
  */
 class SmsService
 {
-    public function send(string|int $phone, string $message): void
+    public function send(string|int $phone, string $message, ?string $queue = null): void
     {
         if (! config('notifications.enabled', true)) {
             Log::info('SMS skipped (SMS_ENABLED=false)', [
@@ -43,7 +43,20 @@ class SmsService
             return;
         }
 
-        SendSmsJob::dispatch($normalized, $this->normalizeSmsBody($message));
+        $queueName = $queue ?: (string) config('notifications.sms_queues.default', 'sms');
+
+        SendSmsJob::dispatch($normalized, $this->normalizeSmsBody($message))
+            ->onQueue($queueName);
+    }
+
+    /** Portal / admin OTP — dedicated sms-otp queue so bulk campaigns cannot delay codes. */
+    public function sendOtp(string|int $phone, string $message): void
+    {
+        $this->send(
+            $phone,
+            $message,
+            (string) config('notifications.sms_queues.otp', 'sms-otp'),
+        );
     }
 
     /**

@@ -48,7 +48,7 @@ class AdminPasswordOtpService
             ."Your verification code is {$otp}. It expires in ".self::EXPIRY_MINUTES.' minutes. '
             .'If you did not request this, ignore this message. Ethio telecom';
 
-        $this->sms->send($normalized, $message);
+        $this->sms->sendOtp($normalized, $message);
         Cache::put($cooldownKey, true, self::SEND_COOLDOWN_SECONDS);
 
         Log::info('Admin password-reset OTP sent', [

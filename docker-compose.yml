@@ -82,7 +82,42 @@ services:
       redis:
         condition: service_healthy
 
-  queue:
+  # OTP — dedicated worker (sms-otp). Bulk/general — three workers (sms,default).
+  queue-otp:
+    build:
+      context: ./vaspartners
+      dockerfile: docker/php/Dockerfile
+    working_dir: /var/www/html
+    env_file: ./vaspartners/backend/.env
+    environment:
+      APP_URL: http://localhost:8000
+      FRONTEND_URL: http://localhost:3000
+      DB_CONNECTION: pgsql
+      DB_HOST: pgbouncer
+      DB_PORT: "5432"
+      DB_DATABASE: vaspartners
+      DB_USERNAME: vas
+      DB_PASSWORD: secret
+      DB_EMULATE_PREPARES: "false"
+      REDIS_CLIENT: phpredis
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ""
+      CACHE_STORE: redis
+      SESSION_DRIVER: redis
+      QUEUE_CONNECTION: redis
+      VAS_SEED_ON_START: "false"
+    volumes:
+      - ./vaspartners/backend:/var/www/html
+      - backend_vendor:/var/www/html/vendor
+    command: ["php", "artisan", "queue:work", "redis", "--queue=sms-otp", "--sleep=1", "--tries=5", "--timeout=90"]
+    depends_on:
+      backend:
+        condition: service_started
+      redis:
+        condition: service_healthy
+
+  queue-sms-1: &dev-queue-sms
     build:
       context: ./vaspartners
       dockerfile: docker/php/Dockerfile
@@ -115,6 +150,12 @@ services:
         condition: service_started
       redis:
         condition: service_healthy
+
+  queue-sms-2:
+    <<: *dev-queue-sms
+
+  queue-sms-3:
+    <<: *dev-queue-sms
 
   frontend:
     image: node:20-alpine

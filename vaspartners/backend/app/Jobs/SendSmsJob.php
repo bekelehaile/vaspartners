@@ -21,7 +21,7 @@ class SendSmsJob implements ShouldQueue
         public string $phone,
         public string $message,
     ) {
-        $this->onQueue('sms');
+        $this->onQueue((string) config('notifications.sms_queues.default', 'sms'));
     }
 
     /**

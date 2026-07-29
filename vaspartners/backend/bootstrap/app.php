@@ -28,6 +28,11 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     })
     ->withSchedule(function (Schedule $schedule): void {
+        $schedule->command('vas:scan-document-missing')
+            ->hourly()
+            ->withoutOverlapping(55)
+            ->description('Reject open/in-progress requests missing required documents and SMS partners (automated document check)');
+
         $schedule->command('vas:open-due-renewals')
             ->dailyAt('01:00')
             ->description('Open renewal service requests for subscriptions in the renewal lead window');

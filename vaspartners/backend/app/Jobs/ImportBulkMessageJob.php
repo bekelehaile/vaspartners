@@ -19,7 +19,7 @@ class ImportBulkMessageJob implements ShouldQueue
     public function __construct(
         public int $bulkMessageId,
     ) {
-        $this->onQueue('sms');
+        $this->onQueue((string) config('notifications.sms_queues.bulk', 'sms'));
     }
 
     public function handle(BulkMessageService $bulkMessages): void

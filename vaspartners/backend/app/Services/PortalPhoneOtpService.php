@@ -86,7 +86,7 @@ class PortalPhoneOtpService
             ."Your verification code is {$otp}. It expires in ".self::EXPIRY_MINUTES.' minutes. '
             .'If you did not request this, ignore this message. Ethio telecom';
 
-        $this->sms->send($phone, $message);
+        $this->sms->sendOtp($phone, $message);
         Cache::put($cooldownKey, true, self::SEND_COOLDOWN_SECONDS);
 
         Log::info('Portal login OTP sent', [

@@ -98,6 +98,12 @@ class PartnerNotificationService
         $this->notifyPartner($ticket, 'documents_need_attention', $note);
     }
 
+    /** Automated scan: returned for missing required documents (option B wording). */
+    public function documentsIncompleteAutoRejected(Ticket $ticket): void
+    {
+        $this->notifyPartner($ticket, 'documents_incomplete_auto');
+    }
+
     public function documentsPassed(Ticket $ticket, ?string $note = null): void
     {
         $this->notifyPartner($ticket, 'documents_passed', $note);
@@ -637,6 +643,7 @@ class PartnerNotificationService
             'ticket_in_progress' => 'Under review',
             'documents_need_attention' => 'Documents required',
             'documents_passed' => 'Documents accepted',
+            'documents_incomplete_auto' => 'Documents incomplete',
             'ticket_completed' => 'Request completed',
             'ticket_rejected' => 'Request not approved',
             'ticket_closed' => 'Request closed',

@@ -127,9 +127,43 @@ services:
         max-size: "50m"
         max-file: "3"
 
-  queue:
+  # OTP codes — dedicated queue so bulk SMS never blocks login / password reset.
+  queue-otp:
     image: vaspartners-php:latest
-    container_name: vaspartners-queue
+    container_name: vaspartners-queue-otp
+    build:
+      context: ./vaspartners
+      dockerfile: docker/php/Dockerfile.staging
+    restart: unless-stopped
+    env_file:
+      - .env.staging
+    environment:
+      <<: *backend-env
+      VAS_RUN_BOOTSTRAP: "false"
+      VAS_SEED_ON_START: "false"
+    volumes:
+      - vaspartners-storage:/var/www/html/storage/app
+      - vaspartners-logs:/var/www/html/storage/logs
+    command: ["php", "artisan", "queue:work", "redis", "--queue=sms-otp", "--sleep=1", "--tries=5", "--timeout=90"]
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - vaspartners-network
+    extra_hosts:
+      - "smsgw.ethiotelecom.et:197.156.68.29"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # Bulk + general partner SMS — three parallel workers.
+  queue-sms-1: &queue-sms-worker
+    image: vaspartners-php:latest
+    container_name: vaspartners-queue-sms-1
     build:
       context: ./vaspartners
       dockerfile: docker/php/Dockerfile.staging
@@ -158,6 +192,14 @@ services:
       options:
         max-size: "50m"
         max-file: "3"
+
+  queue-sms-2:
+    <<: *queue-sms-worker
+    container_name: vaspartners-queue-sms-2
+
+  queue-sms-3:
+    <<: *queue-sms-worker
+    container_name: vaspartners-queue-sms-3
 
   scheduler:
     image: vaspartners-php:latest
