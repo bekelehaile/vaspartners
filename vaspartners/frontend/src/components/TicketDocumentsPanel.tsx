@@ -79,6 +79,18 @@ export function TicketDocumentsPanel({
 
   const locked = documentsLockedStatus(ticket.status, ticket.documents_locked);
   const byType = mapUploadsByType(ticket.documents || []);
+  const requirementTypeIds = new Set(requirements.map((r) => r.document_type.id));
+  const orphanUploads = (ticket.documents || [])
+    .filter((d) => {
+      const typeId = d.document_type_id ?? d.document_type?.id;
+      return !typeId || !requirementTypeIds.has(typeId);
+    })
+    .map((d) => ({
+      id: d.id,
+      name: d.original_name,
+      downloadUrl: d.download_url,
+      typeName: d.document_type?.name || "Document",
+    }));
   const softOptional = (r: DocumentRequirement) =>
     r.document_type.code === "document-if-any" || /if any/i.test(r.document_type.name);
   const requiredIds = requirements
@@ -155,7 +167,7 @@ export function TicketDocumentsPanel({
         <>
           <div className="ticket-docs-grid">
             {requirements.map((r) => {
-              const uploaded = byType[r.document_type.id];
+              const uploaded = byType[r.document_type.id] ?? [];
               const optional = !r.is_required || softOptional(r);
               return (
                 <div key={r.id} className="ticket-doc-row">
@@ -235,6 +247,28 @@ export function TicketDocumentsPanel({
               );
             })}
           </div>
+          {orphanUploads.length > 0 && (
+            <div className="ticket-docs-list" style={{ marginTop: "1rem" }}>
+              <strong className="muted" style={{ display: "block", marginBottom: "0.5rem" }}>
+                Other attached files
+              </strong>
+              <ul className="ticket-docs-list">
+                {orphanUploads.map((file) => (
+                  <li key={file.id}>
+                    <span>{file.typeName} — {file.name}</span>
+                    <button
+                      type="button"
+                      className="linkish"
+                      disabled={busy}
+                      onClick={() => void onDownload(file)}
+                    >
+                      {downloadingId === file.id ? "Downloading…" : "Download"}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </>
       ) : (
         <ul className="ticket-docs-list">

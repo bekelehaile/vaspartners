@@ -146,7 +146,7 @@ export function RequestsTable({
             render={<Link href={`/portal/requests/${info.row.original.tt_number}`} />}
             onClick={(e) => e.stopPropagation()}
           >
-            Open
+            View
           </Button>
         ),
       }),

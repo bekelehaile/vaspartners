@@ -97,7 +97,7 @@ class ServiceRequestsRelationManager extends RelationManager
             ])
             ->recordActions([
                 ViewAction::make()
-                    ->label('Open')
+                    ->label('View')
                     ->url(fn (Ticket $record): string => TicketResource::getUrl('view', ['record' => $record])),
             ])
             ->headerActions([])

@@ -32,7 +32,9 @@ export function StatusJourney({ status }: { status: Ticket["status"] }) {
             )}
           >
             <span className="journey-dot" />
-            <span className="journey-label">{statusCopy[step].label}</span>
+            <span className="journey-label">
+              {(statusCopy[step] ?? statusCopy.open).label}
+            </span>
           </li>
         );
       })}

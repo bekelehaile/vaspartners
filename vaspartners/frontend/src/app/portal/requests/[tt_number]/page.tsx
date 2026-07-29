@@ -31,8 +31,11 @@ import { statusCopy } from "@/lib/api";
 type DetailTab = "overview" | "documents" | "messages";
 
 export default function RequestDetailPage() {
-  const params = useParams<{ tt_number: string }>();
-  const requestNumber = decodeURIComponent(params.tt_number);
+  const params = useParams<{ tt_number: string | string[] }>();
+  const raw = params.tt_number;
+  const requestNumber = decodeURIComponent(
+    Array.isArray(raw) ? raw[0] ?? "" : raw ?? "",
+  );
   const { data: ticket, isLoading, isError, error } = useTicket(requestNumber);
   const [tab, setTab] = useState<DetailTab>("overview");
 
