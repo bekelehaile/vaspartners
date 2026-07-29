@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 use stdClass;
 use Throwable;
@@ -53,6 +54,16 @@ class PortalPhoneOtpService
         $phone = PhoneNumber::normalize($rawPhone);
         if (! PhoneNumber::isValidLocalMobile($phone)) {
             throw new RuntimeException('Enter a valid Ethio telecom mobile number.');
+        }
+
+        $existing = Contact::query()->where('phone_number', $phone)->first();
+        if ($existing) {
+            $membership = app(CompanyMembershipService::class);
+            if (! $membership->contactMayUsePortal($existing)) {
+                throw new RuntimeException(
+                    'Your company has been deactivated. Portal sign-in is disabled. Contact Ethio telecom.',
+                );
+            }
         }
 
         $cooldownKey = 'portal-otp:cooldown:'.$phone;
@@ -137,6 +148,18 @@ class PortalPhoneOtpService
         }
 
         $contact = $contact->fresh(['company', 'memberships.company']);
+
+        try {
+            $membership->assertPortalSignInAllowed($contact);
+        } catch (ValidationException $e) {
+            $message = collect($e->errors())->flatten()->first();
+            throw new RuntimeException(
+                is_string($message) && $message !== ''
+                    ? $message
+                    : 'Your company has been deactivated. Portal sign-in is disabled. Contact Ethio telecom.',
+            );
+        }
+
         $token = $contact->createToken('phone_otp')->plainTextToken;
 
         return [

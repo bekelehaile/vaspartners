@@ -62,6 +62,11 @@ class FaydaAuthController extends Controller
             return redirect()->away($frontend.'?error=banned');
         }
 
+        $membership = app(CompanyMembershipService::class);
+        if (! $membership->contactMayUsePortal($contact->fresh(['memberships.company']))) {
+            return redirect()->away($frontend.'?error=company_inactive');
+        }
+
         $accessToken = $contact->createToken('fayda')->plainTextToken;
         $target = $pkce['frontend_redirect'] ?? $frontend;
         $sep = str_contains($target, '?') ? '&' : '?';
@@ -74,8 +79,17 @@ class FaydaAuthController extends Controller
 
     public function me(Request $request, CompanyMembershipService $membership)
     {
+        $contact = $request->user();
+        if (! $membership->contactMayUsePortal($contact)) {
+            $contact->tokens()->delete();
+
+            return response()->json([
+                'message' => 'Your company has been deactivated. Portal sign-in is disabled. Contact Ethio telecom.',
+            ], 403);
+        }
+
         return response()->json([
-            'data' => $membership->serializeContact($request->user()),
+            'data' => $membership->serializeContact($contact),
         ]);
     }
 

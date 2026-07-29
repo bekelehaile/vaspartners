@@ -7,6 +7,7 @@ use App\Filament\Resources\Companies\CompanyResource;
 use App\Models\Company;
 use App\Models\Contact;
 use App\Services\CompanyMembershipService;
+use App\Services\CompanyPurgeService;
 use App\Services\SmsService;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
@@ -28,6 +29,37 @@ class ViewCompany extends ViewRecord
         return [
             EditAction::make()
                 ->label('Update company'),
+            Action::make('force_purge')
+                ->label('Delete permanently')
+                ->icon('heroicon-o-trash')
+                ->color('danger')
+                ->requiresConfirmation()
+                ->modalHeading('Permanently delete company?')
+                ->modalDescription('Permanently deletes this company, memberships, subscriptions, service requests, attachments, and contacts that only belong here. Cannot be undone.')
+                ->action(function (CompanyPurgeService $purge): void {
+                    try {
+                        $stats = $purge->forcePurge($this->getRecord());
+                        Notification::make()
+                            ->title('Company permanently deleted')
+                            ->body(sprintf(
+                                'Removed %d contact(s), %d subscription(s), %d ticket(s), %d document(s).',
+                                $stats['contacts'],
+                                $stats['subscriptions'],
+                                $stats['tickets'],
+                                $stats['documents'],
+                            ))
+                            ->success()
+                            ->send();
+                        $this->redirect(CompanyResource::getUrl('index'));
+                    } catch (Throwable $e) {
+                        report($e);
+                        Notification::make()
+                            ->title('Could not delete company')
+                            ->body($e->getMessage())
+                            ->danger()
+                            ->send();
+                    }
+                }),
             Action::make('send_sms')
                 ->label('Send SMS')
                 ->icon('heroicon-o-chat-bubble-left-ellipsis')

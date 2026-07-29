@@ -22,6 +22,11 @@ class EditCompany extends EditRecord
     {
         /** @var \App\Models\Company $company */
         $company = $this->getRecord();
-        app(CompanyMembershipService::class)->syncAllMembersDenormalizedFields($company);
+        $membership = app(CompanyMembershipService::class);
+        $membership->syncAllMembersDenormalizedFields($company);
+
+        if ($company->wasChanged('is_active') && ! $company->is_active) {
+            $membership->revokePortalAccessForInactiveCompany($company);
+        }
     }
 }

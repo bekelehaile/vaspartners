@@ -59,10 +59,6 @@ class Company extends Model
                 );
             }
         });
-
-        static::deleting(function (): bool {
-            return false;
-        });
     }
 
     public function setPhoneAttribute(mixed $value): void

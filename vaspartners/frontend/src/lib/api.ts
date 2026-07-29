@@ -318,7 +318,7 @@ export async function api<T = unknown>(path: string, init: RequestInit = {}): Pr
   if (t) headers.set("Authorization", `Bearer ${t}`);
 
   const res = await fetch(`${API}${path}`, { ...init, headers, cache: "no-store" });
-  if (res.status === 401) {
+  if (res.status === 401 || (res.status === 403 && path === "/auth/me")) {
     clearClientSession();
     if (typeof window !== "undefined") {
       window.dispatchEvent(new Event("vas:unauthorized"));

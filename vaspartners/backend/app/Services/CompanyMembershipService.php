@@ -33,8 +33,8 @@ class CompanyMembershipService
 
     /**
      * Create a company profile as owner — stays pending until admin verifies required info.
-     * Phone/email always come from the partner identity. TIN uniquely identifies the company
-     * (a contact may own multiple companies, each with a different TIN).
+     * TIN uniquely identifies the company. Phone/email are shared: first company uses the
+     * partner identity; additional companies copy phone/email from an existing company.
      *
      * @param  array{company_name: string, company_tin: string, company_address: string}  $data
      */
@@ -46,22 +46,20 @@ class CompanyMembershipService
             ]);
         }
 
-        $phone = \App\Support\PhoneNumber::normalize((string) $contact->phone_number);
-        $email = trim((string) $contact->email);
-        if ($phone === '' || ! \App\Support\PhoneNumber::isValidLocalMobile($phone)) {
-            throw ValidationException::withMessages([
-                'company' => 'Your signed-in phone number is required to create a company. Sign in again.',
-            ]);
-        }
-
         $tin = $this->normalizeCode($data['company_tin']);
         $this->assertUniqueTin($tin);
 
-        $contact->loadMissing(['memberships', 'company']);
+        $contact->loadMissing(['memberships.company', 'company']);
         $creatingAdditional = $contact->memberships->isNotEmpty();
+        [$companyPhone, $companyEmail] = $this->resolveSharedCompanyContacts($contact);
 
-        $companyPhone = $phone;
-        $companyEmail = $email !== '' ? \App\Support\EmailAddress::normalize($email) : null;
+        if ($companyPhone === '' || ! \App\Support\PhoneNumber::isValidLocalMobile($companyPhone)) {
+            throw ValidationException::withMessages([
+                'company' => $creatingAdditional
+                    ? 'Your existing company has no usable phone. Update that company or sign in again.'
+                    : 'Your signed-in phone number is required to create a company. Sign in again.',
+            ]);
+        }
 
         // Stay on an approved working company so the portal is not locked to a pending TIN.
         $keepApprovedContext = $creatingAdditional
@@ -136,11 +134,11 @@ class CompanyMembershipService
             ]);
         }
 
-        $phone = \App\Support\PhoneNumber::normalize((string) $contact->phone_number);
-        $email = trim((string) $contact->email);
+        $phone = \App\Support\PhoneNumber::normalize((string) ($company->phone ?: $contact->phone_number));
+        $email = trim((string) ($company->email ?: $contact->email));
         if ($phone === '' || ! \App\Support\PhoneNumber::isValidLocalMobile($phone)) {
             throw ValidationException::withMessages([
-                'company' => 'Your Fayda phone number is required to update a company. Sign in again with Fayda.',
+                'company' => 'A valid company phone is required. Use your existing company phone or sign in again.',
             ]);
         }
 
@@ -1642,6 +1640,8 @@ class CompanyMembershipService
 
     public function assertCanAccessCompany(Contact $contact): void
     {
+        $this->assertPortalSignInAllowed($contact);
+
         if (! $contact->current_company_id) {
             throw ValidationException::withMessages([
                 'company' => 'Create a company with a unique TIN (or join an approved company) before using VAS services.',
@@ -1666,6 +1666,76 @@ class CompanyMembershipService
                 'company' => 'A valid company TIN is required before using VAS services.',
             ]);
         }
+    }
+
+    /**
+     * Portal sign-in / session: blocked when every linked company is admin-deactivated
+     * (approved + is_active=false). Pending/rejected companies still allow sign-in.
+     */
+    public function assertPortalSignInAllowed(Contact $contact): void
+    {
+        if ($this->contactMayUsePortal($contact)) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'company' => 'Your company has been deactivated. Portal sign-in is disabled. Contact Ethio telecom.',
+        ]);
+    }
+
+    public function contactMayUsePortal(Contact $contact): bool
+    {
+        $contact->loadMissing(['memberships.company']);
+
+        $companies = $contact->memberships
+            ->map(fn (CompanyMembership $m) => $m->company)
+            ->filter();
+
+        if ($companies->isEmpty()) {
+            return true;
+        }
+
+        foreach ($companies as $company) {
+            if ($company->is_active) {
+                return true;
+            }
+
+            $status = $company->approval_status instanceof CompanyApprovalStatus
+                ? $company->approval_status
+                : CompanyApprovalStatus::tryFrom((string) $company->approval_status);
+
+            // Still onboarding / needs fixes — allow portal access.
+            if ($status !== CompanyApprovalStatus::Approved) {
+                return true;
+            }
+        }
+
+        // All linked companies are approved but switched off by admin.
+        return false;
+    }
+
+    /**
+     * When a company is turned off, revoke portal tokens for contacts who no longer
+     * have any active/onboarding company.
+     */
+    public function revokePortalAccessForInactiveCompany(Company $company): int
+    {
+        if ($company->is_active) {
+            return 0;
+        }
+
+        $revoked = 0;
+        foreach ($this->companyContactIds((int) $company->id) as $contactId) {
+            $contact = Contact::query()->find($contactId);
+            if (! $contact || $this->contactMayUsePortal($contact)) {
+                continue;
+            }
+
+            $contact->tokens()->delete();
+            $revoked++;
+        }
+
+        return $revoked;
     }
 
     /**
@@ -2029,42 +2099,35 @@ class CompanyMembershipService
         }
     }
 
-    protected function assertUniqueCompanyPhone(string $phone, ?int $ignoreCompanyId = null): void
+    /**
+     * Phone/email for portal company create: copy from an existing company when the
+     * partner already has one; otherwise use the signed-in contact identity.
+     *
+     * @return array{0: string, 1: ?string} [phone, email]
+     */
+    protected function resolveSharedCompanyContacts(Contact $contact): array
     {
-        $phone = \App\Support\PhoneNumber::normalize($phone);
-        if ($phone === '') {
-            return;
+        $source = $contact->company;
+        if (! $source) {
+            foreach ($contact->memberships as $membership) {
+                if ($membership->company) {
+                    $source = $membership->company;
+                    break;
+                }
+            }
         }
 
-        $query = Company::query()->where('phone', $phone);
-        if ($ignoreCompanyId) {
-            $query->where('id', '!=', $ignoreCompanyId);
+        $identityPhone = \App\Support\PhoneNumber::normalize((string) $contact->phone_number);
+        $identityEmail = \App\Support\EmailAddress::normalize($contact->email);
+
+        if ($source) {
+            $phone = \App\Support\PhoneNumber::normalize((string) ($source->phone ?: $identityPhone));
+            $email = \App\Support\EmailAddress::normalize($source->email) ?? $identityEmail;
+
+            return [$phone, $email];
         }
 
-        if ($query->exists()) {
-            throw ValidationException::withMessages([
-                'company' => 'This company phone number is already registered to another company.',
-            ]);
-        }
-    }
-
-    protected function assertUniqueCompanyEmail(?string $email, ?int $ignoreCompanyId = null): void
-    {
-        $email = \App\Support\EmailAddress::normalize($email);
-        if ($email === null) {
-            return;
-        }
-
-        $query = Company::query()->where('email', $email);
-        if ($ignoreCompanyId) {
-            $query->where('id', '!=', $ignoreCompanyId);
-        }
-
-        if ($query->exists()) {
-            throw ValidationException::withMessages([
-                'company' => 'This company email is already registered to another company.',
-            ]);
-        }
+        return [$identityPhone, $identityEmail];
     }
 
     /** @return array{disk: string, path: string, original_name: string, size: int} */

@@ -347,9 +347,9 @@ export default function CompanyProfilePage() {
                       <div className="portal-stack-sm">
                         <p className="muted">
                           Register a new company with its own unique TIN (for example{" "}
-                          <strong>00012345</strong>). Your account phone is used as company
-                          contact. Existing memberships stay in place; switch after admin
-                          approval.
+                          <strong>00012345</strong>). Phone and email are copied from your
+                          current company. Existing memberships stay in place; switch after
+                          admin approval.
                         </p>
                         <CompanyProfileForm
                           key="create-another"

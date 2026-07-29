@@ -14,6 +14,7 @@ use App\Filament\Resources\Companies\RelationManagers\SubscriptionsRelationManag
 use App\Models\Company;
 use App\Models\Service;
 use App\Services\CompanyMembershipService;
+use App\Services\CompanyPurgeService;
 use App\Services\SmsService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
@@ -76,19 +77,17 @@ class CompanyResource extends Resource
             TextInput::make('phone')
                 ->tel()
                 ->maxLength(32)
-                ->unique(ignoreRecord: true)
-                ->helperText('Saved as last 9 digits. Must be unique across companies.')
+                ->helperText('Saved as last 9 digits. Partners may share the same phone across multiple companies.')
                 ->dehydrateStateUsing(fn (?string $state): ?string => \App\Support\PhoneNumber::normalizeNullable($state)),
             TextInput::make('email')
                 ->email()
                 ->maxLength(255)
-                ->unique(ignoreRecord: true)
-                ->helperText('Must be unique across companies.')
+                ->helperText('Partners may share the same email across multiple companies.')
                 ->dehydrateStateUsing(fn (?string $state): ?string => \App\Support\EmailAddress::normalize($state)),
             Textarea::make('address')->rows(3)->columnSpanFull(),
             Toggle::make('is_active')
                 ->label('Active')
-                ->helperText('Normally set by Approve profile. Inactive companies cannot use VAS services.'),
+                ->helperText('Normally set by Approve profile. When off, company contacts cannot sign in to the portal and cannot use VAS services.'),
         ])->columns(2);
     }
 
@@ -240,6 +239,36 @@ class CompanyResource extends Resource
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make(),
+                Action::make('force_purge')
+                    ->label('Delete permanently')
+                    ->icon('heroicon-o-trash')
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->modalHeading('Permanently delete company?')
+                    ->modalDescription('This permanently deletes the company, its memberships, subscriptions, service requests, attachments, and contacts that belong only to this company. Cannot be undone.')
+                    ->action(function (Company $record, CompanyPurgeService $purge): void {
+                        try {
+                            $stats = $purge->forcePurge($record);
+                            Notification::make()
+                                ->title('Company permanently deleted')
+                                ->body(sprintf(
+                                    'Removed %d contact(s), %d subscription(s), %d ticket(s), %d document(s).',
+                                    $stats['contacts'],
+                                    $stats['subscriptions'],
+                                    $stats['tickets'],
+                                    $stats['documents'],
+                                ))
+                                ->success()
+                                ->send();
+                        } catch (Throwable $e) {
+                            report($e);
+                            Notification::make()
+                                ->title('Could not delete company')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->send();
+                        }
+                    }),
                 Action::make('send_sms')
                     ->label('Send SMS')
                     ->icon('heroicon-o-chat-bubble-left-ellipsis')
@@ -299,6 +328,49 @@ class CompanyResource extends Resource
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    BulkAction::make('force_purge_selected')
+                        ->label('Delete permanently')
+                        ->icon('heroicon-o-trash')
+                        ->color('danger')
+                        ->requiresConfirmation()
+                        ->modalHeading('Permanently delete selected companies?')
+                        ->modalDescription('Permanently deletes each company plus memberships, subscriptions, tickets, attachments, and exclusive contacts. Cannot be undone.')
+                        ->deselectRecordsAfterCompletion()
+                        ->visible(fn (): bool => static::canDeleteAny())
+                        ->action(function (Collection $records, CompanyPurgeService $purge): void {
+                            $deleted = 0;
+                            $failed = 0;
+                            $contacts = 0;
+                            $docs = 0;
+
+                            foreach ($records as $company) {
+                                if (! $company instanceof Company) {
+                                    continue;
+                                }
+
+                                try {
+                                    $stats = $purge->forcePurge($company);
+                                    $deleted++;
+                                    $contacts += $stats['contacts'];
+                                    $docs += $stats['documents'];
+                                } catch (Throwable $e) {
+                                    report($e);
+                                    $failed++;
+                                }
+                            }
+
+                            Notification::make()
+                                ->title($deleted > 0
+                                    ? "Permanently deleted {$deleted} company(ies)"
+                                    : 'No companies deleted')
+                                ->body(trim(implode(' ', array_filter([
+                                    $contacts > 0 ? "{$contacts} contact(s) removed." : null,
+                                    $docs > 0 ? "{$docs} document(s) removed." : null,
+                                    $failed > 0 ? "{$failed} failed." : null,
+                                ]))) ?: null)
+                                ->color($deleted > 0 ? 'success' : 'warning')
+                                ->send();
+                        }),
                     BulkAction::make('send_sms')
                         ->label('Send SMS to selected')
                         ->icon('heroicon-o-chat-bubble-left-ellipsis')
@@ -426,21 +498,21 @@ class CompanyResource extends Resource
 
     public static function canDelete($record): bool
     {
-        return false;
+        return $record instanceof Company;
     }
 
     public static function canForceDelete($record): bool
     {
-        return false;
+        return $record instanceof Company;
     }
 
     public static function canDeleteAny(): bool
     {
-        return false;
+        return true;
     }
 
     public static function canForceDeleteAny(): bool
     {
-        return false;
+        return true;
     }
 }
