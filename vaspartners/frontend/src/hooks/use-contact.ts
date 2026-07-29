@@ -277,10 +277,28 @@ export function useCompleteCompanyProfile() {
   });
 }
 
+export function useSubmitCompanyTin() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: { company_tin: string }) => {
+      const res = await api<{ message?: string; data: Contact }>("/profile/company/tin", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      return res.data;
+    },
+    onSuccess: (contact) => {
+      queryClient.setQueryData(queryKeys.contact.me, contact);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.contact.me });
+    },
+  });
+}
+
 export function useLookupCompany(tin: string) {
   return useQuery({
     queryKey: ["company-lookup", tin],
-    enabled: tin.trim().length >= 5,
+    enabled: tin.trim().replace(/\D+/g, "").length === 10,
     queryFn: async () => {
       const params = new URLSearchParams({
         tin: tin.trim(),

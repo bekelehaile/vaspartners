@@ -16,9 +16,6 @@ export function TinValidationGate({ children }: { children: React.ReactNode }) {
 
   const company = me?.company;
   const needsGate = !!me?.profile_completed && !!company && !company.tin_validated;
-  const canEdit =
-    !!me?.company_can_edit || me?.company_role === "owner" || !!me?.company_can_manage_members;
-  // Owners always can; company_can_edit is false once approved — allow owner anyway.
   const canSubmitTin = me?.company_role === "owner" || !!me?.company_can_edit;
 
   const formatOk = useMemo(
@@ -88,7 +85,7 @@ export function TinValidationGate({ children }: { children: React.ReactNode }) {
                   inputMode="numeric"
                   autoComplete="off"
                   maxLength={14}
-                  placeholder={company?.tin && formatOk ? company.tin : "0000000000"}
+                  placeholder={company?.tin && formatOk ? company.tin : "0001234567"}
                   value={tin}
                   onChange={(e) => setTin(e.target.value.replace(/[^\d\s-]/g, ""))}
                   required
@@ -115,8 +112,8 @@ export function TinValidationGate({ children }: { children: React.ReactNode }) {
             </form>
           ) : (
             <p className="portal-modal-hint">
-              Ask your company owner to submit a valid TIN
-              {canEdit ? "" : ""}. Service requests stay locked until validation.
+              Ask your company owner to submit a valid TIN. Service requests stay locked until
+              Ethio telecom validates it.
             </p>
           )}
         </div>

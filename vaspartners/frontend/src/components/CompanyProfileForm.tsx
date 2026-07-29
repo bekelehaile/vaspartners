@@ -209,7 +209,7 @@ export function CompanyProfileForm({
                     field={field}
                     label="TIN"
                     submissionAttempts={submissionAttempts}
-                    placeholder="e.g. 00012345"
+                    placeholder="e.g. 0001234567"
                     inputMode="numeric"
                     autoComplete="off"
                   />

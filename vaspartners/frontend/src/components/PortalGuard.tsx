@@ -4,6 +4,7 @@ import { ReactNode, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { AuthWait } from "@/components/AuthWait";
 import { SiteShell } from "@/components/SiteShell";
+import { TinValidationGate } from "@/components/TinValidationGate";
 import { getToken } from "@/lib/api";
 import { useContact, useLogout } from "@/hooks/use-contact";
 
@@ -58,9 +59,15 @@ export function PortalGuard({ children }: { children: ReactNode }) {
     );
   }
 
+  const body = onCompanyPage ? (
+    children
+  ) : (
+    <TinValidationGate>{children}</TinValidationGate>
+  );
+
   return (
     <SiteShell me={me} onLogout={() => void logout()} compact>
-      {children}
+      {body}
     </SiteShell>
   );
 }

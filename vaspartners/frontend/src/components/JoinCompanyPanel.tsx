@@ -7,6 +7,7 @@ import {
   useLookupCompany,
 } from "@/hooks/use-contact";
 import { queryKeys } from "@/lib/query-keys";
+import { isValidEthiopianTin, normalizeEthiopianTin } from "@/lib/tin";
 
 /** Request membership (attach) to an approved company by TIN. */
 export function JoinCompanyPanel({
@@ -25,6 +26,7 @@ export function JoinCompanyPanel({
   const [lookupTin, setLookupTin] = useState("");
   const lookup = useLookupCompany(lookupTin);
   const attach = useAttachCompany();
+  const tinOk = isValidEthiopianTin(tin);
 
   const body = (
     <>
@@ -37,8 +39,10 @@ export function JoinCompanyPanel({
         <input
           id="attach-tin"
           value={tin}
-          onChange={(e) => setTin(e.target.value)}
-          placeholder="Registered TIN"
+          onChange={(e) => setTin(e.target.value.replace(/[^\d\s-]/g, ""))}
+          placeholder="10-digit Ethiopian TIN"
+          inputMode="numeric"
+          maxLength={14}
           required
           aria-required="true"
         />
@@ -57,9 +61,9 @@ export function JoinCompanyPanel({
         <button
           type="button"
           className="btn-ghost"
-          disabled={tin.trim().length < 5 || lookup.isFetching}
+          disabled={!tinOk || lookup.isFetching}
           onClick={() => {
-            setLookupTin(tin.trim());
+            setLookupTin(normalizeEthiopianTin(tin));
           }}
         >
           {lookup.isFetching ? "Looking up…" : "Lookup company"}
@@ -67,11 +71,11 @@ export function JoinCompanyPanel({
         <button
           type="button"
           className="btn-primary"
-          disabled={attach.isPending || tin.trim().length < 5}
+          disabled={attach.isPending || !tinOk}
           onClick={() =>
             void attach
               .mutateAsync({
-                company_tin: tin.trim(),
+                company_tin: normalizeEthiopianTin(tin),
                 note,
               })
               .then(() => {
