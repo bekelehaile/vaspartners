@@ -113,8 +113,15 @@ class PortalPhoneOtpService
         $result = $this->findOrCreateContact($phone, $profile ?? []);
         $contact = $result['contact'];
 
-        if ($contact->is_banned || ! $contact->is_active) {
+        // Parity with Fayda (EsignetService): successful auth activates the contact.
+        // Only ban permanently blocks portal sign-in. Migrated MVAS clients often had
+        // is_active=0 even when they were verified and logging into the old portal.
+        if ($contact->is_banned) {
             throw new RuntimeException('This account is not allowed to sign in.');
+        }
+
+        if (! $contact->is_active) {
+            $contact->forceFill(['is_active' => true])->save();
         }
 
         $membership = app(CompanyMembershipService::class);

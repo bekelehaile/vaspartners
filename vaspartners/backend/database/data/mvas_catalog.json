@@ -281,6 +281,7 @@
       "is_active": true,
       "sort_order": 3,
       "is_system": true,
+      "creates_subscription": true,
       "requires_active_subscription": true
     },
     {
@@ -291,7 +292,8 @@
       "is_active": true,
       "sort_order": 4,
       "is_system": true,
-      "requires_active_subscription": true
+      "creates_subscription": true,
+      "requires_active_subscription": false
     },
     {
       "legacy_id": 5,
@@ -372,7 +374,8 @@
       "is_active": true,
       "sort_order": 12,
       "is_system": true,
-      "requires_active_subscription": true
+      "creates_subscription": true,
+      "requires_active_subscription": false
     }
   ],
   "document_types": [

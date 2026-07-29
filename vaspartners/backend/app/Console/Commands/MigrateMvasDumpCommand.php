@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Contact;
 use App\Services\Migration\MvasDumpClearService;
 use App\Services\Migration\MvasDumpEnrichmentService;
 use App\Services\Migration\MvasDumpMigrationService;
@@ -126,13 +127,27 @@ class MigrateMvasDumpCommand extends Command
             ['Entity', 'Imported', 'Skipped', 'Notes'],
             [
                 ['companies', $stats['companies']['imported'], $stats['companies']['skipped'], 'selected '.$stats['companies']['selected']],
-                ['contacts', $stats['contacts']['imported'], $stats['contacts']['skipped'], ''],
+                ['contacts', $stats['contacts']['imported'], $stats['contacts']['skipped'], 'portal_activated '.($stats['contacts']['portal_activated'] ?? 0)],
                 ['tickets', $stats['tickets']['imported'], $stats['tickets']['skipped'], 'orphaned '.$stats['tickets']['orphaned']],
                 ['subscriptions', $enrichStats['subscriptions']['imported'], $enrichStats['subscriptions']['skipped'], 'linked '.$enrichStats['subscriptions']['linked_tickets']],
                 ['approvers', $enrichStats['approvers']['imported'], $enrichStats['approvers']['skipped'], ''],
                 ['attachments', $enrichStats['attachments']['imported'], $enrichStats['attachments']['skipped'], 'missing '.$enrichStats['attachments']['missing_file']],
             ],
         );
+
+        if (! $dryRun) {
+            $blocked = Contact::query()
+                ->whereNotNull('legacy_mvas_id')
+                ->where('is_banned', false)
+                ->where('is_active', false)
+                ->count();
+            if ($blocked > 0) {
+                $this->error("Portal login risk: {$blocked} migrated contact(s) still inactive. Re-run seed or activate in admin.");
+
+                return self::FAILURE;
+            }
+            $this->info('Portal login check: all non-banned migrated contacts are active.');
+        }
 
         $this->line('Repeat anytime:');
         $this->line('  php artisan vas:migrate-mvas-dump --fresh --force --dump='.$dump.($storage !== '' ? ' --storage='.$storage : ''));

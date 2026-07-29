@@ -88,6 +88,8 @@ class MvasDumpEnrichmentService
      */
     private function importSubscriptions(bool $dryRun, array &$stats): void
     {
+        // Includes New + Additional Services + Revenue Request + Merchant (catalog creates_subscription).
+        // Old MVAS often onboarded API/MT via Revenue Request without a separate "New" ticket.
         $createReqIds = Requisition::query()
             ->where('creates_subscription', true)
             ->pluck('id')
@@ -107,6 +109,7 @@ class MvasDumpEnrichmentService
             ->whereNotNull('legacy_mvas_ticket_id')
             ->whereIn('requisition_id', $createReqIds)
             ->whereIn('status', $doneStatuses)
+            ->orderByRaw('COALESCE(completed_at, closed_at, created_at, id)')
             ->orderBy('id')
             ->get();
 

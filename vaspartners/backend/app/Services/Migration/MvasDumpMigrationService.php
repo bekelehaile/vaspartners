@@ -32,8 +32,9 @@ class MvasDumpMigrationService
     private const STATUS_MAP = [
         1 => TicketStatus::Open,
         2 => TicketStatus::InProgress,
-        3 => TicketStatus::Completed,
-        4 => TicketStatus::Completed, // Approved
+        // Old MVAS "Completed" / "Approved" → Closed (finished service requests).
+        3 => TicketStatus::Closed,
+        4 => TicketStatus::Closed,
         5 => TicketStatus::Rejected,
         6 => TicketStatus::Closed,
     ];
@@ -85,7 +86,7 @@ class MvasDumpMigrationService
 
         $stats = [
             'companies' => ['imported' => 0, 'skipped' => 0, 'selected' => 0],
-            'contacts' => ['imported' => 0, 'skipped' => 0, 'selected' => 0],
+            'contacts' => ['imported' => 0, 'skipped' => 0, 'selected' => 0, 'portal_activated' => 0],
             'tickets' => ['imported' => 0, 'skipped' => 0, 'selected' => 0, 'orphaned' => 0],
             'memberships' => ['linked' => 0, 'skipped' => 0],
             'dry_run' => $dryRun,
@@ -264,6 +265,7 @@ class MvasDumpMigrationService
                         fn (string $number): bool => Ticket::query()->where('tt_number', $number)->exists(),
                     );
 
+                    $finishedAt = $ticket['closed_at'] ?? $ticket['updated_at'] ?? now();
                     $model = new Ticket([
                         'tt_number' => $ttNumber,
                         'legacy_mvas_ticket_id' => $ticket['id'],
@@ -279,9 +281,11 @@ class MvasDumpMigrationService
                         'description' => $ticket['description'],
                         'escalated_at' => $ticket['escalated_at'],
                         'rejected_at' => $ticket['rejected_at'],
-                        'closed_at' => $ticket['closed_at'],
-                        'completed_at' => in_array($status, [TicketStatus::Completed, TicketStatus::Closed], true)
-                            ? ($ticket['closed_at'] ?? $ticket['updated_at'] ?? now())
+                        'closed_at' => $status === TicketStatus::Closed
+                            ? ($ticket['closed_at'] ?? $finishedAt)
+                            : $ticket['closed_at'],
+                        'completed_at' => $status === TicketStatus::Closed
+                            ? $finishedAt
                             : null,
                         'assigned_at' => $status === TicketStatus::InProgress
                             ? ($ticket['updated_at'] ?? now())
@@ -296,9 +300,33 @@ class MvasDumpMigrationService
             }
         }
 
+        // Old MVAS clients.is_active defaults to 0; portal OTP/Fayda require is_active.
+        // Always re-enable non-banned migrated contacts (idempotent re-runs + legacy imports).
+        $stats['contacts']['portal_activated'] = (int) ($stats['contacts']['portal_activated'] ?? 0)
+            + $this->ensureMigratedContactsPortalReady($dryRun);
+
         Log::info('MVAS dump migration finished', $stats);
 
         return $stats;
+    }
+
+    /**
+     * Guarantee migrated partners can pass portal sign-in checks (is_active).
+     * Banned contacts stay blocked. Admin "deactivate" is not durable across migrate —
+     * use Ban for permanent portal blocks.
+     */
+    public function ensureMigratedContactsPortalReady(bool $dryRun = false): int
+    {
+        $query = Contact::query()
+            ->whereNotNull('legacy_mvas_id')
+            ->where('is_banned', false)
+            ->where('is_active', false);
+
+        if ($dryRun) {
+            return (int) $query->count();
+        }
+
+        return (int) $query->update(['is_active' => true]);
     }
 
     /**
@@ -389,6 +417,9 @@ class MvasDumpMigrationService
     ): ?int {
         if (isset($contactByLegacyId[$partner['id']])) {
             $stats['contacts']['skipped']++;
+            if (! $dryRun) {
+                $this->ensureContactPortalReady((int) $contactByLegacyId[$partner['id']], $stats);
+            }
 
             return $contactByLegacyId[$partner['id']];
         }
@@ -400,6 +431,9 @@ class MvasDumpMigrationService
 
         if ($existing) {
             $stats['contacts']['skipped']++;
+            if (! $dryRun) {
+                $this->ensureContactPortalReady((int) $existing->id, $stats);
+            }
 
             return (int) $existing->id;
         }
@@ -432,8 +466,11 @@ class MvasDumpMigrationService
 
         // No company_* / membership yet — Fayda login claims matching company by phone
         // (or admin assigns orphan companies after verification).
+        // Old MVAS `clients.is_active` defaults to 0 and is rarely flipped; verified
+        // partners still signed in there. Portal OTP/Fayda require is_active — always
+        // enable non-banned migrated contacts (banned clients are skipped above).
         $contact->forceFill([
-            'is_active' => (bool) $partner['is_active'],
+            'is_active' => true,
             'is_banned' => (bool) $partner['is_banned'],
             'company_name' => null,
             'company_tin' => null,
@@ -455,6 +492,22 @@ class MvasDumpMigrationService
         $stats['contacts']['imported']++;
 
         return (int) $contact->id;
+    }
+
+    /**
+     * @param  array<string, mixed>  $stats
+     */
+    private function ensureContactPortalReady(int $contactId, array &$stats): void
+    {
+        $updated = Contact::query()
+            ->whereKey($contactId)
+            ->where('is_banned', false)
+            ->where('is_active', false)
+            ->update(['is_active' => true]);
+
+        if ($updated > 0) {
+            $stats['contacts']['portal_activated'] = (int) ($stats['contacts']['portal_activated'] ?? 0) + $updated;
+        }
     }
 
     /**
