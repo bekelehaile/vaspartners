@@ -95,7 +95,7 @@ class CompanyMembershipService
                 switchTo: ! $keepApprovedContext,
             );
             $fresh = $contact->fresh(['company', 'memberships.company']);
-            $this->notifications->companyProfileSubmitted($fresh);
+            $this->notifications->companyProfileSubmitted($fresh, $company);
 
             return $fresh;
         });
@@ -165,7 +165,7 @@ class CompanyMembershipService
             $this->syncAllMembersDenormalizedFields($company);
 
             $fresh = $contact->fresh(['company', 'memberships.company']);
-            $this->notifications->companyProfileSubmitted($fresh);
+            $this->notifications->companyProfileSubmitted($fresh, $company);
 
             return $fresh;
         });

@@ -180,6 +180,7 @@ class CompanyResource extends Resource
                 TextColumn::make('tin')->label('TIN')->searchable()->sortable(),
                 IconColumn::make('tin_validated')->boolean()->label('TIN OK'),
                 TextColumn::make('phone')->label('Phone')->toggleable()->placeholder('—'),
+                TextColumn::make('email')->label('Email')->toggleable()->placeholder('—'),
                 TextColumn::make('owner_name')
                     ->label('Owner')
                     ->state(fn (Company $record): ?string => $record->ownerContact()?->name)

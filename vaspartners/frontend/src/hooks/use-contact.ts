@@ -272,6 +272,7 @@ export function useCompleteCompanyProfile() {
     onSuccess: (contact) => {
       queryClient.setQueryData(queryKeys.contact.me, contact);
       void queryClient.invalidateQueries({ queryKey: queryKeys.contact.me });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.notifications });
       void queryClient.invalidateQueries({ queryKey: ["company-requests-inbox"] });
     },
   });

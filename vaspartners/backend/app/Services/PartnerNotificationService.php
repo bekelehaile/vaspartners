@@ -296,10 +296,14 @@ class PartnerNotificationService
         }
     }
 
-    public function companyProfileSubmitted(Contact $contact): void
+    public function companyProfileSubmitted(Contact $contact, ?Company $company = null): void
     {
         $contact->loadMissing('company');
-        $company = $contact->company;
+        $company ??= $contact->company;
+
+        // Drop stale company-profile notices so a new submission is not mixed with
+        // old approved / rejected / pending messages that confuse partners.
+        $this->clearCompanyProfileNotifications($contact);
 
         $this->notifyStaffDatabase(
             $this->managementUsers(),
@@ -333,8 +337,32 @@ class PartnerNotificationService
         ));
     }
 
+    /**
+     * Remove in-app company profile notifications for a partner.
+     */
+    public function clearCompanyProfileNotifications(Contact $contact): void
+    {
+        $templates = [
+            'company_profile_pending',
+            'company_profile_approved',
+            'company_profile_rejected',
+            'profile_completed',
+        ];
+
+        $contact->notifications()
+            ->where(function ($query) use ($templates): void {
+                foreach ($templates as $i => $template) {
+                    $method = $i === 0 ? 'where' : 'orWhere';
+                    $query->{$method}('data->template', $template);
+                }
+            })
+            ->delete();
+    }
+
     public function companyProfileDecided(Company $company, Contact $owner, bool $approved): void
     {
+        $this->clearCompanyProfileNotifications($owner);
+
         $template = $approved ? 'company_profile_approved' : 'company_profile_rejected';
         $placeholders = [
             'contact_name' => $owner->name ?: 'Partner',
