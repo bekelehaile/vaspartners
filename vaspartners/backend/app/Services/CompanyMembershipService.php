@@ -1849,6 +1849,65 @@ class CompanyMembershipService
     }
 
     /**
+     * Clear a false / mistaken TIN approval when the stored value is not a valid Ethiopian TIN.
+     *
+     * @return array{cleared: bool, notified: bool, skipped: bool, reason?: string|null}
+     */
+    public function clearInvalidTinApproval(Company $company, bool $notify = true): array
+    {
+        $company->refresh();
+
+        if (TinNumber::isValid($company->tin)) {
+            return ['cleared' => false, 'skipped' => true, 'reason' => 'tin_format_valid'];
+        }
+
+        $wasValidated = (bool) $company->tin_validated;
+
+        if ($wasValidated) {
+            $company->forceFill([
+                'tin_validated' => false,
+                'tin_validated_by_user_id' => null,
+                'tin_validated_at' => null,
+            ])->save();
+
+            $this->recordStatusHistory(
+                $company,
+                'tin_cleared',
+                null,
+                null,
+                'Automated scan: TIN format invalid while tin_validated was true',
+            );
+        }
+
+        // Default: SMS only when clearing a false approval (avoids hourly spam on placeholders).
+        // Callers pass $notify=true for unvalidated rows only with an explicit --notify-all run.
+        if ($notify && $wasValidated) {
+            $this->notifications->companyTinInvalid(
+                $company->fresh(['activeMembers']) ?? $company,
+                true,
+            );
+        }
+
+        return [
+            'cleared' => $wasValidated,
+            'notified' => $notify && $wasValidated,
+            'skipped' => ! $wasValidated,
+            'reason' => $wasValidated ? null : 'already_unvalidated',
+        ];
+    }
+
+    /**
+     * Notify owner that the company TIN format is invalid (one-shot / --notify-all scans).
+     */
+    public function notifyInvalidTin(Company $company, bool $hadFalseApproval = false): void
+    {
+        $this->notifications->companyTinInvalid(
+            $company->fresh(['activeMembers']) ?? $company,
+            $hadFalseApproval,
+        );
+    }
+
+    /**
      * Log admin edits to Active / TIN validated / approval from the company form.
      *
      * @param  array{approval_status?: mixed, is_active?: mixed, tin_validated?: mixed}  $before

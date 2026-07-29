@@ -114,6 +114,10 @@ SMS,
 Dear {contact_name}, the TIN for {company_name} is confirmed. Log in to the VAS Partners portal and submit service requests. — Ethio telecom
 SMS,
 
+        'company_tin_invalid' => <<<'SMS'
+Dear {contact_name}, company {company_name} has an invalid TIN ({company_tin}). {note} Enter a valid 10-digit Ethiopian TIN in the portal. — Ethio telecom
+SMS,
+
         'company_profile_rejected' => <<<'SMS'
 Dear {contact_name}, your company profile for {company_name} needs updates. {note} Open the portal to correct and resubmit. — Ethio telecom
 SMS,
@@ -171,6 +175,8 @@ SMS,
         'company_profile_approved' => 'Your company {company_name} was approved. Ethio telecom will confirm your TIN before you can submit service requests.',
 
         'company_tin_validated' => 'TIN for {company_name} is confirmed. Log in and submit service requests.',
+
+        'company_tin_invalid' => 'TIN for {company_name} ({company_tin}) is invalid. {note} Update it in Company settings.',
 
         'company_profile_pending' => 'Your company {company_name} (TIN {company_tin}) was submitted and is waiting for Ethio telecom approval. You will be notified when it is reviewed.',
 

@@ -116,7 +116,17 @@ class CompanyResource extends Resource
                 ->helperText('Normally set by Approve profile. When off, company contacts cannot sign in to the portal and cannot use VAS services.'),
             Toggle::make('tin_validated')
                 ->label('TIN NUMBER approved')
-                ->helperText('Prefer Approve TIN NUMBER action so who/when is logged. Required before partners can submit service requests.'),
+                ->helperText('Prefer Approve TIN NUMBER action so who/when is logged. Required before partners can submit service requests. Invalid TIN format cannot be approved.')
+                ->dehydrateStateUsing(function (?bool $state, ?\App\Models\Company $record): bool {
+                    if (! $state) {
+                        return false;
+                    }
+                    if ($record !== null && ! \App\Support\TinNumber::isValid($record->tin)) {
+                        return false;
+                    }
+
+                    return true;
+                }),
         ])->columns(2);
     }
 

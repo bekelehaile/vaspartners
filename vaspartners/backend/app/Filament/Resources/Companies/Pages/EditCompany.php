@@ -5,8 +5,10 @@ namespace App\Filament\Resources\Companies\Pages;
 use App\Filament\Resources\Companies\CompanyResource;
 use App\Models\User;
 use App\Services\CompanyMembershipService;
+use App\Support\TinNumber;
 use Filament\Actions\ViewAction;
 use Filament\Resources\Pages\EditRecord;
+use Illuminate\Validation\ValidationException;
 
 class EditCompany extends EditRecord
 {
@@ -26,6 +28,14 @@ class EditCompany extends EditRecord
     {
         /** @var \App\Models\Company $company */
         $company = $this->getRecord();
+        $data = $this->form->getState();
+
+        if (! empty($data['tin_validated']) && ! TinNumber::isValid($data['tin'] ?? $company->tin)) {
+            throw ValidationException::withMessages([
+                'data.tin_validated' => TinNumber::message().' Clear TIN approval or enter a valid TIN first.',
+            ]);
+        }
+
         $this->conditionSnapshot = [
             'approval_status' => $company->approval_status instanceof \BackedEnum
                 ? $company->approval_status->value

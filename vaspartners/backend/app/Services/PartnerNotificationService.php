@@ -497,6 +497,55 @@ class PartnerNotificationService
         }
     }
 
+    /**
+     * Automated scan: company has an owner but TIN is not a valid 10-digit Ethiopian TIN
+     * (including cases where tin_validated was set incorrectly).
+     */
+    public function companyTinInvalid(Company $company, bool $hadFalseApproval = false): void
+    {
+        $company->loadMissing(['activeMembers']);
+
+        $owner = $company->ownerContact();
+        $recipients = $owner ? collect([$owner]) : collect();
+        if ($recipients->isEmpty()) {
+            $recipients = $company->activeMembers;
+        }
+
+        $template = 'company_tin_invalid';
+        $sentPhones = [];
+
+        foreach ($recipients as $contact) {
+            if (! $contact instanceof Contact) {
+                continue;
+            }
+
+            $placeholders = [
+                'contact_name' => $contact->name ?: 'Partner',
+                'company_name' => $company->name ?: 'your organisation',
+                'company_tin' => $company->tin ?: '—',
+                'note' => $hadFalseApproval
+                    ? 'Previous TIN approval was cleared.'
+                    : 'Please submit a valid TIN for approval.',
+            ];
+
+            $smsBody = $this->render('templates', $template, $placeholders);
+            $portalBody = $this->render('portal', $template, $placeholders);
+
+            $phone = trim((string) $contact->phone_number);
+            if ($phone !== '' && ! isset($sentPhones[$phone])) {
+                $this->sms->send($phone, $smsBody);
+                $sentPhones[$phone] = true;
+            }
+
+            $contact->notify(new PartnerPortalNotification(
+                title: $this->titleFor($template),
+                body: Str::limit($portalBody, 280),
+                template: $template,
+                url: '/portal/company',
+            ));
+        }
+    }
+
     public function memberLeftCompany(Company $company, Contact $owner, Contact $member, ?string $note = null): void
     {
         $placeholders = [
@@ -657,6 +706,7 @@ class PartnerNotificationService
             'company_profile_pending' => 'Company waiting for approval',
             'company_profile_approved' => 'Company approved',
             'company_tin_validated' => 'TIN confirmed',
+            'company_tin_invalid' => 'TIN invalid',
             'company_profile_rejected' => 'Company needs updates',
             'company_member_left' => 'Member left company',
             'company_transfer_approved' => 'Ownership transfer approved',

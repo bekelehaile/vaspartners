@@ -33,6 +33,11 @@ return Application::configure(basePath: dirname(__DIR__))
             ->withoutOverlapping(55)
             ->description('Reject open/in-progress/closed/completed requests missing required documents and SMS partners');
 
+        $schedule->command('vas:scan-invalid-tin')
+            ->hourlyAt(30)
+            ->withoutOverlapping(55)
+            ->description('Clear mistaken TIN approvals when format is invalid and SMS company owners');
+
         $schedule->command('vas:open-due-renewals')
             ->dailyAt('01:00')
             ->description('Open renewal service requests for subscriptions in the renewal lead window');
