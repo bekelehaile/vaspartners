@@ -10,6 +10,7 @@ use App\Enums\CompanyRole;
 use App\Models\Company;
 use App\Models\CompanyChangeRequest;
 use App\Models\CompanyMembership;
+use App\Models\CompanyStatusHistory;
 use App\Models\Contact;
 use App\Models\Ticket;
 use App\Models\User;
@@ -215,6 +216,8 @@ class CompanyMembershipService
             'is_active' => true,
         ])->save();
 
+        $this->recordStatusHistory($company, 'approved', $admin, null, filled($note) ? trim($note) : null);
+
         $fresh = $company->fresh(['memberships', 'approvedBy']);
         $owner = $fresh->ownerContact();
         if ($owner) {
@@ -239,6 +242,14 @@ class CompanyMembershipService
             'approval_note' => filled($note) ? trim($note) : 'Incomplete company information.',
             'is_active' => false,
         ])->save();
+
+        $this->recordStatusHistory(
+            $company,
+            'rejected',
+            $admin,
+            null,
+            filled($note) ? trim($note) : 'Incomplete company information.',
+        );
 
         $fresh = $company->fresh(['memberships', 'approvedBy']);
         $owner = $fresh->ownerContact();
@@ -1788,10 +1799,18 @@ class CompanyMembershipService
         $tin = $this->normalizeEthiopianTin($rawTin);
         $this->assertUniqueTin($tin, $company->id);
 
+        $wasValidated = (bool) $company->tin_validated;
+
         $company->fill([
             'tin' => $tin,
             'tin_validated' => false,
+            'tin_validated_by_user_id' => null,
+            'tin_validated_at' => null,
         ])->save();
+
+        if ($wasValidated) {
+            $this->recordStatusHistory($company, 'tin_cleared', null, $contact, 'Partner updated TIN NUMBER');
+        }
 
         $this->syncAllMembersDenormalizedFields($company);
 
@@ -1801,7 +1820,7 @@ class CompanyMembershipService
     /**
      * Admin attests that the company TIN has been verified.
      */
-    public function markTinValidated(Company $company): Company
+    public function markTinValidated(Company $company, ?User $admin = null): Company
     {
         if (! TinNumber::isValid($company->tin)) {
             throw ValidationException::withMessages([
@@ -1810,15 +1829,116 @@ class CompanyMembershipService
         }
 
         if ($company->tin_validated) {
-            return $company->fresh();
+            return $company->fresh(['tinValidatedBy']);
         }
 
-        $company->forceFill(['tin_validated' => true])->save();
+        $admin ??= auth()->user();
 
-        $fresh = $company->fresh();
+        $company->forceFill([
+            'tin_validated' => true,
+            'tin_validated_by_user_id' => $admin?->id,
+            'tin_validated_at' => now(),
+        ])->save();
+
+        $this->recordStatusHistory($company, 'tin_validated', $admin instanceof User ? $admin : null);
+
+        $fresh = $company->fresh(['tinValidatedBy']);
         $this->notifications->companyTinValidated($fresh);
 
         return $fresh;
+    }
+
+    /**
+     * Log admin edits to Active / TIN validated / approval from the company form.
+     *
+     * @param  array{approval_status?: mixed, is_active?: mixed, tin_validated?: mixed}  $before
+     */
+    public function logAdminConditionChanges(Company $company, array $before, ?User $admin = null, ?string $note = null): void
+    {
+        $admin ??= auth()->user() instanceof User ? auth()->user() : null;
+
+        $beforeApproval = (string) ($before['approval_status'] ?? '');
+        $afterApproval = $company->approval_status instanceof CompanyApprovalStatus
+            ? $company->approval_status->value
+            : (string) $company->approval_status;
+        $beforeActive = (bool) ($before['is_active'] ?? false);
+        $afterActive = (bool) $company->is_active;
+        $beforeTin = (bool) ($before['tin_validated'] ?? false);
+        $afterTin = (bool) $company->tin_validated;
+
+        if ($beforeApproval === $afterApproval && $beforeActive === $afterActive && $beforeTin === $afterTin) {
+            return;
+        }
+
+        // Keep current TIN validator stamp when flipped via edit form.
+        if ($beforeTin !== $afterTin) {
+            if ($afterTin) {
+                $company->forceFill([
+                    'tin_validated_by_user_id' => $admin?->id,
+                    'tin_validated_at' => now(),
+                ])->save();
+            } else {
+                $company->forceFill([
+                    'tin_validated_by_user_id' => null,
+                    'tin_validated_at' => null,
+                ])->save();
+            }
+        }
+
+        $action = 'conditions_updated';
+        if ($beforeTin !== $afterTin && $beforeApproval === $afterApproval && $beforeActive === $afterActive) {
+            $action = $afterTin ? 'tin_validated' : 'tin_cleared';
+        } elseif ($beforeActive !== $afterActive && $beforeApproval === $afterApproval && $beforeTin === $afterTin) {
+            $action = $afterActive ? 'activated' : 'deactivated';
+        } elseif ($beforeApproval !== $afterApproval && $beforeActive === $afterActive && $beforeTin === $afterTin) {
+            $action = $afterApproval === CompanyApprovalStatus::Approved->value
+                ? 'approved'
+                : ($afterApproval === CompanyApprovalStatus::Rejected->value ? 'rejected' : 'conditions_updated');
+        }
+
+        $this->recordStatusHistory(
+            $company->fresh(),
+            $action,
+            $admin,
+            null,
+            $note,
+            [
+                'before' => [
+                    'approval_status' => $beforeApproval !== '' ? $beforeApproval : null,
+                    'is_active' => $beforeActive,
+                    'tin_validated' => $beforeTin,
+                ],
+            ],
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $meta
+     */
+    public function recordStatusHistory(
+        Company $company,
+        string $action,
+        ?User $actorUser = null,
+        ?Contact $actorContact = null,
+        ?string $note = null,
+        ?array $meta = null,
+    ): CompanyStatusHistory {
+        $approval = $company->approval_status instanceof CompanyApprovalStatus
+            ? $company->approval_status->value
+            : (string) ($company->approval_status ?? '');
+
+        return CompanyStatusHistory::query()->create([
+            'company_id' => $company->id,
+            'action' => $action,
+            'approval_status' => $approval !== '' ? $approval : null,
+            'is_active' => (bool) $company->is_active,
+            'tin_validated' => (bool) $company->tin_validated,
+            'actor_user_id' => $actorUser?->id,
+            'actor_contact_id' => $actorContact?->id,
+            'note' => filled($note) ? trim($note) : null,
+            'meta' => $meta,
+            'created_at' => now(),
+        ]);
     }
 
     /**

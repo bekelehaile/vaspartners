@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# Build and roll out the VAS Partners staging stack (containers + Postgres).
-# Does NOT touch mvasportal (production on :443 → :30011).
+# Build and roll out the VAS Partners stack (containers + Postgres).
+# Public URL: https://vaspartnersportal.ethiotelecom.et (host nginx → :30011).
 #
 # Usage:
 #   ./deploy-staging.sh
@@ -40,23 +40,23 @@ ensure_kv() {
   fi
 }
 
-ensure_kv APP_URL "https://vaspartnersportal.ethiotelecom.et:8443"
-ensure_kv FRONTEND_URL "https://vaspartnersportal.ethiotelecom.et:8443"
-ensure_kv FAYDA_REDIRECT_URI "https://vaspartnersportal.ethiotelecom.et:8443/callback"
-ensure_kv SANCTUM_STATEFUL_DOMAINS "vaspartnersportal.ethiotelecom.et:8443"
+ensure_kv APP_URL "https://vaspartnersportal.ethiotelecom.et"
+ensure_kv FRONTEND_URL "https://vaspartnersportal.ethiotelecom.et"
+ensure_kv FAYDA_REDIRECT_URI "https://vaspartnersportal.ethiotelecom.et/callback"
+ensure_kv SANCTUM_STATEFUL_DOMAINS "vaspartnersportal.ethiotelecom.et"
 ensure_kv APP_ENV "staging"
 ensure_kv TRUSTED_PROXIES "*"
 
 if [[ ! -r /etc/nginx/ssl/fullchain-wildcard.crt || ! -r /etc/nginx/ssl/ethiotelecom-wildcard.key ]]; then
   echo "Tele SSL certs not readable at /etc/nginx/ssl/fullchain-wildcard.crt (+ key)."
-  echo "Staging nginx mounts these for :8443 TLS."
+  echo "Nginx mounts these for TLS on :8443 (host :443 uses system nginx)."
   exit 1
 fi
 
 echo "==> Building staging images (${VERSION})..."
 DOCKER_BUILDKIT=1 "${COMPOSE[@]}" build \
-  --build-arg NEXT_PUBLIC_API_URL=https://vaspartnersportal.ethiotelecom.et:8443/api/v1 \
-  --build-arg NEXT_PUBLIC_SITE_URL=https://vaspartnersportal.ethiotelecom.et:8443
+  --build-arg NEXT_PUBLIC_API_URL=https://vaspartnersportal.ethiotelecom.et/api/v1 \
+  --build-arg NEXT_PUBLIC_SITE_URL=https://vaspartnersportal.ethiotelecom.et
 
 echo "==> Starting staging stack (Postgres + PgBouncer + Redis + app + queue + web + nginx)..."
 "${COMPOSE[@]}" up -d --remove-orphans
@@ -80,11 +80,12 @@ for i in $(seq 1 90); do
 done
 
 echo
-echo "Staging up (${VERSION})."
-echo "  Portal:  https://vaspartnersportal.ethiotelecom.et:8443"
-echo "  Admin:   https://vaspartnersportal.ethiotelecom.et:8443/admin"
-echo "  API:     https://vaspartnersportal.ethiotelecom.et:8443/api/v1"
+echo "VAS Partners up (${VERSION})."
+echo "  Portal:  https://vaspartnersportal.ethiotelecom.et"
+echo "  Admin:   https://vaspartnersportal.ethiotelecom.et/admin"
+echo "  API:     https://vaspartnersportal.ethiotelecom.et/api/v1"
+echo "  Legacy:  https://vaspartnersportal.ethiotelecom.et:8443 (optional)"
 echo
-echo "  Production mvasportal on :443 is untouched (→ :30011)."
+echo "  Host nginx :443 → 127.0.0.1:30011 → vaspartners-nginx"
 echo "  Logs:    docker compose -f compose.staging.yml logs -f"
 echo "  Down:    ./down-staging.sh"

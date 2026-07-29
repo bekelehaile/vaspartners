@@ -10,6 +10,7 @@ use App\Filament\Resources\Companies\Pages\ViewCompany;
 use App\Filament\Resources\Companies\RelationManagers\ChangeRequestsRelationManager;
 use App\Filament\Resources\Companies\RelationManagers\MembersRelationManager;
 use App\Filament\Resources\Companies\RelationManagers\ServiceRequestsRelationManager;
+use App\Filament\Resources\Companies\RelationManagers\StatusHistoryRelationManager;
 use App\Filament\Resources\Companies\RelationManagers\SubscriptionsRelationManager;
 use App\Models\Company;
 use App\Models\Service;
@@ -89,7 +90,7 @@ class CompanyResource extends Resource
         return $schema->components([
             TextInput::make('name')->required()->maxLength(255),
             TextInput::make('tin')
-                ->label('TIN')
+                ->label('TIN NUMBER')
                 ->required()
                 ->unique(ignoreRecord: true)
                 ->maxLength(32)
@@ -98,7 +99,7 @@ class CompanyResource extends Resource
                         $fail(TinNumber::message());
                     }
                 })
-                ->helperText('Ethiopian TIN: exactly 10 digits. Unique. Partners cannot use services until Active is on and TIN is validated.'),
+                ->helperText('Ethiopian TIN NUMBER: exactly 10 digits. Unique. Partners cannot use services until Active is on and TIN NUMBER is approved.'),
             TextInput::make('phone')
                 ->tel()
                 ->maxLength(32)
@@ -114,8 +115,8 @@ class CompanyResource extends Resource
                 ->label('Active')
                 ->helperText('Normally set by Approve profile. When off, company contacts cannot sign in to the portal and cannot use VAS services.'),
             Toggle::make('tin_validated')
-                ->label('TIN validated')
-                ->helperText('Set via Validate TIN action after verifying the Ethiopian TIN. Required before partners can submit service requests.'),
+                ->label('TIN NUMBER approved')
+                ->helperText('Prefer Approve TIN NUMBER action so who/when is logged. Required before partners can submit service requests.'),
         ])->columns(2);
     }
 
@@ -125,12 +126,21 @@ class CompanyResource extends Resource
             Section::make('Company')->schema([
                 TextEntry::make('public_id')->label('ID'),
                 TextEntry::make('name'),
-                TextEntry::make('tin')->label('TIN'),
+                TextEntry::make('tin')->label('TIN NUMBER'),
                 TextEntry::make('tin_validated')
-                    ->label('TIN validated')
+                    ->label('TIN NUMBER status')
                     ->badge()
-                    ->formatStateUsing(fn ($state) => $state ? 'Validated' : 'Not validated')
+                    ->formatStateUsing(fn ($state) => $state ? 'Approved' : 'Not approved')
                     ->color(fn ($state) => $state ? 'success' : 'warning'),
+                TextEntry::make('tinValidatedBy.name')
+                    ->label('TIN NUMBER approved by')
+                    ->placeholder('—')
+                    ->visible(fn (Company $record): bool => (bool) $record->tin_validated),
+                TextEntry::make('tin_validated_at')
+                    ->label('TIN NUMBER approved at')
+                    ->dateTime()
+                    ->placeholder('—')
+                    ->visible(fn (Company $record): bool => (bool) $record->tin_validated),
                 TextEntry::make('phone')->placeholder('—'),
                 TextEntry::make('email')->placeholder('—'),
                 TextEntry::make('approval_status')
@@ -144,7 +154,7 @@ class CompanyResource extends Resource
                         'rejected' => 'danger',
                         default => 'warning',
                     }),
-                TextEntry::make('is_active')->badge()->formatStateUsing(fn ($state) => $state ? 'Active' : 'Inactive')
+                TextEntry::make('is_active')->label('Active')->badge()->formatStateUsing(fn ($state) => $state ? 'Active' : 'Inactive')
                     ->color(fn ($state) => $state ? 'success' : 'gray'),
                 TextEntry::make('ownership_flag')
                     ->label('Ownership')
@@ -179,9 +189,11 @@ class CompanyResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn ($query) => $query->withExists([
-                'ownerMembership as has_owner_flag',
-            ]))
+            ->modifyQueryUsing(fn ($query) => $query
+                ->with(['tinValidatedBy'])
+                ->withExists([
+                    'ownerMembership as has_owner_flag',
+                ]))
             ->columns([
                 TextColumn::make('name')->searchable()->sortable(),
                 TextColumn::make('ownership_flag')
@@ -195,8 +207,24 @@ class CompanyResource extends Resource
                             ['owner'],
                         );
                     }),
-                TextColumn::make('tin')->label('TIN')->searchable()->sortable(),
+                TextColumn::make('tin')->label('TIN NUMBER')->searchable()->sortable(),
                 IconColumn::make('tin_validated')->boolean()->label('TIN OK'),
+                TextColumn::make('tinValidatedBy.name')
+                    ->label('TIN approved by')
+                    ->placeholder('—')
+                    ->toggleable()
+                    ->sortable(query: function (Builder $query, string $direction): Builder {
+                        return $query
+                            ->leftJoin('users as tin_validators', 'tin_validators.id', '=', 'companies.tin_validated_by_user_id')
+                            ->orderBy('tin_validators.name', $direction)
+                            ->select('companies.*');
+                    }),
+                TextColumn::make('tin_validated_at')
+                    ->label('TIN approved at')
+                    ->dateTime()
+                    ->placeholder('—')
+                    ->toggleable()
+                    ->sortable(),
                 TextColumn::make('phone')
                     ->label('Phone')
                     ->toggleable()
@@ -345,25 +373,25 @@ class CompanyResource extends Resource
                         static::dispatchCompanySms($record, (string) $data['message'], $sms);
                     }),
                 Action::make('validate_tin')
-                    ->label('Validate TIN')
+                    ->label('Approve TIN NUMBER')
                     ->icon('heroicon-o-identification')
                     ->color('success')
                     ->visible(fn (Company $record): bool => filled($record->tin) && ! $record->tin_validated)
                     ->requiresConfirmation()
-                    ->modalHeading(fn (Company $record): string => 'Validate TIN '.$record->tin.'?')
-                    ->modalDescription('Confirm this Ethiopian TIN was verified. Partners can submit service requests only after TIN validation.')
+                    ->modalHeading(fn (Company $record): string => 'Approve TIN NUMBER '.$record->tin.'?')
+                    ->modalDescription('Confirm this Ethiopian TIN NUMBER was verified. Your name and the time are logged. Partners can submit service requests only after TIN NUMBER approval.')
                     ->action(function (Company $record, CompanyMembershipService $membership): void {
                         try {
-                            $membership->markTinValidated($record);
-                            Notification::make()->title('TIN validated')->success()->send();
+                            $membership->markTinValidated($record, auth()->user());
+                            Notification::make()->title('TIN NUMBER approved')->success()->send();
                         } catch (ValidationException $e) {
                             Notification::make()
-                                ->title('Could not validate TIN')
+                                ->title('Could not approve TIN NUMBER')
                                 ->body(collect($e->errors())->flatten()->first() ?: $e->getMessage())
                                 ->danger()
                                 ->send();
                         } catch (Throwable $e) {
-                            Notification::make()->title('Could not validate TIN')->body($e->getMessage())->danger()->send();
+                            Notification::make()->title('Could not approve TIN NUMBER')->body($e->getMessage())->danger()->send();
                         }
                     }),
                 Action::make('approve')
@@ -407,12 +435,12 @@ class CompanyResource extends Resource
             ->toolbarActions([
                 BulkActionGroup::make([
                     BulkAction::make('validate_tin')
-                        ->label('Validate TIN')
+                        ->label('Approve TIN NUMBER')
                         ->icon('heroicon-o-identification')
                         ->color('success')
                         ->requiresConfirmation()
-                        ->modalHeading('Validate TIN for selected companies?')
-                        ->modalDescription('Marks each selected company TIN as validated when it is a valid 10-digit Ethiopian TIN.')
+                        ->modalHeading('Approve TIN NUMBER for selected companies?')
+                        ->modalDescription('Approves each selected company TIN NUMBER when it is a valid 10-digit Ethiopian TIN. Approver name and time are logged.')
                         ->deselectRecordsAfterCompletion()
                         ->action(function (Collection $records, CompanyMembershipService $membership): void {
                             $validated = 0;
@@ -431,7 +459,7 @@ class CompanyResource extends Resource
                                 }
 
                                 try {
-                                    $membership->markTinValidated($company);
+                                    $membership->markTinValidated($company, auth()->user());
                                     $validated++;
                                 } catch (Throwable $e) {
                                     $failed++;
@@ -440,11 +468,11 @@ class CompanyResource extends Resource
 
                             Notification::make()
                                 ->title($validated > 0
-                                    ? "Validated TIN for {$validated} company(ies)"
-                                    : 'No TINs validated')
+                                    ? "Approved TIN NUMBER for {$validated} company(ies)"
+                                    : 'No TIN NUMBERs approved')
                                 ->body(trim(implode(' ', array_filter([
-                                    $skipped > 0 ? "{$skipped} already validated." : null,
-                                    $failed > 0 ? "{$failed} skipped (invalid or missing TIN)." : null,
+                                    $skipped > 0 ? "{$skipped} already approved." : null,
+                                    $failed > 0 ? "{$failed} skipped (invalid or missing TIN NUMBER)." : null,
                                 ]))) ?: null)
                                 ->color($validated > 0 ? 'success' : 'warning')
                                 ->send();
@@ -604,6 +632,7 @@ class CompanyResource extends Resource
     {
         return [
             MembersRelationManager::class,
+            StatusHistoryRelationManager::class,
             ServiceRequestsRelationManager::class,
             SubscriptionsRelationManager::class,
             ChangeRequestsRelationManager::class,

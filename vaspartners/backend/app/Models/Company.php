@@ -25,6 +25,8 @@ class Company extends Model
         'name',
         'tin',
         'tin_validated',
+        'tin_validated_by_user_id',
+        'tin_validated_at',
         'phone',
         'email',
         'address',
@@ -44,6 +46,7 @@ class Company extends Model
             'tin_validated' => 'boolean',
             'approval_status' => CompanyApprovalStatus::class,
             'approved_at' => 'datetime',
+            'tin_validated_at' => 'datetime',
         ];
     }
 
@@ -65,6 +68,8 @@ class Company extends Model
             // Changing TIN requires admin to re-validate.
             if ($company->isDirty('tin')) {
                 $company->tin_validated = false;
+                $company->tin_validated_by_user_id = null;
+                $company->tin_validated_at = null;
             }
         });
     }
@@ -120,6 +125,16 @@ class Company extends Model
     public function approvedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by_user_id');
+    }
+
+    public function tinValidatedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'tin_validated_by_user_id');
+    }
+
+    public function statusHistories(): HasMany
+    {
+        return $this->hasMany(CompanyStatusHistory::class)->orderByDesc('created_at')->orderByDesc('id');
     }
 
     public function memberships(): HasMany

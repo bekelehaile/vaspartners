@@ -85,21 +85,26 @@ class ViewCompany extends ViewRecord
                     );
                 }),
             Action::make('validate_tin')
-                ->label('Validate TIN')
+                ->label('Approve TIN NUMBER')
                 ->icon('heroicon-o-identification')
                 ->color('success')
                 ->visible(fn (): bool => filled($this->getRecord()->tin) && ! $this->getRecord()->tin_validated)
                 ->requiresConfirmation()
-                ->modalHeading(fn (): string => 'Validate TIN '.$this->getRecord()->tin.'?')
-                ->modalDescription('Confirm this Ethiopian TIN was verified. Partners can submit service requests only after TIN validation.')
+                ->modalHeading(fn (): string => 'Approve TIN NUMBER '.$this->getRecord()->tin.'?')
+                ->modalDescription('Confirm this Ethiopian TIN NUMBER was verified. Your name and the time are logged on the company and in Approval & TIN log.')
                 ->action(function (CompanyMembershipService $membership): void {
                     try {
-                        $membership->markTinValidated($this->getRecord());
-                        Notification::make()->title('TIN validated')->success()->send();
-                        $this->refreshFormData(['tin_validated', 'tin']);
+                        $membership->markTinValidated($this->getRecord(), auth()->user());
+                        Notification::make()->title('TIN NUMBER approved')->success()->send();
+                        $this->refreshFormData([
+                            'tin_validated',
+                            'tin',
+                            'tin_validated_by_user_id',
+                            'tin_validated_at',
+                        ]);
                     } catch (Throwable $e) {
                         Notification::make()
-                            ->title('Could not validate TIN')
+                            ->title('Could not approve TIN NUMBER')
                             ->body($e->getMessage())
                             ->danger()
                             ->send();
