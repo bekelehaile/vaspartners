@@ -37,6 +37,7 @@ Rows (not code enums) so ops can add types like **Other** without deploys:
 | Code (seeded) | Typical behavior flags |
 |---------------|------------------------|
 | `new` | `creates_subscription` |
+| `additional-services` / `revenue-request` / `merchant-acoount` | `creates_subscription` (onboard another service; revenue often used historically without a prior `new`) |
 | `renew` | `requires_active_subscription` + `renews_subscription` |
 | `move` / `upgrade` / `downgrade` / `relocate` / `maintenance` | `requires_active_subscription` |
 | `terminate` | `requires_active_subscription` + `terminates_subscription` |

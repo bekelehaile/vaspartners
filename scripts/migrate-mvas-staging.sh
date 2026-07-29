@@ -2,10 +2,16 @@
 #
 # Repeatable MVAS dump → VAS Partners staging migration.
 #
+# Prerequisites:
+#   ./scripts/dump-mvas.sh   # fresh dump into mvasportal/dumps/
+#   ./deploy-staging.sh
+#
 # Usage:
 #   ./scripts/migrate-mvas-staging.sh              # fresh wipe + full migrate
 #   ./scripts/migrate-mvas-staging.sh --dry-run    # count only
 #   ./scripts/migrate-mvas-staging.sh --no-fresh   # idempotent re-run (no wipe)
+#
+# Docs: docs/mvas-migration-commands.md
 #
 set -euo pipefail
 

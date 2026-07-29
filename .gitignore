@@ -7,3 +7,6 @@ mvas_*.dump
 
 # Staging secrets (keep .env.staging.example)
 .env.staging
+
+# Local MVAS attachment host backups (large binaries)
+/backups/

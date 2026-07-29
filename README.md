@@ -34,6 +34,16 @@ Contact creates ticket (open)
 
 See [`docs/SCHEMA.md`](docs/SCHEMA.md). Highlights: configurable request types, per-type document matrix, subscriptions with yearly/bi-yearly renewal, append-only ticket history.
 
+## MVAS migration
+
+Full dump → staging import (companies, tickets, attachments, shutdown checklist): [`docs/mvas-migration-commands.md`](docs/mvas-migration-commands.md).
+
+```bash
+./scripts/dump-mvas.sh
+./scripts/migrate-mvas-staging.sh
+./scripts/backup-mvas-attachments.sh
+```
+
 ## Quick start (Docker — recommended)
 
 Brings up **Postgres 18**, **PgBouncer**, **Redis**, **Laravel (PHP 8.4)**, and **Next.js**.
