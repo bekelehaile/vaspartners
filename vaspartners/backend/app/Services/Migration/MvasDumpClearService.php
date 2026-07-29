@@ -74,15 +74,18 @@ class MvasDumpClearService
                     continue;
                 }
                 try {
-                    $disk = $doc->disk ?: 'local';
+                    $disk = $doc->disk ?: 'public';
                     if (Storage::disk($disk)->exists($doc->path)) {
                         Storage::disk($disk)->delete($doc->path);
                         $stats['attachment_files_removed']++;
                     } else {
-                        $abs = storage_path('app/private/'.ltrim((string) $doc->path, '/'));
-                        if (is_file($abs)) {
-                            File::delete($abs);
-                            $stats['attachment_files_removed']++;
+                        foreach (['public', 'private'] as $root) {
+                            $abs = storage_path('app/'.$root.'/'.ltrim((string) $doc->path, '/'));
+                            if (is_file($abs)) {
+                                File::delete($abs);
+                                $stats['attachment_files_removed']++;
+                                break;
+                            }
                         }
                     }
                 } catch (\Throwable $e) {

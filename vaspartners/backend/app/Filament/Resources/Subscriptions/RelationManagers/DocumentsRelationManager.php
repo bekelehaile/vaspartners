@@ -109,6 +109,6 @@ class DocumentsRelationManager extends RelationManager
             return false;
         }
 
-        return Storage::disk($document->disk ?: 'local')->exists($document->path);
+        return Storage::disk($document->disk ?: 'public')->exists($document->path);
     }
 }

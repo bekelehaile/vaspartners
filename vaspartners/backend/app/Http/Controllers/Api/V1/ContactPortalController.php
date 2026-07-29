@@ -360,7 +360,7 @@ class ContactPortalController extends Controller
         $membership->assertCanAccessCompanyTicket($request->user(), $ticket);
         abort_unless((int) $document->ticket_id === (int) $ticket->id, 404);
 
-        $disk = $document->disk ?: 'local';
+        $disk = $document->disk ?: 'public';
         abort_unless(
             filled($document->path) && Storage::disk($disk)->exists($document->path),
             404,

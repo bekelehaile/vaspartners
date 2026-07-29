@@ -19,6 +19,7 @@ use App\Support\Migration\MvasDumpTableReader;
 use App\Support\Migration\MvasStaffLegacyMap;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
@@ -448,11 +449,14 @@ class MvasDumpEnrichmentService
             }
 
             $file = $files[$fileId] ?? null;
-            if (! $file || ! is_file($file['path'])) {
+            $resolvedPath = $file ? $this->resolveExistingFilePath($file['path']) : null;
+            if (! $file || $resolvedPath === null) {
                 $stats['attachments']['missing_file']++;
 
                 continue;
             }
+            $file['path'] = $resolvedPath;
+            $file['size'] = (int) filesize($resolvedPath);
 
             $matchedTypeId = $this->matchDocumentTypeId($requested, $docTypesByName);
             $docTypeId = $matchedTypeId ?? $fallbackTypeId;
@@ -465,15 +469,8 @@ class MvasDumpEnrichmentService
                 $stats['attachments']['unmapped_type']++;
             }
 
-            // One row per ticket+document_type in new platform — keep first file for that type.
-            if (TicketDocument::query()
-                ->where('ticket_id', $ticket->id)
-                ->where('document_type_id', $docTypeId)
-                ->exists()) {
-                $stats['attachments']['skipped']++;
-
-                continue;
-            }
+            // Keep every historical ticket file for Filament admin + portal download.
+            // (Portal new uploads still replace one-per-type; migrated archive is additive.)
 
             if ($dryRun) {
                 $stats['attachments']['imported']++;
@@ -481,20 +478,30 @@ class MvasDumpEnrichmentService
                 continue;
             }
 
-            $ext = pathinfo($file['name'], PATHINFO_EXTENSION) ?: 'bin';
-            $destRel = 'tickets/'.$ticket->public_id.'/'.Str::uuid().'.'.$ext;
-            $destAbs = storage_path('app/private/'.$destRel);
-            File::ensureDirectoryExists(dirname($destAbs));
-            File::copy($file['path'], $destAbs);
+            $safeName = $this->sanitizeOriginalName($file['name']);
+            $ext = pathinfo($safeName, PATHINFO_EXTENSION) ?: 'bin';
+            $destRel = 'tickets/'.$ticket->public_id.'/'.Str::uuid().'.'.strtolower($ext);
+            $contents = file_get_contents($file['path']);
+            if ($contents === false) {
+                $stats['attachments']['missing_file']++;
+
+                continue;
+            }
+            Storage::disk('public')->put($destRel, $contents);
+
+            $mime = $file['mime'] ?: (mime_content_type($file['path']) ?: null);
+            if (! is_string($mime) || $mime === '') {
+                $mime = 'application/octet-stream';
+            }
 
             TicketDocument::query()->create([
                 'ticket_id' => $ticket->id,
                 'document_type_id' => $docTypeId,
-                'disk' => 'local',
+                'disk' => 'public',
                 'path' => $destRel,
-                'original_name' => $file['name'],
-                'mime_type' => $file['mime'],
-                'size_bytes' => $file['size'] ?: (int) filesize($destAbs),
+                'original_name' => $safeName,
+                'mime_type' => $mime,
+                'size_bytes' => $file['size'] ?: (int) Storage::disk('public')->size($destRel),
                 'verification_status' => $verified ? 'accepted' : 'pending',
                 'remark' => $requested !== '' ? 'Migrated from MVAS: '.$requested : 'Migrated from MVAS',
                 'uploaded_by_contact_id' => $ticket->contact_id,
@@ -503,6 +510,49 @@ class MvasDumpEnrichmentService
 
             $stats['attachments']['imported']++;
         }
+    }
+
+    /**
+     * Resolve MVAS storage path; strip Unicode bidi marks that break is_file() on Linux.
+     */
+    private function resolveExistingFilePath(string $absolute): ?string
+    {
+        if (is_file($absolute)) {
+            return $absolute;
+        }
+
+        $cleaned = preg_replace('/[\x{200E}\x{200F}\x{202A}-\x{202E}]/u', '', $absolute) ?? $absolute;
+        if ($cleaned !== $absolute && is_file($cleaned)) {
+            return $cleaned;
+        }
+
+        $dir = dirname($absolute);
+        if (! is_dir($dir)) {
+            $dirClean = preg_replace('/[\x{200E}\x{200F}\x{202A}-\x{202E}]/u', '', $dir) ?? $dir;
+            if (! is_dir($dirClean)) {
+                return null;
+            }
+            $dir = $dirClean;
+        }
+
+        $want = mb_strtolower(preg_replace('/[\x{200E}\x{200F}\x{202A}-\x{202E}]/u', '', basename($absolute)) ?? basename($absolute));
+        foreach (File::files($dir) as $candidate) {
+            $name = mb_strtolower(preg_replace('/[\x{200E}\x{200F}\x{202A}-\x{202E}]/u', '', $candidate->getFilename()) ?? $candidate->getFilename());
+            if ($name === $want) {
+                return $candidate->getPathname();
+            }
+        }
+
+        return null;
+    }
+
+    private function sanitizeOriginalName(string $name): string
+    {
+        $name = preg_replace('/[\x{200E}\x{200F}\x{202A}-\x{202E}]/u', '', $name) ?? $name;
+        $name = str_replace(["\0", "\r", "\n"], '', $name);
+        $name = trim($name);
+
+        return $name !== '' ? basename($name) : 'attachment.bin';
     }
 
     /**

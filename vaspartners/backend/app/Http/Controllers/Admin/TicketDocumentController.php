@@ -14,7 +14,7 @@ class TicketDocumentController extends Controller
     {
         $this->authorizeDocument($document);
 
-        $disk = $document->disk ?: 'local';
+        $disk = $document->disk ?: 'public';
         abort_unless($document->path && Storage::disk($disk)->exists($document->path), 404);
 
         $absolute = Storage::disk($disk)->path($document->path);
@@ -33,7 +33,7 @@ class TicketDocumentController extends Controller
     {
         $this->authorizeDocument($document);
 
-        $disk = $document->disk ?: 'local';
+        $disk = $document->disk ?: 'public';
         abort_unless($document->path && Storage::disk($disk)->exists($document->path), 404);
 
         return Storage::disk($disk)->download(

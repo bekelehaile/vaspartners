@@ -85,7 +85,7 @@ export function TicketDocumentsPanel({
     .filter((r) => r.is_required && !softOptional(r))
     .map((r) => r.document_type.id);
   const missingRequired = requirements.filter(
-    (r) => r.is_required && !softOptional(r) && !byType[r.document_type.id]
+    (r) => r.is_required && !softOptional(r) && !(byType[r.document_type.id]?.length)
   );
 
   const busy = upload.isPending || remove.isPending || downloadingId !== null;
@@ -175,30 +175,34 @@ export function TicketDocumentsPanel({
                       · max {r.document_type.max_size_kb} KB
                     </small>
                   </div>
-                  {uploaded ? (
-                    <div className="ticket-doc-actions">
-                      <span className="muted">{uploaded.name}</span>
-                      <button
-                        type="button"
-                        className="linkish"
-                        disabled={busy}
-                        onClick={() => void onDownload(uploaded)}
-                      >
-                        {downloadingId === uploaded.id ? "Downloading…" : "Download"}
-                      </button>
-                      {!locked && (
-                        <button
-                          type="button"
-                          className="linkish"
-                          disabled={busy}
-                          onClick={() => onRemove(uploaded.id)}
-                        >
-                          Remove
-                        </button>
-                      )}
+                  {uploaded.length > 0 ? (
+                    <div className="ticket-doc-actions" style={{ flexDirection: "column", alignItems: "flex-start", gap: "0.35rem" }}>
+                      {uploaded.map((file) => (
+                        <div key={file.id} style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
+                          <span className="muted">{file.name}</span>
+                          <button
+                            type="button"
+                            className="linkish"
+                            disabled={busy}
+                            onClick={() => void onDownload(file)}
+                          >
+                            {downloadingId === file.id ? "Downloading…" : "Download"}
+                          </button>
+                          {!locked && (
+                            <button
+                              type="button"
+                              className="linkish"
+                              disabled={busy}
+                              onClick={() => onRemove(file.id)}
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      ))}
                       {!locked && (
                         <label className="linkish" style={{ cursor: busy ? "wait" : "pointer" }}>
-                          Replace
+                          {uploaded.length ? "Add / Replace" : "Upload"}
                           <input
                             type="file"
                             accept={acceptAttrFromMimes(r.document_type.accepted_mimes)}
@@ -289,16 +293,17 @@ export function TicketDocumentsPanel({
 
 function mapUploadsByType(
   documents: NonNullable<Ticket["documents"]>
-): Record<number, UploadedSlot> {
-  const map: Record<number, UploadedSlot> = {};
+): Record<number, UploadedSlot[]> {
+  const map: Record<number, UploadedSlot[]> = {};
   for (const d of documents) {
     const typeId = d.document_type_id ?? d.document_type?.id;
     if (!typeId) continue;
-    map[typeId] = {
+    if (!map[typeId]) map[typeId] = [];
+    map[typeId].push({
       id: d.id,
       name: d.original_name,
       downloadUrl: d.download_url,
-    };
+    });
   }
   return map;
 }

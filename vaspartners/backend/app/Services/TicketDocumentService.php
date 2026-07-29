@@ -63,12 +63,12 @@ class TicketDocumentService
             ->where('document_type_id', $documentType->id)
             ->get();
 
-        $path = $file->store('tickets/'.$ticket->public_id, 'local');
+        $path = $file->store('tickets/'.$ticket->public_id, 'public');
 
         $doc = TicketDocument::query()->create([
             'ticket_id' => $ticket->id,
             'document_type_id' => $documentType->id,
-            'disk' => 'local',
+            'disk' => 'public',
             'path' => $path,
             'original_name' => $this->safeOriginalName($file),
             'mime_type' => $file->getMimeType() ?: $file->getClientMimeType(),
@@ -262,7 +262,7 @@ class TicketDocumentService
     protected function purgeStoredFile(TicketDocument $document): void
     {
         if ($document->path) {
-            Storage::disk($document->disk ?: 'local')->delete($document->path);
+            Storage::disk($document->disk ?: 'public')->delete($document->path);
         }
     }
 }
