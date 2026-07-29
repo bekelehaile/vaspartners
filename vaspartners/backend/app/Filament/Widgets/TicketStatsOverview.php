@@ -93,7 +93,12 @@ class TicketStatsOverview extends StatsOverviewWidget
     {
         $query = TicketResource::getEloquentQuery()->where('status', $status);
         $this->applyDashboardServiceFilter($query);
-        $this->applyDashboardEventDateFilter($query, $column, defaultToToday: true);
+
+        // No date range → live count by current status (same as Pending / In progress).
+        // With a date range → filter by that status's event timestamp.
+        if ($this->hasCustomDateRange()) {
+            $this->applyDashboardEventDateFilter($query, $column, defaultToToday: false);
+        }
 
         return $query->count();
     }

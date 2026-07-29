@@ -42,11 +42,13 @@ class PendingCompanyRequestsStats extends StatsOverviewWidget
             ->where('type', CompanyChangeType::Detach)
             ->count();
 
-        // Approved outcomes use reviewed_at (not created_at).
+        // Approved: live total when no dates; reviewed_at when a range is set.
         $approvedQuery = CompanyChangeRequest::query()
             ->where('status', CompanyChangeStatus::Approved);
-        $this->applyDashboardEventDateFilter($approvedQuery, 'reviewed_at', defaultToToday: true);
-        $approvedLabel = $this->hasCustomDateRange() ? 'Approved in range' : 'Approved today';
+        if ($this->hasCustomDateRange()) {
+            $this->applyDashboardEventDateFilter($approvedQuery, 'reviewed_at', defaultToToday: false);
+        }
+        $approvedLabel = 'Approved';
 
         return [
             Stat::make('Ownership transfers', $pendingTransfers)
