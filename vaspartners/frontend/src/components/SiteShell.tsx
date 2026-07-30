@@ -117,14 +117,13 @@ export function SiteShell({
       </a>
       <header className="topbar">
         <div className="topbar-inner">
-          <Link href="/" className="brand-lockup" prefetch={false}>
+          <Link href="/" className="brand-lockup" prefetch={false} aria-label="Ethio telecom VAS Partners home">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/brand/ethio_logo_full.png"
               alt="Ethio telecom"
               className="brand-logo"
             />
-            <span className="brand-product">VAS Partners</span>
           </Link>
 
           <nav className="topnav" aria-label="Primary">
