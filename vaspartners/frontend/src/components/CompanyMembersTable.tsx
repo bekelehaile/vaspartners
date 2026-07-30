@@ -19,6 +19,33 @@ function permissionLabel(
   return catalog.find((p) => p.key === key)?.label ?? key.replaceAll("_", " ");
 }
 
+function memberIdentityLabel(member: CompanyMemberOption): string {
+  if (member.awaiting_fayda) {
+    return "Awaiting sign-in";
+  }
+  const via =
+    member.identity_verified_via ?? (member.fayda_verified ? "fayda" : null);
+  if (member.identity_verified || via) {
+    if (via === "crm") {
+      return "Verified via CRM";
+    }
+    if (via === "fayda") {
+      return "Verified via Fayda";
+    }
+    return "Verified";
+  }
+  return "Unverified";
+}
+
+function memberIdentityApproved(member: CompanyMemberOption): boolean {
+  if (member.awaiting_fayda) {
+    return false;
+  }
+  return Boolean(
+    member.identity_verified || member.identity_verified_via || member.fayda_verified,
+  );
+}
+
 function PermissionsEditor({
   member,
   catalog,
@@ -99,11 +126,11 @@ function PhoneEditor({
   return (
     <div className="company-member-permissions-editor">
       <p className="muted" style={{ marginTop: 0 }}>
-        Change phone for <strong>{member.name || "this partner"}</strong>. Use the Fayda
+        Change phone for <strong>{member.name || "this partner"}</strong>. Use their
         mobile number (last 9 digits).
         {member.awaiting_fayda
           ? " They will sync when they sign in with this phone."
-          : " A later Fayda sign-in may overwrite this with National ID data."}
+          : " A later Fayda or CRM-verified sign-in may refresh identity fields."}
       </p>
       <div className="field">
         <label htmlFor={`member-phone-${member.public_id}`}>
@@ -578,11 +605,7 @@ export function CompanyMembersTable({ enabled }: { enabled: boolean }) {
                   <div className="portal-mobile-card-row">
                     <span>{member.email || "No email"}</span>
                     <span>
-                      {member.awaiting_fayda
-                        ? "Awaiting sign-in"
-                        : member.fayda_verified
-                          ? "Fayda verified"
-                          : "Phone OTP"}
+                      {memberIdentityLabel(member)}
                     </span>
                   </div>
                   <div className="portal-mobile-card-meta" style={{ marginTop: "0.35rem" }}>
@@ -633,7 +656,7 @@ export function CompanyMembersTable({ enabled }: { enabled: boolean }) {
                 <th>Email</th>
                 <th>Role</th>
                 <th>Access</th>
-                <th>Fayda</th>
+                <th>Identity</th>
                 <th>Permissions</th>
                 <th></th>
               </tr>
@@ -688,13 +711,13 @@ export function CompanyMembersTable({ enabled }: { enabled: boolean }) {
                           <span className="company-request-status is-pending">
                             Awaiting sign-in
                           </span>
-                        ) : member.fayda_verified ? (
+                        ) : memberIdentityApproved(member) ? (
                           <span className="company-request-status is-approved">
-                            Fayda verified
+                            {memberIdentityLabel(member)}
                           </span>
                         ) : (
                           <span className="company-request-status is-pending">
-                            Phone OTP
+                            Unverified
                           </span>
                         )}
                       </td>

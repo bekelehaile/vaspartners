@@ -548,6 +548,8 @@ export type CompanyMemberOption = {
   is_active?: boolean;
   is_owner?: boolean;
   awaiting_fayda?: boolean;
+  identity_verified?: boolean;
+  identity_verified_via?: "fayda" | "crm" | null;
   fayda_verified?: boolean;
   permissions?: string[];
 };

@@ -729,6 +729,8 @@ class CompanyMembershipService
                     'is_active' => (bool) $m->is_active,
                     'is_owner' => $role === CompanyRole::Owner->value,
                     'awaiting_fayda' => $c ? $this->isPlaceholderContact($c) : false,
+                    'identity_verified' => $c ? $c->isIdentityVerified() : false,
+                    'identity_verified_via' => $c?->identityVerifiedViaValue(),
                     'fayda_verified' => (bool) ($c?->fayda_verified),
                     'permissions' => $this->effectivePermissionsForMembership($m),
                 ];
@@ -1496,6 +1498,8 @@ class CompanyMembershipService
                 'is_active' => $isActive,
                 'is_owner' => false,
                 'awaiting_fayda' => $this->isPlaceholderContact($contact),
+                'identity_verified' => $contact->isIdentityVerified(),
+                'identity_verified_via' => $contact->identityVerifiedViaValue(),
                 'fayda_verified' => (bool) $contact->fayda_verified,
                 'permissions' => CompanyMemberPermission::defaultsForMember(),
             ],

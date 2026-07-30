@@ -914,9 +914,9 @@ class ContactPortalController extends Controller
         $linkedExisting = $result['linked_existing'] ?? false;
 
         $message = match (true) {
-            $linkedExisting && $awaiting => 'Existing partner linked to this company. They still need to sign in with Fayda (access applies only if enabled).',
+            $linkedExisting && $awaiting => 'Existing partner linked to this company. They still need to sign in (access applies only if enabled).',
             $linkedExisting => 'Existing partner linked to this company as an additional membership. They can switch companies in the portal.',
-            $awaiting => 'Member added. They will sync when they sign in with Fayda using this phone number (only if access stays enabled).',
+            $awaiting => 'Member added. They will sync when they sign in with this phone number (only if access stays enabled).',
             default => 'Member added to this company.',
         };
 

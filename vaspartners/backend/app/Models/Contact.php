@@ -96,6 +96,18 @@ class Contact extends Authenticatable
     }
 
     /**
+     * Canonical KYC channel for APIs/UI: fayda | crm | null.
+     */
+    public function identityVerifiedViaValue(): ?string
+    {
+        if (filled($this->identity_verified_via)) {
+            return (string) $this->identity_verified_via;
+        }
+
+        return $this->fayda_verified ? IdentityVerifiedVia::Fayda->value : null;
+    }
+
+    /**
      * Mark identity as verified via Fayda. Sticky — later OTP logins do not clear it.
      */
     public function markFaydaVerified(): void
