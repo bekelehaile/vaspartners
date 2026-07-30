@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\Companies\RelationManagers;
 
-use App\Enums\CompanyApprovalStatus;
 use App\Models\CompanyStatusHistory;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\IconColumn;
@@ -14,7 +13,7 @@ class StatusHistoryRelationManager extends RelationManager
 {
     protected static string $relationship = 'statusHistories';
 
-    protected static ?string $title = 'Approval & TIN NUMBER log';
+    protected static ?string $title = 'Status log';
 
     public function isReadOnly(): bool
     {
@@ -31,7 +30,7 @@ class StatusHistoryRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->description('Who approved or cleared TIN NUMBER, changed approval/Active — and when.')
+            ->description('ERCA TIN confirmation and Active changes.')
             ->modifyQueryUsing(fn ($query) => $query->with(['actorUser', 'actorContact']))
             ->columns([
                 TextColumn::make('created_at')
@@ -50,7 +49,7 @@ class StatusHistoryRelationManager extends RelationManager
                                 .' (partner)';
                         }
 
-                        return 'System';
+                        return 'System / ERCA';
                     }),
                 TextColumn::make('action')
                     ->label('Action')
@@ -62,24 +61,13 @@ class StatusHistoryRelationManager extends RelationManager
                         'tin_cleared' => 'warning',
                         default => 'gray',
                     }),
-                TextColumn::make('approval_status')
-                    ->label('Approval')
-                    ->badge()
-                    ->formatStateUsing(fn (?string $state): string => CompanyApprovalStatus::tryFrom((string) $state)?->label()
-                        ?? ($state ?: '—'))
-                    ->color(fn (?string $state): string => match ($state) {
-                        'approved' => 'success',
-                        'rejected' => 'danger',
-                        'pending' => 'warning',
-                        default => 'gray',
-                    }),
                 IconColumn::make('is_active')
                     ->label('Active')
                     ->boolean()
                     ->trueIcon('heroicon-o-check-circle')
                     ->falseIcon('heroicon-o-x-circle'),
                 IconColumn::make('tin_validated')
-                    ->label('TIN NUMBER OK')
+                    ->label('Verified')
                     ->boolean()
                     ->trueIcon('heroicon-o-check-badge')
                     ->falseIcon('heroicon-o-x-mark'),

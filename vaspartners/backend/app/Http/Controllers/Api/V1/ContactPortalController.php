@@ -524,7 +524,7 @@ class ContactPortalController extends Controller
             $membership->assertCanAccessCompany($contact);
         } catch (\Illuminate\Validation\ValidationException $e) {
             $message = collect($e->errors())->flatten()->first()
-                ?: 'Complete and get your company TIN approved before viewing subscriptions.';
+                ?: 'Confirm your company TIN with ERCA before viewing subscriptions.';
 
             return response()->json([
                 'data' => [],

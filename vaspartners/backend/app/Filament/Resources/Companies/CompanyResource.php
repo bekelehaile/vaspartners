@@ -2,9 +2,7 @@
 
 namespace App\Filament\Resources\Companies;
 
-use App\Enums\CompanyApprovalStatus;
 use App\Enums\CompanyRole;
-use App\Filament\Resources\Companies\Pages\EditCompany;
 use App\Filament\Resources\Companies\Pages\ListCompanies;
 use App\Filament\Resources\Companies\Pages\ViewCompany;
 use App\Filament\Resources\Companies\RelationManagers\ChangeRequestsRelationManager;
@@ -14,16 +12,12 @@ use App\Filament\Resources\Companies\RelationManagers\StatusHistoryRelationManag
 use App\Filament\Resources\Companies\RelationManagers\SubscriptionsRelationManager;
 use App\Models\Company;
 use App\Models\Service;
-use App\Services\CompanyMembershipService;
-use App\Services\CompanyPurgeService;
 use App\Services\SmsService;
 use App\Support\PhoneNumber;
 use App\Support\TinNumber;
 use Filament\Actions\Action;
-use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
-use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -41,8 +35,6 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Arr;
-use Illuminate\Validation\ValidationException;
-use Throwable;
 
 class CompanyResource extends Resource
 {
@@ -79,9 +71,7 @@ class CompanyResource extends Resource
 
     public static function getNavigationBadge(): ?string
     {
-        $count = Company::query()
-            ->where('approval_status', CompanyApprovalStatus::Pending)
-            ->count();
+        $count = Company::query()->awaitingTinApproval()->count();
 
         return $count > 0 ? (string) $count : null;
     }
@@ -128,113 +118,79 @@ class CompanyResource extends Resource
             Textarea::make('address')->rows(3)->columnSpanFull(),
             Toggle::make('is_active')
                 ->label('Active'),
-            Toggle::make('tin_validated')
-                ->label('TIN validated')
-                ->helperText('Service access gate. Prefer Approve TIN so who/when is logged.')
-                ->dehydrateStateUsing(function (?bool $state, ?\App\Models\Company $record): bool {
-                    if (! $state) {
-                        return false;
-                    }
-                    if ($record !== null && ! \App\Support\TinNumber::isValid($record->tin)) {
-                        return false;
-                    }
-
-                    return true;
-                }),
         ])->columns(2);
     }
 
     public static function infolist(Schema $schema): Schema
     {
         return $schema->components([
-            Section::make('Company')->schema([
-                TextEntry::make('public_id')->label('ID'),
-                TextEntry::make('name'),
-                TextEntry::make('legal_name')
-                    ->label('ERCA legal name')
-                    ->placeholder('—'),
-                TextEntry::make('tin')->label('TIN NUMBER'),
-                TextEntry::make('tin_validated')
-                    ->label('TIN NUMBER status')
-                    ->badge()
-                    ->formatStateUsing(fn ($state) => $state ? 'Approved' : 'Not approved')
-                    ->color(fn ($state) => $state ? 'success' : 'warning'),
-                TextEntry::make('erca_tin_verified')
-                    ->label('ERCA verified')
-                    ->badge()
-                    ->formatStateUsing(fn ($state) => $state ? 'Verified' : 'Not verified')
-                    ->color(fn ($state) => $state ? 'success' : 'gray'),
-                TextEntry::make('erca_name_status')
-                    ->label('ERCA name')
-                    ->badge()
-                    ->formatStateUsing(fn ($state) => $state instanceof \App\Enums\ErcaNameStatus
-                        ? $state->label()
-                        : (\App\Enums\ErcaNameStatus::tryFrom((string) $state)?->label() ?? (string) $state))
-                    ->color(fn ($state) => match ($state instanceof \App\Enums\ErcaNameStatus ? $state->value : (string) $state) {
-                        'matched', 'accepted_legal', 'kept_both' => 'success',
-                        'mismatch_pending' => 'warning',
-                        'not_found', 'failed' => 'danger',
-                        default => 'gray',
-                    }),
-                TextEntry::make('erca_last_checked_at')
-                    ->label('ERCA last checked')
-                    ->dateTime()
-                    ->placeholder('—'),
-                TextEntry::make('erca_next_check_at')
-                    ->label('ERCA next check')
-                    ->dateTime()
-                    ->placeholder('—'),
-                TextEntry::make('tinValidatedBy.name')
-                    ->label('TIN NUMBER approved by')
-                    ->placeholder('—')
-                    ->visible(fn (Company $record): bool => (bool) $record->tin_validated),
-                TextEntry::make('tin_validated_at')
-                    ->label('TIN NUMBER approved at')
-                    ->dateTime()
-                    ->placeholder('—')
-                    ->visible(fn (Company $record): bool => (bool) $record->tin_validated),
-                TextEntry::make('phone')->placeholder('—'),
-                TextEntry::make('email')->placeholder('—'),
-                TextEntry::make('approval_status')
-                    ->label('Approval')
-                    ->badge()
-                    ->formatStateUsing(fn ($state) => $state instanceof CompanyApprovalStatus
-                        ? $state->label()
-                        : (CompanyApprovalStatus::tryFrom((string) $state)?->label() ?? (string) $state))
-                    ->color(fn ($state) => match ($state instanceof CompanyApprovalStatus ? $state->value : $state) {
-                        'approved' => 'success',
-                        'rejected' => 'danger',
-                        default => 'warning',
-                    }),
-                TextEntry::make('is_active')->label('Active')->badge()->formatStateUsing(fn ($state) => $state ? 'Active' : 'Inactive')
-                    ->color(fn ($state) => $state ? 'success' : 'gray'),
-                TextEntry::make('ownership_flag')
-                    ->label('Ownership')
-                    ->badge()
-                    ->state(fn (Company $record): string => $record->isOwnerless() ? 'No owner' : 'Has owner')
-                    ->color(fn (Company $record): string => $record->isOwnerless() ? 'warning' : 'success')
-                    ->helperText(fn (Company $record): ?string => $record->isOwnerless()
-                        ? 'No owner yet.'
-                        : null),
-                TextEntry::make('owner_name')
-                    ->label('Owner')
-                    ->state(fn (Company $record): ?string => $record->ownerContact()?->name)
-                    ->placeholder('—')
-                    ->color('success'),
-                TextEntry::make('legacy_mvas_id')
-                    ->label('Legacy MVAS ID')
-                    ->placeholder('—')
-                    ->visible(fn (Company $record): bool => filled($record->legacy_mvas_id)),
-                TextEntry::make('members_count')
-                    ->label('Total people')
-                    ->state(fn (Company $record): int => $record->memberCount()),
-                TextEntry::make('approvedBy.name')->label('Approved / reviewed by')->placeholder('—'),
-                TextEntry::make('approved_at')->dateTime()->placeholder('—'),
-                TextEntry::make('approval_note')->label('Approval note')->columnSpanFull()->placeholder('—'),
-                TextEntry::make('address')->columnSpanFull()->placeholder('—'),
-                TextEntry::make('created_at')->dateTime(),
-                TextEntry::make('creator.name')->label('Created by partner')->placeholder('—'),
-            ])->columns(2),
+            Section::make('Overview')
+                ->schema([
+                    TextEntry::make('name')->label('Company name'),
+                    TextEntry::make('tin')->label('TIN'),
+                    TextEntry::make('tin_ok')
+                        ->label('TIN status')
+                        ->badge()
+                        ->state(fn (Company $record): bool => $record->isTinValidated())
+                        ->formatStateUsing(fn ($state) => $state ? 'Verified' : 'Not verified')
+                        ->color(fn ($state) => $state ? 'success' : 'warning'),
+                    TextEntry::make('is_active')
+                        ->label('Active')
+                        ->badge()
+                        ->formatStateUsing(fn ($state) => $state ? 'Active' : 'Inactive')
+                        ->color(fn ($state) => $state ? 'success' : 'danger'),
+                    TextEntry::make('owner_name')
+                        ->label('Owner')
+                        ->state(fn (Company $record): ?string => $record->ownerContact()?->name)
+                        ->placeholder('No owner')
+                        ->color(fn (Company $record): string => $record->isOwnerless() ? 'warning' : 'success'),
+                    TextEntry::make('members_count')
+                        ->label('Members')
+                        ->state(fn (Company $record): int => $record->memberCount()),
+                ])->columns(3),
+            Section::make('Contact')
+                ->schema([
+                    TextEntry::make('phone')->placeholder('—'),
+                    TextEntry::make('email')->placeholder('—'),
+                    TextEntry::make('address')->columnSpanFull()->placeholder('—'),
+                ])->columns(2),
+            Section::make('ERCA')
+                ->schema([
+                    TextEntry::make('legal_name')
+                        ->label('Legal name')
+                        ->placeholder('—'),
+                    TextEntry::make('erca_name_status')
+                        ->label('Name match')
+                        ->badge()
+                        ->formatStateUsing(fn ($state) => $state instanceof \App\Enums\ErcaNameStatus
+                            ? $state->label()
+                            : (\App\Enums\ErcaNameStatus::tryFrom((string) $state)?->label() ?? 'Not checked'))
+                        ->color(fn ($state) => match ($state instanceof \App\Enums\ErcaNameStatus ? $state->value : (string) $state) {
+                            'matched', 'accepted_legal', 'kept_both' => 'success',
+                            'mismatch_pending' => 'warning',
+                            'not_found', 'failed' => 'danger',
+                            default => 'gray',
+                        }),
+                    TextEntry::make('erca_verified_at')
+                        ->label('Verified at')
+                        ->dateTime()
+                        ->placeholder('—'),
+                ])->columns(2),
+            Section::make('Record')
+                ->collapsed()
+                ->schema([
+                    TextEntry::make('public_id')->label('ID'),
+                    TextEntry::make('legacy_mvas_id')
+                        ->label('Legacy MVAS ID')
+                        ->placeholder('—')
+                        ->visible(fn (Company $record): bool => filled($record->legacy_mvas_id)),
+                    TextEntry::make('erca_last_checked_at')
+                        ->label('ERCA last checked')
+                        ->dateTime()
+                        ->placeholder('—'),
+                    TextEntry::make('creator.name')->label('Created by')->placeholder('—'),
+                    TextEntry::make('created_at')->dateTime(),
+                ])->columns(3),
         ]);
     }
 
@@ -242,7 +198,6 @@ class CompanyResource extends Resource
     {
         return $table
             ->modifyQueryUsing(fn ($query) => $query
-                ->with(['tinValidatedBy'])
                 ->withExists([
                     'ownerMembership as has_owner_flag',
                 ]))
@@ -264,13 +219,20 @@ class CompanyResource extends Resource
                             ['owner'],
                         );
                     }),
-                TextColumn::make('tin')->label('TIN NUMBER')->searchable()->sortable(),
-                IconColumn::make('tin_validated')->boolean()->label('TIN OK'),
-                IconColumn::make('erca_tin_verified')->boolean()->label('ERCA OK')->toggleable(),
+                TextColumn::make('tin')->label('TIN')->searchable()->sortable(),
+                IconColumn::make('tin_ok')
+                    ->label('Verified')
+                    ->boolean()
+                    ->state(fn (Company $record): bool => $record->isTinValidated())
+                    ->sortable(query: function (Builder $query, string $direction): Builder {
+                        $resolved = "erca_tin_verified = true AND erca_name_status IN ('matched','accepted_legal','kept_both')";
+
+                        return $query->orderByRaw("CASE WHEN {$resolved} THEN 1 ELSE 0 END ".$direction);
+                    }),
                 TextColumn::make('erca_name_status')
                     ->label('ERCA name')
                     ->badge()
-                    ->toggleable()
+                    ->toggleable(isToggledHiddenByDefault: true)
                     ->formatStateUsing(fn ($state) => $state instanceof \App\Enums\ErcaNameStatus
                         ? $state->value
                         : (string) ($state ?: 'unchecked'))
@@ -280,21 +242,11 @@ class CompanyResource extends Resource
                         'not_found', 'failed' => 'danger',
                         default => 'gray',
                     }),
-                TextColumn::make('tinValidatedBy.name')
-                    ->label('TIN approved by')
-                    ->placeholder('—')
-                    ->toggleable()
-                    ->sortable(query: function (Builder $query, string $direction): Builder {
-                        return $query
-                            ->leftJoin('users as tin_validators', 'tin_validators.id', '=', 'companies.tin_validated_by_user_id')
-                            ->orderBy('tin_validators.name', $direction)
-                            ->select('companies.*');
-                    }),
-                TextColumn::make('tin_validated_at')
-                    ->label('TIN approved at')
+                TextColumn::make('erca_verified_at')
+                    ->label('ERCA verified at')
                     ->dateTime()
                     ->placeholder('—')
-                    ->toggleable()
+                    ->toggleable(isToggledHiddenByDefault: true)
                     ->sortable(),
                 TextColumn::make('phone')
                     ->label('Phone')
@@ -322,17 +274,6 @@ class CompanyResource extends Resource
                     ->state(fn (Company $record): ?string => $record->ownerContact()?->name)
                     ->placeholder('—')
                     ->toggleable(),
-                TextColumn::make('approval_status')
-                    ->label('Approval')
-                    ->badge()
-                    ->formatStateUsing(fn ($state) => $state instanceof CompanyApprovalStatus
-                        ? $state->label()
-                        : (CompanyApprovalStatus::tryFrom((string) $state)?->label() ?? (string) $state))
-                    ->color(fn ($state) => match ($state instanceof CompanyApprovalStatus ? $state->value : $state) {
-                        'approved' => 'success',
-                        'rejected' => 'danger',
-                        default => 'warning',
-                    }),
                 TextColumn::make('members_count')
                     ->counts('memberships')
                     ->label('Members')
@@ -342,55 +283,38 @@ class CompanyResource extends Resource
             ])
             ->defaultSort('created_at', 'desc')
             ->filters([
-                SelectFilter::make('approval_status')->options([
-                    CompanyApprovalStatus::Pending->value => CompanyApprovalStatus::Pending->label(),
-                    CompanyApprovalStatus::Approved->value => CompanyApprovalStatus::Approved->label(),
-                    CompanyApprovalStatus::Rejected->value => CompanyApprovalStatus::Rejected->label(),
-                ]),
-                TernaryFilter::make('is_active')->label('Active'),
-                SelectFilter::make('tin_number_status')
-                    ->label('TIN NUMBER')
+                SelectFilter::make('tin_verification')
+                    ->label('TIN verification')
                     ->options([
-                        'awaiting' => 'Awaiting approval',
-                        'approved' => 'Approved',
-                        'missing' => 'Missing / not 10 digits',
+                        'validated' => 'Verified',
+                        'awaiting' => 'Valid TIN — awaiting verification',
+                        'mismatch' => 'Name mismatch (consent needed)',
+                        'invalid' => 'Invalid / missing TIN',
+                        'erca_matched' => 'Name matched',
+                        'erca_not_found' => 'TIN not found',
+                        'erca_failed' => 'Verification failed',
+                        'erca_unchecked' => 'Not checked yet',
                     ])
                     ->query(function (Builder $query, array $data): Builder {
                         return match ($data['value'] ?? null) {
+                            'validated' => $query->tinApproved(),
                             'awaiting' => $query->awaitingTinApproval(),
-                            'approved' => $query->tinApproved(),
-                            'missing' => $query
-                                ->where('tin_validated', false)
-                                ->where(function (Builder $q): void {
-                                    $q->whereNull('tin')
-                                        ->orWhere('tin', '')
-                                        ->orWhereRaw("length(regexp_replace(coalesce(tin, ''), '[^0-9]', '', 'g')) <> 10");
-                                }),
+                            'mismatch' => $query->ercaNameMismatchPending(),
+                            'invalid' => $query->invalidOrMissingTin(),
+                            'erca_matched' => $query->where('erca_name_status', \App\Enums\ErcaNameStatus::Matched->value),
+                            'erca_not_found' => $query->where('erca_name_status', \App\Enums\ErcaNameStatus::NotFound->value),
+                            'erca_failed' => $query->where('erca_name_status', \App\Enums\ErcaNameStatus::Failed->value),
+                            'erca_unchecked' => $query->where(function (Builder $q): void {
+                                $q->whereNull('erca_name_status')
+                                    ->orWhere('erca_name_status', '')
+                                    ->orWhere('erca_name_status', \App\Enums\ErcaNameStatus::Unchecked->value);
+                            }),
                             default => $query,
                         };
                     }),
-                TernaryFilter::make('tin_validated')
-                    ->label('TIN approved (simple)')
-                    ->placeholder('Any TIN approval')
-                    ->trueLabel('TIN approved')
-                    ->falseLabel('TIN not approved')
-                    ->queries(
-                        true: fn ($query) => $query->where('tin_validated', true),
-                        false: fn ($query) => $query->where('tin_validated', false),
-                        blank: fn ($query) => $query,
-                    ),
-                TernaryFilter::make('erca_tin_verified')
-                    ->label('ERCA verified')
-                    ->placeholder('Any ERCA status')
-                    ->trueLabel('ERCA verified')
-                    ->falseLabel('Not ERCA verified')
-                    ->queries(
-                        true: fn ($query) => $query->where('erca_tin_verified', true),
-                        false: fn ($query) => $query->where('erca_tin_verified', false),
-                        blank: fn ($query) => $query,
-                    ),
+                TernaryFilter::make('is_active')->label('Active'),
                 TernaryFilter::make('no_owner')
-                    ->label('No owner')
+                    ->label('Ownership')
                     ->placeholder('All ownership')
                     ->trueLabel('No owner only')
                     ->falseLabel('Has owner only')
@@ -432,215 +356,28 @@ class CompanyResource extends Resource
             ])
             ->recordActions([
                 ViewAction::make(),
-                ActionGroup::make([
-                    EditAction::make(),
-                    Action::make('validate_tin')
-                        ->label('Approve TIN NUMBER')
-                        ->icon('heroicon-o-identification')
-                        ->color('success')
-                        ->visible(fn (Company $record): bool => filled($record->tin) && ! $record->tin_validated)
-                        ->requiresConfirmation()
-                        ->modalHeading(fn (Company $record): string => 'Approve TIN NUMBER '.$record->tin.'?')
-                        ->modalDescription('Logs your name and the approval time.')
-                        ->action(function (Company $record, CompanyMembershipService $membership): void {
-                            try {
-                                $membership->markTinValidated($record, auth()->user());
-                                Notification::make()->title('TIN NUMBER approved')->success()->send();
-                            } catch (ValidationException $e) {
-                                Notification::make()
-                                    ->title('Could not approve TIN NUMBER')
-                                    ->body(collect($e->errors())->flatten()->first() ?: $e->getMessage())
-                                    ->danger()
-                                    ->send();
-                            } catch (Throwable $e) {
-                                Notification::make()->title('Could not approve TIN NUMBER')->body($e->getMessage())->danger()->send();
-                            }
-                        }),
-                    Action::make('approve')
-                        ->label('Approve')
-                        ->color('success')
-                        ->icon('heroicon-o-check-circle')
-                        ->visible(fn (Company $record): bool => ! $record->isApproved())
-                        ->form([
-                            Textarea::make('approval_note')->label('Note to partner (optional)'),
-                        ])
-                        ->requiresConfirmation()
-                        ->modalHeading('Approve company profile')
-                        ->modalDescription('Confirm all required company information is complete. The creating partner remains the owner.')
-                        ->action(function (Company $record, array $data, CompanyMembershipService $membership): void {
-                            try {
-                                $membership->approveCompany($record, auth()->user(), $data['approval_note'] ?? null);
-                                Notification::make()->title('Company approved')->success()->send();
-                            } catch (Throwable $e) {
-                                Notification::make()->title('Could not approve')->body($e->getMessage())->danger()->send();
-                            }
-                        }),
-                    Action::make('reject')
-                        ->label('Reject')
-                        ->color('danger')
-                        ->icon('heroicon-o-x-circle')
-                        ->visible(fn (Company $record): bool => ! $record->isApproved()
-                            && ($record->approval_status !== CompanyApprovalStatus::Rejected))
-                        ->form([
-                            Textarea::make('approval_note')->label('What is missing / needs correction')->required(),
-                        ])
-                        ->requiresConfirmation()
-                        ->action(function (Company $record, array $data, CompanyMembershipService $membership): void {
-                            try {
-                                $membership->rejectCompany($record, auth()->user(), $data['approval_note'] ?? null);
-                                Notification::make()->title('Company rejected')->warning()->send();
-                            } catch (Throwable $e) {
-                                Notification::make()->title('Could not reject')->body($e->getMessage())->danger()->send();
-                            }
-                        }),
-                    Action::make('send_sms')
-                        ->label('Send SMS')
-                        ->icon('heroicon-o-chat-bubble-left-ellipsis')
-                        ->color('primary')
-                        ->visible(fn (Company $record): bool => (bool) auth()->user()?->canSendCompanySms()
-                            && filled($record->phone))
-                        ->form([
-                            Textarea::make('message')
-                                ->label('SMS message')
-                                ->required()
-                                ->rows(5)
-                                ->maxLength(640)
-                                ->helperText('Event / ad-hoc SMS to this company phone. Max 640 characters.'),
-                        ])
-                        ->requiresConfirmation()
-                        ->modalHeading(fn (Company $record): string => 'Send SMS to '.$record->name)
-                        ->action(function (Company $record, array $data, SmsService $sms): void {
-                            static::dispatchCompanySms($record, (string) $data['message'], $sms);
-                        }),
-                    Action::make('force_purge')
-                        ->label('Delete permanently')
-                        ->icon('heroicon-o-trash')
-                        ->color('danger')
-                        ->visible(fn (Company $record): bool => app(CompanyPurgeService::class)->canForcePurge($record))
-                        ->requiresConfirmation()
-                        ->modalHeading('Permanently delete company?')
-                        ->modalDescription('This permanently deletes the company, its memberships, subscriptions, service requests, attachments, and contacts that belong only to this company. Cannot be undone. Companies with an owner, approved valid TIN, and at least one subscription cannot be deleted.')
-                        ->action(function (Company $record, CompanyPurgeService $purge): void {
-                            try {
-                                $stats = $purge->forcePurge($record);
-                                Notification::make()
-                                    ->title('Company permanently deleted')
-                                    ->body(sprintf(
-                                        'Removed %d contact(s), %d subscription(s), %d ticket(s), %d document(s).',
-                                        $stats['contacts'],
-                                        $stats['subscriptions'],
-                                        $stats['tickets'],
-                                        $stats['documents'],
-                                    ))
-                                    ->success()
-                                    ->send();
-                            } catch (Throwable $e) {
-                                report($e);
-                                Notification::make()
-                                    ->title('Could not delete company')
-                                    ->body($e->getMessage())
-                                    ->danger()
-                                    ->send();
-                            }
-                        }),
-                ]),
+                Action::make('send_sms')
+                    ->label('Send SMS')
+                    ->icon('heroicon-o-chat-bubble-left-ellipsis')
+                    ->color('primary')
+                    ->visible(fn (Company $record): bool => (bool) auth()->user()?->canSendCompanySms()
+                        && filled($record->phone))
+                    ->form([
+                        Textarea::make('message')
+                            ->label('SMS message')
+                            ->required()
+                            ->rows(5)
+                            ->maxLength(640)
+                            ->helperText('Event / ad-hoc SMS to this company phone. Max 640 characters.'),
+                    ])
+                    ->requiresConfirmation()
+                    ->modalHeading(fn (Company $record): string => 'Send SMS to '.$record->name)
+                    ->action(function (Company $record, array $data, SmsService $sms): void {
+                        static::dispatchCompanySms($record, (string) $data['message'], $sms);
+                    }),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    BulkAction::make('validate_tin')
-                        ->label('Approve TIN NUMBER')
-                        ->icon('heroicon-o-identification')
-                        ->color('success')
-                        ->requiresConfirmation()
-                        ->modalHeading('Approve TIN NUMBER for selected companies?')
-                        ->modalDescription('Approves valid 10-digit TINs. Approver is logged.')
-                        ->deselectRecordsAfterCompletion()
-                        ->action(function (Collection $records, CompanyMembershipService $membership): void {
-                            $validated = 0;
-                            $skipped = 0;
-                            $failed = 0;
-
-                            foreach ($records as $company) {
-                                if (! $company instanceof Company) {
-                                    continue;
-                                }
-
-                                if ($company->tin_validated) {
-                                    $skipped++;
-
-                                    continue;
-                                }
-
-                                try {
-                                    $membership->markTinValidated($company, auth()->user());
-                                    $validated++;
-                                } catch (Throwable $e) {
-                                    $failed++;
-                                }
-                            }
-
-                            Notification::make()
-                                ->title($validated > 0
-                                    ? "Approved TIN NUMBER for {$validated} company(ies)"
-                                    : 'No TIN NUMBERs approved')
-                                ->body(trim(implode(' ', array_filter([
-                                    $skipped > 0 ? "{$skipped} already approved." : null,
-                                    $failed > 0 ? "{$failed} skipped (invalid or missing TIN NUMBER)." : null,
-                                ]))) ?: null)
-                                ->color($validated > 0 ? 'success' : 'warning')
-                                ->send();
-                        }),
-                    BulkAction::make('force_purge_selected')
-                        ->label('Delete permanently')
-                        ->icon('heroicon-o-trash')
-                        ->color('danger')
-                        ->requiresConfirmation()
-                        ->modalHeading('Permanently delete selected companies?')
-                        ->modalDescription('Permanently deletes each company plus memberships, subscriptions, tickets, attachments, and exclusive contacts. Companies with an owner, approved valid TIN, and at least one subscription are skipped.')
-                        ->deselectRecordsAfterCompletion()
-                        ->visible(fn (): bool => static::canDeleteAny())
-                        ->action(function (Collection $records, CompanyPurgeService $purge): void {
-                            $deleted = 0;
-                            $failed = 0;
-                            $skippedTin = 0;
-                            $contacts = 0;
-                            $docs = 0;
-
-                            foreach ($records as $company) {
-                                if (! $company instanceof Company) {
-                                    continue;
-                                }
-
-                                if (! $purge->canForcePurge($company)) {
-                                    $skippedTin++;
-
-                                    continue;
-                                }
-
-                                try {
-                                    $stats = $purge->forcePurge($company);
-                                    $deleted++;
-                                    $contacts += $stats['contacts'];
-                                    $docs += $stats['documents'];
-                                } catch (Throwable $e) {
-                                    report($e);
-                                    $failed++;
-                                }
-                            }
-
-                            Notification::make()
-                                ->title($deleted > 0
-                                    ? "Permanently deleted {$deleted} company(ies)"
-                                    : 'No companies deleted')
-                                ->body(trim(implode(' ', array_filter([
-                                    $contacts > 0 ? "{$contacts} contact(s) removed." : null,
-                                    $docs > 0 ? "{$docs} document(s) removed." : null,
-                                    $skippedTin > 0 ? "{$skippedTin} skipped (owner + approved TIN + subscription)." : null,
-                                    $failed > 0 ? "{$failed} failed." : null,
-                                ]))) ?: null)
-                                ->color($deleted > 0 ? 'success' : 'warning')
-                                ->send();
-                        }),
                     BulkAction::make('send_sms')
                         ->label('Send SMS to selected')
                         ->icon('heroicon-o-chat-bubble-left-ellipsis')
@@ -757,7 +494,6 @@ class CompanyResource extends Resource
         return [
             'index' => ListCompanies::route('/'),
             'view' => ViewCompany::route('/{record}'),
-            'edit' => EditCompany::route('/{record}/edit'),
         ];
     }
 
@@ -767,23 +503,28 @@ class CompanyResource extends Resource
         return false;
     }
 
+    public static function canEdit($record): bool
+    {
+        return false;
+    }
+
     public static function canDelete($record): bool
     {
-        return $record instanceof Company && app(CompanyPurgeService::class)->canForcePurge($record);
+        return false;
     }
 
     public static function canForceDelete($record): bool
     {
-        return $record instanceof Company && app(CompanyPurgeService::class)->canForcePurge($record);
+        return false;
     }
 
     public static function canDeleteAny(): bool
     {
-        return true;
+        return false;
     }
 
     public static function canForceDeleteAny(): bool
     {
-        return true;
+        return false;
     }
 }

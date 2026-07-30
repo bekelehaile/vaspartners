@@ -59,8 +59,8 @@ class ContactResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            Section::make('Fayda identity')
-                ->description('Admins may correct these fields. The next Fayda sign-in can overwrite them from National ID. Fayda sub cannot be changed.')
+            Section::make('Identity')
+                ->description('Fayda / CRM identity. Fayda sub cannot be changed.')
                 ->schema([
                     TextInput::make('public_id')
                         ->label('Public ID')
@@ -79,7 +79,7 @@ class ContactResource extends Resource
                         ->required()
                         ->maxLength(32)
                         ->unique(ignoreRecord: true)
-                        ->helperText('Saved as last 9 digits. Must be unique across contacts.')
+                        ->helperText('Last 9 digits. Unique.')
                         ->dehydrateStateUsing(
                             fn (?string $state): ?string => \App\Support\PhoneNumber::normalizeNullable($state)
                         ),
@@ -87,7 +87,7 @@ class ContactResource extends Resource
                         ->email()
                         ->maxLength(255)
                         ->unique(ignoreRecord: true)
-                        ->helperText('Must be unique across contacts when set.')
+                        ->helperText('Unique when set.')
                         ->dehydrateStateUsing(
                             fn (?string $state): ?string => \App\Support\EmailAddress::normalize($state)
                         ),
@@ -99,7 +99,6 @@ class ContactResource extends Resource
                     Textarea::make('address')
                         ->rows(3)
                         ->columnSpanFull()
-                        ->helperText('Optional free-text or JSON address from Fayda.')
                         ->formatStateUsing(function ($state): ?string {
                             if ($state === null || $state === '') {
                                 return null;
@@ -119,9 +118,7 @@ class ContactResource extends Resource
                 ])->columns(3),
             Section::make('Status')
                 ->schema([
-                    Toggle::make('is_active')
-                        ->label('Active')
-                        ->helperText('Off = no portal access.'),
+                    Toggle::make('is_active')->label('Active'),
                     TextInput::make('legacy_mvas_id')
                         ->label('Legacy MVAS ID')
                         ->maxLength(64),
@@ -132,34 +129,44 @@ class ContactResource extends Resource
     public static function infolist(Schema $schema): Schema
     {
         return $schema->components([
-            Section::make('Identity')
-                ->description('Personal identity (sticky once verified). Common fields: Verified via + Verified at.')
+            Section::make('Person')
                 ->schema([
-                    TextEntry::make('public_id'),
-                    TextEntry::make('sub')->label('SSO / placeholder sub'),
+                    TextEntry::make('name'),
+                    TextEntry::make('phone_number')->label('Phone'),
+                    TextEntry::make('email')->placeholder('—'),
                     TextEntry::make('identity_verified_via')
-                        ->label('Verified via')
+                        ->label('Identity')
                         ->badge()
                         ->state(fn (Contact $record): ?string => $record->identityVerifiedViaValue())
                         ->formatStateUsing(fn ($state): string => filled($state)
                             ? \App\Support\IdentityLabels::via((string) $state)
                             : 'Unverified')
                         ->color(fn ($state): string => filled($state) ? 'success' : 'warning'),
-                    TextEntry::make('identity_verified_at')->label('Verified at')->dateTime()->placeholder('—'),
-                    TextEntry::make('name'),
-                    TextEntry::make('phone_number'),
-                    TextEntry::make('email'),
-                    TextEntry::make('gender'),
-                    TextEntry::make('nationality'),
-                    TextEntry::make('identification_type'),
-                    TextEntry::make('identification_number'),
-                    TextEntry::make('birthdate')->date(),
-                    TextEntry::make('address')->formatStateUsing(
-                        fn ($state) => is_array($state) ? json_encode($state) : $state
-                    )->columnSpanFull(),
+                    TextEntry::make('identity_verified_at')
+                        ->label('Verified at')
+                        ->dateTime()
+                        ->placeholder('—'),
+                    TextEntry::make('is_active')
+                        ->label('Active')
+                        ->badge()
+                        ->formatStateUsing(fn ($state) => $state ? 'Active' : 'Inactive')
+                        ->color(fn ($state) => $state ? 'success' : 'danger'),
                 ])->columns(3),
-            Section::make('Current company context')
-                ->description('Active portal company for this contact. They may also belong to other companies under Company memberships.')
+            Section::make('ID details')
+                ->schema([
+                    TextEntry::make('identification_type')->label('ID type')->placeholder('—'),
+                    TextEntry::make('identification_number')->label('ID number')->placeholder('—'),
+                    TextEntry::make('birthdate')->date()->placeholder('—'),
+                    TextEntry::make('gender')->placeholder('—'),
+                    TextEntry::make('nationality')->placeholder('—'),
+                    TextEntry::make('address')
+                        ->formatStateUsing(fn ($state) => is_array($state)
+                            ? collect($state)->filter()->implode(', ')
+                            : $state)
+                        ->columnSpanFull()
+                        ->placeholder('—'),
+                ])->columns(3),
+            Section::make('Company')
                 ->schema([
                     TextEntry::make('company.name')
                         ->label('Current company')
@@ -168,19 +175,29 @@ class ContactResource extends Resource
                             ? CompanyResource::getUrl('view', ['record' => $record->company])
                             : null),
                     TextEntry::make('company.tin')->label('TIN')->placeholder('—'),
-                    TextEntry::make('company_role')->label('Role in current company')->placeholder('—'),
-                    TextEntry::make('company_phone')->placeholder('—'),
-                    TextEntry::make('company_email')->placeholder('—'),
-                    TextEntry::make('company_address')->columnSpanFull()->placeholder('—'),
-                    TextEntry::make('profile_completed_at')->dateTime()->label('Completed at')->placeholder('—'),
+                    TextEntry::make('company_role')->label('Role')->placeholder('—'),
+                    TextEntry::make('company.tin_ok')
+                        ->label('Company TIN')
+                        ->badge()
+                        ->state(fn (Contact $record): ?bool => $record->company
+                            ? $record->company->isTinValidated()
+                            : null)
+                        ->formatStateUsing(fn ($state) => $state === null ? '—' : ($state ? 'Verified' : 'Not verified'))
+                        ->color(fn ($state) => $state === true ? 'success' : ($state === false ? 'warning' : 'gray'))
+                        ->placeholder('—'),
                     TextEntry::make('memberships_count')
-                        ->label('Total memberships')
+                        ->label('Memberships')
                         ->state(fn (Contact $record): int => $record->memberships()->count()),
-                ])->columns(2),
-            Section::make('Status')->schema([
-                TextEntry::make('is_active')->badge(),
-                TextEntry::make('created_at')->dateTime(),
-            ])->columns(2),
+                ])->columns(3),
+            Section::make('Record')
+                ->collapsed()
+                ->schema([
+                    TextEntry::make('public_id')->label('ID'),
+                    TextEntry::make('sub')->label('Fayda sub')->placeholder('—'),
+                    TextEntry::make('legacy_mvas_id')->label('Legacy MVAS ID')->placeholder('—'),
+                    TextEntry::make('profile_completed_at')->label('Profile completed')->dateTime()->placeholder('—'),
+                    TextEntry::make('created_at')->dateTime(),
+                ])->columns(3),
         ]);
     }
 

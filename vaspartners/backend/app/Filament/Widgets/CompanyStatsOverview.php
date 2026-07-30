@@ -2,7 +2,6 @@
 
 namespace App\Filament\Widgets;
 
-use App\Enums\CompanyApprovalStatus;
 use App\Filament\Resources\Companies\CompanyResource;
 use App\Models\Company;
 use Filament\Support\Icons\Heroicon;
@@ -15,45 +14,38 @@ class CompanyStatsOverview extends StatsOverviewWidget
 
     protected ?string $heading = 'Partners';
 
-    protected ?string $description = 'Approvals and ownership that need attention';
+    protected ?string $description = 'TIN verification that needs attention';
 
     protected ?string $pollingInterval = '60s';
 
     protected function getStats(): array
     {
+        $tinOk = Company::query()->tinApproved()->count();
         $tinAwaiting = Company::query()->awaitingTinApproval()->count();
-        $pending = Company::query()
-            ->where('approval_status', CompanyApprovalStatus::Pending)
-            ->count();
-        $orphans = Company::query()
-            ->ownerless()
-            ->where('approval_status', CompanyApprovalStatus::Approved)
-            ->count();
-        $approved = Company::query()
-            ->where('approval_status', CompanyApprovalStatus::Approved)
-            ->count();
+        $mismatch = Company::query()->ercaNameMismatchPending()->count();
+        $invalid = Company::query()->invalidOrMissingTin()->count();
 
         return [
-            Stat::make('TIN awaiting', $tinAwaiting)
-                ->description('Validate partner TIN')
+            Stat::make('Verified', $tinOk)
+                ->description('TIN confirmed')
+                ->descriptionIcon(Heroicon::OutlinedBuildingOffice)
+                ->color('success')
+                ->url(CompanyResource::getUrl('index').'?tab=tin_ok'),
+            Stat::make('Awaiting verification', $tinAwaiting)
+                ->description('Valid TIN — pending check')
                 ->descriptionIcon(Heroicon::OutlinedIdentification)
                 ->color($tinAwaiting > 0 ? 'warning' : 'gray')
                 ->url(CompanyResource::getUrl('index').'?tab=tin_awaiting'),
-            Stat::make('Pending approval', $pending)
-                ->description('New partner applications')
-                ->descriptionIcon(Heroicon::OutlinedClock)
-                ->color($pending > 0 ? 'warning' : 'gray')
-                ->url(CompanyResource::getUrl('index').'?tab=pending'),
-            Stat::make('Orphans', $orphans)
-                ->description('Approved — no owner')
-                ->descriptionIcon(Heroicon::OutlinedUserMinus)
-                ->color($orphans > 0 ? 'danger' : 'gray')
-                ->url(CompanyResource::getUrl('index').'?tab=orphans'),
-            Stat::make('Approved partners', $approved)
-                ->description('Active partner companies')
-                ->descriptionIcon(Heroicon::OutlinedBuildingOffice)
-                ->color('success')
-                ->url(CompanyResource::getUrl('index').'?tab=approved'),
+            Stat::make('Name mismatch', $mismatch)
+                ->description('Partner consent needed')
+                ->descriptionIcon(Heroicon::OutlinedExclamationTriangle)
+                ->color($mismatch > 0 ? 'warning' : 'gray')
+                ->url(CompanyResource::getUrl('index').'?tab=mismatch'),
+            Stat::make('Invalid TIN', $invalid)
+                ->description('Missing or not 10 digits')
+                ->descriptionIcon(Heroicon::OutlinedXCircle)
+                ->color($invalid > 0 ? 'danger' : 'gray')
+                ->url(CompanyResource::getUrl('index').'?tab=invalid_tin'),
         ];
     }
 }

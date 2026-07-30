@@ -193,8 +193,6 @@ class CompanyMembershipService
                 'legal_name' => $legal,
                 'tin' => $tin,
                 'tin_validated' => true,
-                'tin_validated_by_user_id' => null,
-                'tin_validated_at' => now(),
                 'erca_tin_verified' => true,
                 'erca_verified_at' => now(),
                 'erca_name_status' => \App\Enums\ErcaNameStatus::Matched->value,
@@ -304,8 +302,6 @@ class CompanyMembershipService
             'legal_name' => $legal,
             'tin' => $tin,
             'tin_validated' => true,
-            'tin_validated_by_user_id' => null,
-            'tin_validated_at' => now(),
             'erca_tin_verified' => true,
             'erca_verified_at' => now(),
             'erca_name_status' => \App\Enums\ErcaNameStatus::Matched,
@@ -360,7 +356,7 @@ class CompanyMembershipService
 
         if ($company->isApproved()) {
             throw ValidationException::withMessages([
-                'company' => 'This company is already approved. Ask an administrator to update or change company details.',
+                'company' => 'This company TIN is already validated. Ask an administrator to update company details.',
             ]);
         }
 
@@ -430,38 +426,18 @@ class CompanyMembershipService
     }
 
     /**
-     * Admin verifies required company info and activates the company (creator remains owner).
+     * Forces ERCA verification — admin cannot mark TIN OK without ERCA.
      */
     public function approveCompany(Company $company, User $admin, ?string $note = null): Company
     {
-        if ($company->isApproved()) {
-            return $company->fresh(['memberships', 'approvedBy']);
-        }
-
         $this->assertCompanyReadyForApproval($company);
 
-        $company->fill([
-            'approval_status' => CompanyApprovalStatus::Approved,
-            'approved_by_user_id' => $admin->id,
-            'approved_at' => now(),
-            'approval_note' => filled($note) ? trim($note) : null,
-            'is_active' => true,
-        ])->save();
-
-        $this->recordStatusHistory($company, 'approved', $admin, null, filled($note) ? trim($note) : null);
-
-        $fresh = $company->fresh(['memberships', 'approvedBy']);
-        $owner = $fresh->ownerContact();
-        if ($owner) {
-            $this->notifications->companyProfileDecided($fresh, $owner, approved: true);
-        }
-
-        return $fresh;
+        return $this->markTinValidated($company, $admin);
     }
 
     /**
-     * After Fayda / CRM identity verification: auto-approve + activate companies this
-     * contact owns when profile is complete (Approval=Approved, Active=Active, Has owner).
+     * Identity verification no longer approves companies — TIN validation does.
+     * If TIN is already validated, ensure Active + synced approval_status.
      */
     public function autoApproveOwnedCompaniesAfterIdentityVerification(Contact $contact): void
     {
@@ -470,9 +446,6 @@ class CompanyMembershipService
         }
 
         $contact->loadMissing(['memberships.company']);
-        $via = $contact->identity_verified_via
-            ?? ($contact->fayda_verified ? 'fayda' : 'crm');
-        $note = 'Auto-approved after identity verification ('.$via.').';
 
         foreach ($contact->memberships as $membership) {
             if (! $membership->is_active) {
@@ -486,46 +459,11 @@ class CompanyMembershipService
             }
 
             $company = $membership->company;
-            if (! $company || $company->isApproved()) {
+            if (! $company || ! $company->isTinValidated()) {
                 continue;
             }
 
-            // Only lift pending profiles — rejected stays for admin review.
-            $status = $company->approval_status instanceof CompanyApprovalStatus
-                ? $company->approval_status
-                : CompanyApprovalStatus::tryFrom((string) $company->approval_status);
-            if ($status === CompanyApprovalStatus::Rejected) {
-                continue;
-            }
-
-            try {
-                $this->assertCompanyReadyForApproval($company);
-            } catch (ValidationException) {
-                continue;
-            }
-
-            $company->fill([
-                'approval_status' => CompanyApprovalStatus::Approved,
-                'approved_by_user_id' => null,
-                'approved_at' => now(),
-                'approval_note' => $note,
-                'is_active' => true,
-            ])->save();
-
-            $this->recordStatusHistory(
-                $company,
-                'approved',
-                null,
-                $contact,
-                $note,
-                ['auto' => true, 'via' => $via],
-            );
-
-            $fresh = $company->fresh(['memberships', 'approvedBy']);
-            $owner = $fresh->ownerContact();
-            if ($owner) {
-                $this->notifications->companyProfileDecided($fresh, $owner, approved: true);
-            }
+            $this->ensureApprovedWhenTinValidated($company);
         }
     }
 
@@ -564,35 +502,20 @@ class CompanyMembershipService
 
     public function rejectCompany(Company $company, User $admin, ?string $note = null): Company
     {
-        if ($company->isApproved()) {
-            throw ValidationException::withMessages([
-                'status' => 'An approved company cannot be rejected. Edit details in admin instead.',
-            ]);
-        }
+        // Deactivate instead of a separate "profile rejected" gate — TIN + Active are the flags.
+        $note = filled($note) ? trim($note) : 'Company deactivated by admin.';
 
         $company->fill([
-            'approval_status' => CompanyApprovalStatus::Rejected,
-            'approved_by_user_id' => $admin->id,
-            'approved_at' => now(),
-            'approval_note' => filled($note) ? trim($note) : 'Incomplete company information.',
+            'approval_status' => CompanyApprovalStatus::Pending,
+            'approval_note' => $note,
             'is_active' => false,
+            'tin_validated' => false,
         ])->save();
 
-        $this->recordStatusHistory(
-            $company,
-            'rejected',
-            $admin,
-            null,
-            filled($note) ? trim($note) : 'Incomplete company information.',
-        );
+        $this->recordStatusHistory($company, 'rejected', $admin, null, $note);
+        $this->revokePortalAccessForInactiveCompany($company);
 
-        $fresh = $company->fresh(['memberships', 'approvedBy']);
-        $owner = $fresh->ownerContact();
-        if ($owner) {
-            $this->notifications->companyProfileDecided($fresh, $owner, approved: false);
-        }
-
-        return $fresh;
+        return $company->fresh(['memberships', 'approvedBy']) ?? $company;
     }
 
     public function lookupByIdentity(string $tin): ?Company
@@ -605,7 +528,7 @@ class CompanyMembershipService
         return Company::query()
             ->where('tin', $tin)
             ->where('is_active', true)
-            ->where('approval_status', CompanyApprovalStatus::Approved)
+            ->tinApproved()
             ->first();
     }
 
@@ -629,7 +552,7 @@ class CompanyMembershipService
         $company = $this->lookupByIdentity($tin);
         if (! $company) {
             throw ValidationException::withMessages([
-                'company_tin' => 'No active approved company found for this TIN. Create a new company instead.',
+                'company_tin' => 'No active company with a validated TIN found. Create a new company instead.',
             ]);
         }
 
@@ -856,7 +779,7 @@ class CompanyMembershipService
         $company = $owner->company;
         if (! $company?->isApproved()) {
             throw ValidationException::withMessages([
-                'company' => 'Ownership can only be transferred after the company is approved.',
+                'company' => 'Ownership can only be transferred after the company TIN is validated.',
             ]);
         }
 
@@ -1492,7 +1415,7 @@ class CompanyMembershipService
 
         if (! $company?->isApproved()) {
             throw ValidationException::withMessages([
-                'company' => 'Membership requests are available after admin approves this company profile.',
+                'company' => 'Membership requests are available after the company TIN is validated.',
             ]);
         }
     }
@@ -1514,7 +1437,7 @@ class CompanyMembershipService
         $contact->loadMissing('company');
         if (! $contact->company?->isApproved()) {
             throw ValidationException::withMessages([
-                'company' => 'Member management is available after admin approves your company profile.',
+                'company' => 'Member management is available after the company TIN is validated.',
             ]);
         }
     }
@@ -1530,7 +1453,7 @@ class CompanyMembershipService
         $contact->loadMissing('company');
         if (! $contact->company?->isApproved()) {
             throw ValidationException::withMessages([
-                'company' => 'Membership requests are available after admin approves your company profile.',
+                'company' => 'Membership requests are available after the company TIN is validated.',
             ]);
         }
 
@@ -1860,7 +1783,7 @@ class CompanyMembershipService
             $company = Company::query()
                 ->where('legacy_mvas_id', $contact->legacy_mvas_id)
                 ->where('is_active', true)
-                ->where('approval_status', CompanyApprovalStatus::Approved->value)
+                ->where('tin_validated', true)
                 ->whereDoesntHave('memberships', function ($query) {
                     $query->where('role', CompanyRole::Owner->value);
                 })
@@ -1875,7 +1798,7 @@ class CompanyMembershipService
 
             $candidates = Company::query()
                 ->where('is_active', true)
-                ->where('approval_status', CompanyApprovalStatus::Approved->value)
+                ->where('tin_validated', true)
                 ->whereNotNull('phone')
                 ->where('phone', '!=', '')
                 ->whereRaw(
@@ -2026,10 +1949,10 @@ class CompanyMembershipService
             ]);
         }
 
-        // Single service gate: validated TIN (via ERCA or admin).
-        if (! $contact->company->tin_validated) {
+        // Single service gate: ERCA-confirmed TIN.
+        if (! $contact->company->isTinValidated()) {
             throw ValidationException::withMessages([
-                'company_tin' => 'Update and confirm your company TIN before using VAS services.',
+                'company_tin' => 'Confirm your company TIN with ERCA before using VAS services.',
             ]);
         }
 
@@ -2151,8 +2074,6 @@ class CompanyMembershipService
         $company->fill([
             'tin' => $tin,
             'tin_validated' => false,
-            'tin_validated_by_user_id' => null,
-            'tin_validated_at' => null,
         ])->save();
 
         if ($wasValidated) {
@@ -2220,9 +2141,8 @@ class CompanyMembershipService
     }
 
     /**
-     * Admin attests that the company TIN has been verified.
-     * Also marks the company profile approved when still pending/rejected —
-     * services require both gates; TIN approval is the stronger attestation.
+     * TIN must be confirmed via ERCA — admin cannot attest alone.
+     * Forces an ERCA check and unlocks only when ERCA resolves the identity.
      */
     public function markTinValidated(Company $company, ?User $admin = null): Company
     {
@@ -2232,27 +2152,16 @@ class CompanyMembershipService
             ]);
         }
 
-        $admin ??= auth()->user() instanceof User ? auth()->user() : null;
-        $newlyValidated = ! $company->tin_validated;
+        $this->ercaTin->verifyCompany($company->fresh() ?? $company, force: true);
+        $fresh = $this->syncTinValidatedFromErca($company->fresh() ?? $company);
 
-        if ($newlyValidated) {
-            $company->forceFill([
-                'tin_validated' => true,
-                'tin_validated_by_user_id' => $admin?->id,
-                'tin_validated_at' => now(),
-            ])->save();
-
-            $this->recordStatusHistory($company, 'tin_validated', $admin, null);
+        if (! $fresh->isTinValidated()) {
+            throw ValidationException::withMessages([
+                'tin' => 'TIN must be confirmed in ERCA (and any name mismatch resolved by the partner) before it is marked OK.',
+            ]);
         }
 
-        $this->ensureApprovedWhenTinValidated($company->fresh() ?? $company, $admin);
-
-        $fresh = $company->fresh(['tinValidatedBy', 'approvedBy']);
-        if ($newlyValidated) {
-            $this->notifications->companyTinValidated($fresh);
-        }
-
-        return $fresh;
+        return $fresh->fresh(['approvedBy']) ?? $fresh;
     }
 
     /**
@@ -2262,23 +2171,19 @@ class CompanyMembershipService
     {
         $company->refresh();
 
-        if (! $company->erca_tin_verified || ! TinNumber::isValid($company->tin)) {
-            return $company;
-        }
+        if (! $company->isTinValidated()) {
+            if ($company->tin_validated) {
+                $company->forceFill([
+                    'tin_validated' => false,
+                ])->save();
+            }
 
-        $status = $company->erca_name_status instanceof \App\Enums\ErcaNameStatus
-            ? $company->erca_name_status
-            : \App\Enums\ErcaNameStatus::tryFrom((string) ($company->erca_name_status ?: ''));
-
-        if (! $status?->isResolved()) {
-            return $company;
+            return $company->fresh() ?? $company;
         }
 
         if (! $company->tin_validated) {
             $company->forceFill([
                 'tin_validated' => true,
-                'tin_validated_by_user_id' => null,
-                'tin_validated_at' => now(),
             ])->save();
 
             $this->recordStatusHistory(
@@ -2295,12 +2200,21 @@ class CompanyMembershipService
     }
 
     /**
-     * When TIN is confirmed, unlock the company profile approval gate as well
-     * (without a separate "profile approved — wait for TIN" SMS).
+     * Keep legacy approval_status / Active in sync when ERCA TIN is confirmed.
      */
     public function ensureApprovedWhenTinValidated(Company $company, ?User $admin = null): Company
     {
-        if ($company->isApproved()) {
+        $company->refresh();
+
+        if (! $company->isTinValidated()) {
+            return $company;
+        }
+
+        $status = $company->approval_status instanceof CompanyApprovalStatus
+            ? $company->approval_status
+            : CompanyApprovalStatus::tryFrom((string) ($company->approval_status ?: ''));
+
+        if ($status === CompanyApprovalStatus::Approved && $company->is_active) {
             return $company;
         }
 
@@ -2345,8 +2259,6 @@ class CompanyMembershipService
         if ($wasValidated) {
             $company->forceFill([
                 'tin_validated' => false,
-                'tin_validated_by_user_id' => null,
-                'tin_validated_at' => null,
             ])->save();
 
             $this->recordStatusHistory(
@@ -2387,7 +2299,8 @@ class CompanyMembershipService
     }
 
     /**
-     * Log admin edits to Active / TIN validated / approval from the company form.
+     * Log admin edits to Active / approval from the company form.
+     * TIN OK is ERCA-only and is not changed from the admin form.
      *
      * @param  array{approval_status?: mixed, is_active?: mixed, tin_validated?: mixed}  $before
      */
@@ -2401,37 +2314,15 @@ class CompanyMembershipService
             : (string) $company->approval_status;
         $beforeActive = (bool) ($before['is_active'] ?? false);
         $afterActive = (bool) $company->is_active;
-        $beforeTin = (bool) ($before['tin_validated'] ?? false);
-        $afterTin = (bool) $company->tin_validated;
 
-        if ($beforeApproval === $afterApproval && $beforeActive === $afterActive && $beforeTin === $afterTin) {
+        if ($beforeApproval === $afterApproval && $beforeActive === $afterActive) {
             return;
         }
 
-        // Keep current TIN validator stamp when flipped via edit form.
-        if ($beforeTin !== $afterTin) {
-            if ($afterTin) {
-                $company->forceFill([
-                    'tin_validated_by_user_id' => $admin?->id,
-                    'tin_validated_at' => now(),
-                ])->save();
-                // Same unlock path as the Approve TIN action.
-                $this->ensureApprovedWhenTinValidated($company->fresh() ?? $company, $admin);
-                $company->refresh();
-            } else {
-                $company->forceFill([
-                    'tin_validated_by_user_id' => null,
-                    'tin_validated_at' => null,
-                ])->save();
-            }
-        }
-
         $action = 'conditions_updated';
-        if ($beforeTin !== $afterTin && $beforeApproval === $afterApproval && $beforeActive === $afterActive) {
-            $action = $afterTin ? 'tin_validated' : 'tin_cleared';
-        } elseif ($beforeActive !== $afterActive && $beforeApproval === $afterApproval && $beforeTin === $afterTin) {
+        if ($beforeActive !== $afterActive && $beforeApproval === $afterApproval) {
             $action = $afterActive ? 'activated' : 'deactivated';
-        } elseif ($beforeApproval !== $afterApproval && $beforeActive === $afterActive && $beforeTin === $afterTin) {
+        } elseif ($beforeApproval !== $afterApproval && $beforeActive === $afterActive) {
             $action = $afterApproval === CompanyApprovalStatus::Approved->value
                 ? 'approved'
                 : ($afterApproval === CompanyApprovalStatus::Rejected->value ? 'rejected' : 'conditions_updated');
@@ -2447,7 +2338,10 @@ class CompanyMembershipService
                 'before' => [
                     'approval_status' => $beforeApproval !== '' ? $beforeApproval : null,
                     'is_active' => $beforeActive,
-                    'tin_validated' => $beforeTin,
+                ],
+                'after' => [
+                    'approval_status' => $afterApproval !== '' ? $afterApproval : null,
+                    'is_active' => $afterActive,
                 ],
             ],
         );
@@ -2653,7 +2547,8 @@ class CompanyMembershipService
             : [];
         $canEditCompany = $membershipActive
             && $company
-            && ! $companyApproved
+            && ! $company->isTinValidated()
+            && ! $company->isErcaIdentityLocked()
             && in_array(CompanyMemberPermission::EditCompanyProfile->value, $permissions, true);
         $canDetach = (bool) $contact->current_company_id
             && $membershipActive
@@ -2688,7 +2583,7 @@ class CompanyMembershipService
             'approval_status' => $approvalStatus?->value,
             'approval_note' => $company->approval_note,
             'is_approved' => $companyApproved,
-            'tin_validated' => (bool) $company->tin_validated,
+            'tin_validated' => $company->isTinValidated(),
             'tin_format_valid' => TinNumber::isValid($company->tin),
             'erca_tin_verified' => (bool) $company->erca_tin_verified,
             'erca_name_status' => $company->erca_name_status instanceof \App\Enums\ErcaNameStatus
@@ -2742,7 +2637,7 @@ class CompanyMembershipService
                     'approval_status' => $c?->approval_status instanceof CompanyApprovalStatus
                         ? $c->approval_status->value
                         : ($c ? (string) $c->approval_status : null),
-                    'tin_validated' => (bool) ($c?->tin_validated),
+                    'tin_validated' => $c ? $c->isTinValidated() : false,
                 ];
             })
             ->values()

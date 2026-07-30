@@ -26,8 +26,6 @@ class Company extends Model
         'legal_name',
         'tin',
         'tin_validated',
-        'tin_validated_by_user_id',
-        'tin_validated_at',
         'erca_name_status',
         'erca_tin_verified',
         'erca_verified_at',
@@ -55,7 +53,6 @@ class Company extends Model
             'approval_status' => CompanyApprovalStatus::class,
             'erca_name_status' => \App\Enums\ErcaNameStatus::class,
             'approved_at' => 'datetime',
-            'tin_validated_at' => 'datetime',
             'erca_verified_at' => 'datetime',
             'erca_last_checked_at' => 'datetime',
             'erca_next_check_at' => 'datetime',
@@ -77,12 +74,10 @@ class Company extends Model
                 );
             }
 
-            // Changing TIN on an existing company requires admin re-validate and a fresh ERCA check.
+            // Changing TIN on an existing company clears validation (TIN is the service gate).
             // (Skip on create so ERCA-consent create can set verified/approved in the same insert.)
             if ($company->exists && $company->isDirty('tin')) {
                 $company->tin_validated = false;
-                $company->tin_validated_by_user_id = null;
-                $company->tin_validated_at = null;
                 $company->legal_name = null;
                 $company->erca_tin_verified = false;
                 $company->erca_verified_at = null;
@@ -150,9 +145,29 @@ class Company extends Model
         return TinNumber::isValid($this->tin);
     }
 
+    /**
+     * TIN is OK only when ERCA found it and the name status is resolved.
+     * Admin-only tin_validated flags are not trusted.
+     */
     public function isTinValidated(): bool
     {
-        return (bool) $this->tin_validated && $this->hasValidEthiopianTin();
+        if (! $this->hasValidEthiopianTin() || ! (bool) $this->erca_tin_verified) {
+            return false;
+        }
+
+        $status = $this->erca_name_status instanceof \App\Enums\ErcaNameStatus
+            ? $this->erca_name_status
+            : \App\Enums\ErcaNameStatus::tryFrom((string) ($this->erca_name_status ?: ''));
+
+        return $status?->isResolved() === true;
+    }
+
+    /**
+     * Company is usable when ERCA TIN is OK and Active is on.
+     */
+    public function isApproved(): bool
+    {
+        return $this->isTinValidated() && (bool) $this->is_active;
     }
 
     /**
@@ -194,11 +209,6 @@ class Company extends Model
     public function approvedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by_user_id');
-    }
-
-    public function tinValidatedBy(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'tin_validated_by_user_id');
     }
 
     public function statusHistories(): HasMany
@@ -315,20 +325,57 @@ class Company extends Model
     }
 
     /**
-     * Partner submitted a 10-digit TIN NUMBER that still needs admin Approve TIN NUMBER.
+     * Valid 10-digit TIN that is not yet ERCA-OK (partner/ERCA still needed).
      */
     public function scopeAwaitingTinApproval(Builder $query): Builder
     {
+        $done = [
+            \App\Enums\ErcaNameStatus::Matched->value,
+            \App\Enums\ErcaNameStatus::AcceptedLegal->value,
+            \App\Enums\ErcaNameStatus::KeptBoth->value,
+            \App\Enums\ErcaNameStatus::MismatchPending->value,
+        ];
+
         return $query
-            ->where('tin_validated', false)
             ->whereNotNull('tin')
             ->where('tin', '!=', '')
-            ->whereRaw("length(regexp_replace(coalesce(tin, ''), '[^0-9]', '', 'g')) = 10");
+            ->whereRaw("length(regexp_replace(coalesce(tin, ''), '[^0-9]', '', 'g')) = 10")
+            ->where(function (Builder $q) use ($done): void {
+                $q->where('erca_tin_verified', false)
+                    ->orWhereNull('erca_name_status')
+                    ->orWhereNotIn('erca_name_status', $done);
+            });
     }
 
+    /**
+     * ERCA confirmed TIN + resolved name (source of truth for TIN OK).
+     */
     public function scopeTinApproved(Builder $query): Builder
     {
-        return $query->where('tin_validated', true);
+        return $query
+            ->where('erca_tin_verified', true)
+            ->whereIn('erca_name_status', [
+                \App\Enums\ErcaNameStatus::Matched->value,
+                \App\Enums\ErcaNameStatus::AcceptedLegal->value,
+                \App\Enums\ErcaNameStatus::KeptBoth->value,
+            ]);
+    }
+
+    /**
+     * Missing TIN or not a valid 10-digit Ethiopian TIN.
+     */
+    public function scopeInvalidOrMissingTin(Builder $query): Builder
+    {
+        return $query->where(function (Builder $q): void {
+            $q->whereNull('tin')
+                ->orWhere('tin', '')
+                ->orWhereRaw("length(regexp_replace(coalesce(tin, ''), '[^0-9]', '', 'g')) <> 10");
+        });
+    }
+
+    public function scopeErcaNameMismatchPending(Builder $query): Builder
+    {
+        return $query->where('erca_name_status', \App\Enums\ErcaNameStatus::MismatchPending->value);
     }
 
     public function ownerContact(): ?Contact
@@ -339,15 +386,6 @@ class Company extends Model
     public function memberCount(): int
     {
         return $this->memberships()->count();
-    }
-
-    public function isApproved(): bool
-    {
-        $status = $this->approval_status instanceof CompanyApprovalStatus
-            ? $this->approval_status
-            : CompanyApprovalStatus::tryFrom((string) $this->approval_status);
-
-        return $status?->isApproved() === true && $this->is_active;
     }
 
     protected static function normalizeIdentityCode(?string $value): ?string

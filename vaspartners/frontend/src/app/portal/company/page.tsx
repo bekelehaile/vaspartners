@@ -43,12 +43,12 @@ export default function CompanyProfilePage() {
   const [tab, setTab] = useState<CompanyTab>("identity");
   const membershipDisabled =
     !!me?.company_id && me?.company_membership_active === false;
-  const awaitingApproval =
+  const awaitingTin =
     !!me?.company_id &&
     !membershipDisabled &&
-    me?.company?.is_approved === false;
+    me?.company?.tin_validated === false;
   const isLinked = !!me?.profile_completed && !!me?.company_id && !membershipDisabled;
-  const isOwner = (isLinked || awaitingApproval) && me?.company_role === "owner";
+  const isOwner = (isLinked || awaitingTin) && me?.company_role === "owner";
   const canEditCompany = !!me?.company_can_edit;
   const pending = me?.pending_company_request;
   const [mode, setMode] = useState<"create" | "attach">("create");
@@ -56,7 +56,7 @@ export default function CompanyProfilePage() {
   const transfer = useTransferOwnership();
   const canViewMembers =
     !membershipDisabled && !!me?.company_id && !pending;
-  const showWorkspace = !pending && (isLinked || awaitingApproval);
+  const showWorkspace = !pending && (isLinked || awaitingTin);
   const companyMembers = useCompanyMembers(canViewMembers && showWorkspace);
   const [detachNote, setDetachNote] = useState("");
   const [transferTarget, setTransferTarget] = useState("");
@@ -133,10 +133,8 @@ export default function CompanyProfilePage() {
         return {
           kicker: "Company",
           title: COMPANY_SECTION_LABEL.profile,
-          description: awaitingApproval
-            ? me?.company?.approval_status === "rejected"
-              ? me?.company?.approval_note || "Please update company details and resubmit."
-              : "Waiting for TIN approval."
+          description: awaitingTin
+            ? "Confirm your company TIN with ERCA to unlock services."
             : `Details for ${companyName}.`,
         };
       case "members":
@@ -229,7 +227,7 @@ export default function CompanyProfilePage() {
           </div>
         )}
 
-        {!membershipDisabled && !pending && !isLinked && !awaitingApproval && (
+        {!membershipDisabled && !pending && !isLinked && !awaitingTin && (
           <AdminWorkspace
             sidebar={
               <VerticalTabs
@@ -359,15 +357,15 @@ export default function CompanyProfilePage() {
                 )}
 
                 <div id="company-profile-panel" className="panel portal-stack-sm">
-                  {awaitingApproval ? (
+                  {awaitingTin ? (
                     <>
                       <div className="alert alert-warning" role="status">
-                        Waiting for TIN approval.
+                        Confirm your company TIN with ERCA to unlock services.
                       </div>
                       <p className="muted">
                         {canEditCompany
-                          ? "You can update the details below while you wait."
-                          : "Please wait."}
+                          ? "Search ERCA and consent to apply the TIN, or update details below."
+                          : "Ask your company owner to confirm the TIN with ERCA."}
                       </p>
                       <section id="company-info" className="settings-block">
                         {canEditCompany ? (
@@ -387,8 +385,8 @@ export default function CompanyProfilePage() {
                               <dd>{me?.company_tin || me?.company?.tin || "—"}</dd>
                             </div>
                             <div>
-                              <dt>Approval</dt>
-                              <dd>{me?.company?.approval_status || "pending"}</dd>
+                              <dt>TIN status</dt>
+                              <dd>{me?.company?.tin_validated ? "Verified" : "Not verified"}</dd>
                             </div>
                           </dl>
                         )}
@@ -415,8 +413,8 @@ export default function CompanyProfilePage() {
                           <dd>{me?.company?.legal_name || "—"}</dd>
                         </div>
                         <div>
-                          <dt>Approval</dt>
-                          <dd>{me?.company?.approval_status || "approved"}</dd>
+                          <dt>TIN status</dt>
+                          <dd>{me?.company?.tin_validated ? "Verified" : "Not verified"}</dd>
                         </div>
                         <div className="field-span-full">
                           <dt>Address</dt>

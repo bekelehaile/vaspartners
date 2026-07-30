@@ -5,16 +5,14 @@ namespace App\Filament\Resources\Companies\Pages;
 use App\Filament\Resources\Companies\CompanyResource;
 use App\Models\User;
 use App\Services\CompanyMembershipService;
-use App\Support\TinNumber;
 use Filament\Actions\ViewAction;
 use Filament\Resources\Pages\EditRecord;
-use Illuminate\Validation\ValidationException;
 
 class EditCompany extends EditRecord
 {
     protected static string $resource = CompanyResource::class;
 
-    /** @var array{approval_status?: mixed, is_active?: mixed, tin_validated?: mixed}|null */
+    /** @var array{approval_status?: mixed, is_active?: mixed}|null */
     protected ?array $conditionSnapshot = null;
 
     protected function getHeaderActions(): array
@@ -28,20 +26,12 @@ class EditCompany extends EditRecord
     {
         /** @var \App\Models\Company $company */
         $company = $this->getRecord();
-        $data = $this->form->getState();
-
-        if (! empty($data['tin_validated']) && ! TinNumber::isValid($data['tin'] ?? $company->tin)) {
-            throw ValidationException::withMessages([
-                'data.tin_validated' => TinNumber::message().' Clear TIN approval or enter a valid TIN first.',
-            ]);
-        }
 
         $this->conditionSnapshot = [
             'approval_status' => $company->approval_status instanceof \BackedEnum
                 ? $company->approval_status->value
                 : $company->approval_status,
             'is_active' => (bool) $company->is_active,
-            'tin_validated' => (bool) $company->tin_validated,
         ];
     }
 
