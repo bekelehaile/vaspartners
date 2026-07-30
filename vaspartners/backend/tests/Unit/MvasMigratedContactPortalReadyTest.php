@@ -11,7 +11,7 @@ class MvasMigratedContactPortalReadyTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_ensure_migrated_contacts_portal_ready_activates_inactive_non_banned(): void
+    public function test_ensure_migrated_contacts_portal_ready_activates_inactive(): void
     {
         $inactive = new Contact;
         $inactive->forceFill([
@@ -19,19 +19,17 @@ class MvasMigratedContactPortalReadyTest extends TestCase
             'name' => 'Inactive Migrated',
             'phone_number' => '911111111',
             'is_active' => false,
-            'is_banned' => false,
             'legacy_mvas_id' => 9001,
             'identification_type' => '2',
             'identification_number' => 'mvas-contact-9001',
         ])->save();
 
-        $banned = new Contact;
-        $banned->forceFill([
+        $alreadyActive = new Contact;
+        $alreadyActive->forceFill([
             'sub' => 'mvas-contact-9002',
-            'name' => 'Banned Migrated',
+            'name' => 'Active Migrated',
             'phone_number' => '922222222',
-            'is_active' => false,
-            'is_banned' => true,
+            'is_active' => true,
             'legacy_mvas_id' => 9002,
             'identification_type' => '2',
             'identification_number' => 'mvas-contact-9002',
@@ -41,7 +39,6 @@ class MvasMigratedContactPortalReadyTest extends TestCase
 
         $this->assertSame(1, $activated);
         $this->assertTrue($inactive->fresh()->is_active);
-        $this->assertFalse($banned->fresh()->is_active);
-        $this->assertTrue($banned->fresh()->is_banned);
+        $this->assertTrue($alreadyActive->fresh()->is_active);
     }
 }

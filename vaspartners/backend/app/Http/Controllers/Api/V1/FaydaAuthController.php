@@ -59,8 +59,8 @@ class FaydaAuthController extends Controller
         }
 
         $contact = $info['contact'];
-        if ($contact->is_banned || ! $contact->is_active) {
-            return redirect()->away($frontend.'?error=banned');
+        if (! $contact->is_active) {
+            return redirect()->away($frontend.'?error=inactive');
         }
 
         $membership = app(CompanyMembershipService::class);

@@ -20,6 +20,7 @@ use App\Services\SmsService;
 use App\Support\PhoneNumber;
 use App\Support\TinNumber;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\EditAction;
@@ -361,116 +362,118 @@ class CompanyResource extends Resource
             ])
             ->recordActions([
                 ViewAction::make(),
-                EditAction::make(),
-                Action::make('force_purge')
-                    ->label('Delete permanently')
-                    ->icon('heroicon-o-trash')
-                    ->color('danger')
-                    ->visible(fn (Company $record): bool => app(CompanyPurgeService::class)->canForcePurge($record))
-                    ->requiresConfirmation()
-                    ->modalHeading('Permanently delete company?')
-                    ->modalDescription('This permanently deletes the company, its memberships, subscriptions, service requests, attachments, and contacts that belong only to this company. Cannot be undone. Companies with an owner, approved valid TIN, and at least one subscription cannot be deleted.')
-                    ->action(function (Company $record, CompanyPurgeService $purge): void {
-                        try {
-                            $stats = $purge->forcePurge($record);
-                            Notification::make()
-                                ->title('Company permanently deleted')
-                                ->body(sprintf(
-                                    'Removed %d contact(s), %d subscription(s), %d ticket(s), %d document(s).',
-                                    $stats['contacts'],
-                                    $stats['subscriptions'],
-                                    $stats['tickets'],
-                                    $stats['documents'],
-                                ))
-                                ->success()
-                                ->send();
-                        } catch (Throwable $e) {
-                            report($e);
-                            Notification::make()
-                                ->title('Could not delete company')
-                                ->body($e->getMessage())
-                                ->danger()
-                                ->send();
-                        }
-                    }),
-                Action::make('send_sms')
-                    ->label('Send SMS')
-                    ->icon('heroicon-o-chat-bubble-left-ellipsis')
-                    ->color('primary')
-                    ->visible(fn (Company $record): bool => (bool) auth()->user()?->canSendCompanySms()
-                        && filled($record->phone))
-                    ->form([
-                        Textarea::make('message')
-                            ->label('SMS message')
-                            ->required()
-                            ->rows(5)
-                            ->maxLength(640)
-                            ->helperText('Event / ad-hoc SMS to this company phone. Max 640 characters.'),
-                    ])
-                    ->requiresConfirmation()
-                    ->modalHeading(fn (Company $record): string => 'Send SMS to '.$record->name)
-                    ->action(function (Company $record, array $data, SmsService $sms): void {
-                        static::dispatchCompanySms($record, (string) $data['message'], $sms);
-                    }),
-                Action::make('validate_tin')
-                    ->label('Approve TIN NUMBER')
-                    ->icon('heroicon-o-identification')
-                    ->color('success')
-                    ->visible(fn (Company $record): bool => filled($record->tin) && ! $record->tin_validated)
-                    ->requiresConfirmation()
-                    ->modalHeading(fn (Company $record): string => 'Approve TIN NUMBER '.$record->tin.'?')
-                    ->modalDescription('Confirm this Ethiopian TIN NUMBER was verified. Your name and the time are logged. Partners can submit service requests only after TIN NUMBER approval.')
-                    ->action(function (Company $record, CompanyMembershipService $membership): void {
-                        try {
-                            $membership->markTinValidated($record, auth()->user());
-                            Notification::make()->title('TIN NUMBER approved')->success()->send();
-                        } catch (ValidationException $e) {
-                            Notification::make()
-                                ->title('Could not approve TIN NUMBER')
-                                ->body(collect($e->errors())->flatten()->first() ?: $e->getMessage())
-                                ->danger()
-                                ->send();
-                        } catch (Throwable $e) {
-                            Notification::make()->title('Could not approve TIN NUMBER')->body($e->getMessage())->danger()->send();
-                        }
-                    }),
-                Action::make('approve')
-                    ->label('Approve')
-                    ->color('success')
-                    ->icon('heroicon-o-check-circle')
-                    ->visible(fn (Company $record): bool => ! $record->isApproved())
-                    ->form([
-                        Textarea::make('approval_note')->label('Note to partner (optional)'),
-                    ])
-                    ->requiresConfirmation()
-                    ->modalHeading('Approve company profile')
-                    ->modalDescription('Confirm all required company information is complete. The creating partner remains the owner.')
-                    ->action(function (Company $record, array $data, CompanyMembershipService $membership): void {
-                        try {
-                            $membership->approveCompany($record, auth()->user(), $data['approval_note'] ?? null);
-                            Notification::make()->title('Company approved')->success()->send();
-                        } catch (Throwable $e) {
-                            Notification::make()->title('Could not approve')->body($e->getMessage())->danger()->send();
-                        }
-                    }),
-                Action::make('reject')
-                    ->label('Reject')
-                    ->color('danger')
-                    ->icon('heroicon-o-x-circle')
-                    ->visible(fn (Company $record): bool => ! $record->isApproved()
-                        && ($record->approval_status !== CompanyApprovalStatus::Rejected))
-                    ->form([
-                        Textarea::make('approval_note')->label('What is missing / needs correction')->required(),
-                    ])
-                    ->requiresConfirmation()
-                    ->action(function (Company $record, array $data, CompanyMembershipService $membership): void {
-                        try {
-                            $membership->rejectCompany($record, auth()->user(), $data['approval_note'] ?? null);
-                            Notification::make()->title('Company rejected')->warning()->send();
-                        } catch (Throwable $e) {
-                            Notification::make()->title('Could not reject')->body($e->getMessage())->danger()->send();
-                        }
-                    }),
+                ActionGroup::make([
+                    EditAction::make(),
+                    Action::make('validate_tin')
+                        ->label('Approve TIN NUMBER')
+                        ->icon('heroicon-o-identification')
+                        ->color('success')
+                        ->visible(fn (Company $record): bool => filled($record->tin) && ! $record->tin_validated)
+                        ->requiresConfirmation()
+                        ->modalHeading(fn (Company $record): string => 'Approve TIN NUMBER '.$record->tin.'?')
+                        ->modalDescription('Confirm this Ethiopian TIN NUMBER was verified. Your name and the time are logged. Partners can submit service requests only after TIN NUMBER approval.')
+                        ->action(function (Company $record, CompanyMembershipService $membership): void {
+                            try {
+                                $membership->markTinValidated($record, auth()->user());
+                                Notification::make()->title('TIN NUMBER approved')->success()->send();
+                            } catch (ValidationException $e) {
+                                Notification::make()
+                                    ->title('Could not approve TIN NUMBER')
+                                    ->body(collect($e->errors())->flatten()->first() ?: $e->getMessage())
+                                    ->danger()
+                                    ->send();
+                            } catch (Throwable $e) {
+                                Notification::make()->title('Could not approve TIN NUMBER')->body($e->getMessage())->danger()->send();
+                            }
+                        }),
+                    Action::make('approve')
+                        ->label('Approve')
+                        ->color('success')
+                        ->icon('heroicon-o-check-circle')
+                        ->visible(fn (Company $record): bool => ! $record->isApproved())
+                        ->form([
+                            Textarea::make('approval_note')->label('Note to partner (optional)'),
+                        ])
+                        ->requiresConfirmation()
+                        ->modalHeading('Approve company profile')
+                        ->modalDescription('Confirm all required company information is complete. The creating partner remains the owner.')
+                        ->action(function (Company $record, array $data, CompanyMembershipService $membership): void {
+                            try {
+                                $membership->approveCompany($record, auth()->user(), $data['approval_note'] ?? null);
+                                Notification::make()->title('Company approved')->success()->send();
+                            } catch (Throwable $e) {
+                                Notification::make()->title('Could not approve')->body($e->getMessage())->danger()->send();
+                            }
+                        }),
+                    Action::make('reject')
+                        ->label('Reject')
+                        ->color('danger')
+                        ->icon('heroicon-o-x-circle')
+                        ->visible(fn (Company $record): bool => ! $record->isApproved()
+                            && ($record->approval_status !== CompanyApprovalStatus::Rejected))
+                        ->form([
+                            Textarea::make('approval_note')->label('What is missing / needs correction')->required(),
+                        ])
+                        ->requiresConfirmation()
+                        ->action(function (Company $record, array $data, CompanyMembershipService $membership): void {
+                            try {
+                                $membership->rejectCompany($record, auth()->user(), $data['approval_note'] ?? null);
+                                Notification::make()->title('Company rejected')->warning()->send();
+                            } catch (Throwable $e) {
+                                Notification::make()->title('Could not reject')->body($e->getMessage())->danger()->send();
+                            }
+                        }),
+                    Action::make('send_sms')
+                        ->label('Send SMS')
+                        ->icon('heroicon-o-chat-bubble-left-ellipsis')
+                        ->color('primary')
+                        ->visible(fn (Company $record): bool => (bool) auth()->user()?->canSendCompanySms()
+                            && filled($record->phone))
+                        ->form([
+                            Textarea::make('message')
+                                ->label('SMS message')
+                                ->required()
+                                ->rows(5)
+                                ->maxLength(640)
+                                ->helperText('Event / ad-hoc SMS to this company phone. Max 640 characters.'),
+                        ])
+                        ->requiresConfirmation()
+                        ->modalHeading(fn (Company $record): string => 'Send SMS to '.$record->name)
+                        ->action(function (Company $record, array $data, SmsService $sms): void {
+                            static::dispatchCompanySms($record, (string) $data['message'], $sms);
+                        }),
+                    Action::make('force_purge')
+                        ->label('Delete permanently')
+                        ->icon('heroicon-o-trash')
+                        ->color('danger')
+                        ->visible(fn (Company $record): bool => app(CompanyPurgeService::class)->canForcePurge($record))
+                        ->requiresConfirmation()
+                        ->modalHeading('Permanently delete company?')
+                        ->modalDescription('This permanently deletes the company, its memberships, subscriptions, service requests, attachments, and contacts that belong only to this company. Cannot be undone. Companies with an owner, approved valid TIN, and at least one subscription cannot be deleted.')
+                        ->action(function (Company $record, CompanyPurgeService $purge): void {
+                            try {
+                                $stats = $purge->forcePurge($record);
+                                Notification::make()
+                                    ->title('Company permanently deleted')
+                                    ->body(sprintf(
+                                        'Removed %d contact(s), %d subscription(s), %d ticket(s), %d document(s).',
+                                        $stats['contacts'],
+                                        $stats['subscriptions'],
+                                        $stats['tickets'],
+                                        $stats['documents'],
+                                    ))
+                                    ->success()
+                                    ->send();
+                            } catch (Throwable $e) {
+                                report($e);
+                                Notification::make()
+                                    ->title('Could not delete company')
+                                    ->body($e->getMessage())
+                                    ->danger()
+                                    ->send();
+                            }
+                        }),
+                ]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

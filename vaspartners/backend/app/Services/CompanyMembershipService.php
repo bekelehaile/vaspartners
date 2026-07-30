@@ -1415,9 +1415,9 @@ class CompanyMembershipService
                 ]);
             }
 
-            if ($contact?->is_banned) {
+            if ($contact && ! $contact->is_active) {
                 throw ValidationException::withMessages([
-                    'phone_number' => 'This partner is banned and cannot be added.',
+                    'phone_number' => 'This partner is inactive and cannot be added.',
                 ]);
             }
 
@@ -1440,7 +1440,6 @@ class CompanyMembershipService
                 ]);
                 $contact->forceFill([
                     'is_active' => true,
-                    'is_banned' => false,
                     'current_company_id' => null,
                     'profile_completed_at' => null,
                 ])->save();
@@ -1684,9 +1683,9 @@ class CompanyMembershipService
             ]);
         }
 
-        if (! $contact->is_active || $contact->is_banned) {
+        if (! $contact->is_active) {
             throw ValidationException::withMessages([
-                'owner' => 'Cannot assign an inactive or banned partner as owner.',
+                'owner' => 'Cannot assign an inactive partner as owner.',
             ]);
         }
 

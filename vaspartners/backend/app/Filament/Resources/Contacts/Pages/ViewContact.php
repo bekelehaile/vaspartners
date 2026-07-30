@@ -30,19 +30,6 @@ class ViewContact extends ViewRecord
                         ->success()
                         ->send();
                 }),
-            Action::make('toggle_banned')
-                ->label(fn (Contact $record): string => $record->is_banned ? 'Unban' : 'Ban')
-                ->icon(fn (Contact $record): string => $record->is_banned ? 'heroicon-o-lock-open' : 'heroicon-o-no-symbol')
-                ->color(fn (Contact $record): string => $record->is_banned ? 'success' : 'danger')
-                ->requiresConfirmation()
-                ->action(function (Contact $record): void {
-                    $record->updateFromAdmin(['is_banned' => ! $record->is_banned]);
-
-                    Notification::make()
-                        ->title($record->is_banned ? 'Contact banned' : 'Contact unbanned')
-                        ->success()
-                        ->send();
-                }),
         ];
     }
 }

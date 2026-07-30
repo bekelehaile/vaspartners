@@ -22,7 +22,7 @@ final class MvasDumpPartnerReader
      *   email: string,
      *   mobile: ?string,
      *   phone: string,
-     *   is_banned: bool,
+     *   is_banned: bool, // legacy dump flag; mapped to skip (portal uses is_active only)
      *   is_verified_partner: bool,
      *   is_active: bool,
      *   deleted_at: ?string,

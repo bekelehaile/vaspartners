@@ -373,7 +373,6 @@ function ConsentCard({
         id="login-identity"
         showHeading={false}
         description={null}
-        showVerificationMeta={false}
         person={{
           name: proposal.name,
           phone_number: proposal.phone,

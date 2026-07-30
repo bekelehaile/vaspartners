@@ -126,7 +126,6 @@ class ViewCompany extends ViewRecord
 
                                 return Contact::query()
                                     ->where('is_active', true)
-                                    ->where('is_banned', false)
                                     ->where(function ($q) use ($term) {
                                         $q->where('name', 'ilike', $term)
                                             ->orWhere('phone_number', 'ilike', $term)

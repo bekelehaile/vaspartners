@@ -14,7 +14,7 @@ return new class extends Migration
             $table->string('company_phone', 32)->nullable()->after('company_tin');
             $table->string('company_email')->nullable()->after('company_phone');
             $table->text('company_address')->nullable()->after('company_email');
-            $table->timestamp('profile_completed_at')->nullable()->after('is_banned');
+            $table->timestamp('profile_completed_at')->nullable()->after('is_active');
         });
     }
 

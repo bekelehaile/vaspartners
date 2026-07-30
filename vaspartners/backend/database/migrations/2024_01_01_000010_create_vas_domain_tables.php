@@ -32,7 +32,6 @@ return new class extends Migration
             $table->longText('picture')->nullable();
             $table->json('address')->nullable();
             $table->boolean('is_active')->default(true);
-            $table->boolean('is_banned')->default(false);
             $table->timestamps();
             $table->softDeletes();
         });

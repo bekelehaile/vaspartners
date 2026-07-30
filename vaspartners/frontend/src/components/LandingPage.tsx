@@ -41,7 +41,7 @@ function LandingInner() {
               <p className="alert" style={{ marginBottom: "1rem", maxWidth: "28rem" }}>
                 {authError === "company_inactive"
                   ? "Your company has been deactivated. Portal sign-in is disabled. Contact Ethio telecom."
-                  : authError === "banned"
+                  : authError === "inactive" || authError === "banned"
                     ? "This account is not allowed to sign in."
                     : `Sign-in failed (${authError}). Please try again${authConfig?.phone_otp_enabled ? " or use phone OTP" : ""}.`}
               </p>

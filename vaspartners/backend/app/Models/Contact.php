@@ -52,7 +52,6 @@ class Contact extends Authenticatable
         'current_company_id',
         'legacy_mvas_id',
         'is_active',
-        'is_banned',
         'profile_completed_at',
     ];
 
@@ -75,7 +74,6 @@ class Contact extends Authenticatable
             'address' => 'array',
             'birthdate' => 'date',
             'is_active' => 'boolean',
-            'is_banned' => 'boolean',
             'fayda_verified' => 'boolean',
             'identity_verified_at' => 'datetime',
             'crm_identity_snapshot' => 'array',
@@ -249,7 +247,6 @@ class Contact extends Authenticatable
         $allowed = [
             ...self::FAYDA_ATTRIBUTES,
             'is_active',
-            'is_banned',
             'legacy_mvas_id',
             'company_name',
             'company_tin',

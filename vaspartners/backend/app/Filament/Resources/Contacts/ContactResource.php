@@ -122,9 +122,6 @@ class ContactResource extends Resource
                     Toggle::make('is_active')
                         ->label('Active')
                         ->helperText('Inactive contacts cannot use the partner portal.'),
-                    Toggle::make('is_banned')
-                        ->label('Banned')
-                        ->helperText('Banned contacts are blocked from signing in.'),
                     TextInput::make('legacy_mvas_id')
                         ->label('Legacy MVAS ID')
                         ->maxLength(64),
@@ -182,9 +179,8 @@ class ContactResource extends Resource
                 ])->columns(2),
             Section::make('Status')->schema([
                 TextEntry::make('is_active')->badge(),
-                TextEntry::make('is_banned')->badge(),
                 TextEntry::make('created_at')->dateTime(),
-            ])->columns(3),
+            ])->columns(2),
         ]);
     }
 
@@ -231,10 +227,6 @@ class ContactResource extends Resource
                 ToggleColumn::make('is_active')
                     ->label('Active')
                     ->onColor('success')
-                    ->offColor('gray'),
-                ToggleColumn::make('is_banned')
-                    ->label('Banned')
-                    ->onColor('danger')
                     ->offColor('gray'),
                 TextColumn::make('legacy_mvas_id')
                     ->label('Legacy ID')
@@ -315,12 +307,6 @@ class ContactResource extends Resource
                     ->placeholder('Any')
                     ->trueLabel('Active')
                     ->falseLabel('Inactive'),
-                TernaryFilter::make('is_banned')
-                    ->label('Banned')
-                    ->boolean()
-                    ->placeholder('Any')
-                    ->trueLabel('Banned')
-                    ->falseLabel('Not banned'),
                 TernaryFilter::make('has_membership')
                     ->label('Has membership')
                     ->placeholder('Any')

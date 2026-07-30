@@ -14,7 +14,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('contacts', function (Blueprint $table): void {
-            $table->boolean('fayda_verified')->default(false)->after('is_banned');
+            $table->boolean('fayda_verified')->default(false)->after('is_active');
         });
 
         // Backfill: real Fayda subjects (not invite / MVAS / phone-OTP placeholders).

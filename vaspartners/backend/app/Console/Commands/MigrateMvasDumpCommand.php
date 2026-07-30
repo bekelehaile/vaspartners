@@ -141,7 +141,6 @@ class MigrateMvasDumpCommand extends Command
         if (! $dryRun) {
             $blocked = Contact::query()
                 ->whereNotNull('legacy_mvas_id')
-                ->where('is_banned', false)
                 ->where('is_active', false)
                 ->count();
             if ($blocked > 0) {
@@ -149,7 +148,7 @@ class MigrateMvasDumpCommand extends Command
 
                 return self::FAILURE;
             }
-            $this->info('Portal login check: all non-banned migrated contacts are active.');
+            $this->info('Portal login check: all migrated contacts are active.');
         }
 
         $this->line('Repeat anytime:');

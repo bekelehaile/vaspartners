@@ -130,6 +130,7 @@ class MvasDumpMigrationService
                     continue;
                 }
                 if ($partner['is_banned']) {
+                    // Legacy MVAS ban → skip; portal uses is_active only (no ban column).
                     continue;
                 }
                 if ($onlyVerified && ! $partner['is_verified_partner']) {
@@ -320,7 +321,8 @@ class MvasDumpMigrationService
         }
 
         // Old MVAS clients.is_active defaults to 0; portal OTP/Fayda require is_active.
-        // Always re-enable non-banned migrated contacts (idempotent re-runs + legacy imports).
+        // Always re-enable migrated contacts (idempotent re-runs + legacy imports).
+        // Banned MVAS clients are never imported (skipped above).
         $stats['contacts']['portal_activated'] = (int) ($stats['contacts']['portal_activated'] ?? 0)
             + $this->ensureMigratedContactsPortalReady($dryRun);
 
@@ -331,14 +333,13 @@ class MvasDumpMigrationService
 
     /**
      * Guarantee migrated partners can pass portal sign-in checks (is_active).
-     * Banned contacts stay blocked. Admin "deactivate" is not durable across migrate —
-     * use Ban for permanent portal blocks.
+     * Banned legacy clients are never imported. Re-runs re-enable inactive migrated contacts
+     * (old MVAS is_active defaults were unreliable).
      */
     public function ensureMigratedContactsPortalReady(bool $dryRun = false): int
     {
         $query = Contact::query()
             ->whereNotNull('legacy_mvas_id')
-            ->where('is_banned', false)
             ->where('is_active', false);
 
         if ($dryRun) {
@@ -486,11 +487,10 @@ class MvasDumpMigrationService
         // No company_* / membership yet — Fayda login claims matching company by phone
         // (or admin assigns orphan companies after verification).
         // Old MVAS `clients.is_active` defaults to 0 and is rarely flipped; verified
-        // partners still signed in there. Portal OTP/Fayda require is_active — always
-        // enable non-banned migrated contacts (banned clients are skipped above).
+        // partners still signed in there. Portal requires is_active — always enable
+        // migrated contacts (banned clients are skipped above).
         $contact->forceFill([
             'is_active' => true,
-            'is_banned' => (bool) $partner['is_banned'],
             'company_name' => null,
             'company_tin' => null,
             'company_phone' => null,
@@ -520,7 +520,6 @@ class MvasDumpMigrationService
     {
         $updated = Contact::query()
             ->whereKey($contactId)
-            ->where('is_banned', false)
             ->where('is_active', false)
             ->update(['is_active' => true]);
 

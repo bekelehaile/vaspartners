@@ -19,20 +19,6 @@ function permissionLabel(
   return catalog.find((p) => p.key === key)?.label ?? key.replaceAll("_", " ");
 }
 
-function memberIdentityLabel(member: CompanyMemberOption): string {
-  if (member.awaiting_fayda) {
-    return "Awaiting sign-in";
-  }
-  const via =
-    member.identity_verified_via ?? (member.fayda_verified ? "fayda" : null);
-  if (member.identity_verified || via) {
-    if (via === "crm") return "CRM";
-    if (via === "fayda") return "Fayda";
-    return "Verified";
-  }
-  return "—";
-}
-
 function memberIdentityApproved(member: CompanyMemberOption): boolean {
   if (member.awaiting_fayda) {
     return false;
@@ -40,6 +26,16 @@ function memberIdentityApproved(member: CompanyMemberOption): boolean {
   return Boolean(
     member.identity_verified || member.identity_verified_via || member.fayda_verified,
   );
+}
+
+function memberIdentityLabel(member: CompanyMemberOption): string {
+  if (member.awaiting_fayda) {
+    return "Awaiting sign-in";
+  }
+  if (memberIdentityApproved(member)) {
+    return "Verified";
+  }
+  return "—";
 }
 
 function PermissionsEditor({
@@ -652,7 +648,7 @@ export function CompanyMembersTable({ enabled }: { enabled: boolean }) {
                 <th>Email</th>
                 <th>Role</th>
                 <th>Access</th>
-                <th>Verified via</th>
+                <th>Identity</th>
                 <th>Permissions</th>
                 <th></th>
               </tr>

@@ -173,6 +173,8 @@ class EsignetService
 
         $contact ??= new Contact;
 
+        $isNew = ! $contact->exists;
+
         $contact->syncFromFayda([
             'sub' => $sub,
             'name' => $payload['name'] ?? $contact->name ?? 'Contact',
@@ -187,9 +189,12 @@ class EsignetService
             'address' => $payload['address'] ?? $contact->address,
         ]);
 
-        $contact->forceFill([
-            'is_active' => true,
-        ])->save();
+        // New contacts start active; existing inactive contacts stay blocked (is_active is the only gate).
+        if ($isNew) {
+            $contact->forceFill(['is_active' => true])->save();
+        } else {
+            $contact->save();
+        }
         $contact->markIdentityVerified(\App\Enums\IdentityVerifiedVia::Fayda);
 
         $membership = app(CompanyMembershipService::class);
