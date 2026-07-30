@@ -250,8 +250,28 @@ class TicketResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn (Builder $query) => $query->with([
+                'subscription.company',
+                'contact.company',
+            ]))
             ->columns([
                 TextColumn::make('tt_number')->label('Request number')->searchable()->sortable(),
+                TextColumn::make('company_name')
+                    ->label('Company')
+                    ->placeholder('—')
+                    ->toggleable()
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        $like = '%'.$search.'%';
+
+                        return $query->where(function (Builder $q) use ($like): void {
+                            $q->whereHas('subscription.company', fn (Builder $c) => $c->where('name', 'like', $like))
+                                ->orWhereHas('contact.company', fn (Builder $c) => $c->where('name', 'like', $like))
+                                ->orWhereHas('contact', fn (Builder $c) => $c->where('company_name', 'like', $like));
+                        });
+                    })
+                    ->state(fn (Ticket $record): ?string => $record->subscription?->company?->name
+                        ?? $record->contact?->company?->name
+                        ?? $record->contact?->company_name),
                 TextColumn::make('contact.name')->label('Contact')->toggleable(),
                 TextColumn::make('contact.phone_number')->label('Phone')->toggleable(),
                 TextColumn::make('service.name')->sortable(),

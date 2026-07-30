@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\AppSetting;
 use App\Services\CompanyMembershipService;
+use App\Services\ContactIdentityService;
 use App\Services\PortalPhoneOtpService;
 use App\Support\PortalProfileOptions;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 use Throwable;
 
@@ -22,6 +24,7 @@ class PortalAuthController extends Controller
                 'genders' => PortalProfileOptions::GENDERS,
                 'nationalities' => PortalProfileOptions::nationalities(),
                 'default_nationality' => PortalProfileOptions::DEFAULT_NATIONALITY,
+                'crm_identity_enabled' => (bool) config('services.crm.enabled', true),
             ],
         ]);
     }
@@ -88,7 +91,72 @@ class PortalAuthController extends Controller
                 'token' => $result['token'],
                 'is_new' => $result['is_new'],
                 'expires_in' => $result['expires_in'],
+                'identity' => $result['identity'],
                 'contact' => $membership->serializeContact($result['contact']),
+            ],
+        ]);
+    }
+
+    /**
+     * Accept or decline CRM identity proposal after OTP (or refresh pending proposal).
+     */
+    public function identityConsent(
+        Request $request,
+        ContactIdentityService $identity,
+        CompanyMembershipService $membership,
+    ) {
+        $data = $request->validate([
+            'action' => ['required', 'string', 'in:accept,decline,refresh'],
+            'name' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        /** @var \App\Models\Contact $contact */
+        $contact = $request->user();
+
+        try {
+            if ($data['action'] === 'accept') {
+                $contact = $identity->acceptCrmConsent($contact);
+            } elseif ($data['action'] === 'decline') {
+                $identity->declineCrmConsent($contact);
+                if (filled($data['name'] ?? null)) {
+                    $contact = $identity->updateManualName($contact, (string) $data['name']);
+                }
+            } else {
+                $resolved = $identity->resolveAfterAuth($contact);
+
+                return response()->json([
+                    'message' => 'Identity status refreshed.',
+                    'data' => [
+                        'identity' => $resolved,
+                        'contact' => $membership->serializeContact($contact->fresh(['company', 'memberships.company']) ?? $contact),
+                    ],
+                ]);
+            }
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => 'Unable to update identity. Please try again.'], 500);
+        }
+
+        $contact = $contact->fresh(['company', 'memberships.company']) ?? $contact;
+        $pending = $identity->pendingProposal($contact);
+
+        return response()->json([
+            'message' => $data['action'] === 'accept'
+                ? 'Identity verified with Ethio telecom CRM.'
+                : 'CRM identity declined.',
+            'data' => [
+                'identity' => [
+                    'needs_consent' => false,
+                    'needs_manual_name' => $data['action'] === 'decline'
+                        && blank(trim((string) $contact->name)),
+                    'crm_available' => (bool) config('services.crm.enabled', true),
+                    'proposal' => $pending,
+                    'verified_via' => $contact->identity_verified_via,
+                ],
+                'contact' => $membership->serializeContact($contact),
             ],
         ]);
     }

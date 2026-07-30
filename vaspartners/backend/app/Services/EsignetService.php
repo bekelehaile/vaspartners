@@ -189,8 +189,8 @@ class EsignetService
 
         $contact->forceFill([
             'is_active' => true,
-            'fayda_verified' => true,
         ])->save();
+        $contact->markIdentityVerified(\App\Enums\IdentityVerifiedVia::Fayda);
 
         $membership = app(CompanyMembershipService::class);
 

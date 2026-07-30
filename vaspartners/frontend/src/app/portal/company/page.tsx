@@ -291,17 +291,21 @@ export default function CompanyProfilePage() {
                     id="fayda-identity"
                     showHeading={false}
                     description={
-                      me?.fayda_verified
-                        ? "Verified via Fayda (National ID)."
-                        : "Not yet verified via Fayda — phone OTP sign-in only so far."
+                      me?.identity_verified_via === "crm"
+                        ? "Verified via Ethio telecom CRM."
+                        : me?.fayda_verified || me?.identity_verified_via === "fayda"
+                          ? "Verified via Fayda (National ID)."
+                          : "Not yet verified via Fayda or CRM — phone OTP sign-in only so far."
                     }
                     person={me ?? {}}
                     badge={
                       <>
-                        {me?.fayda_verified ? (
+                        {me?.identity_verified_via === "crm" ? (
+                          <span className="service-meta">CRM verified</span>
+                        ) : me?.fayda_verified || me?.identity_verified_via === "fayda" ? (
                           <span className="service-meta">Fayda verified</span>
                         ) : (
-                          <span className="service-meta">Not Fayda-verified</span>
+                          <span className="service-meta">Identity unverified</span>
                         )}
                         {me?.company_role === "owner" ? (
                           <span className="service-meta">Owner</span>

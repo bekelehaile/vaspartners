@@ -140,16 +140,29 @@ class ContactResource extends Resource
     public static function infolist(Schema $schema): Schema
     {
         return $schema->components([
-            Section::make('Fayda identity')
-                ->description('Partner identity fields. “Verified via Fayda” is set only when they sign in with National ID — not editable by admin.')
+            Section::make('Identity')
+                ->description('Personal KYC via Fayda (National ID) or Ethio telecom CRM. Sticky once verified — not editable by admin.')
                 ->schema([
                     TextEntry::make('public_id'),
-                    TextEntry::make('sub')->label('Fayda sub'),
+                    TextEntry::make('sub')->label('SSO / placeholder sub'),
+                    TextEntry::make('identity_verified_via')
+                        ->label('Verified via')
+                        ->badge()
+                        ->formatStateUsing(fn ($state): string => match ((string) $state) {
+                            'fayda' => 'Fayda',
+                            'crm' => 'CRM',
+                            default => 'Unverified',
+                        })
+                        ->color(fn ($state): string => match ((string) $state) {
+                            'fayda', 'crm' => 'success',
+                            default => 'warning',
+                        }),
+                    TextEntry::make('identity_verified_at')->label('Verified at')->dateTime()->placeholder('—'),
                     TextEntry::make('fayda_verified')
-                        ->label('Verified via Fayda')
+                        ->label('Fayda flag')
                         ->badge()
                         ->formatStateUsing(fn ($state): string => $state ? 'Yes' : 'No')
-                        ->color(fn ($state): string => $state ? 'success' : 'warning'),
+                        ->color(fn ($state): string => $state ? 'success' : 'gray'),
                     TextEntry::make('name'),
                     TextEntry::make('phone_number'),
                     TextEntry::make('email'),
@@ -222,6 +235,18 @@ class ContactResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
                 IconColumn::make('profile_completed')->boolean()->label('Company OK'),
                 IconColumn::make('fayda_verified')->boolean()->label('Fayda'),
+                TextColumn::make('identity_verified_via')
+                    ->label('KYC')
+                    ->badge()
+                    ->formatStateUsing(fn ($state): string => match ((string) $state) {
+                        'fayda' => 'Fayda',
+                        'crm' => 'CRM',
+                        default => '—',
+                    })
+                    ->color(fn ($state): string => match ((string) $state) {
+                        'fayda', 'crm' => 'success',
+                        default => 'gray',
+                    }),
                 ToggleColumn::make('is_active')
                     ->label('Active')
                     ->onColor('success')

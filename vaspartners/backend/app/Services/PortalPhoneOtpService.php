@@ -104,7 +104,13 @@ class PortalPhoneOtpService
      * Verify OTP and return an authenticated contact (creates profile on first sign-in).
      *
      * @param  array{name?: ?string, email?: ?string, gender?: ?string, nationality?: ?string}|null  $profile
-     * @return array{contact: Contact, token: string, is_new: bool}
+     * @return array{
+     *   contact: Contact,
+     *   token: string,
+     *   is_new: bool,
+     *   expires_in: int,
+     *   identity: array<string, mixed>
+     * }
      */
     public function verify(string $rawPhone, string $code, ?array $profile = null): array
     {
@@ -171,13 +177,15 @@ class PortalPhoneOtpService
             );
         }
 
+        $identity = app(ContactIdentityService::class)->resolveAfterAuth($contact);
         $token = PortalAccessToken::issue($contact, PortalAccessToken::NAME_OTP);
 
         return [
-            'contact' => $contact,
+            'contact' => $contact->fresh(['company', 'memberships.company']) ?? $contact,
             'token' => $token,
             'is_new' => $result['is_new'],
             'expires_in' => PortalAccessToken::ttlMinutes() * 60,
+            'identity' => $identity,
         ];
     }
 
@@ -193,21 +201,22 @@ class PortalPhoneOtpService
             return ['contact' => $contact, 'is_new' => false];
         }
 
+        // Prefer CRM consent after verify. Optional name from the form is a fallback only.
         $displayName = trim((string) ($profile['name'] ?? ''));
-        if ($displayName === '') {
-            throw new RuntimeException('Please enter your full name to create your profile.');
-        }
-        if (mb_strlen($displayName) < 2 || mb_strlen($displayName) > 120) {
+        if ($displayName !== '' && (mb_strlen($displayName) < 2 || mb_strlen($displayName) > 120)) {
             throw new RuntimeException('Name must be between 2 and 120 characters.');
+        }
+        if ($displayName === '') {
+            $displayName = 'Partner';
         }
 
         $email = EmailAddress::normalize($profile['email'] ?? null);
-        if (! $email || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        if ($email && ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
             throw new RuntimeException('Please enter a valid email address.');
         }
 
         $gender = trim((string) ($profile['gender'] ?? ''));
-        if (! PortalProfileOptions::isValidGender($gender)) {
+        if ($gender !== '' && ! PortalProfileOptions::isValidGender($gender)) {
             throw new RuntimeException('Please select gender (Male or Female).');
         }
 
@@ -226,7 +235,7 @@ class PortalPhoneOtpService
             'name' => $displayName,
             'phone_number' => $phone,
             'email' => $email,
-            'gender' => $gender,
+            'gender' => $gender !== '' ? $gender : null,
             'nationality' => $nationality,
             'identification_type' => '2',
             'identification_number' => $sub,

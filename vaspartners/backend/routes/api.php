@@ -30,6 +30,8 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('auth/me', [FaydaAuthController::class, 'me']);
         Route::post('auth/logout', [FaydaAuthController::class, 'logout']);
+        Route::post('auth/identity/consent', [PortalAuthController::class, 'identityConsent'])
+            ->middleware('throttle:portal-otp-verify');
         Route::post('profile/company', [ContactPortalController::class, 'completeCompanyProfile']);
         // TIN NUMBER submit — accept POST (portal) and PUT/PATCH for clients that use update verbs.
         Route::match(['post', 'put', 'patch'], 'profile/company/tin', [ContactPortalController::class, 'submitCompanyTin']);

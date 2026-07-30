@@ -79,7 +79,7 @@ class FaydaAuthController extends Controller
         ]));
     }
 
-    public function me(Request $request, CompanyMembershipService $membership)
+    public function me(Request $request, CompanyMembershipService $membership, \App\Services\ContactIdentityService $identity)
     {
         $contact = $request->user();
         if (! $membership->contactMayUsePortal($contact)) {
@@ -90,8 +90,22 @@ class FaydaAuthController extends Controller
             ], 403);
         }
 
+        // Unverified partners: (re)stage CRM consent when possible.
+        $identityState = null;
+        if (! $contact->isIdentityVerified()) {
+            $identityState = $identity->resolveAfterAuth($contact);
+            $contact = $contact->fresh(['company', 'memberships.company']) ?? $contact;
+        }
+
+        $payload = $membership->serializeContact($contact);
+        if ($identityState !== null) {
+            $payload['needs_identity_consent'] = (bool) ($identityState['needs_consent'] ?? false);
+            $payload['needs_manual_name'] = (bool) ($identityState['needs_manual_name'] ?? false);
+            $payload['identity_proposal'] = $identityState['proposal'] ?? null;
+        }
+
         return response()->json([
-            'data' => $membership->serializeContact($contact),
+            'data' => $payload,
         ]);
     }
 

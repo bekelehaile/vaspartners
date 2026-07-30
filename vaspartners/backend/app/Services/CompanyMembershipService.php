@@ -2219,6 +2219,21 @@ class CompanyMembershipService
         $data['company_needs_ownership_transfer'] = $isOwner && $membershipActive && (bool) $contact->current_company_id;
         $data['pending_membership_requests_count'] = $pendingMembershipCount;
         $data['profile_completed'] = $contact->profile_completed;
+        $data['fayda_verified'] = (bool) $contact->fayda_verified;
+        $data['identity_verified'] = $contact->isIdentityVerified();
+        $data['identity_verified_via'] = $contact->identity_verified_via
+            ?? ($contact->fayda_verified ? 'fayda' : null);
+        $data['identity_verified_at'] = optional($contact->identity_verified_at)?->toIso8601String();
+        $data['needs_identity_consent'] = false;
+        $data['needs_manual_name'] = false;
+        if (! $contact->isIdentityVerified()) {
+            $pending = app(\App\Services\ContactIdentityService::class)->pendingProposal($contact);
+            $data['needs_identity_consent'] = $pending !== null;
+            $data['identity_proposal'] = $pending;
+            $name = trim((string) $contact->name);
+            $data['needs_manual_name'] = $pending === null
+                && ($name === '' || strcasecmp($name, 'Partner') === 0);
+        }
         $data['memberships'] = $contact->memberships
             ->map(function (CompanyMembership $m) use ($contact) {
                 $c = $m->company;

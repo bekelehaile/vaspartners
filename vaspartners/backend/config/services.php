@@ -55,4 +55,23 @@ return [
     'sms_endpoint' => env('SMS_ENDPOINT', 'https://smsgw.ethiotelecom.et/bl/index.php?receiver='),
     'sms_country_code' => env('SMS_COUNTRY_CODE', '251'),
 
+    /*
+    | Ethio telecom NGBSS / IVR CRM (same stack as bill_complaint).
+    | Used to verify partner personal identity by MSISDN after OTP when Fayda is unavailable.
+    */
+    'crm' => [
+        'enabled' => filter_var(env('CRM_ENABLED', true), FILTER_VALIDATE_BOOL),
+        'query_endpoint' => env('CRM_QUERY_CUSTOMER_ENDPOINT')
+            ?: env('QUERY_CUSTOMER_ENDPOINT')
+            ?: (rtrim((string) env('CRM_API_BASE_URL', env('API_BASE_URL', '')), '/')
+                .(string) env('CRM_CUSTOMER_ENDPOINT', env('CUSTOMER_ENDPOINT', ''))),
+        'timeout' => (int) env('CRM_TIMEOUT', env('TIMEOUT', 15)),
+        'access_token' => [
+            'base_url' => env('CRM_ACCESS_TOKEN_BASE_URL', env('ACCESS_TOKEN_BASE_URL')),
+            'app_key' => env('CRM_ACCESS_TOKEN_APP_KEY', env('ACCESS_TOKEN_APP_KEY')),
+            'secret_key' => env('CRM_ACCESS_TOKEN_SECRET_KEY', env('ACCESS_TOKEN_SECRET_KEY')),
+            'timeout' => (int) env('CRM_TIMEOUT', env('TIMEOUT', 15)),
+        ],
+    ],
+
 ];

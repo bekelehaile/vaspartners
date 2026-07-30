@@ -11,15 +11,18 @@ import {
   faydaLoginUrl,
   requestPortalOtp,
   setToken,
+  submitIdentityConsent,
   verifyPortalOtp,
+  type IdentityConsentProposal,
+  type IdentityAuthState,
 } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 
-type Step = "phone" | "code";
+type Step = "phone" | "code" | "consent" | "manual_name";
 
-const FALLBACK_GENDERS = ["Male", "Female"];
-const FALLBACK_NATIONALITIES = ["Ethiopia"];
-const FALLBACK_DEFAULT_NATIONALITY = "Ethiopia";
+function nextAfterIdentity(contact: { profile_completed?: boolean }) {
+  return contact.profile_completed ? "/portal" : "/portal/company";
+}
 
 export function LoginPageView() {
   const router = useRouter();
@@ -30,23 +33,12 @@ export function LoginPageView() {
 
   const faydaOn = authConfig?.fayda_enabled ?? true;
   const otpOn = authConfig?.phone_otp_enabled ?? true;
-  const genders = authConfig?.genders?.length
-    ? authConfig.genders
-    : FALLBACK_GENDERS;
-  const nationalities = authConfig?.nationalities?.length
-    ? authConfig.nationalities
-    : FALLBACK_NATIONALITIES;
-  const defaultNationality =
-    authConfig?.default_nationality || FALLBACK_DEFAULT_NATIONALITY;
 
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [gender, setGender] = useState("");
-  const [nationality, setNationality] = useState(defaultNationality);
-  const [needsProfile, setNeedsProfile] = useState(false);
+  const [manualName, setManualName] = useState("");
+  const [proposal, setProposal] = useState<IdentityConsentProposal | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -57,7 +49,61 @@ export function LoginPageView() {
     return "Sign in with Fayda";
   }, [otpOn, faydaOn]);
 
-  if (me) {
+  function applyIdentityGate(identity: IdentityAuthState, contact: { profile_completed?: boolean }) {
+    if (identity.needs_consent && identity.proposal) {
+      setProposal(identity.proposal);
+      setStep("consent");
+      setInfo("Confirm your Ethio telecom CRM identity to continue.");
+      return;
+    }
+    if (identity.needs_manual_name) {
+      setStep("manual_name");
+      setInfo("We could not match this number in CRM. Enter your full name to continue.");
+      return;
+    }
+    router.replace(nextAfterIdentity(contact));
+  }
+
+  // Already signed in — finish identity if still needed.
+  if (me && step !== "consent" && step !== "manual_name") {
+    if (me.needs_identity_consent && me.identity_proposal) {
+      return (
+        <SiteShell me={me} onLogout={() => void logout()} landing>
+          <ConsentCard
+            proposal={me.identity_proposal}
+            busy={busy}
+            error={error}
+            onAccept={async () => {
+              setBusy(true);
+              setError(null);
+              try {
+                const res = await submitIdentityConsent({ action: "accept" });
+                queryClient.setQueryData(queryKeys.contact.me, res.data.contact);
+                router.replace(nextAfterIdentity(res.data.contact));
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "Unable to confirm identity.");
+              } finally {
+                setBusy(false);
+              }
+            }}
+            onDecline={async () => {
+              setBusy(true);
+              setError(null);
+              try {
+                await submitIdentityConsent({ action: "decline" });
+                setStep("manual_name");
+                setProposal(null);
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "Unable to decline.");
+              } finally {
+                setBusy(false);
+              }
+            }}
+          />
+        </SiteShell>
+      );
+    }
+
     return (
       <SiteShell me={me} onLogout={() => void logout()} landing>
         <section className="section login-page">
@@ -86,8 +132,6 @@ export function LoginPageView() {
     try {
       const res = await requestPortalOtp(phone);
       setPhone(res.data.phone);
-      setNeedsProfile(res.data.needs_name);
-      setNationality(defaultNationality);
       setStep("code");
       setInfo("We sent a 6-digit code by SMS. It expires in 5 minutes.");
     } catch (err) {
@@ -102,26 +146,60 @@ export function LoginPageView() {
     setError(null);
     setBusy(true);
     try {
-      const res = await verifyPortalOtp({
-        phone,
-        code,
-        ...(needsProfile
-          ? {
-              name,
-              email,
-              gender,
-              nationality: nationality || defaultNationality,
-            }
-          : {}),
-      });
+      const res = await verifyPortalOtp({ phone, code });
       setToken(res.data.token);
       queryClient.setQueryData(queryKeys.contact.me, res.data.contact);
-      const next = res.data.contact.profile_completed
-        ? "/portal"
-        : "/portal/company";
-      router.replace(next);
+      applyIdentityGate(res.data.identity, res.data.contact);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to verify code.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onAcceptConsent(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      const res = await submitIdentityConsent({ action: "accept" });
+      queryClient.setQueryData(queryKeys.contact.me, res.data.contact);
+      router.replace(nextAfterIdentity(res.data.contact));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to confirm identity.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onDeclineConsent() {
+    setError(null);
+    setBusy(true);
+    try {
+      await submitIdentityConsent({ action: "decline" });
+      setProposal(null);
+      setStep("manual_name");
+      setInfo("Enter your full name to continue. Company setup only needs name, TIN, and address.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to decline.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onManualName(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      const res = await submitIdentityConsent({
+        action: "decline",
+        name: manualName,
+      });
+      queryClient.setQueryData(queryKeys.contact.me, res.data.contact);
+      router.replace(nextAfterIdentity(res.data.contact));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save name.");
     } finally {
       setBusy(false);
     }
@@ -153,154 +231,195 @@ export function LoginPageView() {
             </p>
           )}
 
-          {otpOn && (
+          {otpOn && step === "phone" && (
             <div className="login-block">
-              {step === "phone" ? (
-                <form onSubmit={onRequestOtp} className="login-form">
-                  <label htmlFor="login-phone">Mobile number</label>
-                  <input
-                    id="login-phone"
-                    name="phone"
-                    type="tel"
-                    inputMode="tel"
-                    autoComplete="tel"
-                    placeholder="09xxxxxxxx"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    required
-                    disabled={busy}
-                  />
-                  <button type="submit" className="btn-hero" disabled={busy}>
-                    {busy ? "Sending…" : "Send verification code"}
-                  </button>
-                </form>
-              ) : (
-                <form onSubmit={onVerifyOtp} className="login-form">
-                  <p className="muted login-phone-hint">
-                    Code sent to <strong>{phone}</strong>{" "}
-                    <button
-                      type="button"
-                      className="linkish"
-                      onClick={() => {
-                        setStep("phone");
-                        setCode("");
-                        setInfo(null);
-                        setError(null);
-                      }}
-                      disabled={busy}
-                    >
-                      Change number
-                    </button>
-                  </p>
-                  {needsProfile && (
-                    <>
-                      <label htmlFor="login-name">Full name</label>
-                      <input
-                        id="login-name"
-                        name="name"
-                        type="text"
-                        autoComplete="name"
-                        placeholder="Your full name"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        required
-                        disabled={busy}
-                      />
-                      <label htmlFor="login-email">Email</label>
-                      <input
-                        id="login-email"
-                        name="email"
-                        type="email"
-                        autoComplete="email"
-                        placeholder="name@example.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
-                        disabled={busy}
-                      />
-                      <label htmlFor="login-gender">Gender</label>
-                      <select
-                        id="login-gender"
-                        name="gender"
-                        value={gender}
-                        onChange={(e) => setGender(e.target.value)}
-                        required
-                        disabled={busy}
-                      >
-                        <option value="" disabled>
-                          Select gender
-                        </option>
-                        {genders.map((g) => (
-                          <option key={g} value={g}>
-                            {g}
-                          </option>
-                        ))}
-                      </select>
-                      <label htmlFor="login-nationality">Nationality</label>
-                      <select
-                        id="login-nationality"
-                        name="nationality"
-                        value={nationality}
-                        onChange={(e) => setNationality(e.target.value)}
-                        required
-                        disabled={busy}
-                      >
-                        {nationalities.map((n) => (
-                          <option key={n} value={n}>
-                            {n}
-                          </option>
-                        ))}
-                      </select>
-                    </>
-                  )}
-                  <label htmlFor="login-code">Verification code</label>
-                  <input
-                    id="login-code"
-                    name="code"
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    placeholder="6-digit code"
-                    value={code}
-                    onChange={(e) =>
-                      setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
-                    }
-                    required
-                    maxLength={6}
-                    disabled={busy}
-                  />
-                  <button type="submit" className="btn-hero" disabled={busy}>
-                    {busy ? "Signing in…" : "Verify and continue"}
-                  </button>
-                </form>
-              )}
+              <form onSubmit={onRequestOtp} className="login-form">
+                <label htmlFor="login-phone">Mobile number</label>
+                <input
+                  id="login-phone"
+                  name="phone"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder="09xxxxxxxx"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  required
+                  disabled={busy}
+                />
+                <button type="submit" className="btn-hero" disabled={busy}>
+                  {busy ? "Sending…" : "Send verification code"}
+                </button>
+              </form>
             </div>
           )}
 
-          {otpOn && faydaOn && <div className="login-divider">or</div>}
-
-          {faydaOn && (
+          {otpOn && step === "code" && (
             <div className="login-block">
-              <a className="btn-hero-ghost login-fayda" href={faydaLoginUrl()}>
-                Continue with Fayda
+              <form onSubmit={onVerifyOtp} className="login-form">
+                <p className="muted login-phone-hint">
+                  Code sent to <strong>{phone}</strong>{" "}
+                  <button
+                    type="button"
+                    className="linkish"
+                    onClick={() => {
+                      setStep("phone");
+                      setCode("");
+                      setInfo(null);
+                      setError(null);
+                    }}
+                    disabled={busy}
+                  >
+                    Change number
+                  </button>
+                </p>
+                <label htmlFor="login-code">Verification code</label>
+                <input
+                  id="login-code"
+                  name="code"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="6-digit code"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  required
+                  minLength={6}
+                  maxLength={6}
+                  disabled={busy}
+                />
+                <button type="submit" className="btn-hero" disabled={busy || code.length !== 6}>
+                  {busy ? "Verifying…" : "Verify and continue"}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {otpOn && step === "consent" && proposal && (
+            <ConsentCard
+              proposal={proposal}
+              busy={busy}
+              error={null}
+              onAccept={() => void onAcceptConsent({ preventDefault() {} } as FormEvent)}
+              onDecline={() => void onDeclineConsent()}
+              asForm
+              onSubmit={onAcceptConsent}
+            />
+          )}
+
+          {otpOn && step === "manual_name" && (
+            <div className="login-block">
+              <form onSubmit={onManualName} className="login-form">
+                <label htmlFor="login-manual-name">Full name</label>
+                <input
+                  id="login-manual-name"
+                  name="name"
+                  type="text"
+                  autoComplete="name"
+                  placeholder="Your full name"
+                  value={manualName}
+                  onChange={(e) => setManualName(e.target.value)}
+                  required
+                  minLength={2}
+                  disabled={busy}
+                />
+                <button type="submit" className="btn-hero" disabled={busy}>
+                  {busy ? "Saving…" : "Continue"}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {faydaOn && step === "phone" && (
+            <div className="login-alt">
+              {otpOn ? <p className="muted">Or</p> : null}
+              <a className="btn-secondary" href={faydaLoginUrl()}>
+                Sign in with Fayda
               </a>
-              <p className="muted login-fayda-note">
-                National ID sign-in when Fayda / eSignet is available.
-              </p>
             </div>
           )}
-
-          {!otpOn && !faydaOn && (
-            <p className="alert">
-              Partner sign-in is temporarily unavailable. Please try again later.
-            </p>
-          )}
-
-          <p className="muted login-back">
-            <Link href="/">Back to home</Link>
-          </p>
         </div>
       </section>
     </SiteShell>
+  );
+}
+
+function ConsentCard({
+  proposal,
+  busy,
+  error,
+  onAccept,
+  onDecline,
+  asForm,
+  onSubmit,
+}: {
+  proposal: IdentityConsentProposal;
+  busy: boolean;
+  error: string | null;
+  onAccept: () => void;
+  onDecline: () => void;
+  asForm?: boolean;
+  onSubmit?: (e: FormEvent) => void;
+}) {
+  const body = (
+    <>
+      <h2 style={{ marginTop: 0 }}>Confirm your identity</h2>
+      <p className="muted">
+        We found this profile in Ethio telecom CRM for your mobile number.
+        Confirm to verify your identity (same trust path as Fayda). Next time you
+        sign in, we will not ask again.
+      </p>
+      {error && (
+        <p className="alert" role="alert">
+          {error}
+        </p>
+      )}
+      <dl className="fayda-dl" style={{ marginBottom: "1rem" }}>
+        <div>
+          <dt>Name</dt>
+          <dd>{proposal.name || "—"}</dd>
+        </div>
+        <div>
+          <dt>Phone</dt>
+          <dd>{proposal.phone || "—"}</dd>
+        </div>
+        {proposal.primary_offer_name ? (
+          <div>
+            <dt>Offer</dt>
+            <dd>{proposal.primary_offer_name}</dd>
+          </div>
+        ) : null}
+        {proposal.customer_type ? (
+          <div>
+            <dt>Customer type</dt>
+            <dd>{proposal.customer_type}</dd>
+          </div>
+        ) : null}
+      </dl>
+      <div className="login-actions" style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+        <button type={asForm ? "submit" : "button"} className="btn-hero" disabled={busy} onClick={asForm ? undefined : onAccept}>
+          {busy ? "Saving…" : "Yes, this is me"}
+        </button>
+        <button type="button" className="btn-secondary" disabled={busy} onClick={onDecline}>
+          Not me — enter name
+        </button>
+      </div>
+    </>
+  );
+
+  if (asForm && onSubmit) {
+    return (
+      <div className="login-block">
+        <form onSubmit={onSubmit} className="login-form">
+          {body}
+        </form>
+      </div>
+    );
+  }
+
+  return (
+    <section className="section login-page">
+      <div className="login-card">{body}</div>
+    </section>
   );
 }

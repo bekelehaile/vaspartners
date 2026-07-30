@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\CompanyRole;
+use App\Enums\IdentityVerifiedVia;
 use App\Support\EmailAddress;
 use App\Support\PhoneNumber;
 use Illuminate\Database\Eloquent\Builder;
@@ -76,8 +77,22 @@ class Contact extends Authenticatable
             'is_active' => 'boolean',
             'is_banned' => 'boolean',
             'fayda_verified' => 'boolean',
+            'identity_verified_at' => 'datetime',
+            'crm_identity_snapshot' => 'array',
             'profile_completed_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Sticky personal KYC via Fayda or CRM.
+     */
+    public function isIdentityVerified(): bool
+    {
+        if (filled($this->identity_verified_via)) {
+            return true;
+        }
+
+        return (bool) $this->fayda_verified;
     }
 
     /**
@@ -85,11 +100,40 @@ class Contact extends Authenticatable
      */
     public function markFaydaVerified(): void
     {
-        if ($this->fayda_verified) {
+        $this->markIdentityVerified(IdentityVerifiedVia::Fayda);
+    }
+
+    public function markIdentityVerified(IdentityVerifiedVia|string $via, ?array $crmSnapshot = null): void
+    {
+        $viaEnum = $via instanceof IdentityVerifiedVia
+            ? $via
+            : IdentityVerifiedVia::from((string) $via);
+
+        // Never downgrade Fayda → CRM.
+        if ($this->identity_verified_via === IdentityVerifiedVia::Fayda->value
+            && $viaEnum === IdentityVerifiedVia::Crm) {
             return;
         }
 
-        $this->forceFill(['fayda_verified' => true])->save();
+        if ($this->identity_verified_via === $viaEnum->value && $this->identity_verified_at) {
+            if ($viaEnum === IdentityVerifiedVia::Crm && $crmSnapshot !== null && ! $this->crm_identity_snapshot) {
+                $this->forceFill(['crm_identity_snapshot' => $crmSnapshot])->save();
+            }
+
+            return;
+        }
+
+        $payload = [
+            'identity_verified_via' => $viaEnum->value,
+            'identity_verified_at' => $this->identity_verified_at ?? now(),
+            'fayda_verified' => $viaEnum === IdentityVerifiedVia::Fayda ? true : (bool) $this->fayda_verified,
+        ];
+
+        if ($viaEnum === IdentityVerifiedVia::Crm && $crmSnapshot !== null) {
+            $payload['crm_identity_snapshot'] = $crmSnapshot;
+        }
+
+        $this->forceFill($payload)->save();
     }
 
     protected static function booted(): void

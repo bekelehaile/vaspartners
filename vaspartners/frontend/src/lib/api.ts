@@ -77,6 +77,30 @@ export type Contact = {
   profile_completed?: boolean;
   /** True after at least one successful Fayda (National ID) sign-in; sticky across OTP logins. */
   fayda_verified?: boolean;
+  /** True when verified via Fayda or CRM. */
+  identity_verified?: boolean;
+  identity_verified_via?: "fayda" | "crm" | null;
+  identity_verified_at?: string | null;
+  needs_identity_consent?: boolean;
+  needs_manual_name?: boolean;
+  identity_proposal?: IdentityConsentProposal | null;
+};
+
+export type IdentityConsentProposal = {
+  source: "crm" | string;
+  phone?: string | null;
+  name?: string | null;
+  customer_type?: string | null;
+  primary_offer_name?: string | null;
+  service_numbers?: string[];
+};
+
+export type IdentityAuthState = {
+  needs_consent: boolean;
+  needs_manual_name: boolean;
+  crm_available: boolean;
+  proposal: IdentityConsentProposal | null;
+  verified_via?: string | null;
 };
 
 export type ServiceGroup = {
@@ -334,8 +358,27 @@ export async function verifyPortalOtp(payload: {
 }) {
   return api<{
     message: string;
-    data: { token: string; is_new: boolean; contact: Contact };
+    data: {
+      token: string;
+      is_new: boolean;
+      expires_in?: number;
+      identity: IdentityAuthState;
+      contact: Contact;
+    };
   }>("/auth/otp/verify", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function submitIdentityConsent(payload: {
+  action: "accept" | "decline" | "refresh";
+  name?: string;
+}) {
+  return api<{
+    message: string;
+    data: { identity: IdentityAuthState; contact: Contact };
+  }>("/auth/identity/consent", {
     method: "POST",
     body: JSON.stringify(payload),
   });
