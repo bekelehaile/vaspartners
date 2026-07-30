@@ -28,14 +28,16 @@ class PortalPhoneOtpService
 
     private const EXPIRY_MINUTES = 5;
 
-    private const OTP_RATE_LIMIT = 3;
+    /** Max OTP SMS requests per phone within the decay window. */
+    private const OTP_RATE_LIMIT = 8;
 
     private const OTP_RATE_DECAY_SECONDS = 300;
 
-    private const SEND_COOLDOWN_SECONDS = 60;
+    /** Min seconds between two OTP sends for the same phone. */
+    private const SEND_COOLDOWN_SECONDS = 30;
 
     /** Wrong verify guesses allowed per phone before the OTP is invalidated. */
-    private const VERIFY_MAX_ATTEMPTS = 5;
+    private const VERIFY_MAX_ATTEMPTS = 8;
 
     private const VERIFY_DECAY_SECONDS = 300;
 

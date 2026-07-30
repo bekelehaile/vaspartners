@@ -75,12 +75,13 @@ class AppServiceProvider extends ServiceProvider
     private function configurePortalOtpRateLimiters(): void
     {
         // IP caps on top of per-phone limits inside PortalPhoneOtpService.
+        // Kept generous so shared NAT / office IPs do not lock partners out.
         RateLimiter::for('portal-otp-request', function ($request) {
-            return Limit::perMinutes(5, 10)->by('portal-otp-req:'.$request->ip());
+            return Limit::perMinutes(5, 40)->by('portal-otp-req:'.$request->ip());
         });
 
         RateLimiter::for('portal-otp-verify', function ($request) {
-            return Limit::perMinutes(5, 30)->by('portal-otp-ver:'.$request->ip());
+            return Limit::perMinutes(5, 80)->by('portal-otp-ver:'.$request->ip());
         });
     }
 
