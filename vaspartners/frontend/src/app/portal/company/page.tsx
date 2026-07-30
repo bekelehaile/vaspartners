@@ -396,6 +396,11 @@ export default function CompanyProfilePage() {
                     </>
                   ) : (
                     <section id="company-info" className="settings-block">
+                      {me?.company?.erca_identity_locked ? (
+                        <p className="muted" style={{ marginBottom: "0.75rem" }}>
+                          Name and TIN are locked after ERCA verification match.
+                        </p>
+                      ) : null}
                       <dl className="fayda-dl company-profile-dl">
                         <div>
                           <dt>Company name</dt>
@@ -404,6 +409,10 @@ export default function CompanyProfilePage() {
                         <div>
                           <dt>TIN</dt>
                           <dd>{me?.company_tin || me?.company?.tin || "—"}</dd>
+                        </div>
+                        <div>
+                          <dt>ERCA legal name</dt>
+                          <dd>{me?.company?.legal_name || "—"}</dd>
                         </div>
                         <div>
                           <dt>Approval</dt>

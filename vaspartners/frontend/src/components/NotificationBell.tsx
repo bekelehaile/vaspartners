@@ -49,6 +49,8 @@ function toneFor(template?: string | null): string {
     case "ticket_rejected":
     case "company_profile_rejected":
     case "company_profile_pending":
+    case "company_tin_invalid":
+    case "company_erca_name_mismatch":
       return "warning";
     case "ticket_closed":
       return "muted";

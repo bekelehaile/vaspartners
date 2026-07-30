@@ -37,6 +37,7 @@ export type Contact = {
     erca_verified_at?: string | null;
     erca_last_checked_at?: string | null;
     needs_erca_name_consent?: boolean;
+    erca_identity_locked?: boolean;
   } | null;
   memberships?: Array<{
     company_public_id?: string | null;

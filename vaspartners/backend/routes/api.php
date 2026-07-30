@@ -42,6 +42,8 @@ Route::prefix('v1')->group(function () {
             ->middleware('throttle:portal-tin-lookup');
         Route::post('profile/company/erca/create', [ContactPortalController::class, 'createCompanyFromErcaConsent'])
             ->middleware('throttle:portal-tin-lookup');
+        Route::post('profile/company/erca/update-tin', [ContactPortalController::class, 'updateCompanyTinFromErca'])
+            ->middleware('throttle:portal-tin-lookup');
         Route::post('profile/company/erca/decline', [ContactPortalController::class, 'declineErcaCompany'])
             ->middleware('throttle:portal-tin-lookup');
         // TIN NUMBER submit — accept POST (portal) and PUT/PATCH for clients that use update verbs.

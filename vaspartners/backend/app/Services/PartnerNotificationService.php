@@ -498,6 +498,53 @@ class PartnerNotificationService
     }
 
     /**
+     * Daily reminder: company has a subscription but ERCA legal name ≠ company name.
+     * Owner should update TIN / confirm ERCA legal name in the portal.
+     */
+    public function companyErcaNameMismatch(Company $company): void
+    {
+        $company->loadMissing(['activeMembers']);
+
+        $owner = $company->ownerContact();
+        $recipients = $owner ? collect([$owner]) : collect();
+        if ($recipients->isEmpty()) {
+            $recipients = $company->activeMembers;
+        }
+
+        $template = 'company_erca_name_mismatch';
+        $sentPhones = [];
+
+        foreach ($recipients as $contact) {
+            if (! $contact instanceof Contact) {
+                continue;
+            }
+
+            $placeholders = [
+                'contact_name' => $contact->name ?: 'Partner',
+                'company_name' => $company->name ?: 'your organisation',
+                'company_tin' => $company->tin ?: '—',
+                'legal_name' => $company->legal_name ?: '—',
+            ];
+
+            $smsBody = $this->render('templates', $template, $placeholders);
+            $portalBody = $this->render('portal', $template, $placeholders);
+
+            $phone = trim((string) $contact->phone_number);
+            if ($phone !== '' && ! isset($sentPhones[$phone])) {
+                $this->sms->send($phone, $smsBody);
+                $sentPhones[$phone] = true;
+            }
+
+            $contact->notify(new PartnerPortalNotification(
+                title: $this->titleFor($template),
+                body: Str::limit($portalBody, 280),
+                template: $template,
+                url: '/portal/company',
+            ));
+        }
+    }
+
+    /**
      * Automated scan: company has an owner but TIN is not a valid 10-digit Ethiopian TIN
      * (including cases where tin_validated was set incorrectly).
      */
@@ -707,6 +754,7 @@ class PartnerNotificationService
             'company_profile_approved' => 'Company approved',
             'company_tin_validated' => 'TIN confirmed',
             'company_tin_invalid' => 'TIN invalid',
+            'company_erca_name_mismatch' => 'TIN / ERCA name mismatch',
             'company_profile_rejected' => 'Company needs updates',
             'company_member_left' => 'Member left company',
             'company_transfer_approved' => 'Ownership transfer approved',

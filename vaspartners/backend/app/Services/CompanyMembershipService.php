@@ -121,6 +121,22 @@ class CompanyMembershipService
     }
 
     /**
+     * @throws ValidationException
+     */
+    public function assertErcaIdentityEditable(Company $company): void
+    {
+        if (! $company->isErcaIdentityLocked()) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'company' => 'Company name and TIN are locked after ERCA verification match. Contact Ethio telecom support if a correction is required.',
+            'company_name' => 'Company name cannot be changed after ERCA match.',
+            'company_tin' => 'TIN cannot be changed after ERCA match.',
+        ]);
+    }
+
+    /**
      * Create company after partner consents to ERCA registry match.
      * Auto-approves + marks TIN validated (ERCA is the attestation).
      *
@@ -234,6 +250,85 @@ class CompanyMembershipService
     }
 
     /**
+     * Update current company TIN + name from an ERCA preview consent (portal mismatch fix).
+     *
+     * @param  array{company_tin: string, legal_name: string}  $data
+     */
+    public function updateCompanyFromErcaPreview(Contact $contact, array $data): Contact
+    {
+        if (! $contact->current_company_id || ! $contact->hasActiveCompanyMembership()) {
+            throw ValidationException::withMessages([
+                'company' => 'Link an active company before updating the TIN.',
+            ]);
+        }
+
+        $isOwner = $this->roleOf($contact) === CompanyRole::Owner;
+        if (! $isOwner && ! $this->contactHasPermission($contact, CompanyMemberPermission::EditCompanyProfile)) {
+            throw ValidationException::withMessages([
+                'company_tin' => 'Only the company owner (or a member with edit permission) can update the TIN.',
+            ]);
+        }
+
+        $company = $contact->company;
+        if (! $company) {
+            throw ValidationException::withMessages(['company' => 'Company not found.']);
+        }
+
+        $this->assertErcaIdentityEditable($company);
+
+        $tin = $this->normalizeEthiopianTin($data['company_tin']);
+        $this->assertUniqueTin($tin, $company->id);
+
+        $legal = \App\Services\Etrade\CompanyNameMatcher::titleCase(
+            trim((string) ($data['legal_name'] ?? '')),
+        );
+        if ($legal === '') {
+            throw ValidationException::withMessages([
+                'legal_name' => 'ERCA legal name is required.',
+            ]);
+        }
+
+        $wasValidated = (bool) $company->tin_validated;
+        $tinChanged = (string) $company->tin !== $tin;
+
+        // TIN change resets ERCA flags in model boot — apply ERCA-confirmed values afterwards.
+        if ($tinChanged) {
+            $company->fill(['tin' => $tin])->save();
+            if ($wasValidated) {
+                $this->recordStatusHistory($company, 'tin_cleared', null, $contact, 'Partner replaced TIN via ERCA search');
+            }
+        }
+
+        $company->forceFill([
+            'name' => $legal,
+            'legal_name' => $legal,
+            'tin' => $tin,
+            'tin_validated' => true,
+            'tin_validated_by_user_id' => null,
+            'tin_validated_at' => now(),
+            'erca_tin_verified' => true,
+            'erca_verified_at' => now(),
+            'erca_name_status' => \App\Enums\ErcaNameStatus::Matched,
+            'erca_last_checked_at' => now(),
+            'erca_next_check_at' => now()->addHours(max(24, (int) config('services.etrade.recheck_hours', 168))),
+            'erca_last_error' => null,
+        ])->save();
+
+        $this->recordStatusHistory(
+            $company,
+            'tin_validated',
+            null,
+            $contact,
+            'TIN confirmed via ERCA search and partner consent',
+            ['auto' => true, 'via' => 'erca_update'],
+        );
+
+        $this->syncAllMembersDenormalizedFields($company->fresh() ?? $company);
+
+        return $contact->fresh(['company', 'memberships.company']);
+    }
+
+    /**
      * Owner may edit company details only while awaiting (or after) admin rejection.
      * Once approved, only admin can update or remove company data in Filament.
      *
@@ -277,14 +372,31 @@ class CompanyMembershipService
         }
 
         $tin = $this->normalizeEthiopianTin($data['company_tin']);
+        $name = trim($data['company_name']);
+
+        if ($company->isErcaIdentityLocked()) {
+            if ($name !== (string) $company->name || $tin !== (string) $company->tin) {
+                $this->assertErcaIdentityEditable($company);
+            }
+            // Address-only update while name/TIN stay frozen.
+            $company->fill([
+                'address' => trim($data['company_address']),
+                'phone' => $phone,
+                'email' => $email !== '' ? \App\Support\EmailAddress::normalize($email) : null,
+            ])->save();
+            $this->syncAllMembersDenormalizedFields($company);
+
+            return $contact->fresh(['company', 'memberships.company']);
+        }
+
         $this->assertUniqueTin($tin, $company->id);
 
         $previousTin = (string) $company->tin;
         $previousName = (string) $company->name;
 
-        $fresh = DB::transaction(function () use ($contact, $company, $data, $tin, $phone, $email) {
+        $fresh = DB::transaction(function () use ($contact, $company, $data, $tin, $name, $phone, $email) {
             $company->fill([
-                'name' => trim($data['company_name']),
+                'name' => $name,
                 'tin' => $tin,
                 'tin_validated' => false,
                 'phone' => $phone,
@@ -2021,6 +2133,8 @@ class CompanyMembershipService
             throw ValidationException::withMessages(['company' => 'Company not found.']);
         }
 
+        $this->assertErcaIdentityEditable($company);
+
         $tin = $this->normalizeEthiopianTin($rawTin);
         $this->assertUniqueTin($tin, $company->id);
 
@@ -2536,6 +2650,7 @@ class CompanyMembershipService
             'erca_verified_at' => optional($company->erca_verified_at)?->toIso8601String(),
             'erca_last_checked_at' => optional($company->erca_last_checked_at)?->toIso8601String(),
             'needs_erca_name_consent' => $company->needsErcaNameConsent(),
+            'erca_identity_locked' => $company->isErcaIdentityLocked(),
         ] : null;
         $data['company_role'] = $contact->company_role;
         $data['company_membership_active'] = $membershipActive;

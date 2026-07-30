@@ -30,6 +30,14 @@ enum ErcaNameStatus: string
         return $this === self::MismatchPending;
     }
 
+    /**
+     * Partner cannot change company name or TIN once ERCA name is aligned.
+     */
+    public function locksPartnerIdentity(): bool
+    {
+        return in_array($this, [self::Matched, self::AcceptedLegal], true);
+    }
+
     public function isResolved(): bool
     {
         return in_array($this, [

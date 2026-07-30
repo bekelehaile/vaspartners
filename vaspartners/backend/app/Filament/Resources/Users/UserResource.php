@@ -111,7 +111,7 @@ class UserResource extends Resource
             Toggle::make('is_active')
                 ->label('Active')
                 ->default(true)
-                ->helperText('Inactive users cannot sign in to the admin panel.'),
+                ->helperText('Off = no admin sign-in.'),
         ])->columns(2);
     }
 

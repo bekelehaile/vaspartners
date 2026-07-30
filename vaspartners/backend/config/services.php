@@ -86,11 +86,11 @@ return [
         'include_registrations' => filter_var(env('ETRADE_INCLUDE_REGISTRATIONS', true), FILTER_VALIDATE_BOOL),
         // Anti-flood: cache each TIN lookup and cap scheduled/global calls.
         'tin_cache_hours' => (int) env('ETRADE_TIN_CACHE_HOURS', 6),
-        'global_lookups_per_minute' => (int) env('ETRADE_GLOBAL_LOOKUPS_PER_MINUTE', 8),
+        'global_lookups_per_minute' => (int) env('ETRADE_GLOBAL_LOOKUPS_PER_MINUTE', 20),
         'recheck_hours' => (int) env('ETRADE_RECHECK_HOURS', 168),
         'retry_hours' => (int) env('ETRADE_RETRY_HOURS', 6),
-        'schedule_limit' => (int) env('ETRADE_SCHEDULE_LIMIT', 10),
-        'schedule_sleep_ms' => (int) env('ETRADE_SCHEDULE_SLEEP_MS', 1500),
+        'schedule_limit' => (int) env('ETRADE_SCHEDULE_LIMIT', 25),
+        'schedule_sleep_ms' => (int) env('ETRADE_SCHEDULE_SLEEP_MS', 800),
     ],
 
 ];

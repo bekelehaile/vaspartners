@@ -121,7 +121,7 @@ class ContactResource extends Resource
                 ->schema([
                     Toggle::make('is_active')
                         ->label('Active')
-                        ->helperText('Inactive contacts cannot use the partner portal.'),
+                        ->helperText('Off = no portal access.'),
                     TextInput::make('legacy_mvas_id')
                         ->label('Legacy MVAS ID')
                         ->maxLength(64),

@@ -89,40 +89,48 @@ class CompanyResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('name')->required()->maxLength(255),
+            TextInput::make('name')
+                ->required()
+                ->maxLength(255)
+                ->disabled(fn (?Company $record): bool => (bool) $record?->isErcaIdentityLocked())
+                ->dehydrated(fn (?Company $record): bool => ! (bool) $record?->isErcaIdentityLocked())
+                ->helperText(fn (?Company $record): ?string => $record?->isErcaIdentityLocked()
+                    ? 'Locked after ERCA match.'
+                    : null),
             TextInput::make('legal_name')
                 ->label('ERCA legal name')
                 ->disabled()
-                ->dehydrated(false)
-                ->helperText('From eTrade / ERCA. Partner can accept this name or keep both when there is a mismatch.'),
+                ->dehydrated(false),
             TextInput::make('tin')
                 ->label('TIN NUMBER')
                 ->required()
                 ->unique(ignoreRecord: true)
                 ->maxLength(32)
+                ->disabled(fn (?Company $record): bool => (bool) $record?->isErcaIdentityLocked())
+                ->dehydrated(fn (?Company $record): bool => ! (bool) $record?->isErcaIdentityLocked())
                 ->rule(fn () => function (string $attribute, mixed $value, \Closure $fail): void {
                     if (! TinNumber::isValid($value)) {
                         $fail(TinNumber::message());
                     }
                 })
-                ->helperText('Ethiopian TIN NUMBER: exactly 10 digits. Unique. Partners cannot use services until Active is on and TIN NUMBER is approved.'),
+                ->helperText(fn (?Company $record): ?string => $record?->isErcaIdentityLocked()
+                    ? 'Locked after ERCA match.'
+                    : 'Exactly 10 digits. Unique.'),
             TextInput::make('phone')
                 ->tel()
                 ->maxLength(32)
-                ->helperText('Saved as last 9 digits. Partners may share the same phone across multiple companies.')
+                ->helperText('Last 9 digits.')
                 ->dehydrateStateUsing(fn (?string $state): ?string => \App\Support\PhoneNumber::normalizeNullable($state)),
             TextInput::make('email')
                 ->email()
                 ->maxLength(255)
-                ->helperText('Partners may share the same email across multiple companies.')
                 ->dehydrateStateUsing(fn (?string $state): ?string => \App\Support\EmailAddress::normalize($state)),
             Textarea::make('address')->rows(3)->columnSpanFull(),
             Toggle::make('is_active')
-                ->label('Active')
-                ->helperText('Normally set by Approve profile. When off, company contacts cannot sign in to the portal and cannot use VAS services.'),
+                ->label('Active'),
             Toggle::make('tin_validated')
                 ->label('TIN NUMBER approved')
-                ->helperText('Prefer Approve TIN NUMBER action so who/when is logged. Required before partners can submit service requests. Invalid TIN format cannot be approved.')
+                ->helperText('Prefer Approve TIN NUMBER so who/when is logged.')
                 ->dehydrateStateUsing(function (?bool $state, ?\App\Models\Company $record): bool {
                     if (! $state) {
                         return false;
@@ -143,8 +151,7 @@ class CompanyResource extends Resource
             Toggle::make('erca_tin_verified')
                 ->label('ERCA verified')
                 ->disabled()
-                ->dehydrated(false)
-                ->helperText('Set when the TIN was found in ERCA and checked.'),
+                ->dehydrated(false),
         ])->columns(2);
     }
 
@@ -218,7 +225,7 @@ class CompanyResource extends Resource
                     ->state(fn (Company $record): string => $record->isOwnerless() ? 'No owner' : 'Has owner')
                     ->color(fn (Company $record): string => $record->isOwnerless() ? 'warning' : 'success')
                     ->helperText(fn (Company $record): ?string => $record->isOwnerless()
-                        ? 'No membership/owner yet — Fayda phone claim or Assign owner after verification.'
+                        ? 'No owner yet.'
                         : null),
                 TextEntry::make('owner_name')
                     ->label('Owner')
@@ -445,7 +452,7 @@ class CompanyResource extends Resource
                         ->visible(fn (Company $record): bool => filled($record->tin) && ! $record->tin_validated)
                         ->requiresConfirmation()
                         ->modalHeading(fn (Company $record): string => 'Approve TIN NUMBER '.$record->tin.'?')
-                        ->modalDescription('Confirm this Ethiopian TIN NUMBER was verified. Your name and the time are logged. Partners can submit service requests only after TIN NUMBER approval.')
+                        ->modalDescription('Logs your name and the approval time.')
                         ->action(function (Company $record, CompanyMembershipService $membership): void {
                             try {
                                 $membership->markTinValidated($record, auth()->user());
@@ -557,7 +564,7 @@ class CompanyResource extends Resource
                         ->color('success')
                         ->requiresConfirmation()
                         ->modalHeading('Approve TIN NUMBER for selected companies?')
-                        ->modalDescription('Approves each selected company TIN NUMBER when it is a valid 10-digit Ethiopian TIN. Approver name and time are logged.')
+                        ->modalDescription('Approves valid 10-digit TINs. Approver is logged.')
                         ->deselectRecordsAfterCompletion()
                         ->action(function (Collection $records, CompanyMembershipService $membership): void {
                             $validated = 0;

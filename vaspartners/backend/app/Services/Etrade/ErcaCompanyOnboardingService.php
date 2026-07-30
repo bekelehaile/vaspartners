@@ -32,7 +32,7 @@ class ErcaCompanyOnboardingService
      *   city: ?string
      * }
      */
-    public function previewByTin(Contact $contact, string $rawTin): array
+    public function previewByTin(Contact $contact, string $rawTin, ?int $ignoreCompanyId = null): array
     {
         $tin = TinNumber::normalize($rawTin);
         if (! TinNumber::isValid($tin)) {
@@ -41,7 +41,7 @@ class ErcaCompanyOnboardingService
             ]);
         }
 
-        $this->membership->assertTinAvailableForCreate($tin);
+        $this->membership->assertTinAvailableForCreate($tin, $ignoreCompanyId);
 
         if (! $this->lookup->enabled()) {
             throw ValidationException::withMessages([
@@ -138,6 +138,35 @@ class ErcaCompanyOnboardingService
                 'company_name' => $legal,
                 'company_tin' => $tin,
                 'company_address' => $address,
+                'legal_name' => $legal,
+            ],
+        );
+    }
+
+    /**
+     * Apply ERCA preview to the contact's current company (TIN + legal name update).
+     */
+    public function updateExistingFromConsent(Contact $contact, string $previewToken): Contact
+    {
+        $cached = Cache::pull($this->tokenKey($previewToken));
+        if (! is_array($cached) || (int) ($cached['contact_id'] ?? 0) !== (int) $contact->id) {
+            throw ValidationException::withMessages([
+                'preview_token' => 'ERCA preview expired. Search the TIN again.',
+            ]);
+        }
+
+        $tin = (string) ($cached['tin'] ?? '');
+        $legal = trim((string) ($cached['legal_name'] ?? ''));
+        if (! TinNumber::isValid($tin) || $legal === '') {
+            throw ValidationException::withMessages([
+                'preview_token' => 'Invalid ERCA preview. Search the TIN again.',
+            ]);
+        }
+
+        return $this->membership->updateCompanyFromErcaPreview(
+            $contact,
+            [
+                'company_tin' => $tin,
                 'legal_name' => $legal,
             ],
         );

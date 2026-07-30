@@ -24,8 +24,11 @@ export function TinValidationGate({ children }: { children: React.ReactNode }) {
     !!me?.profile_completed &&
     !!company &&
     !company.tin_validated &&
-    company.needs_erca_name_consent !== true;
-  const canSubmitTin = me?.company_role === "owner" || !!me?.company_can_edit;
+    company.needs_erca_name_consent !== true &&
+    company.erca_identity_locked !== true;
+  const canSubmitTin =
+    (me?.company_role === "owner" || !!me?.company_can_edit) &&
+    company?.erca_identity_locked !== true;
 
   const otherReady = useMemo(() => {
     return (me?.memberships ?? []).filter(

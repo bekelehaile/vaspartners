@@ -77,8 +77,9 @@ class Company extends Model
                 );
             }
 
-            // Changing TIN requires admin to re-validate and a fresh ERCA check.
-            if ($company->isDirty('tin')) {
+            // Changing TIN on an existing company requires admin re-validate and a fresh ERCA check.
+            // (Skip on create so ERCA-consent create can set verified/approved in the same insert.)
+            if ($company->exists && $company->isDirty('tin')) {
                 $company->tin_validated = false;
                 $company->tin_validated_by_user_id = null;
                 $company->tin_validated_at = null;
@@ -99,6 +100,19 @@ class Company extends Model
             : \App\Enums\ErcaNameStatus::tryFrom((string) $this->erca_name_status);
 
         return $status?->needsPartnerConsent() === true;
+    }
+
+    /**
+     * ERCA-matched (or partner-accepted legal name): name + TIN are frozen for partners.
+     */
+    public function isErcaIdentityLocked(): bool
+    {
+        $status = $this->erca_name_status instanceof \App\Enums\ErcaNameStatus
+            ? $this->erca_name_status
+            : \App\Enums\ErcaNameStatus::tryFrom((string) ($this->erca_name_status ?: ''));
+
+        return $status?->locksPartnerIdentity() === true
+            && (bool) $this->erca_tin_verified;
     }
 
     public function ercaDisplayLegalName(): ?string

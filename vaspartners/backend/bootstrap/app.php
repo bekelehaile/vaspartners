@@ -41,9 +41,14 @@ return Application::configure(basePath: dirname(__DIR__))
         // Small ERCA batches only — never bulk-flood eTrade (limit/sleep in command + global cap).
         // Prefer unverified Has-owner companies first.
         $schedule->command('vas:scan-erca-tin --unverified-only')
-            ->everyFifteenMinutes()
-            ->withoutOverlapping(14)
+            ->everyFiveMinutes()
+            ->withoutOverlapping(4)
             ->description('Throttled ERCA TIN check for unverified Has-owner companies');
+
+        $schedule->command('vas:notify-erca-mismatch')
+            ->dailyAt('09:00')
+            ->withoutOverlapping(120)
+            ->description('Daily SMS: subscribed companies with ERCA name mismatch');
 
         $schedule->command('vas:open-due-renewals')
             ->dailyAt('01:00')

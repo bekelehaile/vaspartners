@@ -90,7 +90,7 @@ class ViewCompany extends ViewRecord
                     ->visible(fn (): bool => filled($this->getRecord()->tin) && ! $this->getRecord()->tin_validated)
                     ->requiresConfirmation()
                     ->modalHeading(fn (): string => 'Approve TIN NUMBER '.$this->getRecord()->tin.'?')
-                    ->modalDescription('Confirm this Ethiopian TIN NUMBER was verified. Your name and the time are logged on the company and in Approval & TIN log.')
+                    ->modalDescription('Logs your name and the approval time.')
                     ->action(function (CompanyMembershipService $membership): void {
                         try {
                             $membership->markTinValidated($this->getRecord(), auth()->user());

@@ -722,11 +722,42 @@ class ContactPortalController extends Controller
             'company_tin' => ['required', 'string', 'max:32'],
         ]);
 
-        $preview = $ercaOnboarding->previewByTin($contact, $data['company_tin']);
+        // When updating an existing company, allow re-checking its current TIN.
+        $ignoreCompanyId = $contact->current_company_id
+            && $contact->hasActiveCompanyMembership()
+            ? (int) $contact->current_company_id
+            : null;
+
+        $preview = $ercaOnboarding->previewByTin($contact, $data['company_tin'], $ignoreCompanyId);
 
         return response()->json([
             'message' => 'Taxpayer found in ERCA. Confirm to create your company.',
             'data' => $preview,
+        ]);
+    }
+
+    public function updateCompanyTinFromErca(
+        Request $request,
+        CompanyMembershipService $membership,
+        \App\Services\Etrade\ErcaCompanyOnboardingService $ercaOnboarding,
+    ) {
+        /** @var \App\Models\Contact $contact */
+        $contact = $request->user();
+        if ($contact->current_company_id && ! $contact->hasActiveCompanyMembership()) {
+            return response()->json([
+                'message' => 'Your membership for this company is disabled. Contact an administrator.',
+            ], 403);
+        }
+
+        $data = $request->validate([
+            'preview_token' => ['required', 'string', 'max:64'],
+        ]);
+
+        $fresh = $ercaOnboarding->updateExistingFromConsent($contact, $data['preview_token']);
+
+        return response()->json([
+            'message' => 'Company TIN and name updated from ERCA verification.',
+            'data' => $membership->serializeContact($fresh),
         ]);
     }
 

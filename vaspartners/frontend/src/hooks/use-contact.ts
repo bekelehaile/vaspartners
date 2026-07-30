@@ -373,6 +373,28 @@ export function useCreateCompanyFromErca() {
   });
 }
 
+export function useUpdateCompanyTinFromErca() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: { preview_token: string }) => {
+      const res = await api<{ message?: string; data: Contact }>(
+        "/profile/company/erca/update-tin",
+        {
+          method: "POST",
+          body: JSON.stringify(payload),
+        },
+      );
+      return res.data;
+    },
+    onSuccess: (contact) => {
+      queryClient.setQueryData(queryKeys.contact.me, contact);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.contact.me });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.notifications });
+    },
+  });
+}
+
 export function useDeclineErcaCompany() {
   const queryClient = useQueryClient();
 

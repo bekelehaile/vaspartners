@@ -54,12 +54,14 @@ function CompanyField({
   label,
   submissionAttempts,
   as = "input",
+  disabled = false,
   ...inputProps
 }: {
   field: FieldApi;
   label: string;
   submissionAttempts: number;
   as?: "input" | "textarea";
+  disabled?: boolean;
 } & InputHTMLAttributes<HTMLInputElement> &
   TextareaHTMLAttributes<HTMLTextAreaElement>) {
   const show =
@@ -81,6 +83,7 @@ function CompanyField({
           onBlur={field.handleBlur}
           onChange={onChange}
           rows={3}
+          disabled={disabled}
           aria-invalid={!!err || undefined}
           aria-describedby={err ? `${field.name}-error` : undefined}
           {...(inputProps as TextareaHTMLAttributes<HTMLTextAreaElement>)}
@@ -92,6 +95,7 @@ function CompanyField({
           value={field.state.value}
           onBlur={field.handleBlur}
           onChange={onChange}
+          disabled={disabled}
           aria-invalid={!!err || undefined}
           aria-describedby={err ? `${field.name}-error` : undefined}
           {...(inputProps as InputHTMLAttributes<HTMLInputElement>)}
@@ -118,6 +122,7 @@ export function CompanyProfileForm({
   const router = useRouter();
   const mutation = useCompleteCompanyProfile();
   const isUpdate = !!me?.company_id && !createNew;
+  const identityLocked = !!me?.company?.erca_identity_locked;
 
   const form = useForm({
     defaultValues: fromContact(me, createNew),
@@ -126,6 +131,11 @@ export function CompanyProfileForm({
       onSubmit: companyProfileSchema,
     },
     onSubmit: async ({ value }) => {
+      if (identityLocked) {
+        throw new Error(
+          "Company name and TIN are locked after ERCA verification match.",
+        );
+      }
       const parsed = companyProfileSchema.parse(value);
       await mutation.mutateAsync({ ...parsed, create_new: createNew || undefined });
       router.replace(redirectTo);
@@ -145,9 +155,11 @@ export function CompanyProfileForm({
       <div className="company-form-head">
         <h2>{isUpdate ? "Company details" : createNew ? "Add company" : "Company details"}</h2>
         <p className="muted">
-          {isUpdate
-            ? "Update name, TIN, and address."
-            : "Enter company name, TIN, and address."}
+          {identityLocked
+            ? "Name and TIN are locked after ERCA verification match. Address can still be updated while pending."
+            : isUpdate
+              ? "Update name, TIN, and address."
+              : "Enter company name, TIN, and address."}
         </p>
       </div>
 
@@ -188,6 +200,7 @@ export function CompanyProfileForm({
                     submissionAttempts={submissionAttempts}
                     placeholder="Company name"
                     autoComplete="organization"
+                    disabled={identityLocked}
                   />
                 )}
               </form.Field>
@@ -201,6 +214,7 @@ export function CompanyProfileForm({
                     placeholder="10 digits"
                     inputMode="numeric"
                     autoComplete="off"
+                    disabled={identityLocked}
                   />
                 )}
               </form.Field>
