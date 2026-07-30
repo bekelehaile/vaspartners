@@ -123,7 +123,7 @@ Dear Partner, your TIN number ({company_tin}) for {company_name} was not found i
 SMS,
 
         'company_erca_name_mismatch' => <<<'SMS'
-Dear {contact_name}, TIN number for {company_name} ({company_tin}) does not match ERCA verification (legal name: {legal_name}). Please update your TIN number in the VAS Partners portal, search ERCA, and confirm. — Ethio telecom
+Dear Partner, your company name for {company_name} (TIN number {company_tin}) does not match ERCA (legal name: {legal_name}). Confirm or update in the VAS Partners portal to continue VAS services. {portal_url} — Ethio telecom
 SMS,
 
         'company_profile_rejected' => <<<'SMS'
@@ -188,7 +188,7 @@ SMS,
 
         'company_tin_not_found_erca' => 'Dear Partner, your TIN number ({company_tin}) for {company_name} was not found in ERCA. Update your TIN number in the VAS Partners portal. {portal_url}',
 
-        'company_erca_name_mismatch' => 'TIN number for {company_name} does not match ERCA (legal name: {legal_name}). Update your TIN number in Company settings, search ERCA, and confirm.',
+        'company_erca_name_mismatch' => 'Dear Partner, your company name for {company_name} (TIN number {company_tin}) does not match ERCA (legal name: {legal_name}). Confirm or update in the VAS Partners portal to continue VAS services. {portal_url}',
 
         'company_profile_pending' => 'Your company {company_name} (TIN number {company_tin}) was submitted and is waiting for Ethio telecom approval. You will be notified when it is reviewed.',
 

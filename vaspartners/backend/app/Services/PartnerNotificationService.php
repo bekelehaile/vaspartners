@@ -498,50 +498,18 @@ class PartnerNotificationService
     }
 
     /**
-     * Daily reminder: company has a subscription but ERCA legal name ≠ company name.
-     * Owner should update TIN number / confirm ERCA legal name in the portal.
+     * ERCA found the TIN number but legal name ≠ company name (consent still needed).
+     * Queues SMS on the bulk queue to the owner phone and/or company phone.
      */
     public function companyErcaNameMismatch(Company $company): void
     {
-        $company->loadMissing(['activeMembers']);
-
-        $owner = $company->ownerContact();
-        $recipients = $owner ? collect([$owner]) : collect();
-        if ($recipients->isEmpty()) {
-            $recipients = $company->activeMembers;
-        }
-
-        $template = 'company_erca_name_mismatch';
-        $sentPhones = [];
-
-        foreach ($recipients as $contact) {
-            if (! $contact instanceof Contact) {
-                continue;
-            }
-
-            $placeholders = [
-                'contact_name' => $contact->name ?: 'Partner',
-                'company_name' => $company->name ?: 'your organisation',
-                'company_tin' => $company->tin ?: '—',
+        $this->notifyCompanyTinIssue(
+            $company,
+            'company_erca_name_mismatch',
+            [
                 'legal_name' => $company->legal_name ?: '—',
-            ];
-
-            $smsBody = $this->render('templates', $template, $placeholders);
-            $portalBody = $this->render('portal', $template, $placeholders);
-
-            $phone = trim((string) $contact->phone_number);
-            if ($phone !== '' && ! isset($sentPhones[$phone])) {
-                $this->sms->send($phone, $smsBody);
-                $sentPhones[$phone] = true;
-            }
-
-            $contact->notify(new PartnerPortalNotification(
-                title: $this->titleFor($template),
-                body: Str::limit($portalBody, 280),
-                template: $template,
-                url: '/portal/company',
-            ));
-        }
+            ],
+        );
     }
 
     /**

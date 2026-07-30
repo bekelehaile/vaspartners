@@ -12,21 +12,26 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Daily SMS for companies that have a subscription and ERCA name mismatch.
+ * SMS for companies with ERCA name mismatch (legal name ≠ company name).
+ *
+ * Default: subscribed companies only (daily reminder).
+ * --all: every mismatch company with an owner (or company phone via notify path).
  */
 class NotifyErcaMismatchCommand extends Command
 {
     protected $signature = 'vas:notify-erca-mismatch
                             {--dry-run : List matches without sending SMS}
+                            {--all : Notify all mismatch companies (not only those with a live subscription)}
                             {--force : Send even if already notified today}
                             {--limit=0 : Max companies to notify (0 = no limit)}
                             {--chunk=50 : Companies loaded per batch}';
 
-    protected $description = 'SMS owners of subscribed companies whose name does not match ERCA legal name';
+    protected $description = 'SMS owners of companies whose name does not match ERCA legal name';
 
     public function handle(PartnerNotificationService $notifications): int
     {
         $dryRun = (bool) $this->option('dry-run');
+        $all = (bool) $this->option('all');
         $force = (bool) $this->option('force');
         $limit = max(0, (int) $this->option('limit'));
         $chunk = max(1, (int) $this->option('chunk'));
@@ -40,7 +45,10 @@ class NotifyErcaMismatchCommand extends Command
         $query = Company::query()
             ->where('erca_name_status', ErcaNameStatus::MismatchPending->value)
             ->whereHas('memberships', fn ($q) => $q->where('role', $ownerRole))
-            ->whereHas('subscriptions', fn ($q) => $q->whereIn('status', $alive))
+            ->when(
+                ! $all,
+                fn ($q) => $q->whereHas('subscriptions', fn ($s) => $s->whereIn('status', $alive)),
+            )
             ->orderBy('id');
 
         $scanned = 0;
@@ -48,7 +56,8 @@ class NotifyErcaMismatchCommand extends Command
         $skipped = 0;
         $errors = 0;
 
-        $this->info(($dryRun ? '[dry-run] ' : '').'Notifying ERCA mismatch companies with subscriptions…');
+        $scope = $all ? 'all mismatch companies with owners' : 'subscribed mismatch companies';
+        $this->info(($dryRun ? '[dry-run] ' : '')."Notifying ERCA name mismatch ({$scope})…");
 
         $query->chunkById($chunk, function ($companies) use (
             $notifications,
@@ -95,7 +104,9 @@ class NotifyErcaMismatchCommand extends Command
                     $notifications->companyErcaNameMismatch($company);
                     Cache::put($cacheKey, 1, now()->endOfDay());
                     $notified++;
-                    $this->info('sent '.$label);
+                    if ($notified <= 5 || $notified % 50 === 0) {
+                        $this->info('queued '.$label);
+                    }
                 } catch (\Throwable $e) {
                     $errors++;
                     Log::warning('vas:notify-erca-mismatch failed', [
