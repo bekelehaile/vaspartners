@@ -209,6 +209,15 @@ class EsignetService
             report($e);
         }
 
+        // 3) Auto-approve + activate owned companies when profile is complete.
+        try {
+            $membership->autoApproveOwnedCompaniesAfterIdentityVerification(
+                $contact->fresh(['memberships.company'])
+            );
+        } catch (Throwable $e) {
+            report($e);
+        }
+
         return ['status' => 'ok', 'contact' => $contact->fresh(['company', 'memberships.company'])];
     }
 

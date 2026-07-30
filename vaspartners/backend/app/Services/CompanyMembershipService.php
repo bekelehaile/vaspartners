@@ -97,8 +97,9 @@ class CompanyMembershipService
             );
             $fresh = $contact->fresh(['company', 'memberships.company']);
             $this->notifications->companyProfileSubmitted($fresh, $company);
+            $this->autoApproveOwnedCompaniesAfterIdentityVerification($fresh);
 
-            return $fresh;
+            return $fresh->fresh(['company', 'memberships.company']);
         });
     }
 
@@ -167,8 +168,9 @@ class CompanyMembershipService
 
             $fresh = $contact->fresh(['company', 'memberships.company']);
             $this->notifications->companyProfileSubmitted($fresh, $company);
+            $this->autoApproveOwnedCompaniesAfterIdentityVerification($fresh);
 
-            return $fresh;
+            return $fresh->fresh(['company', 'memberships.company']);
         });
     }
 
@@ -181,6 +183,102 @@ class CompanyMembershipService
             return $company->fresh(['memberships', 'approvedBy']);
         }
 
+        $this->assertCompanyReadyForApproval($company);
+
+        $company->fill([
+            'approval_status' => CompanyApprovalStatus::Approved,
+            'approved_by_user_id' => $admin->id,
+            'approved_at' => now(),
+            'approval_note' => filled($note) ? trim($note) : null,
+            'is_active' => true,
+        ])->save();
+
+        $this->recordStatusHistory($company, 'approved', $admin, null, filled($note) ? trim($note) : null);
+
+        $fresh = $company->fresh(['memberships', 'approvedBy']);
+        $owner = $fresh->ownerContact();
+        if ($owner) {
+            $this->notifications->companyProfileDecided($fresh, $owner, approved: true);
+        }
+
+        return $fresh;
+    }
+
+    /**
+     * After Fayda / CRM identity verification: auto-approve + activate companies this
+     * contact owns when profile is complete (Approval=Approved, Active=Active, Has owner).
+     */
+    public function autoApproveOwnedCompaniesAfterIdentityVerification(Contact $contact): void
+    {
+        if (! $contact->isIdentityVerified()) {
+            return;
+        }
+
+        $contact->loadMissing(['memberships.company']);
+        $via = $contact->identity_verified_via
+            ?? ($contact->fayda_verified ? 'fayda' : 'crm');
+        $note = 'Auto-approved after identity verification ('.$via.').';
+
+        foreach ($contact->memberships as $membership) {
+            if (! $membership->is_active) {
+                continue;
+            }
+            $role = $membership->role instanceof CompanyRole
+                ? $membership->role
+                : CompanyRole::tryFrom((string) $membership->role);
+            if ($role !== CompanyRole::Owner) {
+                continue;
+            }
+
+            $company = $membership->company;
+            if (! $company || $company->isApproved()) {
+                continue;
+            }
+
+            // Only lift pending profiles — rejected stays for admin review.
+            $status = $company->approval_status instanceof CompanyApprovalStatus
+                ? $company->approval_status
+                : CompanyApprovalStatus::tryFrom((string) $company->approval_status);
+            if ($status === CompanyApprovalStatus::Rejected) {
+                continue;
+            }
+
+            try {
+                $this->assertCompanyReadyForApproval($company);
+            } catch (ValidationException) {
+                continue;
+            }
+
+            $company->fill([
+                'approval_status' => CompanyApprovalStatus::Approved,
+                'approved_by_user_id' => null,
+                'approved_at' => now(),
+                'approval_note' => $note,
+                'is_active' => true,
+            ])->save();
+
+            $this->recordStatusHistory(
+                $company,
+                'approved',
+                null,
+                $contact,
+                $note,
+                ['auto' => true, 'via' => $via],
+            );
+
+            $fresh = $company->fresh(['memberships', 'approvedBy']);
+            $owner = $fresh->ownerContact();
+            if ($owner) {
+                $this->notifications->companyProfileDecided($fresh, $owner, approved: true);
+            }
+        }
+    }
+
+    /**
+     * @throws ValidationException
+     */
+    protected function assertCompanyReadyForApproval(Company $company): void
+    {
         $required = [
             'name' => $company->name,
             'tin' => $company->tin,
@@ -207,24 +305,6 @@ class CompanyMembershipService
                 'owner' => 'Company must have an owner (the partner who created the profile) before approval.',
             ]);
         }
-
-        $company->fill([
-            'approval_status' => CompanyApprovalStatus::Approved,
-            'approved_by_user_id' => $admin->id,
-            'approved_at' => now(),
-            'approval_note' => filled($note) ? trim($note) : null,
-            'is_active' => true,
-        ])->save();
-
-        $this->recordStatusHistory($company, 'approved', $admin, null, filled($note) ? trim($note) : null);
-
-        $fresh = $company->fresh(['memberships', 'approvedBy']);
-        $owner = $fresh->ownerContact();
-        if ($owner) {
-            $this->notifications->companyProfileDecided($fresh, $owner, approved: true);
-        }
-
-        return $fresh;
     }
 
     public function rejectCompany(Company $company, User $admin, ?string $note = null): Company

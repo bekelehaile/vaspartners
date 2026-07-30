@@ -9,9 +9,11 @@ use App\Support\PhoneNumber;
 use App\Support\PortalProfileOptions;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 /**
  * Personal KYC: Fayda or CRM (BSS GetCustomer). Once verified, skip re-fetch on later logins.
+ * CRM matches are applied automatically (same trust path as Fayda); owned companies auto-approve when complete.
  */
 class ContactIdentityService
 {
@@ -32,7 +34,7 @@ class ContactIdentityService
     }
 
     /**
-     * After OTP/Fayda auth: if unverified, try CRM and stage a consent proposal.
+     * After OTP/Fayda auth: if unverified, try CRM and auto-apply identity (no consent prompt).
      *
      * @return array{
      *   needs_consent: bool,
@@ -47,6 +49,7 @@ class ContactIdentityService
         if ($this->isVerified($contact)) {
             $via = $contact->identity_verified_via
                 ?? ($contact->fayda_verified ? IdentityVerifiedVia::Fayda->value : null);
+            $this->autoApproveOwnedCompanies($contact);
 
             return [
                 'needs_consent' => false,
@@ -92,67 +95,44 @@ class ContactIdentityService
             'snapshot' => $lookup['raw'],
         ];
 
-        Cache::put($this->cacheKey($contact), $proposal, now()->addMinutes(20));
+        // Auto-activate CRM identity (no partner consent prompt).
+        $contact = $this->applyCrmProposal($contact, $proposal);
+        $this->autoApproveOwnedCompanies($contact);
 
         return [
-            'needs_consent' => true,
+            'needs_consent' => false,
             'needs_manual_name' => false,
             'crm_available' => true,
-            'proposal' => $this->publicProposal($proposal),
-            'verified_via' => null,
+            'proposal' => null,
+            'verified_via' => IdentityVerifiedVia::Crm->value,
         ];
     }
 
     /**
-     * Partner accepts CRM identity shown on the consent screen.
+     * Partner accepts CRM identity (kept for API compatibility; normally applied automatically).
      */
     public function acceptCrmConsent(Contact $contact): Contact
     {
         if ($this->isVerified($contact)) {
+            $this->autoApproveOwnedCompanies($contact);
+
             return $contact->fresh() ?? $contact;
         }
 
         $proposal = Cache::get($this->cacheKey($contact));
         if (! is_array($proposal) || blank($proposal['name'] ?? null)) {
-            // Re-fetch once if cache expired.
             $resolved = $this->resolveAfterAuth($contact);
-            if (! ($resolved['needs_consent'] ?? false)) {
-                throw ValidationException::withMessages([
-                    'identity' => 'Identity details are no longer available. Enter your name manually or try again.',
-                ]);
+            if (($resolved['verified_via'] ?? null) === IdentityVerifiedVia::Crm->value) {
+                return $contact->fresh() ?? $contact;
             }
-            $proposal = Cache::get($this->cacheKey($contact));
-        }
-
-        if (! is_array($proposal) || blank($proposal['name'] ?? null)) {
             throw ValidationException::withMessages([
-                'identity' => 'Identity consent expired. Sign in again to refresh.',
+                'identity' => 'Identity details are no longer available. Enter your name manually or try again.',
             ]);
         }
 
-        $name = trim((string) $proposal['name']);
-        $contact->syncFromFayda([
-            'sub' => $contact->sub ?: ('otp-'.$contact->phone_number),
-            'name' => $name,
-            'phone_number' => $contact->phone_number,
-            'email' => $proposal['email'] ?? $contact->email,
-            'gender' => $proposal['gender'] ?? $contact->gender,
-            'nationality' => $proposal['nationality']
-                ?? ($contact->nationality ?: PortalProfileOptions::DEFAULT_NATIONALITY),
-            'birthdate' => $proposal['birthdate'] ?? $contact->birthdate,
-            'identification_type' => $proposal['identification_type']
-                ?? ($contact->identification_type ?: '2'),
-            'identification_number' => $proposal['identification_number']
-                ?? ($contact->identification_number ?: ('crm-'.$contact->phone_number)),
-            'address' => $contact->address,
-        ]);
-
-        $contact->markIdentityVerified(
-            IdentityVerifiedVia::Crm,
-            is_array($proposal['snapshot'] ?? null) ? $proposal['snapshot'] : $proposal,
-        );
-
+        $contact = $this->applyCrmProposal($contact, $proposal);
         Cache::forget($this->cacheKey($contact));
+        $this->autoApproveOwnedCompanies($contact);
 
         return $contact->fresh() ?? $contact;
     }
@@ -197,35 +177,48 @@ class ContactIdentityService
 
     public function pendingProposal(Contact $contact): ?array
     {
-        if ($this->isVerified($contact)) {
-            return null;
-        }
-
-        $proposal = Cache::get($this->cacheKey($contact));
-        if (! is_array($proposal)) {
-            return null;
-        }
-
-        return $this->publicProposal($proposal);
+        // Consent is applied automatically — no pending proposal UI.
+        return null;
     }
 
     /**
      * @param  array<string, mixed>  $proposal
-     * @return array<string, mixed>
      */
-    protected function publicProposal(array $proposal): array
+    protected function applyCrmProposal(Contact $contact, array $proposal): Contact
     {
-        return [
-            'source' => $proposal['source'] ?? IdentityVerifiedVia::Crm->value,
-            'phone' => $proposal['phone'] ?? null,
-            'name' => $proposal['name'] ?? null,
-            'email' => $proposal['email'] ?? null,
-            'gender' => $proposal['gender'] ?? null,
-            'nationality' => $proposal['nationality'] ?? null,
-            'birthdate' => $proposal['birthdate'] ?? null,
-            'identification_type' => $proposal['identification_type'] ?? null,
-            'identification_number' => $proposal['identification_number'] ?? null,
-        ];
+        $name = trim((string) $proposal['name']);
+        $contact->syncFromFayda([
+            'sub' => $contact->sub ?: ('otp-'.$contact->phone_number),
+            'name' => $name,
+            'phone_number' => $contact->phone_number,
+            'email' => $proposal['email'] ?? $contact->email,
+            'gender' => $proposal['gender'] ?? $contact->gender,
+            'nationality' => $proposal['nationality']
+                ?? ($contact->nationality ?: PortalProfileOptions::DEFAULT_NATIONALITY),
+            'birthdate' => $proposal['birthdate'] ?? $contact->birthdate,
+            'identification_type' => $proposal['identification_type']
+                ?? ($contact->identification_type ?: '2'),
+            'identification_number' => $proposal['identification_number']
+                ?? ($contact->identification_number ?: ('crm-'.$contact->phone_number)),
+            'address' => $contact->address,
+        ]);
+
+        $contact->markIdentityVerified(
+            IdentityVerifiedVia::Crm,
+            is_array($proposal['snapshot'] ?? null) ? $proposal['snapshot'] : $proposal,
+        );
+
+        return $contact->fresh() ?? $contact;
+    }
+
+    protected function autoApproveOwnedCompanies(Contact $contact): void
+    {
+        try {
+            app(CompanyMembershipService::class)
+                ->autoApproveOwnedCompaniesAfterIdentityVerification($contact->fresh() ?? $contact);
+        } catch (Throwable $e) {
+            report($e);
+        }
     }
 
     protected function needsManualName(Contact $contact): bool
