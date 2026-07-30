@@ -545,51 +545,78 @@ class PartnerNotificationService
     }
 
     /**
-     * Automated scan: company has an owner but TIN is not a valid 10-digit Ethiopian TIN number
-     * (including cases where tin_validated was set incorrectly).
+     * Automated scan: company has an invalid TIN number (not 10-digit Ethiopian).
+     * Queues SMS on the bulk queue to the owner phone and/or company phone.
      */
     public function companyTinInvalid(Company $company, bool $hadFalseApproval = false): void
     {
         $company->loadMissing(['activeMembers']);
 
-        $owner = $company->ownerContact();
-        $recipients = $owner ? collect([$owner]) : collect();
-        if ($recipients->isEmpty()) {
-            $recipients = $company->activeMembers;
+        $portalUrl = rtrim((string) config('vas.frontend_url', ''), '/');
+        if ($portalUrl !== '') {
+            $portalUrl .= '/login';
         }
 
+        $bulkQueue = (string) config('notifications.sms_queues.bulk', 'sms');
         $template = 'company_tin_invalid';
+        $placeholders = [
+            'contact_name' => 'Partner',
+            'company_name' => $company->name ?: 'your organisation',
+            'company_tin' => $company->tin ?: '—',
+            'note' => $hadFalseApproval
+                ? 'Previous TIN number approval was cleared.'
+                : 'Please submit a valid TIN number for approval.',
+            'portal_url' => $portalUrl !== '' ? $portalUrl : 'the VAS Partners portal',
+        ];
+
+        $smsBody = $this->render('templates', $template, $placeholders);
+        $portalBody = $this->render('portal', $template, $placeholders);
+
         $sentPhones = [];
 
-        foreach ($recipients as $contact) {
-            if (! $contact instanceof Contact) {
-                continue;
+        $queueSms = function (mixed $phone) use (&$sentPhones, $smsBody, $bulkQueue): void {
+            $raw = trim((string) $phone);
+            if ($raw === '') {
+                return;
             }
-
-            $placeholders = [
-                'contact_name' => $contact->name ?: 'Partner',
-                'company_name' => $company->name ?: 'your organisation',
-                'company_tin' => $company->tin ?: '—',
-                'note' => $hadFalseApproval
-                    ? 'Previous TIN number approval was cleared.'
-                    : 'Please submit a valid TIN number for approval.',
-            ];
-
-            $smsBody = $this->render('templates', $template, $placeholders);
-            $portalBody = $this->render('portal', $template, $placeholders);
-
-            $phone = trim((string) $contact->phone_number);
-            if ($phone !== '' && ! isset($sentPhones[$phone])) {
-                $this->sms->send($phone, $smsBody);
-                $sentPhones[$phone] = true;
+            $normalized = $this->sms->normalizePhone($raw);
+            if ($normalized === '' || isset($sentPhones[$normalized])) {
+                return;
             }
+            if (! $this->sms->ensurePhoneIsLocal($normalized)) {
+                return;
+            }
+            $this->sms->send($normalized, $smsBody, $bulkQueue);
+            $sentPhones[$normalized] = true;
+        };
 
-            $contact->notify(new PartnerPortalNotification(
+        $owner = $company->ownerContact();
+        if ($owner instanceof Contact) {
+            $queueSms($owner->phone_number);
+            $owner->notify(new PartnerPortalNotification(
                 title: $this->titleFor($template),
                 body: Str::limit($portalBody, 280),
                 template: $template,
                 url: '/portal/company',
             ));
+        }
+
+        $queueSms($company->phone);
+
+        // Fallback: other active members if nobody was reachable yet.
+        if ($sentPhones === []) {
+            foreach ($company->activeMembers as $contact) {
+                if (! $contact instanceof Contact) {
+                    continue;
+                }
+                $queueSms($contact->phone_number);
+                $contact->notify(new PartnerPortalNotification(
+                    title: $this->titleFor($template),
+                    body: Str::limit($portalBody, 280),
+                    template: $template,
+                    url: '/portal/company',
+                ));
+            }
         }
     }
 

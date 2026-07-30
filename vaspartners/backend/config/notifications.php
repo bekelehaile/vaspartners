@@ -115,7 +115,7 @@ Dear {contact_name}, the TIN number for {company_name} is confirmed. Log in to t
 SMS,
 
         'company_tin_invalid' => <<<'SMS'
-Dear {contact_name}, company {company_name} has an invalid TIN number ({company_tin}). {note} Enter a valid 10-digit Ethiopian TIN number in the portal. — Ethio telecom
+Dear Partner, from now on you cannot get any VAS service because of an invalid TIN number ({company_tin}) for {company_name}. If you want to continue, update your TIN number in the VAS Partners portal. {portal_url} — Ethio telecom
 SMS,
 
         'company_erca_name_mismatch' => <<<'SMS'
@@ -180,7 +180,7 @@ SMS,
 
         'company_tin_validated' => 'TIN number for {company_name} is confirmed. Log in and submit service requests.',
 
-        'company_tin_invalid' => 'TIN number for {company_name} ({company_tin}) is invalid. {note} Update it in Company settings.',
+        'company_tin_invalid' => 'Dear Partner, from now on you cannot get any VAS service because of an invalid TIN number ({company_tin}) for {company_name}. If you want to continue, update your TIN number in the VAS Partners portal. {portal_url}',
 
         'company_erca_name_mismatch' => 'TIN number for {company_name} does not match ERCA (legal name: {legal_name}). Update your TIN number in Company settings, search ERCA, and confirm.',
 

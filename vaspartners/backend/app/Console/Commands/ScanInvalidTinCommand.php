@@ -33,8 +33,12 @@ class ScanInvalidTinCommand extends Command
 
         $ownerRole = CompanyRole::Owner->value;
 
+        // With --notify-all, include ownerless companies that still have a company phone.
         $query = Company::query()
-            ->whereHas('memberships', fn ($q) => $q->where('role', $ownerRole))
+            ->when(
+                ! $notifyAll,
+                fn ($q) => $q->whereHas('memberships', fn ($m) => $m->where('role', $ownerRole)),
+            )
             ->when($falseApprovalsOnly, fn ($q) => $q->where('tin_validated', true))
             ->orderBy('id');
 
@@ -45,7 +49,10 @@ class ScanInvalidTinCommand extends Command
         $skipped = 0;
         $errors = 0;
 
-        $this->info(($dryRun ? '[dry-run] ' : '').'Scanning companies with owner for invalid TIN number…');
+        $this->info(($dryRun ? '[dry-run] ' : '').'Scanning companies for invalid TIN number…');
+        if ($notifyAll) {
+            $this->info('Mode: notify-all (owners + company phones, queued SMS)');
+        }
 
         $query->chunkById($chunk, function ($companies) use (
             $membership,
@@ -108,10 +115,14 @@ class ScanInvalidTinCommand extends Command
                         $membership->notifyInvalidTin($company, false);
                         Cache::put($cacheKey, 1, now()->endOfDay());
                         $notified++;
-                        $this->line('  notified '.$label);
+                        if ($notified <= 5 || $notified % 250 === 0) {
+                            $this->line('  queued '.$label);
+                        }
                     } else {
                         $skipped++;
-                        $this->line('  skipped '.$label.' (not approved; use --notify-all to SMS)');
+                        if ($skipped <= 5) {
+                            $this->line('  skipped '.$label.' (not approved; use --notify-all to SMS)');
+                        }
                     }
                 } catch (\Throwable $e) {
                     $errors++;
