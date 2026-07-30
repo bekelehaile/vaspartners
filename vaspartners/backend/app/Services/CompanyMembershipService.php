@@ -2226,12 +2226,14 @@ class CompanyMembershipService
         $data['identity_verified_at'] = optional($contact->identity_verified_at)?->toIso8601String();
         $data['needs_identity_consent'] = false;
         $data['needs_manual_name'] = false;
+        $data['identity_proposal'] = null;
         if (! $contact->isIdentityVerified()) {
-            $pending = app(\App\Services\ContactIdentityService::class)->pendingProposal($contact);
-            $data['needs_identity_consent'] = $pending !== null;
-            $data['identity_proposal'] = $pending;
+            // Do not reuse $pending — that holds the company change request below.
+            $identityProposal = app(\App\Services\ContactIdentityService::class)->pendingProposal($contact);
+            $data['needs_identity_consent'] = $identityProposal !== null;
+            $data['identity_proposal'] = $identityProposal;
             $name = trim((string) $contact->name);
-            $data['needs_manual_name'] = $pending === null
+            $data['needs_manual_name'] = $identityProposal === null
                 && ($name === '' || strcasecmp($name, 'Partner') === 0);
         }
         $data['memberships'] = $contact->memberships
