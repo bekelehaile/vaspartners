@@ -28,6 +28,7 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\FontWeight;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -221,7 +222,14 @@ class CompanyResource extends Resource
                             ['owner'],
                         );
                     }),
-                TextColumn::make('tin')->label('TIN number')->searchable()->sortable(),
+                TextColumn::make('tin')
+                    ->label('TIN number')
+                    ->searchable()
+                    ->sortable()
+                    ->url(fn (Company $record): string => static::getUrl('view', ['record' => $record]))
+                    ->color('primary')
+                    ->weight(FontWeight::SemiBold)
+                    ->tooltip('View company details'),
                 IconColumn::make('tin_ok')
                     ->label('TIN number verified')
                     ->boolean()
@@ -284,6 +292,7 @@ class CompanyResource extends Resource
                 TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('created_at', 'desc')
+            ->recordUrl(fn (Company $record): string => static::getUrl('view', ['record' => $record]))
             ->filters([
                 SelectFilter::make('tin_verification')
                     ->label('TIN number verification')
