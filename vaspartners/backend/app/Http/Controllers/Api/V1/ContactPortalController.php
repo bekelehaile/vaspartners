@@ -218,6 +218,7 @@ class ContactPortalController extends Controller
             'missing_names' => $attachment['missing_names'],
         ];
         $payload['can_delete'] = app(\App\Services\TicketPurgeService::class)->partnerMayDelete($ticket, $request->user());
+        $payload['status_audit'] = app(\App\Services\TicketAuditTrailService::class)->forPortal($ticket);
 
         return response()->json(['data' => $payload]);
     }

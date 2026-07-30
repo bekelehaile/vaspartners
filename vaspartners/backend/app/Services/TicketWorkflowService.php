@@ -74,6 +74,15 @@ class TicketWorkflowService
         $ticket->save();
 
         $historyMeta = $meta;
+        if (empty($historyMeta['event'])) {
+            $historyMeta['event'] = match ($to) {
+                TicketStatus::Open => $from === null ? 'submitted' : 'pending',
+                TicketStatus::InProgress => ! empty($meta['reassignment']) ? 'reassigned' : 'in_progress',
+                TicketStatus::Completed => 'approved',
+                TicketStatus::Closed => 'closed',
+                TicketStatus::Rejected => 'rejected',
+            };
+        }
         $historyMeta['status_stamp_column'] = $to->eventTimestampColumn();
         $historyMeta['status_stamped_at'] = $stampedAt->toIso8601String();
 
@@ -517,8 +526,9 @@ class TicketWorkflowService
                     'to_status' => TicketStatus::Open->value,
                     'actor_type' => Contact::class,
                     'actor_id' => $contact->id,
-                    'note' => 'Ticket created',
+                    'note' => 'Request submitted',
                     'meta' => [
+                        'event' => 'submitted',
                         'status_stamp_column' => TicketStatus::Open->eventTimestampColumn(),
                         'status_stamped_at' => $openedAt->toIso8601String(),
                     ],
@@ -731,17 +741,34 @@ class TicketWorkflowService
             ]);
 
             if ($ticket->status === TicketStatus::Open) {
-                $this->transition($ticket, TicketStatus::InProgress, $assigner, $note ?? 'Assigned to account manager');
+                $this->transition(
+                    $ticket,
+                    TicketStatus::InProgress,
+                    $assigner,
+                    $note ?? ('Assigned to '.$assignee->name),
+                    [
+                        'event' => 'assigned',
+                        'assignee_user_id' => $assignee->id,
+                        'assignee_name' => $assignee->name,
+                        'assigner_user_id' => $assigner->id,
+                        'assigner_name' => $assigner->name,
+                    ],
+                );
             } elseif ($ticket->status === TicketStatus::InProgress) {
                 // Reassignment while already in progress: refresh in_progress_at with history.
                 $this->transition(
                     $ticket,
                     TicketStatus::InProgress,
                     $assigner,
-                    $note ?? 'Reassigned to account manager',
+                    $note ?? ('Reassigned to '.$assignee->name),
                     [
+                        'event' => 'reassigned',
                         'reassignment' => true,
                         'skip_partner_notification' => true,
+                        'assignee_user_id' => $assignee->id,
+                        'assignee_name' => $assignee->name,
+                        'assigner_user_id' => $assigner->id,
+                        'assigner_name' => $assigner->name,
                     ],
                 );
             }
@@ -894,6 +921,11 @@ class TicketWorkflowService
             $ticket->save();
             if ($nextStatus) {
                 $this->transition($ticket, $nextStatus, $approver, $note, [
+                    'event' => $action === ApprovalAction::Approved && $nextStatus === TicketStatus::Completed
+                        ? 'approved'
+                        : ($action === ApprovalAction::Rejected || $nextStatus === TicketStatus::Rejected
+                            ? 'rejected'
+                            : 'in_progress'),
                     'approval_action' => $action->value,
                     'approver_user_id' => $approver->id,
                     'approver_name' => $approver->name,
@@ -936,7 +968,9 @@ class TicketWorkflowService
 
             $ticket->current_approver_user_id = null;
             $ticket->save();
-            $this->transition($ticket, TicketStatus::Closed, $actor, $note ?? 'Ticket closed');
+            $this->transition($ticket, TicketStatus::Closed, $actor, $note ?? 'Ticket closed', [
+                'event' => 'closed',
+            ]);
 
             return $ticket->fresh();
         });

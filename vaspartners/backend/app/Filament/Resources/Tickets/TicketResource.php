@@ -184,11 +184,34 @@ class TicketResource extends Resource
             Section::make('Assignment & timeline')->schema([
                 TextEntry::make('assignee.name')->label('Account manager')->placeholder('—'),
                 TextEntry::make('currentApprover.name')->label('Current approver')->placeholder('—'),
+                TextEntry::make('audit_trail')
+                    ->label('Status audit (who · when)')
+                    ->columnSpanFull()
+                    ->html()
+                    ->state(function (Ticket $record): string {
+                        $entries = app(\App\Services\TicketAuditTrailService::class)->entries($record);
+                        if ($entries === []) {
+                            return '—';
+                        }
+
+                        $lines = collect($entries)->map(function (array $e): string {
+                            $when = ! empty($e['at'])
+                                ? \Illuminate\Support\Carbon::parse($e['at'])->timezone(config('app.timezone'))->format('Y-m-d H:i')
+                                : '—';
+                            $who = e((string) ($e['actor_name'] ?? 'System'));
+                            $label = e((string) ($e['label'] ?? 'Status'));
+                            $detail = ! empty($e['detail']) ? ' · '.e((string) $e['detail']) : '';
+
+                            return "<div><strong>{$label}</strong> — {$who}{$detail} · <span class=\"text-gray-500\">{$when}</span></div>";
+                        })->implode('');
+
+                        return '<div class="space-y-1 text-sm leading-relaxed">'.$lines.'</div>';
+                    }),
                 TextEntry::make('created_at')->label('Submitted')->dateTime()->placeholder('—'),
                 TextEntry::make('opened_at')->label('Pending at')->dateTime()->placeholder('—'),
                 TextEntry::make('assigned_at')->label('Assigned at')->dateTime()->placeholder('—'),
                 TextEntry::make('in_progress_at')->label('In progress at')->dateTime()->placeholder('—'),
-                TextEntry::make('completed_at')->label('Completed at')->dateTime()->placeholder('—'),
+                TextEntry::make('completed_at')->label('Completed / approved at')->dateTime()->placeholder('—'),
                 TextEntry::make('closed_at')->label('Closed at')->dateTime()->placeholder('—'),
                 TextEntry::make('rejected_at')->label('Rejected at')->dateTime()->placeholder('—'),
                 TextEntry::make('escalated_at')->label('Escalated at')->dateTime()->placeholder('—'),

@@ -39,6 +39,7 @@ class ViewTicket extends ViewRecord
 
         if ($record instanceof Ticket) {
             $record = app(TicketWorkflowService::class)->enforceIncompleteMustBeRejected($record);
+            app(\App\Services\TicketAuditTrailService::class)->backfillMissingHistory($record);
             $record->loadMissing([
                 'contact.company',
                 'service',
@@ -50,6 +51,7 @@ class ViewTicket extends ViewRecord
                 'subscription.company',
                 'subscription.service',
                 'parentTicket',
+                'statusHistories.actor',
             ]);
         }
 

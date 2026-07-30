@@ -337,6 +337,50 @@ export default function RequestDetailPage() {
                   <CardContent className="flex flex-col gap-5 pt-(--card-spacing)">
                     <StatusJourney status={ticket.status} />
 
+                    {Array.isArray(ticket.status_audit) && ticket.status_audit.length > 0 ? (
+                      <div className="rounded-lg border bg-muted/30 px-4 py-3">
+                        <h3 className="mb-2 text-[0.72rem] font-bold tracking-wide text-muted-foreground uppercase">
+                          Status audit trail
+                        </h3>
+                        <ol className="space-y-2.5">
+                          {ticket.status_audit.map((entry, idx) => (
+                            <li
+                              key={`${entry.event}-${entry.at}-${idx}`}
+                              className="flex flex-col gap-0.5 border-b border-border/60 pb-2 last:border-0 last:pb-0 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4"
+                            >
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-foreground">
+                                  {entry.label}
+                                  {entry.detail ? (
+                                    <span className="font-normal text-muted-foreground">
+                                      {" "}
+                                      · {entry.detail}
+                                    </span>
+                                  ) : null}
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  By {entry.actor_name || "System"}
+                                  {entry.note ? ` — ${entry.note}` : ""}
+                                </p>
+                              </div>
+                              <time
+                                className="shrink-0 text-xs text-muted-foreground tabular-nums"
+                                dateTime={entry.at}
+                              >
+                                {new Date(entry.at).toLocaleString(undefined, {
+                                  year: "numeric",
+                                  month: "short",
+                                  day: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </time>
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    ) : null}
+
                     {editing && canEdit ? (
                       <form className="rounded-lg border bg-muted/30 px-4 py-3" onSubmit={onSaveEdit}>
                         <h3 className="mb-1 text-[0.72rem] font-bold tracking-wide text-muted-foreground uppercase">

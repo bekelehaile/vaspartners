@@ -172,6 +172,17 @@ export type GalleryItem = {
   album?: string | null;
 };
 
+export type TicketStatusAuditEntry = {
+  event: string;
+  label: string;
+  status?: string | null;
+  status_label?: string | null;
+  actor_name?: string | null;
+  detail?: string | null;
+  note?: string | null;
+  at: string;
+};
+
 export type Ticket = {
   id: number;
   public_id: string;
@@ -188,6 +199,7 @@ export type Ticket = {
   requisition?: { id: number; name: string };
   created_at: string;
   updated_at?: string;
+  status_audit?: TicketStatusAuditEntry[];
   messages?: TicketMessage[];
   messages_meta?: {
     total: number;
