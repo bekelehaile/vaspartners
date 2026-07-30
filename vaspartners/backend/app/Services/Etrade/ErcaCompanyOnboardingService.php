@@ -18,6 +18,7 @@ class ErcaCompanyOnboardingService
     public function __construct(
         protected EtradeTinLookupService $lookup,
         protected CompanyMembershipService $membership,
+        protected ErcaPortalSearchGuard $searchGuard,
     ) {}
 
     /**
@@ -41,6 +42,7 @@ class ErcaCompanyOnboardingService
             ]);
         }
 
+        $this->searchGuard->assertCanSearch($contact, $tin);
         $this->membership->assertTinAvailableForCreate($tin, $ignoreCompanyId);
 
         if (! $this->lookup->enabled()) {
@@ -49,11 +51,14 @@ class ErcaCompanyOnboardingService
             ]);
         }
 
-        if (! $this->acquireLookupSlot()) {
+        $cachedHit = $this->lookup->hasCachedResult($tin);
+        if (! $cachedHit && ! $this->acquireLookupSlot()) {
             throw ValidationException::withMessages([
                 'company_tin' => 'TIN number verification is busy. Please try again in a few minutes.',
             ]);
         }
+
+        $this->searchGuard->recordSearch($contact, $tin);
 
         $result = $this->lookup->lookup($tin);
 

@@ -86,7 +86,17 @@ return [
         'include_registrations' => filter_var(env('ETRADE_INCLUDE_REGISTRATIONS', true), FILTER_VALIDATE_BOOL),
         // Anti-flood: cache each TIN number lookup and cap scheduled/global calls.
         'tin_cache_hours' => (int) env('ETRADE_TIN_CACHE_HOURS', 6),
+        // Negative / not-found results: shorter cache so genuine TINs can appear sooner.
+        'tin_not_found_cache_minutes' => (int) env('ETRADE_TIN_NOT_FOUND_CACHE_MINUTES', 60),
+        // Brief cache for upstream outages so we do not stampede.
+        'tin_unavailable_cache_seconds' => (int) env('ETRADE_TIN_UNAVAILABLE_CACHE_SECONDS', 90),
         'global_lookups_per_minute' => (int) env('ETRADE_GLOBAL_LOOKUPS_PER_MINUTE', 20),
+        // Portal partner search caps (beyond HTTP throttle).
+        'portal_lookups_per_minute' => (int) env('ETRADE_PORTAL_LOOKUPS_PER_MINUTE', 5),
+        'portal_lookups_per_ip_minute' => (int) env('ETRADE_PORTAL_LOOKUPS_PER_IP_MINUTE', 15),
+        'portal_lookups_per_hour' => (int) env('ETRADE_PORTAL_LOOKUPS_PER_HOUR', 12),
+        'portal_lookups_per_day' => (int) env('ETRADE_PORTAL_LOOKUPS_PER_DAY', 20),
+        'portal_unique_tins_per_day' => (int) env('ETRADE_PORTAL_UNIQUE_TINS_PER_DAY', 8),
         'recheck_hours' => (int) env('ETRADE_RECHECK_HOURS', 168),
         'retry_hours' => (int) env('ETRADE_RETRY_HOURS', 6),
         'schedule_limit' => (int) env('ETRADE_SCHEDULE_LIMIT', 25),

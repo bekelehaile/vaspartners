@@ -60,7 +60,7 @@ class ErcaTinVerificationService
             return $this->snapshot($company->fresh() ?? $company);
         }
 
-        if (! $this->acquireGlobalSlot()) {
+        if (! $this->lookup->hasCachedResult($tin) && ! $this->acquireGlobalSlot()) {
             $company->forceFill([
                 'erca_next_check_at' => now()->addMinutes(15),
                 'erca_last_error' => 'Rate limited — retry later',

@@ -114,10 +114,12 @@ class AppServiceProvider extends ServiceProvider
     {
         RateLimiter::for('portal-tin-lookup', function ($request) {
             $userId = $request->user()?->id ?? 'guest';
+            $perUser = max(1, (int) config('services.etrade.portal_lookups_per_minute', 5));
+            $perIp = max(1, (int) config('services.etrade.portal_lookups_per_ip_minute', 15));
 
             return [
-                Limit::perMinute(20)->by('portal-tin-user:'.$userId),
-                Limit::perMinute(60)->by('portal-tin-ip:'.$request->ip()),
+                Limit::perMinute($perUser)->by('portal-tin-user:'.$userId),
+                Limit::perMinute($perIp)->by('portal-tin-ip:'.$request->ip()),
             ];
         });
     }

@@ -14,6 +14,7 @@ use App\Models\CompanyStatusHistory;
 use App\Models\Contact;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Services\Etrade\ErcaPortalSearchGuard;
 use App\Services\Etrade\ErcaTinVerificationService;
 use App\Support\TinNumber;
 use Illuminate\Http\UploadedFile;
@@ -28,6 +29,7 @@ class CompanyMembershipService
     public function __construct(
         protected PartnerNotificationService $notifications,
         protected ErcaTinVerificationService $ercaTin,
+        protected ErcaPortalSearchGuard $ercaSearchGuard,
     ) {}
 
     public function maxDocKb(): int
@@ -2115,6 +2117,7 @@ class CompanyMembershipService
         $this->assertErcaIdentityEditable($company);
 
         $tin = $this->normalizeEthiopianTin($rawTin);
+        $this->ercaSearchGuard->assertCanSearch($contact, $tin);
         $this->assertUniqueTin($tin, $company->id);
 
         $wasValidated = (bool) $company->tin_validated;
@@ -2130,7 +2133,9 @@ class CompanyMembershipService
 
         $this->syncAllMembersDenormalizedFields($company);
 
-        // One ERCA check per partner submit (force bypasses cache; global rate limit still applies).
+        $this->ercaSearchGuard->recordSearch($contact, $tin);
+
+        // One ERCA check per partner submit (force bypasses company next-check; result cache still applies).
         $this->ercaTin->verifyCompany($company->fresh() ?? $company, force: true);
 
         return $contact->fresh(['company', 'memberships.company']);

@@ -4,6 +4,7 @@ namespace App\Services\Etrade;
 
 use App\Support\TinNumber;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -48,6 +49,21 @@ class EtradeTinLookupService
      *   raw: array{taxpayer: mixed, registrations: mixed}
      * }
      */
+    public function resultCacheKey(string $tin): string
+    {
+        return 'etrade:tin-result:'.TinNumber::normalize($tin);
+    }
+
+    public function hasCachedResult(string $tin): bool
+    {
+        $normalized = TinNumber::normalize($tin);
+        if (! TinNumber::isValid($normalized)) {
+            return false;
+        }
+
+        return Cache::has($this->resultCacheKey($normalized));
+    }
+
     public function lookup(string $tin): array
     {
         $normalized = TinNumber::normalize($tin);
@@ -60,6 +76,12 @@ class EtradeTinLookupService
             return $this->emptyResult($normalized, unavailable: true);
         }
 
+        $cacheKey = $this->resultCacheKey($normalized);
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached) && array_key_exists('found', $cached)) {
+            return $cached;
+        }
+
         try {
             $taxpayerRows = $this->fetchJson($this->url(config('services.etrade.tin_path'), $normalized));
             $registrationRows = [];
@@ -70,15 +92,45 @@ class EtradeTinLookupService
                 ) ?? [];
             }
 
-            return $this->mapResult($normalized, $taxpayerRows, is_array($registrationRows) ? $registrationRows : []);
+            $result = $this->mapResult($normalized, $taxpayerRows, is_array($registrationRows) ? $registrationRows : []);
+            $this->rememberResult($normalized, $result);
+
+            return $result;
         } catch (Throwable $e) {
             Log::error('eTrade TIN number lookup failed', [
                 'tin' => $normalized,
                 'message' => $e->getMessage(),
             ]);
 
-            return $this->emptyResult($normalized, unavailable: true);
+            $unavailable = $this->emptyResult($normalized, unavailable: true);
+            $seconds = max(30, (int) config('services.etrade.tin_unavailable_cache_seconds', 90));
+            Cache::put($cacheKey, $unavailable, now()->addSeconds($seconds));
+
+            return $unavailable;
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $result
+     */
+    protected function rememberResult(string $tin, array $result): void
+    {
+        if (! empty($result['raw']['unavailable'])) {
+            $seconds = max(30, (int) config('services.etrade.tin_unavailable_cache_seconds', 90));
+            Cache::put($this->resultCacheKey($tin), $result, now()->addSeconds($seconds));
+
+            return;
+        }
+
+        if (! ($result['found'] ?? false)) {
+            $minutes = max(5, (int) config('services.etrade.tin_not_found_cache_minutes', 60));
+            Cache::put($this->resultCacheKey($tin), $result, now()->addMinutes($minutes));
+
+            return;
+        }
+
+        $hours = max(1, (int) config('services.etrade.tin_cache_hours', 6));
+        Cache::put($this->resultCacheKey($tin), $result, now()->addHours($hours));
     }
 
     protected function client(): PendingRequest
