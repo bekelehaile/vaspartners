@@ -44,8 +44,9 @@ ensure_kv APP_URL "https://vaspartnersportal.ethiotelecom.et"
 ensure_kv FRONTEND_URL "https://vaspartnersportal.ethiotelecom.et"
 ensure_kv FAYDA_REDIRECT_URI "https://vaspartnersportal.ethiotelecom.et/callback"
 ensure_kv SANCTUM_STATEFUL_DOMAINS "vaspartnersportal.ethiotelecom.et"
-ensure_kv APP_ENV "staging"
+# Keep APP_ENV from .env.staging (production or staging) — do not force overwrite.
 ensure_kv TRUSTED_PROXIES "*"
+ensure_kv APP_DEBUG "false"
 
 if [[ ! -r /etc/nginx/ssl/fullchain-wildcard.crt || ! -r /etc/nginx/ssl/ethiotelecom-wildcard.key ]]; then
   echo "Tele SSL certs not readable at /etc/nginx/ssl/fullchain-wildcard.crt (+ key)."
