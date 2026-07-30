@@ -166,7 +166,11 @@ export function CompanyProfileForm({
           person={me}
           badge={
             <>
-              {me.identity_verified || me.fayda_verified ? (
+              {me.identity_verified_via === "crm" ? (
+                <span className="service-meta">Verified via CRM</span>
+              ) : me.identity_verified_via === "fayda" || me.fayda_verified ? (
+                <span className="service-meta">Verified via Fayda</span>
+              ) : me.identity_verified ? (
                 <span className="service-meta">Verified</span>
               ) : (
                 <span className="service-meta">Unverified</span>

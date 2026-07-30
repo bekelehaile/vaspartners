@@ -148,6 +148,7 @@ class ContactResource extends Resource
                     TextEntry::make('identity_verified_via')
                         ->label('Verified via')
                         ->badge()
+                        ->state(fn (Contact $record): ?string => $record->identityVerifiedViaValue())
                         ->formatStateUsing(fn ($state): string => match ((string) $state) {
                             'fayda' => 'Fayda',
                             'crm' => 'CRM',
@@ -158,11 +159,6 @@ class ContactResource extends Resource
                             default => 'warning',
                         }),
                     TextEntry::make('identity_verified_at')->label('Verified at')->dateTime()->placeholder('—'),
-                    TextEntry::make('fayda_verified')
-                        ->label('Fayda flag')
-                        ->badge()
-                        ->formatStateUsing(fn ($state): string => $state ? 'Yes' : 'No')
-                        ->color(fn ($state): string => $state ? 'success' : 'gray'),
                     TextEntry::make('name'),
                     TextEntry::make('phone_number'),
                     TextEntry::make('email'),
@@ -197,11 +193,19 @@ class ContactResource extends Resource
             Section::make('Status')->schema([
                 TextEntry::make('is_active')->badge(),
                 TextEntry::make('is_banned')->badge(),
-                TextEntry::make('fayda_verified')
-                    ->label('Fayda verified')
+                TextEntry::make('identity_verified_via')
+                    ->label('Verified via')
                     ->badge()
-                    ->formatStateUsing(fn ($state): string => $state ? 'Yes' : 'No')
-                    ->color(fn ($state): string => $state ? 'success' : 'warning'),
+                    ->state(fn (Contact $record): ?string => $record->identityVerifiedViaValue())
+                    ->formatStateUsing(fn ($state): string => match ((string) $state) {
+                        'fayda' => 'Fayda',
+                        'crm' => 'CRM',
+                        default => 'Unverified',
+                    })
+                    ->color(fn ($state): string => match ((string) $state) {
+                        'fayda', 'crm' => 'success',
+                        default => 'warning',
+                    }),
                 TextEntry::make('created_at')->dateTime(),
             ])->columns(4),
         ]);
@@ -234,14 +238,14 @@ class ContactResource extends Resource
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
                 IconColumn::make('profile_completed')->boolean()->label('Company OK'),
-                IconColumn::make('fayda_verified')->boolean()->label('Fayda'),
                 TextColumn::make('identity_verified_via')
-                    ->label('KYC')
+                    ->label('Verified via')
                     ->badge()
+                    ->state(fn (Contact $record): ?string => $record->identityVerifiedViaValue())
                     ->formatStateUsing(fn ($state): string => match ((string) $state) {
                         'fayda' => 'Fayda',
                         'crm' => 'CRM',
-                        default => '—',
+                        default => 'Unverified',
                     })
                     ->color(fn ($state): string => match ((string) $state) {
                         'fayda', 'crm' => 'success',
@@ -294,12 +298,28 @@ class ContactResource extends Resource
                             default => $query,
                         };
                     }),
-                TernaryFilter::make('fayda_verified')
-                    ->label('Fayda verified')
-                    ->boolean()
-                    ->placeholder('Any')
-                    ->trueLabel('Verified via Fayda')
-                    ->falseLabel('Not Fayda-verified'),
+                SelectFilter::make('identity_verified_via')
+                    ->label('Verified via')
+                    ->options([
+                        'fayda' => 'Fayda',
+                        'crm' => 'CRM',
+                        '__none' => 'Unverified',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        $value = $data['value'] ?? null;
+                        if ($value === null || $value === '') {
+                            return $query;
+                        }
+                        if ($value === '__none') {
+                            return $query
+                                ->whereNull('identity_verified_via')
+                                ->where(function (Builder $q): void {
+                                    $q->whereNull('fayda_verified')->orWhere('fayda_verified', false);
+                                });
+                        }
+
+                        return $query->where('identity_verified_via', $value);
+                    }),
                 TernaryFilter::make('profile_completed_at')
                     ->label('Profile completed')
                     ->nullable()

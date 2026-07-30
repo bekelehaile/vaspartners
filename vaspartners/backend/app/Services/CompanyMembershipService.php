@@ -2305,8 +2305,7 @@ class CompanyMembershipService
         $data['profile_completed'] = $contact->profile_completed;
         $data['fayda_verified'] = (bool) $contact->fayda_verified;
         $data['identity_verified'] = $contact->isIdentityVerified();
-        $data['identity_verified_via'] = $contact->identity_verified_via
-            ?? ($contact->fayda_verified ? 'fayda' : null);
+        $data['identity_verified_via'] = $contact->identityVerifiedViaValue();
         $data['identity_verified_at'] = optional($contact->identity_verified_at)?->toIso8601String();
         $data['needs_identity_consent'] = false;
         $data['needs_manual_name'] = false;
