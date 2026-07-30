@@ -550,6 +550,30 @@ class PartnerNotificationService
      */
     public function companyTinInvalid(Company $company, bool $hadFalseApproval = false): void
     {
+        $this->notifyCompanyTinIssue(
+            $company,
+            'company_tin_invalid',
+            [
+                'note' => $hadFalseApproval
+                    ? 'Previous TIN number approval was cleared.'
+                    : 'Please submit a valid TIN number for approval.',
+            ],
+        );
+    }
+
+    /**
+     * Valid 10-digit TIN number that ERCA does not recognise (awaiting verification / not_found).
+     */
+    public function companyTinNotFoundInErca(Company $company): void
+    {
+        $this->notifyCompanyTinIssue($company, 'company_tin_not_found_erca');
+    }
+
+    /**
+     * @param  array<string, string>  $extraPlaceholders
+     */
+    protected function notifyCompanyTinIssue(Company $company, string $template, array $extraPlaceholders = []): void
+    {
         $company->loadMissing(['activeMembers']);
 
         $portalUrl = rtrim((string) config('vas.frontend_url', ''), '/');
@@ -558,16 +582,13 @@ class PartnerNotificationService
         }
 
         $bulkQueue = (string) config('notifications.sms_queues.bulk', 'sms');
-        $template = 'company_tin_invalid';
-        $placeholders = [
+        $placeholders = array_merge([
             'contact_name' => 'Partner',
             'company_name' => $company->name ?: 'your organisation',
             'company_tin' => $company->tin ?: '—',
-            'note' => $hadFalseApproval
-                ? 'Previous TIN number approval was cleared.'
-                : 'Please submit a valid TIN number for approval.',
+            'note' => '',
             'portal_url' => $portalUrl !== '' ? $portalUrl : 'the VAS Partners portal',
-        ];
+        ], $extraPlaceholders);
 
         $smsBody = $this->render('templates', $template, $placeholders);
         $portalBody = $this->render('portal', $template, $placeholders);
@@ -603,7 +624,6 @@ class PartnerNotificationService
 
         $queueSms($company->phone);
 
-        // Fallback: other active members if nobody was reachable yet.
         if ($sentPhones === []) {
             foreach ($company->activeMembers as $contact) {
                 if (! $contact instanceof Contact) {
@@ -781,6 +801,7 @@ class PartnerNotificationService
             'company_profile_approved' => 'Company approved',
             'company_tin_validated' => 'TIN number confirmed',
             'company_tin_invalid' => 'TIN number invalid',
+            'company_tin_not_found_erca' => 'TIN number not found in ERCA',
             'company_erca_name_mismatch' => 'TIN number / ERCA name mismatch',
             'company_profile_rejected' => 'Company needs updates',
             'company_member_left' => 'Member left company',

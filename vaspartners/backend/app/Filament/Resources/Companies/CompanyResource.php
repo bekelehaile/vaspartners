@@ -12,6 +12,7 @@ use App\Filament\Resources\Companies\RelationManagers\StatusHistoryRelationManag
 use App\Filament\Resources\Companies\RelationManagers\SubscriptionsRelationManager;
 use App\Models\Company;
 use App\Models\Service;
+use App\Services\CompanyPurgeService;
 use App\Services\SmsService;
 use App\Support\PhoneNumber;
 use App\Support\TinNumber;
@@ -35,6 +36,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Arr;
+use Illuminate\Validation\ValidationException;
 
 class CompanyResource extends Resource
 {
@@ -377,6 +379,7 @@ class CompanyResource extends Resource
                     ->action(function (Company $record, array $data, SmsService $sms): void {
                         static::dispatchCompanySms($record, (string) $data['message'], $sms);
                     }),
+                static::deleteCompanyAction(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -512,21 +515,82 @@ class CompanyResource extends Resource
 
     public static function canDelete($record): bool
     {
-        return false;
+        $user = auth()->user();
+        if (! $user || ! method_exists($user, 'hasRole') || ! $user->hasRole('super_admin')) {
+            return false;
+        }
+
+        return $record instanceof Company
+            && app(CompanyPurgeService::class)->canForcePurge($record);
     }
 
     public static function canForceDelete($record): bool
     {
-        return false;
+        return static::canDelete($record);
     }
 
     public static function canDeleteAny(): bool
     {
-        return false;
+        $user = auth()->user();
+
+        return (bool) ($user && method_exists($user, 'hasRole') && $user->hasRole('super_admin'));
     }
 
     public static function canForceDeleteAny(): bool
     {
-        return false;
+        return static::canDeleteAny();
+    }
+
+    /**
+     * Super-admin only permanent delete via CompanyPurgeService.
+     *
+     * @return array{ok: bool, stats?: array<string, mixed>}
+     */
+    public static function purgeCompanyRecord(Company $record, CompanyPurgeService $purge): array
+    {
+        try {
+            $stats = $purge->forcePurge($record);
+        } catch (ValidationException $e) {
+            Notification::make()
+                ->title('Cannot delete company')
+                ->body(collect($e->errors())->flatten()->first() ?: $e->getMessage())
+                ->danger()
+                ->send();
+
+            return ['ok' => false];
+        }
+
+        Notification::make()
+            ->title('Company deleted')
+            ->body(sprintf(
+                '%s removed (memberships %d, tickets %d, subscriptions %d, contacts %d).',
+                $stats['company'],
+                $stats['memberships'],
+                $stats['tickets'],
+                $stats['subscriptions'],
+                $stats['contacts'],
+            ))
+            ->success()
+            ->send();
+
+        return ['ok' => true, 'stats' => $stats];
+    }
+
+    public static function deleteCompanyAction(): Action
+    {
+        return Action::make('delete')
+            ->label('Delete')
+            ->icon('heroicon-o-trash')
+            ->color('danger')
+            ->visible(fn (Company $record): bool => static::canDelete($record))
+            ->requiresConfirmation()
+            ->modalHeading(fn (Company $record): string => 'Delete company '.$record->name)
+            ->modalDescription(
+                'Permanently deletes this company and related memberships, tickets, subscriptions, and orphan contacts. Companies with an owner, verified TIN number, and at least one subscription cannot be deleted.'
+            )
+            ->modalSubmitActionLabel('Delete permanently')
+            ->action(function (Company $record, CompanyPurgeService $purge): void {
+                static::purgeCompanyRecord($record, $purge);
+            });
     }
 }
