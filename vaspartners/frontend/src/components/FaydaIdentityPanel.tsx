@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 
-export type FaydaIdentityFields = {
+export type IdentityPersonFields = {
   name?: string | null;
   phone_number?: string | null;
   email?: string | null;
@@ -11,6 +11,9 @@ export type FaydaIdentityFields = {
   birthdate?: string | null;
   identification_type?: string | null;
   identification_number?: string | null;
+  identity_verified_via?: string | null;
+  identity_verified_at?: string | null;
+  fayda_verified?: boolean | null;
 };
 
 function formatBirthdate(value?: string | null): string {
@@ -19,24 +22,54 @@ function formatBirthdate(value?: string | null): string {
   return d || value;
 }
 
+function formatVerifiedAt(value?: string | null): string {
+  if (!value) return "—";
+  try {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return value;
+    return d.toLocaleString();
+  } catch {
+    return value;
+  }
+}
+
+export function identityViaLabel(via?: string | null, legacyFayda?: boolean | null): string {
+  const v = (via || (legacyFayda ? "fayda" : "")).toLowerCase();
+  if (v === "fayda") return "Fayda";
+  if (v === "crm") return "CRM";
+  return "—";
+}
+
+export function isPersonIdentityVerified(person: IdentityPersonFields): boolean {
+  return Boolean(person.identity_verified_via || person.fayda_verified);
+}
+
+/** @deprecated Use IdentityPersonFields */
+export type FaydaIdentityFields = IdentityPersonFields;
+
 export function FaydaIdentityPanel({
-  id = "fayda-identity",
+  id = "partner-identity",
   title = "Your identity",
-  description = "Verified identity details — read-only.",
+  description = "Identity details — read-only.",
   person,
   badge,
   footer,
   showHeading = true,
+  showVerificationMeta = true,
 }: {
   id?: string;
   title?: string;
   description?: string | null;
-  person: FaydaIdentityFields;
+  person: IdentityPersonFields;
   badge?: ReactNode;
   footer?: ReactNode;
   /** When false, page header owns the title — avoid duplicate headings. */
   showHeading?: boolean;
+  /** Show common Verified via / Verified at rows. */
+  showVerificationMeta?: boolean;
 }) {
+  const via = identityViaLabel(person.identity_verified_via, person.fayda_verified);
+
   return (
     <section id={id} className="settings-block fayda-readonly">
       {showHeading && (
@@ -55,6 +88,18 @@ export function FaydaIdentityPanel({
         </div>
       )}
       <dl className="fayda-dl">
+        {showVerificationMeta ? (
+          <>
+            <div>
+              <dt>Verified via</dt>
+              <dd>{via}</dd>
+            </div>
+            <div>
+              <dt>Verified at</dt>
+              <dd>{formatVerifiedAt(person.identity_verified_at)}</dd>
+            </div>
+          </>
+        ) : null}
         <div>
           <dt>Full name</dt>
           <dd>{person.name || "—"}</dd>

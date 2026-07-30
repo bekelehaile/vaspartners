@@ -26,15 +26,11 @@ function memberIdentityLabel(member: CompanyMemberOption): string {
   const via =
     member.identity_verified_via ?? (member.fayda_verified ? "fayda" : null);
   if (member.identity_verified || via) {
-    if (via === "crm") {
-      return "Verified via CRM";
-    }
-    if (via === "fayda") {
-      return "Verified via Fayda";
-    }
+    if (via === "crm") return "CRM";
+    if (via === "fayda") return "Fayda";
     return "Verified";
   }
-  return "Unverified";
+  return "—";
 }
 
 function memberIdentityApproved(member: CompanyMemberOption): boolean {
@@ -656,7 +652,7 @@ export function CompanyMembersTable({ enabled }: { enabled: boolean }) {
                 <th>Email</th>
                 <th>Role</th>
                 <th>Access</th>
-                <th>Identity</th>
+                <th>Verified via</th>
                 <th>Permissions</th>
                 <th></th>
               </tr>
@@ -717,7 +713,7 @@ export function CompanyMembersTable({ enabled }: { enabled: boolean }) {
                           </span>
                         ) : (
                           <span className="company-request-status is-pending">
-                            Unverified
+                            —
                           </span>
                         )}
                       </td>

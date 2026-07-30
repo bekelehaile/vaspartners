@@ -126,35 +126,33 @@ export default function CompanyProfilePage() {
         return {
           kicker: "Account",
           title: COMPANY_SECTION_LABEL.identity,
-          description: `Your personal National ID details from Fayda${
-            me?.company_role === "owner" ? " (you are the company owner)" : ""
-          }. This is not company registration data.`,
+          description: "Your personal identity details.",
         };
       case "profile":
         return {
-          kicker: "Organisation",
+          kicker: "Company",
           title: COMPANY_SECTION_LABEL.profile,
           description: awaitingApproval
             ? me?.company?.approval_status === "rejected"
-              ? `Admin feedback: ${me?.company?.approval_note || "Please complete the required company information and resubmit."}`
-              : "An administrator must approve this unique TIN before you can request VAS services."
-            : `Organisation registration for ${companyName}. After approval, only administrators can change these records.`,
+              ? me?.company?.approval_note || "Please update company details and resubmit."
+              : "Waiting for TIN approval."
+            : `Details for ${companyName}.`,
         };
       case "members":
         return {
-          kicker: "Organisation",
+          kicker: "Company",
           title: COMPANY_SECTION_LABEL.members,
           description: isOwner
-            ? `Partners linked to ${companyName}. Use Actions to enable or disable access and grant permissions.`
-            : `Partners linked to ${companyName}. Open a row to view Fayda identity details.`,
+            ? `People linked to ${companyName}.`
+            : `People linked to ${companyName}.`,
         };
       case "ownership":
         return {
-          kicker: "Organisation",
+          kicker: "Company",
           title: isOwner ? COMPANY_SECTION_LABEL.ownership : "Leave company",
           description: isOwner
-            ? `Transfer ownership of ${companyName} before you leave, or manage your membership.`
-            : `Leave ${companyName}. Leaving is personal and immediate — no admin approval.`,
+            ? `Transfer ownership of ${companyName} before you leave.`
+            : `Leave ${companyName}.`,
         };
       default:
         return {
@@ -167,23 +165,22 @@ export default function CompanyProfilePage() {
 
   const pageHeader = membershipDisabled
     ? {
-        kicker: "Organisation",
-        title: "Membership disabled",
-        description:
-          "Your access to this company has been disabled. Ask your company owner or an administrator to re-enable it.",
+        kicker: "Company",
+        title: "Access disabled",
+        description: "Ask your company owner to restore access.",
       }
     : pending
       ? {
-          kicker: "Organisation",
-          title: "Company request pending",
-          description: `Your ${pending.type} request for ${pending.company?.name || "a company"} is waiting for ${waitingFor} approval. VAS services stay locked until the company TIN is approved.`,
+          kicker: "Company",
+          title: "Request pending",
+          description: `Your request for ${pending.company?.name || "a company"} is waiting for ${waitingFor}.`,
         }
       : showWorkspace
         ? workspaceHeader
         : {
-            kicker: "Welcome",
-            title: "Link your Fayda account to a company",
-            description: `Hello${me?.name ? `, ${me.name.split(" ")[0]}` : ""}. Create a new company with a unique TIN for admin approval, or request to join an existing approved company. You cannot use VAS services until that TIN is approved.`,
+            kicker: "Company",
+            title: "Set up your company",
+            description: "Create a company or join an existing one.",
           };
 
   return (
@@ -240,13 +237,13 @@ export default function CompanyProfilePage() {
                 items={[
                   {
                     id: "create",
-                    label: "Create new company",
-                    description: "Register a unique TIN",
+                    label: "Create company",
+                    description: "Name, TIN, address",
                   },
                   {
                     id: "attach",
-                    label: "Attach to existing",
-                    description: "Request membership",
+                    label: "Join company",
+                    description: "Request to join",
                   },
                 ]}
               />
@@ -290,29 +287,14 @@ export default function CompanyProfilePage() {
                   <FaydaIdentityPanel
                     id="fayda-identity"
                     showHeading={false}
-                    description={
-                      me?.identity_verified || me?.fayda_verified
-                        ? "Verified identity details — read-only."
-                        : "Identity not confirmed yet."
-                    }
+                    description="Identity details — read-only."
                     person={me ?? {}}
                     badge={
-                      <>
-                        {me?.identity_verified_via === "crm" ? (
-                          <span className="service-meta">Verified via CRM</span>
-                        ) : me?.identity_verified_via === "fayda" || me?.fayda_verified ? (
-                          <span className="service-meta">Verified via Fayda</span>
-                        ) : me?.identity_verified ? (
-                          <span className="service-meta">Verified</span>
-                        ) : (
-                          <span className="service-meta">Unverified</span>
-                        )}
-                        {me?.company_role === "owner" ? (
-                          <span className="service-meta">Owner</span>
-                        ) : (
-                          <span className="service-meta">Member</span>
-                        )}
-                      </>
+                      me?.company_role === "owner" ? (
+                        <span className="service-meta">Owner</span>
+                      ) : (
+                        <span className="service-meta">Member</span>
+                      )
                     }
                   />
                 </div>
@@ -330,11 +312,7 @@ export default function CompanyProfilePage() {
                   <div className="panel portal-stack">
                     <div className="panel-section-head">
                       <h2>Your companies</h2>
-                      <p className="muted">
-                        Pick the active company from the list. Subscriptions and service
-                        requests use that company. You can own some companies and be a member
-                        of others.
-                      </p>
+                      <p className="muted">Choose the active company.</p>
                     </div>
                     {me && <CompanySwitcher me={me} variant="page" showHint />}
                     {canAddOrganisation && (
@@ -346,7 +324,7 @@ export default function CompanyProfilePage() {
                             setOrgAction((v) => (v === "create" ? null : "create"))
                           }
                         >
-                          {orgAction === "create" ? "Cancel" : "Create my company"}
+                          {orgAction === "create" ? "Cancel" : "Add company"}
                         </button>
                         <button
                           type="button"
@@ -355,18 +333,12 @@ export default function CompanyProfilePage() {
                             setOrgAction((v) => (v === "attach" ? null : "attach"))
                           }
                         >
-                          {orgAction === "attach" ? "Cancel" : "Request membership"}
+                          {orgAction === "attach" ? "Cancel" : "Join company"}
                         </button>
                       </div>
                     )}
                     {orgAction === "create" && (
                       <div className="portal-stack-sm">
-                        <p className="muted">
-                          Register a new company with its own unique TIN (for example{" "}
-                          <strong>00012345</strong>). Phone and email are copied from your
-                          current company. Existing memberships stay in place; switch after
-                          admin approval.
-                        </p>
                         <CompanyProfileForm
                           key="create-another"
                           me={me}
@@ -378,8 +350,8 @@ export default function CompanyProfilePage() {
                     {orgAction === "attach" && (
                       <JoinCompanyPanel
                         embedded
-                        title="Request membership in another company"
-                        description="Enter an approved company TIN. The owner must approve your join request. You keep membership in your other companies."
+                        title="Join another company"
+                        description="Enter the company TIN to request access."
                       />
                     )}
                   </div>
@@ -389,13 +361,12 @@ export default function CompanyProfilePage() {
                   {awaitingApproval ? (
                     <>
                       <div className="alert alert-warning" role="status">
-                        VAS services are locked until an administrator approves this company
-                        TIN. Each TIN can only be registered once.
+                        Waiting for TIN approval.
                       </div>
                       <p className="muted">
                         {canEditCompany
-                          ? "You can update your company details while waiting for admin approval. Resubmitting sends the profile back for review."
-                          : "Waiting for admin."}
+                          ? "You can update the details below while you wait."
+                          : "Please wait."}
                       </p>
                       <section id="company-info" className="settings-block">
                         {canEditCompany ? (

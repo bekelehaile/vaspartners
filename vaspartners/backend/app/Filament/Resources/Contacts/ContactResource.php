@@ -125,11 +125,6 @@ class ContactResource extends Resource
                     Toggle::make('is_banned')
                         ->label('Banned')
                         ->helperText('Banned contacts are blocked from signing in.'),
-                    Toggle::make('fayda_verified')
-                        ->label('Identity verified via Fayda')
-                        ->disabled()
-                        ->dehydrated(false)
-                        ->helperText('Set only when the partner signs in with Fayda. Admins cannot change this.'),
                     TextInput::make('legacy_mvas_id')
                         ->label('Legacy MVAS ID')
                         ->maxLength(64),
@@ -141,7 +136,7 @@ class ContactResource extends Resource
     {
         return $schema->components([
             Section::make('Identity')
-                ->description('Personal KYC via Fayda (National ID) or Ethio telecom CRM. Sticky once verified — not editable by admin.')
+                ->description('Personal identity (sticky once verified). Common fields: Verified via + Verified at.')
                 ->schema([
                     TextEntry::make('public_id'),
                     TextEntry::make('sub')->label('SSO / placeholder sub'),
@@ -149,15 +144,10 @@ class ContactResource extends Resource
                         ->label('Verified via')
                         ->badge()
                         ->state(fn (Contact $record): ?string => $record->identityVerifiedViaValue())
-                        ->formatStateUsing(fn ($state): string => match ((string) $state) {
-                            'fayda' => 'Fayda',
-                            'crm' => 'CRM',
-                            default => 'Unverified',
-                        })
-                        ->color(fn ($state): string => match ((string) $state) {
-                            'fayda', 'crm' => 'success',
-                            default => 'warning',
-                        }),
+                        ->formatStateUsing(fn ($state): string => filled($state)
+                            ? \App\Support\IdentityLabels::via((string) $state)
+                            : 'Unverified')
+                        ->color(fn ($state): string => filled($state) ? 'success' : 'warning'),
                     TextEntry::make('identity_verified_at')->label('Verified at')->dateTime()->placeholder('—'),
                     TextEntry::make('name'),
                     TextEntry::make('phone_number'),
@@ -193,21 +183,8 @@ class ContactResource extends Resource
             Section::make('Status')->schema([
                 TextEntry::make('is_active')->badge(),
                 TextEntry::make('is_banned')->badge(),
-                TextEntry::make('identity_verified_via')
-                    ->label('Verified via')
-                    ->badge()
-                    ->state(fn (Contact $record): ?string => $record->identityVerifiedViaValue())
-                    ->formatStateUsing(fn ($state): string => match ((string) $state) {
-                        'fayda' => 'Fayda',
-                        'crm' => 'CRM',
-                        default => 'Unverified',
-                    })
-                    ->color(fn ($state): string => match ((string) $state) {
-                        'fayda', 'crm' => 'success',
-                        default => 'warning',
-                    }),
                 TextEntry::make('created_at')->dateTime(),
-            ])->columns(4),
+            ])->columns(3),
         ]);
     }
 
@@ -242,15 +219,15 @@ class ContactResource extends Resource
                     ->label('Verified via')
                     ->badge()
                     ->state(fn (Contact $record): ?string => $record->identityVerifiedViaValue())
-                    ->formatStateUsing(fn ($state): string => match ((string) $state) {
-                        'fayda' => 'Fayda',
-                        'crm' => 'CRM',
-                        default => 'Unverified',
-                    })
-                    ->color(fn ($state): string => match ((string) $state) {
-                        'fayda', 'crm' => 'success',
-                        default => 'gray',
-                    }),
+                    ->formatStateUsing(fn ($state): string => filled($state)
+                        ? \App\Support\IdentityLabels::via((string) $state)
+                        : 'Unverified')
+                    ->color(fn ($state): string => filled($state) ? 'success' : 'gray'),
+                TextColumn::make('identity_verified_at')
+                    ->label('Verified at')
+                    ->dateTime()
+                    ->placeholder('—')
+                    ->toggleable(),
                 ToggleColumn::make('is_active')
                     ->label('Active')
                     ->onColor('success')

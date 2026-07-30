@@ -9,15 +9,14 @@ import {
 import { queryKeys } from "@/lib/query-keys";
 import { isValidEthiopianTin, normalizeEthiopianTin } from "@/lib/tin";
 
-/** Request membership (attach) to an approved company by TIN. */
+/** Request to join a company by TIN. */
 export function JoinCompanyPanel({
-  title = "Join an existing company",
-  description = "Enter the company TIN for an admin-approved company. The company owner must approve your membership before you join. You can stay a member of your other companies.",
+  title = "Join a company",
+  description = "Enter the company TIN to request access.",
   embedded = false,
 }: {
   title?: string;
   description?: string;
-  /** When true, omit the outer panel chrome (already inside a parent panel). */
   embedded?: boolean;
 }) {
   const queryClient = useQueryClient();
@@ -34,13 +33,13 @@ export function JoinCompanyPanel({
       <p className="muted">{description}</p>
       <div className="field">
         <label htmlFor="attach-tin">
-          Company TIN <span aria-hidden="true">*</span>
+          TIN <span aria-hidden="true">*</span>
         </label>
         <input
           id="attach-tin"
           value={tin}
           onChange={(e) => setTin(e.target.value.replace(/[^\d\s-]/g, ""))}
-          placeholder="10-digit Ethiopian TIN"
+          placeholder="10 digits"
           inputMode="numeric"
           maxLength={14}
           required
@@ -48,13 +47,13 @@ export function JoinCompanyPanel({
         />
       </div>
       <div className="field">
-        <label htmlFor="attach-note">Note to owner (optional)</label>
+        <label htmlFor="attach-note">Note (optional)</label>
         <textarea
           id="attach-note"
-          rows={3}
+          rows={2}
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="Your role or reason for joining…"
+          placeholder="Optional message"
         />
       </div>
       <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
@@ -66,7 +65,7 @@ export function JoinCompanyPanel({
             setLookupTin(normalizeEthiopianTin(tin));
           }}
         >
-          {lookup.isFetching ? "Looking up…" : "Lookup company"}
+          {lookup.isFetching ? "Searching…" : "Find company"}
         </button>
         <button
           type="button"
@@ -85,12 +84,13 @@ export function JoinCompanyPanel({
               })
           }
         >
-          {attach.isPending ? "Submitting…" : "Request membership"}
+          {attach.isPending ? "Sending…" : "Request to join"}
         </button>
       </div>
       {lookupTin && lookup.data && (
         <p style={{ marginTop: "1rem" }}>
-          Found: <strong>{lookup.data.name}</strong> (TIN {lookup.data.tin})
+          Found: <strong>{lookup.data.name}</strong>
+          {lookup.data.tin ? ` · ${lookup.data.tin}` : ""}
         </p>
       )}
       {lookupTin && lookup.isError && (
@@ -104,7 +104,7 @@ export function JoinCompanyPanel({
         <div className="alert" style={{ marginTop: "1rem" }}>
           {attach.error instanceof Error
             ? attach.error.message
-            : "Could not submit membership request"}
+            : "Could not send request"}
         </div>
       )}
     </>

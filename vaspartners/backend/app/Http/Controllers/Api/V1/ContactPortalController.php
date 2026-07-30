@@ -725,7 +725,7 @@ class ContactPortalController extends Controller
         $fresh = $membership->submitCompanyTin($contact, $data['company_tin']);
 
         return response()->json([
-            'message' => 'TIN submitted. Ethio telecom will validate it before you can submit service requests.',
+            'message' => 'TIN submitted. We will review it shortly.',
             'data' => $membership->serializeContact($fresh),
         ]);
     }

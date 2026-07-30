@@ -4318,6 +4318,27 @@ button.portal-mobile-card-hit {
   box-shadow: 0 2px 8px color-mix(in oklab, var(--primary) 28%, transparent);
 }
 
+.tin-gate-modal .tin-gate-form {
+  margin-top: 1rem;
+}
+
+.tin-gate-modal .tin-gate-switch {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid color-mix(in oklab, var(--border, #d4d4d8) 80%, transparent);
+}
+
+.tin-gate-switch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tin-gate-switch-list .btn-secondary {
+  justify-content: flex-start;
+  text-align: left;
+}
+
 @media (max-width: 639.98px) {
   .portal-modal {
     width: 100%;

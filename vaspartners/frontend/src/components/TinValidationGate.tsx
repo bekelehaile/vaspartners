@@ -10,9 +10,7 @@ import {
 import { isValidEthiopianTin, normalizeEthiopianTin } from "@/lib/tin";
 
 /**
- * Blocks service use only for the *current* company when its TIN is not
- * admin-validated. Partners can switch to another company that already has
- * a validated TIN and continue working.
+ * Blocks portal use for the current company until its TIN is approved.
  */
 export function TinValidationGate({ children }: { children: React.ReactNode }) {
   const { data: me } = useContact();
@@ -25,7 +23,7 @@ export function TinValidationGate({ children }: { children: React.ReactNode }) {
   const needsGate = !!me?.profile_completed && !!company && !company.tin_validated;
   const canSubmitTin = me?.company_role === "owner" || !!me?.company_can_edit;
 
-  const otherValidated = useMemo(() => {
+  const otherReady = useMemo(() => {
     return (me?.memberships ?? []).filter(
       (m) =>
         m.company_public_id &&
@@ -36,7 +34,7 @@ export function TinValidationGate({ children }: { children: React.ReactNode }) {
     );
   }, [me?.memberships]);
 
-  const formatOk = useMemo(
+  const currentTinOk = useMemo(
     () => (company?.tin ? isValidEthiopianTin(company.tin) : false),
     [company?.tin],
   );
@@ -50,6 +48,12 @@ export function TinValidationGate({ children }: { children: React.ReactNode }) {
     };
   }, [needsGate]);
 
+  useEffect(() => {
+    if (company?.tin && currentTinOk && !tin) {
+      setTin(company.tin);
+    }
+  }, [company?.tin, currentTinOk, tin]);
+
   if (!needsGate) {
     return <>{children}</>;
   }
@@ -59,117 +63,88 @@ export function TinValidationGate({ children }: { children: React.ReactNode }) {
     setLocalError(null);
     const normalized = normalizeEthiopianTin(tin || company?.tin || "");
     if (!isValidEthiopianTin(normalized)) {
-      setLocalError("Enter a valid Ethiopian TIN: exactly 10 digits.");
+      setLocalError("Enter a 10-digit TIN.");
       return;
     }
     submitTin.mutate(
       { company_tin: normalized },
       {
         onError: (err) => {
-          setLocalError(err instanceof Error ? err.message : "Could not submit TIN");
+          setLocalError(err instanceof Error ? err.message : "Could not save TIN.");
         },
       },
     );
   };
+
+  const waiting = submitTin.isSuccess || (currentTinOk && !!company?.tin);
 
   return (
     <>
       {children}
       <div className="portal-modal-backdrop" role="presentation">
         <div
-          className="portal-modal"
+          className="portal-modal tin-gate-modal"
           role="dialog"
           aria-modal="true"
           aria-labelledby="tin-gate-title"
           aria-describedby="tin-gate-desc"
           onClick={(e) => e.stopPropagation()}
         >
-          <h2 id="tin-gate-title">This company needs TIN validation</h2>
-          <p id="tin-gate-desc">
-            <strong>{company?.name || "This company"}</strong> cannot use VAS services until
-            Ethio telecom validates its TIN. Other companies with a validated TIN stay available
-            — switch below to continue.
-          </p>
-
-          {otherValidated.length > 0 && (
-            <div className="tin-gate-switch" style={{ marginBottom: "1rem" }}>
-              <p className="portal-modal-hint" style={{ marginBottom: "0.5rem" }}>
-                Switch to a company with a validated TIN:
-              </p>
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                {otherValidated.map((m) => (
-                  <button
-                    key={m.company_public_id!}
-                    type="button"
-                    className="btn-ghost"
-                    disabled={switchCompany.isPending}
-                    onClick={() =>
-                      void switchCompany.mutateAsync(m.company_public_id!)
-                    }
-                  >
-                    Use {m.company_name || "company"}
-                    {m.company_tin ? ` (TIN ${m.company_tin})` : ""}
-                  </button>
-                ))}
-              </div>
-              {switchCompany.isError && (
-                <p className="alert" role="alert" style={{ marginTop: "0.5rem" }}>
-                  {switchCompany.error instanceof Error
-                    ? switchCompany.error.message
-                    : "Could not switch company"}
-                </p>
-              )}
-            </div>
-          )}
-
-          <p className="portal-modal-hint">
-            Or stay on this company and{" "}
-            {formatOk && company?.tin ? (
+          <h2 id="tin-gate-title">Confirm company TIN</h2>
+          <p id="tin-gate-desc" className="muted">
+            {company?.name ? (
               <>
-                wait for validation of TIN <strong>{company.tin}</strong> (you can correct it
-                below).
+                <strong>{company.name}</strong> needs a confirmed tax number (TIN) before
+                you can continue.
               </>
             ) : (
-              <>submit a valid 10-digit Ethiopian TIN below.</>
+              <>This company needs a confirmed tax number (TIN) before you can continue.</>
             )}
           </p>
 
           {canSubmitTin ? (
             <form onSubmit={onSubmit} className="tin-gate-form">
               <label className="field" htmlFor="tin-gate-input">
-                <span>Ethiopian TIN for {company?.name || "this company"}</span>
+                <span>TIN</span>
                 <input
                   id="tin-gate-input"
                   name="company_tin"
                   inputMode="numeric"
                   autoComplete="off"
                   maxLength={14}
-                  placeholder={company?.tin && formatOk ? company.tin : "0001234567"}
+                  placeholder="10 digits"
                   value={tin}
                   onChange={(e) => setTin(e.target.value.replace(/[^\d\s-]/g, ""))}
                   required
+                  aria-describedby="tin-gate-hint"
                 />
               </label>
+              <p id="tin-gate-hint" className="portal-modal-hint">
+                Exactly 10 digits.
+              </p>
+
               {(localError || submitTin.isError) && (
                 <p className="alert" role="alert">
                   {localError ||
                     (submitTin.error instanceof Error
                       ? submitTin.error.message
-                      : "Could not submit TIN")}
+                      : "Could not save TIN.")}
                 </p>
               )}
-              {submitTin.isSuccess && (
-                <p className="portal-modal-hint" role="status">
-                  TIN submitted for this company. Waiting for Ethio telecom to validate it.
+
+              {waiting && !localError && !submitTin.isError && (
+                <p className="alert alert-success" role="status">
+                  Submitted. We will review it shortly.
                 </p>
               )}
+
               <div className="portal-modal-actions">
                 <button
                   type="submit"
                   className="btn-primary tin-gate-submit"
                   disabled={submitTin.isPending}
                 >
-                  {submitTin.isPending ? "Submitting…" : "Submit TIN for this company"}
+                  {submitTin.isPending ? "Saving…" : waiting ? "Update TIN" : "Submit TIN"}
                 </button>
                 <Link href="/portal/company" className="btn-ghost">
                   Company settings
@@ -179,8 +154,7 @@ export function TinValidationGate({ children }: { children: React.ReactNode }) {
           ) : (
             <>
               <p className="portal-modal-hint">
-                Ask the owner of this company to submit a valid TIN. Meanwhile, switch to another
-                company with a validated TIN if you have one.
+                Ask your company owner to submit the TIN.
               </p>
               <div className="portal-modal-actions">
                 <Link href="/portal/company" className="btn-ghost">
@@ -188,6 +162,33 @@ export function TinValidationGate({ children }: { children: React.ReactNode }) {
                 </Link>
               </div>
             </>
+          )}
+
+          {otherReady.length > 0 && (
+            <div className="tin-gate-switch">
+              <p className="portal-modal-hint">Or continue with another company:</p>
+              <div className="tin-gate-switch-list">
+                {otherReady.map((m) => (
+                  <button
+                    key={m.company_public_id!}
+                    type="button"
+                    className="btn-secondary"
+                    disabled={switchCompany.isPending}
+                    onClick={() => void switchCompany.mutateAsync(m.company_public_id!)}
+                  >
+                    {m.company_name || "Company"}
+                    {m.company_tin ? ` · ${m.company_tin}` : ""}
+                  </button>
+                ))}
+              </div>
+              {switchCompany.isError && (
+                <p className="alert" role="alert">
+                  {switchCompany.error instanceof Error
+                    ? switchCompany.error.message
+                    : "Could not switch company."}
+                </p>
+              )}
+            </div>
           )}
         </div>
       </div>

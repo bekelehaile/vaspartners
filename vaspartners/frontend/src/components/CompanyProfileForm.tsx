@@ -143,14 +143,11 @@ export function CompanyProfileForm({
       noValidate
     >
       <div className="company-form-head">
-        <p className="brand-kicker">{isUpdate ? "Settings" : "Required once"}</p>
-        <h2>{isUpdate ? "Organisation settings" : "Company / organisation profile"}</h2>
+        <h2>{isUpdate ? "Company details" : createNew ? "Add company" : "Company details"}</h2>
         <p className="muted">
           {isUpdate
-            ? "Update your company details and resubmit for admin approval. After approval, only administrators can change company records."
-            : createNew
-              ? "Register another company with a unique TIN. Phone and email are copied from your existing company and shared across your organisations."
-              : "Submit organisation details for admin approval. Phone and email come from your account. Each company needs its own unique TIN."}
+            ? "Update name, TIN, and address."
+            : "Enter company name, TIN, and address."}
         </p>
       </div>
 
@@ -158,27 +155,12 @@ export function CompanyProfileForm({
         <FaydaIdentityPanel
           id="fayda-identity"
           title="Your identity"
-          description={
-            me.identity_verified || me.fayda_verified
-              ? "Phone and email from your account are applied to this company automatically. Company setup only needs name, TIN, and address."
-              : "Confirm your identity when signing in. Company setup only needs name, TIN, and address."
-          }
+          description="Read-only."
           person={me}
           badge={
-            <>
-              {me.identity_verified_via === "crm" ? (
-                <span className="service-meta">Verified via CRM</span>
-              ) : me.identity_verified_via === "fayda" || me.fayda_verified ? (
-                <span className="service-meta">Verified via Fayda</span>
-              ) : me.identity_verified ? (
-                <span className="service-meta">Verified</span>
-              ) : (
-                <span className="service-meta">Unverified</span>
-              )}
-              {me.company_role === "owner" ? (
-                <span className="service-meta">Company owner</span>
-              ) : null}
-            </>
+            me.company_role === "owner" ? (
+              <span className="service-meta">Owner</span>
+            ) : null
           }
         />
       )}
@@ -195,24 +177,16 @@ export function CompanyProfileForm({
         {(submissionAttempts) => (
           <section id="company-info" className="settings-block">
             <div className="settings-block-head">
-              <h3>Company profile</h3>
-              <p className="muted">
-                Organisation name, unique TIN, and address.
-                {createNew
-                  ? " Phone and email are taken from your existing company."
-                  : me?.phone_number
-                    ? <> Phone <strong>{me.phone_number}</strong> is used for this company.</>
-                    : " Phone from your account is used for this company."}
-              </p>
+              <h3>Company</h3>
             </div>
             <div className="form-grid">
               <form.Field name="company_name">
                 {(field) => (
                   <CompanyField
                     field={field}
-                    label="Company / organisation name"
+                    label="Company name"
                     submissionAttempts={submissionAttempts}
-                    placeholder="e.g. Sunrise Media PLC"
+                    placeholder="Company name"
                     autoComplete="organization"
                   />
                 )}
@@ -224,7 +198,7 @@ export function CompanyProfileForm({
                     field={field}
                     label="TIN"
                     submissionAttempts={submissionAttempts}
-                    placeholder="e.g. 0001234567"
+                    placeholder="10 digits"
                     inputMode="numeric"
                     autoComplete="off"
                   />
@@ -235,10 +209,10 @@ export function CompanyProfileForm({
                 {(field) => (
                   <CompanyField
                     field={field}
-                    label="Company address"
+                    label="Address"
                     submissionAttempts={submissionAttempts}
                     as="textarea"
-                    placeholder="City, sub-city, woreda / street"
+                    placeholder="Address"
                     autoComplete="street-address"
                   />
                 )}
@@ -262,7 +236,7 @@ export function CompanyProfileForm({
                   ? "Save changes"
                   : "Save and continue"}
             </button>
-            <p className="muted form-hint">All fields marked * are required.</p>
+            <p className="muted form-hint">* Required</p>
           </div>
         )}
       </form.Subscribe>
