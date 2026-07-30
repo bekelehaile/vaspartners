@@ -90,6 +90,13 @@ export type IdentityConsentProposal = {
   source: "crm" | string;
   phone?: string | null;
   name?: string | null;
+  email?: string | null;
+  gender?: string | null;
+  nationality?: string | null;
+  birthdate?: string | null;
+  identification_type?: string | null;
+  identification_number?: string | null;
+  /** @deprecated bill_complaint fields — no longer returned */
   customer_type?: string | null;
   primary_offer_name?: string | null;
   service_numbers?: string[];

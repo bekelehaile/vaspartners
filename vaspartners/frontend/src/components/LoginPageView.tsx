@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { FaydaIdentityPanel } from "@/components/FaydaIdentityPanel";
 import { SiteShell } from "@/components/SiteShell";
 import { useAuthConfig } from "@/hooks/use-auth-config";
 import { useContact, useLogout } from "@/hooks/use-contact";
@@ -53,15 +54,36 @@ export function LoginPageView() {
     if (identity.needs_consent && identity.proposal) {
       setProposal(identity.proposal);
       setStep("consent");
-      setInfo("Confirm your Ethio telecom CRM identity to continue.");
+      setInfo(null);
       return;
     }
     if (identity.needs_manual_name) {
       setStep("manual_name");
-      setInfo("We could not match this number in CRM. Enter your full name to continue.");
+      setInfo("Enter your full name to continue.");
       return;
     }
     router.replace(nextAfterIdentity(contact));
+  }
+
+  async function declineAndLogout() {
+    setError(null);
+    setBusy(true);
+    try {
+      try {
+        await submitIdentityConsent({ action: "decline" });
+      } catch {
+        // Still sign out even if decline fails (e.g. already cleared).
+      }
+      await logout();
+      setProposal(null);
+      setCode("");
+      setStep("phone");
+      setInfo(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to sign out.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   // Already signed in — finish identity if still needed.
@@ -86,19 +108,7 @@ export function LoginPageView() {
                 setBusy(false);
               }
             }}
-            onDecline={async () => {
-              setBusy(true);
-              setError(null);
-              try {
-                await submitIdentityConsent({ action: "decline" });
-                setStep("manual_name");
-                setProposal(null);
-              } catch (err) {
-                setError(err instanceof Error ? err.message : "Unable to decline.");
-              } finally {
-                setBusy(false);
-              }
-            }}
+            onDecline={() => void declineAndLogout()}
           />
         </SiteShell>
       );
@@ -173,18 +183,7 @@ export function LoginPageView() {
   }
 
   async function onDeclineConsent() {
-    setError(null);
-    setBusy(true);
-    try {
-      await submitIdentityConsent({ action: "decline" });
-      setProposal(null);
-      setStep("manual_name");
-      setInfo("Enter your full name to continue. Company setup only needs name, TIN, and address.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to decline.");
-    } finally {
-      setBusy(false);
-    }
+    await declineAndLogout();
   }
 
   async function onManualName(e: FormEvent) {
@@ -364,44 +363,33 @@ function ConsentCard({
   const body = (
     <>
       <h2 style={{ marginTop: 0 }}>Confirm your identity</h2>
-      <p className="muted">
-        We found this profile in Ethio telecom CRM for your mobile number.
-        Confirm to verify your identity (same trust path as Fayda). Next time you
-        sign in, we will not ask again.
-      </p>
       {error && (
         <p className="alert" role="alert">
           {error}
         </p>
       )}
-      <dl className="fayda-dl" style={{ marginBottom: "1rem" }}>
-        <div>
-          <dt>Name</dt>
-          <dd>{proposal.name || "—"}</dd>
-        </div>
-        <div>
-          <dt>Phone</dt>
-          <dd>{proposal.phone || "—"}</dd>
-        </div>
-        {proposal.primary_offer_name ? (
-          <div>
-            <dt>Offer</dt>
-            <dd>{proposal.primary_offer_name}</dd>
-          </div>
-        ) : null}
-        {proposal.customer_type ? (
-          <div>
-            <dt>Customer type</dt>
-            <dd>{proposal.customer_type}</dd>
-          </div>
-        ) : null}
-      </dl>
-      <div className="login-actions" style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+      {/* Same field set as Fayda identity panel; CRM fills name/phone when available. */}
+      <FaydaIdentityPanel
+        id="login-identity"
+        showHeading={false}
+        description={null}
+        person={{
+          name: proposal.name,
+          phone_number: proposal.phone,
+          email: proposal.email,
+          gender: proposal.gender,
+          nationality: proposal.nationality,
+          birthdate: proposal.birthdate,
+          identification_type: proposal.identification_type,
+          identification_number: proposal.identification_number,
+        }}
+      />
+      <div className="login-actions" style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", marginTop: "1rem" }}>
         <button type={asForm ? "submit" : "button"} className="btn-hero" disabled={busy} onClick={asForm ? undefined : onAccept}>
           {busy ? "Saving…" : "Yes, this is me"}
         </button>
         <button type="button" className="btn-secondary" disabled={busy} onClick={onDecline}>
-          Not me — enter name
+          {busy ? "Signing out…" : "No — sign out"}
         </button>
       </div>
     </>

@@ -159,21 +159,17 @@ export function CompanyProfileForm({
           id="fayda-identity"
           title="Your identity"
           description={
-            me.identity_verified_via === "crm"
-              ? "Verified via Ethio telecom CRM. Phone from your account is applied to this company automatically. Company setup only needs name, TIN, and address."
-              : me.fayda_verified || me.identity_verified_via === "fayda"
-                ? "Verified via Fayda (National ID). Phone and email from your account are applied to this company automatically."
-                : "Signed in with phone OTP — identity not yet verified via Fayda or CRM. Complete CRM consent on sign-in when available."
+            me.identity_verified || me.fayda_verified
+              ? "Phone and email from your account are applied to this company automatically. Company setup only needs name, TIN, and address."
+              : "Confirm your identity when signing in. Company setup only needs name, TIN, and address."
           }
           person={me}
           badge={
             <>
-              {me.identity_verified_via === "crm" ? (
-                <span className="service-meta">CRM verified</span>
-              ) : me.fayda_verified || me.identity_verified_via === "fayda" ? (
-                <span className="service-meta">Fayda verified</span>
+              {me.identity_verified || me.fayda_verified ? (
+                <span className="service-meta">Verified</span>
               ) : (
-                <span className="service-meta">Identity unverified</span>
+                <span className="service-meta">Unverified</span>
               )}
               {me.company_role === "owner" ? (
                 <span className="service-meta">Company owner</span>

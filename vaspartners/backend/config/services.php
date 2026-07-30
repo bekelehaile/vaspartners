@@ -56,22 +56,20 @@ return [
     'sms_country_code' => env('SMS_COUNTRY_CODE', '251'),
 
     /*
-    | Ethio telecom NGBSS / IVR CRM (same stack as bill_complaint).
+    | Ethio telecom BSS GetCustomer (same stack as fixedservices).
     | Used to verify partner personal identity by MSISDN after OTP when Fayda is unavailable.
+    | Prefer NG_* (shared with fixedservices); CRM_* aliases kept for ops familiarity.
     */
     'crm' => [
         'enabled' => filter_var(env('CRM_ENABLED', true), FILTER_VALIDATE_BOOL),
-        'query_endpoint' => env('CRM_QUERY_CUSTOMER_ENDPOINT')
-            ?: env('QUERY_CUSTOMER_ENDPOINT')
-            ?: (rtrim((string) env('CRM_API_BASE_URL', env('API_BASE_URL', '')), '/')
-                .(string) env('CRM_CUSTOMER_ENDPOINT', env('CUSTOMER_ENDPOINT', ''))),
+        'endpoint' => env('CRM_NG_ENDPOINT', env('NG_ENDPOINT')),
+        'access_user' => env('CRM_NG_ACCESS_USER', env('NG_ACCESS_USER', 'PortalFixedService')),
+        'access_pwd' => env('CRM_NG_ACCESS_PWD', env('NG_ACCESS_PWD')),
+        'channel_id' => env('CRM_NG_CHANNEL_ID', env('NG_CHANNEL_ID', '116')),
+        'technical_channel_id' => env('CRM_NG_TECHNICAL_CHANNEL_ID', env('NG_TECHNICAL_CHANNEL_ID', '53')),
+        'tenant_id' => env('CRM_NG_TENANT_ID', env('NG_TENANT_ID', '101')),
+        'language' => env('CRM_NG_LANGUAGE', env('NG_LANGUAGE', '2002')),
         'timeout' => (int) env('CRM_TIMEOUT', env('TIMEOUT', 15)),
-        'access_token' => [
-            'base_url' => env('CRM_ACCESS_TOKEN_BASE_URL', env('ACCESS_TOKEN_BASE_URL')),
-            'app_key' => env('CRM_ACCESS_TOKEN_APP_KEY', env('ACCESS_TOKEN_APP_KEY')),
-            'secret_key' => env('CRM_ACCESS_TOKEN_SECRET_KEY', env('ACCESS_TOKEN_SECRET_KEY')),
-            'timeout' => (int) env('CRM_TIMEOUT', env('TIMEOUT', 15)),
-        ],
     ],
 
 ];

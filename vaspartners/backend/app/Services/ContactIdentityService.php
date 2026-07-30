@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Personal KYC: Fayda or CRM. Once verified, skip re-fetch on later logins.
+ * Personal KYC: Fayda or CRM (BSS GetCustomer). Once verified, skip re-fetch on later logins.
  */
 class ContactIdentityService
 {
@@ -81,13 +81,14 @@ class ContactIdentityService
 
         $proposal = [
             'source' => IdentityVerifiedVia::Crm->value,
-            'phone' => PhoneNumber::normalize((string) $contact->phone_number),
+            'phone' => PhoneNumber::normalize((string) ($lookup['phone'] ?? $contact->phone_number)),
             'name' => (string) $lookup['customer_name'],
-            'customer_type' => $lookup['customer_type'],
-            'primary_offer_name' => $lookup['primary_offer_name'],
-            'service_numbers' => $lookup['service_numbers'],
-            'region' => $lookup['region'],
-            'zone' => $lookup['zone'],
+            'email' => $lookup['email'] ?? null,
+            'gender' => $lookup['gender'] ?? null,
+            'nationality' => $lookup['nationality'] ?? null,
+            'birthdate' => $lookup['birthdate'] ?? null,
+            'identification_type' => $lookup['identification_type'] ?? null,
+            'identification_number' => $lookup['identification_number'] ?? null,
             'snapshot' => $lookup['raw'],
         ];
 
@@ -97,14 +98,7 @@ class ContactIdentityService
             'needs_consent' => true,
             'needs_manual_name' => false,
             'crm_available' => true,
-            'proposal' => [
-                'source' => $proposal['source'],
-                'phone' => $proposal['phone'],
-                'name' => $proposal['name'],
-                'customer_type' => $proposal['customer_type'],
-                'primary_offer_name' => $proposal['primary_offer_name'],
-                'service_numbers' => $proposal['service_numbers'],
-            ],
+            'proposal' => $this->publicProposal($proposal),
             'verified_via' => null,
         ];
     }
@@ -124,7 +118,7 @@ class ContactIdentityService
             $resolved = $this->resolveAfterAuth($contact);
             if (! ($resolved['needs_consent'] ?? false)) {
                 throw ValidationException::withMessages([
-                    'identity' => 'CRM identity is no longer available. Enter your name manually or try again.',
+                    'identity' => 'Identity details are no longer available. Enter your name manually or try again.',
                 ]);
             }
             $proposal = Cache::get($this->cacheKey($contact));
@@ -132,7 +126,7 @@ class ContactIdentityService
 
         if (! is_array($proposal) || blank($proposal['name'] ?? null)) {
             throw ValidationException::withMessages([
-                'identity' => 'CRM identity consent expired. Sign in again to refresh.',
+                'identity' => 'Identity consent expired. Sign in again to refresh.',
             ]);
         }
 
@@ -141,11 +135,15 @@ class ContactIdentityService
             'sub' => $contact->sub ?: ('otp-'.$contact->phone_number),
             'name' => $name,
             'phone_number' => $contact->phone_number,
-            'email' => $contact->email,
-            'gender' => $contact->gender,
-            'nationality' => $contact->nationality ?: PortalProfileOptions::DEFAULT_NATIONALITY,
-            'identification_type' => $contact->identification_type ?: '2',
-            'identification_number' => $contact->identification_number ?: ('crm-'.$contact->phone_number),
+            'email' => $proposal['email'] ?? $contact->email,
+            'gender' => $proposal['gender'] ?? $contact->gender,
+            'nationality' => $proposal['nationality']
+                ?? ($contact->nationality ?: PortalProfileOptions::DEFAULT_NATIONALITY),
+            'birthdate' => $proposal['birthdate'] ?? $contact->birthdate,
+            'identification_type' => $proposal['identification_type']
+                ?? ($contact->identification_type ?: '2'),
+            'identification_number' => $proposal['identification_number']
+                ?? ($contact->identification_number ?: ('crm-'.$contact->phone_number)),
             'address' => $contact->address,
         ]);
 
@@ -208,13 +206,25 @@ class ContactIdentityService
             return null;
         }
 
+        return $this->publicProposal($proposal);
+    }
+
+    /**
+     * @param  array<string, mixed>  $proposal
+     * @return array<string, mixed>
+     */
+    protected function publicProposal(array $proposal): array
+    {
         return [
             'source' => $proposal['source'] ?? IdentityVerifiedVia::Crm->value,
             'phone' => $proposal['phone'] ?? null,
             'name' => $proposal['name'] ?? null,
-            'customer_type' => $proposal['customer_type'] ?? null,
-            'primary_offer_name' => $proposal['primary_offer_name'] ?? null,
-            'service_numbers' => $proposal['service_numbers'] ?? [],
+            'email' => $proposal['email'] ?? null,
+            'gender' => $proposal['gender'] ?? null,
+            'nationality' => $proposal['nationality'] ?? null,
+            'birthdate' => $proposal['birthdate'] ?? null,
+            'identification_type' => $proposal['identification_type'] ?? null,
+            'identification_number' => $proposal['identification_number'] ?? null,
         ];
     }
 

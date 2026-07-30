@@ -21,8 +21,8 @@ function formatBirthdate(value?: string | null): string {
 
 export function FaydaIdentityPanel({
   id = "fayda-identity",
-  title = "Fayda identity",
-  description = "Verified from National ID (Fayda) — read-only.",
+  title = "Your identity",
+  description = "Verified identity details — read-only.",
   person,
   badge,
   footer,
@@ -30,7 +30,7 @@ export function FaydaIdentityPanel({
 }: {
   id?: string;
   title?: string;
-  description?: string;
+  description?: string | null;
   person: FaydaIdentityFields;
   badge?: ReactNode;
   footer?: ReactNode;
