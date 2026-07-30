@@ -20,7 +20,7 @@ class ScanInvalidTinCommand extends Command
                             {--limit=0 : Max companies to process (0 = no limit)}
                             {--chunk=100 : Companies loaded per batch}';
 
-    protected $description = 'Find companies with an owner and an invalid TIN; clear mistaken tin_validated and notify';
+    protected $description = 'Find companies with an owner and an invalid TIN number; clear mistaken tin_validated and notify';
 
     public function handle(CompanyMembershipService $membership): int
     {
@@ -45,7 +45,7 @@ class ScanInvalidTinCommand extends Command
         $skipped = 0;
         $errors = 0;
 
-        $this->info(($dryRun ? '[dry-run] ' : '').'Scanning companies with owner for invalid TIN…');
+        $this->info(($dryRun ? '[dry-run] ' : '').'Scanning companies with owner for invalid TIN number…');
 
         $query->chunkById($chunk, function ($companies) use (
             $membership,

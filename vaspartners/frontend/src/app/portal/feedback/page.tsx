@@ -63,7 +63,7 @@ export default function FeedbackPage() {
     if (!canSubmit) {
       setMessageTone("err");
       setMessage(
-        "Feedback is locked until Ethio telecom validates this company's TIN.",
+        "Feedback is locked until Ethio telecom validates this company's TIN number.",
       );
       return;
     }
@@ -118,8 +118,8 @@ export default function FeedbackPage() {
 
             {!inbox.isLoading && !inbox.isError && !canSubmit && (
               <div className="alert" role="status">
-                Feedback is locked until this company&apos;s TIN is validated by Ethio telecom.
-                Switch to a company with a validated TIN, or wait for validation.{" "}
+                Feedback is locked until this company&apos;s TIN number is validated by Ethio telecom.
+                Switch to a company with a validated TIN number, or wait for validation.{" "}
                 <Link href="/portal/company">Open company settings</Link>
               </div>
             )}

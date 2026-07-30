@@ -111,15 +111,15 @@ Dear {contact_name}, your company {company_name} was approved. — Ethio telecom
 SMS,
 
         'company_tin_validated' => <<<'SMS'
-Dear {contact_name}, the TIN for {company_name} is confirmed. Log in to the VAS Partners portal and submit service requests. — Ethio telecom
+Dear {contact_name}, the TIN number for {company_name} is confirmed. Log in to the VAS Partners portal and submit service requests. — Ethio telecom
 SMS,
 
         'company_tin_invalid' => <<<'SMS'
-Dear {contact_name}, company {company_name} has an invalid TIN ({company_tin}). {note} Enter a valid 10-digit Ethiopian TIN in the portal. — Ethio telecom
+Dear {contact_name}, company {company_name} has an invalid TIN number ({company_tin}). {note} Enter a valid 10-digit Ethiopian TIN number in the portal. — Ethio telecom
 SMS,
 
         'company_erca_name_mismatch' => <<<'SMS'
-Dear {contact_name}, TIN for {company_name} ({company_tin}) does not match ERCA verification (legal name: {legal_name}). Please update your TIN in the VAS Partners portal, search ERCA, and confirm. — Ethio telecom
+Dear {contact_name}, TIN number for {company_name} ({company_tin}) does not match ERCA verification (legal name: {legal_name}). Please update your TIN number in the VAS Partners portal, search ERCA, and confirm. — Ethio telecom
 SMS,
 
         'company_profile_rejected' => <<<'SMS'
@@ -176,15 +176,15 @@ SMS,
 
         'company_membership_requested' => '{applicant_name} requested to join {company_name}. Open Company to approve or reject.',
 
-        'company_profile_approved' => 'Your company {company_name} was approved. Ethio telecom will confirm your TIN before you can submit service requests.',
+        'company_profile_approved' => 'Your company {company_name} was approved. Ethio telecom will confirm your TIN number before you can submit service requests.',
 
-        'company_tin_validated' => 'TIN for {company_name} is confirmed. Log in and submit service requests.',
+        'company_tin_validated' => 'TIN number for {company_name} is confirmed. Log in and submit service requests.',
 
-        'company_tin_invalid' => 'TIN for {company_name} ({company_tin}) is invalid. {note} Update it in Company settings.',
+        'company_tin_invalid' => 'TIN number for {company_name} ({company_tin}) is invalid. {note} Update it in Company settings.',
 
-        'company_erca_name_mismatch' => 'TIN for {company_name} does not match ERCA (legal name: {legal_name}). Update your TIN in Company settings, search ERCA, and confirm.',
+        'company_erca_name_mismatch' => 'TIN number for {company_name} does not match ERCA (legal name: {legal_name}). Update your TIN number in Company settings, search ERCA, and confirm.',
 
-        'company_profile_pending' => 'Your company {company_name} (TIN {company_tin}) was submitted and is waiting for Ethio telecom approval. You will be notified when it is reviewed.',
+        'company_profile_pending' => 'Your company {company_name} (TIN number {company_tin}) was submitted and is waiting for Ethio telecom approval. You will be notified when it is reviewed.',
 
         'company_profile_rejected' => 'Your company profile needs updates before approval.',
 

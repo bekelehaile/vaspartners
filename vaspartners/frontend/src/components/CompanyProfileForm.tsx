@@ -133,7 +133,7 @@ export function CompanyProfileForm({
     onSubmit: async ({ value }) => {
       if (identityLocked) {
         throw new Error(
-          "Company name and TIN are locked after ERCA verification match.",
+          "Company name and TIN number are locked after ERCA verification match.",
         );
       }
       const parsed = companyProfileSchema.parse(value);
@@ -156,10 +156,10 @@ export function CompanyProfileForm({
         <h2>{isUpdate ? "Company details" : createNew ? "Add company" : "Company details"}</h2>
         <p className="muted">
           {identityLocked
-            ? "Name and TIN are locked after ERCA verification match. Address can still be updated while pending."
+            ? "Name and TIN number are locked after ERCA verification match. Address can still be updated while pending."
             : isUpdate
-              ? "Update name, TIN, and address."
-              : "Enter company name, TIN, and address."}
+              ? "Update name, TIN number, and address."
+              : "Enter company name, TIN number, and address."}
         </p>
       </div>
 
@@ -209,7 +209,7 @@ export function CompanyProfileForm({
                 {(field) => (
                   <CompanyField
                     field={field}
-                    label="TIN"
+                    label="TIN number"
                     submissionAttempts={submissionAttempts}
                     placeholder="10 digits"
                     inputMode="numeric"

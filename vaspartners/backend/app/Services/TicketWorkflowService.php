@@ -466,7 +466,7 @@ class TicketWorkflowService
                 $service = Service::query()->findOrFail($data['service_id']);
                 $requisition = Requisition::query()->findOrFail($data['requisition_id']);
 
-                // Hard gate: no VAS service requests until the company TIN is admin-approved.
+                // Hard gate: no VAS service requests until the company TIN number is admin-approved.
                 if (empty($data['skip_open_limit'])) {
                     $this->membership->assertCanAccessCompany($contact);
                     $this->membership->assertHasPermission(

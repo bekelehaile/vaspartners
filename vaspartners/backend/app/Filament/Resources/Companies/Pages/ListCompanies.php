@@ -28,7 +28,7 @@ class ListCompanies extends ListRecords
 
         return [
             'all' => Tab::make('All')->badge(fn (): int => $base()->count()),
-            'tin_ok' => Tab::make('Verified')
+            'tin_ok' => Tab::make('TIN number verified')
                 ->badge(fn (): int => $base()->tinApproved()->count())
                 ->badgeColor('success')
                 ->modifyQueryUsing(fn (Builder $query) => $query->tinApproved()),
@@ -40,14 +40,14 @@ class ListCompanies extends ListRecords
                 ->badge(fn (): int => $base()->ercaNameMismatchPending()->count())
                 ->badgeColor('warning')
                 ->modifyQueryUsing(fn (Builder $query) => $query->ercaNameMismatchPending()),
-            'invalid_tin' => Tab::make('Invalid TIN')
+            'invalid_tin' => Tab::make('Invalid TIN number')
                 ->badge(fn (): int => $base()->invalidOrMissingTin()->count())
                 ->badgeColor('danger')
                 ->modifyQueryUsing(fn (Builder $query) => $query->invalidOrMissingTin()),
             'orphans' => Tab::make('Orphan (no owner)')
-                ->badge(fn (): int => $base()->ownerless()->tinApproved()->count())
+                ->badge(fn (): int => $base()->ownerless()->ercaIdentityResolved()->count())
                 ->badgeColor('warning')
-                ->modifyQueryUsing(fn (Builder $query) => $query->ownerless()->tinApproved()),
+                ->modifyQueryUsing(fn (Builder $query) => $query->ownerless()->ercaIdentityResolved()),
             'inactive' => Tab::make('Inactive')
                 ->badge(fn (): int => $base()->where('is_active', false)->count())
                 ->badgeColor('gray')

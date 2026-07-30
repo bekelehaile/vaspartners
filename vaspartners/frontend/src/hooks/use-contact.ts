@@ -443,7 +443,10 @@ export function useSubmitErcaNameConsent() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (payload: { action: "use_legal" | "keep_both" }) => {
+    mutationFn: async (payload: {
+      action: "use_legal" | "keep_both" | "provide_name";
+      company_name?: string;
+    }) => {
       const res = await api<{ message?: string; data: Contact }>(
         "/profile/company/tin/name-consent",
         {

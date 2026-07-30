@@ -72,7 +72,7 @@ function RequestCard({
       {row.company?.name && (
         <p className="muted company-request-meta">
           Company: <strong>{row.company.name}</strong>
-          {row.company.tin ? ` · TIN ${row.company.tin}` : ""}
+          {row.company.tin ? ` · TIN number ${row.company.tin}` : ""}
         </p>
       )}
       {mode === "membership" && row.applicant?.name && (

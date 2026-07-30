@@ -14,7 +14,7 @@ class CompanyStatsOverview extends StatsOverviewWidget
 
     protected ?string $heading = 'Partners';
 
-    protected ?string $description = 'TIN verification that needs attention';
+    protected ?string $description = 'TIN number verification that needs attention';
 
     protected ?string $pollingInterval = '60s';
 
@@ -26,13 +26,13 @@ class CompanyStatsOverview extends StatsOverviewWidget
         $invalid = Company::query()->invalidOrMissingTin()->count();
 
         return [
-            Stat::make('Verified', $tinOk)
-                ->description('TIN confirmed')
+            Stat::make('TIN number verified', $tinOk)
+                ->description('TIN number found in ERCA')
                 ->descriptionIcon(Heroicon::OutlinedBuildingOffice)
                 ->color('success')
                 ->url(CompanyResource::getUrl('index').'?tab=tin_ok'),
             Stat::make('Awaiting verification', $tinAwaiting)
-                ->description('Valid TIN — pending check')
+                ->description('Valid TIN number — pending check')
                 ->descriptionIcon(Heroicon::OutlinedIdentification)
                 ->color($tinAwaiting > 0 ? 'warning' : 'gray')
                 ->url(CompanyResource::getUrl('index').'?tab=tin_awaiting'),
@@ -41,7 +41,7 @@ class CompanyStatsOverview extends StatsOverviewWidget
                 ->descriptionIcon(Heroicon::OutlinedExclamationTriangle)
                 ->color($mismatch > 0 ? 'warning' : 'gray')
                 ->url(CompanyResource::getUrl('index').'?tab=mismatch'),
-            Stat::make('Invalid TIN', $invalid)
+            Stat::make('Invalid TIN number', $invalid)
                 ->description('Missing or not 10 digits')
                 ->descriptionIcon(Heroicon::OutlinedXCircle)
                 ->color($invalid > 0 ? 'danger' : 'gray')

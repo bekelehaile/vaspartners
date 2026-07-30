@@ -76,7 +76,7 @@ class RevenuePartnerResource extends Resource
                                     $bits = array_filter([
                                         $company->name,
                                         filled($company->phone) ? $company->phone : null,
-                                        filled($company->tin) ? 'TIN '.$company->tin : null,
+                                        filled($company->tin) ? 'TIN number '.$company->tin : null,
                                     ]);
 
                                     return [$company->id => implode(' · ', $bits)];
@@ -99,7 +99,7 @@ class RevenuePartnerResource extends Resource
                                 $set('phone', PhoneNumber::normalizeNullable($company->phone));
                             }
                         })
-                        ->helperText('Optional validated portal company. Search by name, phone, or TIN.')
+                        ->helperText('Optional validated portal company. Search by name, phone, or TIN number.')
                         ->columnSpanFull(),
                     TextInput::make('phone')
                         ->label('Phone')

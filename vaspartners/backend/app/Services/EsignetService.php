@@ -189,17 +189,13 @@ class EsignetService
             'address' => $payload['address'] ?? $contact->address,
         ]);
 
-        // New contacts start active; existing inactive contacts stay blocked (is_active is the only gate).
-        if ($isNew) {
-            $contact->forceFill(['is_active' => true])->save();
-        } else {
-            $contact->save();
-        }
+        // Fayda / CRM verified contacts are always active.
+        $contact->forceFill(['is_active' => true])->save();
         $contact->markIdentityVerified(\App\Enums\IdentityVerifiedVia::Fayda);
 
         $membership = app(CompanyMembershipService::class);
 
-        // 1) Membership sync — respect is_active (inactive stubs never become portal context).
+        // 1) Membership sync after Fayda verification (contact is active).
         try {
             $membership->trySyncMembershipsOnFaydaLogin($contact->fresh(['memberships.company']));
         } catch (Throwable $e) {

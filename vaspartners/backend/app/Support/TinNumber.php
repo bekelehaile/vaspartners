@@ -50,6 +50,6 @@ final class TinNumber
 
     public static function message(): string
     {
-        return 'Enter a valid Ethiopian TIN: exactly 10 digits (Ministry of Revenues / ERCA).';
+        return 'Enter a valid Ethiopian TIN number: exactly 10 digits (Ministry of Revenues / ERCA).';
     }
 }

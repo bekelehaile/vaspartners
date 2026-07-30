@@ -52,8 +52,8 @@ class CompanyStatusHistory extends Model
         return match ($this->action) {
             'approved' => 'Profile approved',
             'rejected' => 'Profile rejected',
-            'tin_validated' => 'TIN confirmed via ERCA',
-            'tin_cleared' => 'TIN validation cleared',
+            'tin_validated' => 'TIN number confirmed via ERCA',
+            'tin_cleared' => 'TIN number validation cleared',
             'activated' => 'Marked active',
             'deactivated' => 'Marked inactive',
             'conditions_updated' => 'Conditions updated',

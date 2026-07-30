@@ -19,7 +19,7 @@ class ListBulkMessages extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'Compose from companies (Active / approval / TIN filters) or import a CSV. Review recipients, Send pending, then Re-send failed as needed.';
+        return 'Compose from companies (Active / approval / TIN number filters) or import a CSV. Review recipients, Send pending, then Re-send failed as needed.';
     }
 
     protected function getHeaderActions(): array

@@ -10,8 +10,8 @@ import { getToken } from "@/lib/api";
 import { useContact, useLogout } from "@/hooks/use-contact";
 
 /**
- * Auth + TIN gate for /portal routes.
- * Contacts use Fayda/CRM identity. Companies use ERCA TIN validation for services.
+ * Auth + TIN number gate for /portal routes.
+ * Contacts use Fayda/CRM identity. Companies use ERCA TIN number validation for services.
  */
 export function PortalGuard({ children }: { children: ReactNode }) {
   const router = useRouter();

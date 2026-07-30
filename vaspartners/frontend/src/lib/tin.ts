@@ -1,4 +1,4 @@
-/** Ethiopian TIN (Ministry of Revenues / ERCA): exactly 10 digits. */
+/** Ethiopian TIN number (Ministry of Revenues / ERCA): exactly 10 digits. */
 
 export const ETHIOPIAN_TIN_LENGTH = 10;
 
@@ -16,4 +16,4 @@ export function isValidEthiopianTin(raw: string): boolean {
 }
 
 export const ETHIOPIAN_TIN_MESSAGE =
-  "Enter a valid Ethiopian TIN: exactly 10 digits (Ministry of Revenues / ERCA).";
+  "Enter a valid Ethiopian TIN number: exactly 10 digits (Ministry of Revenues / ERCA).";

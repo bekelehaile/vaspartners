@@ -130,15 +130,15 @@ class CompanyMembershipService
         }
 
         throw ValidationException::withMessages([
-            'company' => 'Company name and TIN are locked after ERCA verification match. Contact Ethio telecom support if a correction is required.',
+            'company' => 'Company name and TIN number are locked after ERCA verification match. Contact Ethio telecom support if a correction is required.',
             'company_name' => 'Company name cannot be changed after ERCA match.',
-            'company_tin' => 'TIN cannot be changed after ERCA match.',
+            'company_tin' => 'TIN number cannot be changed after ERCA match.',
         ]);
     }
 
     /**
      * Create company after partner consents to ERCA registry match.
-     * Auto-approves + marks TIN validated (ERCA is the attestation).
+     * Auto-approves + marks TIN number validated (ERCA is the attestation).
      *
      * @param  array{company_name: string, company_tin: string, company_address: string, legal_name: string}  $data
      */
@@ -166,6 +166,16 @@ class CompanyMembershipService
         $creatingAdditional = $contact->memberships->isNotEmpty();
         [$companyPhone, $companyEmail] = $this->resolveSharedCompanyContacts($contact);
 
+        $ercaPhone = trim((string) ($data['company_phone'] ?? ''));
+        if ($ercaPhone !== '' && \App\Support\PhoneNumber::isValidLocalMobile($ercaPhone)) {
+            $companyPhone = \App\Support\PhoneNumber::normalize($ercaPhone);
+        }
+
+        $ercaEmail = trim((string) ($data['company_email'] ?? ''));
+        if ($ercaEmail !== '' && filter_var($ercaEmail, FILTER_VALIDATE_EMAIL)) {
+            $companyEmail = strtolower($ercaEmail);
+        }
+
         if ($companyPhone === '' || ! \App\Support\PhoneNumber::isValidLocalMobile($companyPhone)) {
             throw ValidationException::withMessages([
                 'company' => $creatingAdditional
@@ -179,6 +189,12 @@ class CompanyMembershipService
             && $contact->hasActiveCompanyMembership()
             && $contact->company?->isApproved();
 
+        $companyAddress = trim((string) ($data['company_address'] ?? ''));
+        $ercaAddress = trim((string) ($data['erca_address'] ?? ''));
+        if ($companyAddress === '' && $ercaAddress !== '') {
+            $companyAddress = $ercaAddress;
+        }
+
         $result = DB::transaction(function () use (
             $contact,
             $data,
@@ -186,6 +202,7 @@ class CompanyMembershipService
             $legal,
             $companyPhone,
             $companyEmail,
+            $companyAddress,
             $keepApprovedContext,
         ) {
             $company = Company::query()->create([
@@ -201,12 +218,12 @@ class CompanyMembershipService
                 'erca_last_error' => null,
                 'phone' => $companyPhone,
                 'email' => $companyEmail,
-                'address' => trim($data['company_address']),
+                'address' => $companyAddress,
                 'is_active' => true,
                 'approval_status' => CompanyApprovalStatus::Approved,
                 'approved_by_user_id' => null,
                 'approved_at' => now(),
-                'approval_note' => 'Auto-approved after partner ERCA TIN consent.',
+                'approval_note' => 'Auto-approved after partner ERCA TIN number consent.',
                 'created_by_contact_id' => $contact->id,
             ]);
 
@@ -222,7 +239,7 @@ class CompanyMembershipService
                 'approved',
                 null,
                 $contact,
-                'Auto-approved after partner ERCA TIN consent.',
+                'Auto-approved after partner ERCA TIN number consent.',
                 ['auto' => true, 'via' => 'erca'],
             );
             $this->recordStatusHistory(
@@ -230,7 +247,7 @@ class CompanyMembershipService
                 'tin_validated',
                 null,
                 $contact,
-                'TIN confirmed via ERCA / eTrade',
+                'TIN number confirmed via ERCA / eTrade',
                 ['auto' => true, 'via' => 'erca'],
             );
 
@@ -248,22 +265,22 @@ class CompanyMembershipService
     }
 
     /**
-     * Update current company TIN + name from an ERCA preview consent (portal mismatch fix).
+     * Update current company TIN number + name from an ERCA preview consent (portal mismatch fix).
      *
-     * @param  array{company_tin: string, legal_name: string}  $data
+     * @param  array{company_tin: string, legal_name: string, company_phone?: ?string, company_email?: ?string, company_address?: ?string}  $data
      */
     public function updateCompanyFromErcaPreview(Contact $contact, array $data): Contact
     {
         if (! $contact->current_company_id || ! $contact->hasActiveCompanyMembership()) {
             throw ValidationException::withMessages([
-                'company' => 'Link an active company before updating the TIN.',
+                'company' => 'Link an active company before updating the TIN number.',
             ]);
         }
 
         $isOwner = $this->roleOf($contact) === CompanyRole::Owner;
         if (! $isOwner && ! $this->contactHasPermission($contact, CompanyMemberPermission::EditCompanyProfile)) {
             throw ValidationException::withMessages([
-                'company_tin' => 'Only the company owner (or a member with edit permission) can update the TIN.',
+                'company_tin' => 'Only the company owner (or a member with edit permission) can update the TIN number.',
             ]);
         }
 
@@ -293,11 +310,11 @@ class CompanyMembershipService
         if ($tinChanged) {
             $company->fill(['tin' => $tin])->save();
             if ($wasValidated) {
-                $this->recordStatusHistory($company, 'tin_cleared', null, $contact, 'Partner replaced TIN via ERCA search');
+                $this->recordStatusHistory($company, 'tin_cleared', null, $contact, 'Partner replaced TIN number via ERCA search');
             }
         }
 
-        $company->forceFill([
+        $updates = [
             'name' => $legal,
             'legal_name' => $legal,
             'tin' => $tin,
@@ -308,14 +325,31 @@ class CompanyMembershipService
             'erca_last_checked_at' => now(),
             'erca_next_check_at' => now()->addHours(max(24, (int) config('services.etrade.recheck_hours', 168))),
             'erca_last_error' => null,
-        ])->save();
+        ];
+
+        $ercaPhone = trim((string) ($data['company_phone'] ?? ''));
+        if ($ercaPhone !== '' && \App\Support\PhoneNumber::isValidLocalMobile($ercaPhone)) {
+            $updates['phone'] = \App\Support\PhoneNumber::normalize($ercaPhone);
+        }
+
+        $ercaEmail = trim((string) ($data['company_email'] ?? ''));
+        if ($ercaEmail !== '' && filter_var($ercaEmail, FILTER_VALIDATE_EMAIL)) {
+            $updates['email'] = strtolower($ercaEmail);
+        }
+
+        $ercaAddress = trim((string) ($data['company_address'] ?? ''));
+        if ($ercaAddress !== '') {
+            $updates['address'] = $ercaAddress;
+        }
+
+        $company->forceFill($updates)->save();
 
         $this->recordStatusHistory(
             $company,
             'tin_validated',
             null,
             $contact,
-            'TIN confirmed via ERCA search and partner consent',
+            'TIN number confirmed via ERCA search and partner consent',
             ['auto' => true, 'via' => 'erca_update'],
         );
 
@@ -356,7 +390,7 @@ class CompanyMembershipService
 
         if ($company->isApproved()) {
             throw ValidationException::withMessages([
-                'company' => 'This company TIN is already validated. Ask an administrator to update company details.',
+                'company' => 'This company TIN number is already validated. Ask an administrator to update company details.',
             ]);
         }
 
@@ -375,7 +409,7 @@ class CompanyMembershipService
             if ($name !== (string) $company->name || $tin !== (string) $company->tin) {
                 $this->assertErcaIdentityEditable($company);
             }
-            // Address-only update while name/TIN stay frozen.
+            // Address-only update while name/TIN number stay frozen.
             $company->fill([
                 'address' => trim($data['company_address']),
                 'phone' => $phone,
@@ -426,7 +460,7 @@ class CompanyMembershipService
     }
 
     /**
-     * Forces ERCA verification — admin cannot mark TIN OK without ERCA.
+     * Forces ERCA verification — admin cannot mark TIN number OK without ERCA.
      */
     public function approveCompany(Company $company, User $admin, ?string $note = null): Company
     {
@@ -436,7 +470,7 @@ class CompanyMembershipService
     }
 
     /**
-     * Identity verification no longer approves companies — TIN validation does.
+     * Identity verification no longer approves companies — TIN number validation does.
      * If TIN is already validated, ensure Active + synced approval_status.
      */
     public function autoApproveOwnedCompaniesAfterIdentityVerification(Contact $contact): void
@@ -489,7 +523,7 @@ class CompanyMembershipService
 
         if (! TinNumber::isValid($company->tin)) {
             throw ValidationException::withMessages([
-                'tin' => TinNumber::message().' Ask the partner to enter a valid TIN before approval.',
+                'tin' => TinNumber::message().' Ask the partner to enter a valid TIN number before approval.',
             ]);
         }
 
@@ -552,7 +586,7 @@ class CompanyMembershipService
         $company = $this->lookupByIdentity($tin);
         if (! $company) {
             throw ValidationException::withMessages([
-                'company_tin' => 'No active company with a validated TIN found. Create a new company instead.',
+                'company_tin' => 'No active company with a validated TIN number found. Create a new company instead.',
             ]);
         }
 
@@ -779,7 +813,7 @@ class CompanyMembershipService
         $company = $owner->company;
         if (! $company?->isApproved()) {
             throw ValidationException::withMessages([
-                'company' => 'Ownership can only be transferred after the company TIN is validated.',
+                'company' => 'Ownership can only be transferred after the company TIN number is validated.',
             ]);
         }
 
@@ -1415,7 +1449,7 @@ class CompanyMembershipService
 
         if (! $company?->isApproved()) {
             throw ValidationException::withMessages([
-                'company' => 'Membership requests are available after the company TIN is validated.',
+                'company' => 'Membership requests are available after the company TIN number is validated.',
             ]);
         }
     }
@@ -1437,7 +1471,7 @@ class CompanyMembershipService
         $contact->loadMissing('company');
         if (! $contact->company?->isApproved()) {
             throw ValidationException::withMessages([
-                'company' => 'Member management is available after the company TIN is validated.',
+                'company' => 'Member management is available after the company TIN number is validated.',
             ]);
         }
     }
@@ -1453,7 +1487,7 @@ class CompanyMembershipService
         $contact->loadMissing('company');
         if (! $contact->company?->isApproved()) {
             throw ValidationException::withMessages([
-                'company' => 'Membership requests are available after the company TIN is validated.',
+                'company' => 'Membership requests are available after the company TIN number is validated.',
             ]);
         }
 
@@ -1927,7 +1961,7 @@ class CompanyMembershipService
 
         if (! $contact->current_company_id) {
             throw ValidationException::withMessages([
-                'company' => 'Create a company with a unique TIN (or join an approved company) before using VAS services.',
+                'company' => 'Create a company with a unique TIN number (or join an approved company) before using VAS services.',
             ]);
         }
 
@@ -1939,27 +1973,41 @@ class CompanyMembershipService
 
         if (! filled($contact->company->tin)) {
             throw ValidationException::withMessages([
-                'company' => 'A valid company TIN is required before using VAS services.',
+                'company' => 'A valid company TIN number is required before using VAS services.',
             ]);
         }
 
         if (! TinNumber::isValid($contact->company->tin)) {
             throw ValidationException::withMessages([
-                'company_tin' => TinNumber::message().' Update your company TIN before submitting service requests.',
+                'company_tin' => TinNumber::message().' Update your company TIN number before submitting service requests.',
             ]);
         }
 
-        // Single service gate: ERCA-confirmed TIN.
+        // TIN number must be found in ERCA.
         if (! $contact->company->isTinValidated()) {
             throw ValidationException::withMessages([
-                'company_tin' => 'Confirm your company TIN with ERCA before using VAS services.',
+                'company_tin' => 'Confirm your company TIN number with ERCA before using VAS services.',
             ]);
         }
 
-        // TIN found in ERCA but name mismatch — resolve keep-both / update before services.
+        // TIN number found but name mismatch — resolve keep-both / update before services.
         if ($contact->company->needsErcaNameConsent()) {
             throw ValidationException::withMessages([
-                'company' => 'Confirm your company name with ERCA (keep both names, or update TIN) before using VAS services.',
+                'company' => 'Confirm your company name with ERCA (keep both names, or update TIN number) before using VAS services.',
+            ]);
+        }
+
+        // TIN number found but legal name missing — partner must enter a company name.
+        if ($contact->company->needsErcaNameEntry()) {
+            throw ValidationException::withMessages([
+                'company' => 'Enter your company name to continue. ERCA confirmed the TIN number but did not return a legal name.',
+            ]);
+        }
+
+        // TIN number found but legal name missing / unresolved — block until name is settled.
+        if (! $contact->company->isErcaNameResolved()) {
+            throw ValidationException::withMessages([
+                'company' => 'Your TIN number is verified, but the company name must be confirmed before using VAS services.',
             ]);
         }
 
@@ -2041,21 +2089,21 @@ class CompanyMembershipService
     }
 
     /**
-     * Partner submits / corrects Ethiopian TIN (even after company approval).
+     * Partner submits / corrects Ethiopian TIN number (even after company approval).
      * Clears tin_validated so admin must re-confirm.
      */
     public function submitCompanyTin(Contact $contact, string $rawTin): Contact
     {
         if (! $contact->current_company_id || ! $contact->hasActiveCompanyMembership()) {
             throw ValidationException::withMessages([
-                'company' => 'Link an active company before submitting a TIN.',
+                'company' => 'Link an active company before submitting a TIN number.',
             ]);
         }
 
         $isOwner = $this->roleOf($contact) === CompanyRole::Owner;
         if (! $isOwner && ! $this->contactHasPermission($contact, CompanyMemberPermission::EditCompanyProfile)) {
             throw ValidationException::withMessages([
-                'company_tin' => 'Only the company owner (or a member with edit permission) can update the TIN.',
+                'company_tin' => 'Only the company owner (or a member with edit permission) can update the TIN number.',
             ]);
         }
 
@@ -2077,7 +2125,7 @@ class CompanyMembershipService
         ])->save();
 
         if ($wasValidated) {
-            $this->recordStatusHistory($company, 'tin_cleared', null, $contact, 'Partner updated TIN NUMBER');
+            $this->recordStatusHistory($company, 'tin_cleared', null, $contact, 'Partner updated TIN number');
         }
 
         $this->syncAllMembersDenormalizedFields($company);
@@ -2120,6 +2168,35 @@ class CompanyMembershipService
     }
 
     /**
+     * Partner enters company name when ERCA found the TIN number but returned no legal name.
+     */
+    public function applyErcaPartnerEnteredName(Contact $contact, string $name): Contact
+    {
+        if (! $contact->current_company_id || ! $contact->hasActiveCompanyMembership()) {
+            throw ValidationException::withMessages([
+                'company' => 'Link an active company before entering the company name.',
+            ]);
+        }
+
+        $isOwner = $this->roleOf($contact) === CompanyRole::Owner;
+        if (! $isOwner && ! $this->contactHasPermission($contact, CompanyMemberPermission::EditCompanyProfile)) {
+            throw ValidationException::withMessages([
+                'company_name' => 'Only the company owner (or a member with edit permission) can enter the company name.',
+            ]);
+        }
+
+        $company = $contact->company;
+        if (! $company) {
+            throw ValidationException::withMessages(['company' => 'Company not found.']);
+        }
+
+        $this->ercaTin->applyPartnerEnteredName($company, $contact, $name);
+        $this->syncAllMembersDenormalizedFields($company->fresh() ?? $company);
+
+        return $contact->fresh(['company', 'memberships.company']);
+    }
+
+    /**
      * Best-effort ERCA verify — never block company create/update on upstream outages.
      */
     protected function safeErcaVerify(Company $company, bool $force = false): void
@@ -2127,7 +2204,7 @@ class CompanyMembershipService
         try {
             $this->ercaTin->verifyCompany($company, force: $force);
         } catch (ValidationException $e) {
-            // Rate-limit / validation during create: leave schedule fields; partner can retry via TIN submit.
+            // Rate-limit / validation during create: leave schedule fields; partner can retry via TIN number submit.
             Log::info('ERCA verify deferred', [
                 'company_id' => $company->id,
                 'errors' => $e->errors(),
@@ -2141,7 +2218,7 @@ class CompanyMembershipService
     }
 
     /**
-     * TIN must be confirmed via ERCA — admin cannot attest alone.
+     * TIN number must be confirmed via ERCA — admin cannot attest alone.
      * Forces an ERCA check and unlocks only when ERCA resolves the identity.
      */
     public function markTinValidated(Company $company, ?User $admin = null): Company
@@ -2157,7 +2234,7 @@ class CompanyMembershipService
 
         if (! $fresh->isTinValidated()) {
             throw ValidationException::withMessages([
-                'tin' => 'TIN must be confirmed in ERCA (and any name mismatch resolved by the partner) before it is marked OK.',
+                'tin' => 'TIN number must be confirmed in ERCA before it is marked verified.',
             ]);
         }
 
@@ -2165,7 +2242,8 @@ class CompanyMembershipService
     }
 
     /**
-     * After ERCA resolves identity (matched / accepted / kept both), unlock services.
+     * After ERCA finds the TIN number, mark tin_validated and set Active.
+     * Name mismatch still needs partner consent before services unlock.
      */
     public function syncTinValidatedFromErca(Company $company): Company
     {
@@ -2191,16 +2269,17 @@ class CompanyMembershipService
                 'tin_validated',
                 null,
                 null,
-                'TIN confirmed via ERCA',
+                'TIN number confirmed via ERCA',
                 ['auto' => true, 'via' => 'erca'],
             );
         }
 
+        // ERCA-verified TIN number ⇒ company Active must be on.
         return $this->ensureApprovedWhenTinValidated($company->fresh() ?? $company);
     }
 
     /**
-     * Keep legacy approval_status / Active in sync when ERCA TIN is confirmed.
+     * Keep legacy approval_status / Active in sync when ERCA TIN number is confirmed.
      */
     public function ensureApprovedWhenTinValidated(Company $company, ?User $admin = null): Company
     {
@@ -2214,11 +2293,16 @@ class CompanyMembershipService
             ? $company->approval_status
             : CompanyApprovalStatus::tryFrom((string) ($company->approval_status ?: ''));
 
-        if ($status === CompanyApprovalStatus::Approved && $company->is_active) {
+        $alreadyApproved = $status === CompanyApprovalStatus::Approved;
+        $alreadyActive = (bool) $company->is_active;
+
+        if ($alreadyApproved && $alreadyActive) {
             return $company;
         }
 
         $admin ??= auth()->user() instanceof User ? auth()->user() : null;
+
+        $beforeActive = $alreadyActive;
 
         $company->forceFill([
             'approval_status' => CompanyApprovalStatus::Approved,
@@ -2226,23 +2310,33 @@ class CompanyMembershipService
             'approved_at' => $company->approved_at ?? now(),
             'approval_note' => filled($company->approval_note)
                 ? $company->approval_note
-                : 'Approved with TIN validation.',
+                : 'Approved with TIN number validation.',
             'is_active' => true,
         ])->save();
 
-        $this->recordStatusHistory(
-            $company,
-            'approved',
-            $admin,
-            null,
-            'Approved with TIN validation.',
-        );
+        if (! $alreadyApproved) {
+            $this->recordStatusHistory(
+                $company,
+                'approved',
+                $admin,
+                null,
+                'Approved with TIN number validation.',
+            );
+        } elseif (! $beforeActive) {
+            $this->recordStatusHistory(
+                $company,
+                'activated',
+                $admin,
+                null,
+                'Activated after ERCA TIN number verification.',
+            );
+        }
 
         return $company->fresh(['approvedBy']) ?? $company;
     }
 
     /**
-     * Clear a false / mistaken TIN approval when the stored value is not a valid Ethiopian TIN.
+     * Clear a false / mistaken TIN number approval when the stored value is not a valid Ethiopian TIN number.
      *
      * @return array{cleared: bool, notified: bool, skipped: bool, reason?: string|null}
      */
@@ -2266,7 +2360,7 @@ class CompanyMembershipService
                 'tin_cleared',
                 null,
                 null,
-                'Automated scan: TIN format invalid while tin_validated was true',
+                'Automated scan: TIN number format invalid while tin_validated was true',
             );
         }
 
@@ -2288,7 +2382,7 @@ class CompanyMembershipService
     }
 
     /**
-     * Notify owner that the company TIN format is invalid (one-shot / --notify-all scans).
+     * Notify owner that the company TIN number format is invalid (one-shot / --notify-all scans).
      */
     public function notifyInvalidTin(Company $company, bool $hadFalseApproval = false): void
     {
@@ -2300,7 +2394,7 @@ class CompanyMembershipService
 
     /**
      * Log admin edits to Active / approval from the company form.
-     * TIN OK is ERCA-only and is not changed from the admin form.
+     * TIN number OK is ERCA-only and is not changed from the admin form.
      *
      * @param  array{approval_status?: mixed, is_active?: mixed, tin_validated?: mixed}  $before
      */
@@ -2592,6 +2686,7 @@ class CompanyMembershipService
             'erca_verified_at' => optional($company->erca_verified_at)?->toIso8601String(),
             'erca_last_checked_at' => optional($company->erca_last_checked_at)?->toIso8601String(),
             'needs_erca_name_consent' => $company->needsErcaNameConsent(),
+            'needs_erca_name_entry' => $company->needsErcaNameEntry(),
             'erca_identity_locked' => $company->isErcaIdentityLocked(),
         ] : null;
         $data['company_role'] = $contact->company_role;
@@ -2773,7 +2868,7 @@ class CompanyMembershipService
 
         if ($tinQuery->exists()) {
             throw ValidationException::withMessages([
-                'company_tin' => 'This TIN is already registered to another company. TINs are unique — use “Join existing company”, or contact an administrator.',
+                'company_tin' => 'This TIN is already registered to another company. TIN numbers are unique — use “Join existing company”, or contact an administrator.',
             ]);
         }
     }

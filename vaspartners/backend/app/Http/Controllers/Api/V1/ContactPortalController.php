@@ -524,7 +524,7 @@ class ContactPortalController extends Controller
             $membership->assertCanAccessCompany($contact);
         } catch (\Illuminate\Validation\ValidationException $e) {
             $message = collect($e->errors())->flatten()->first()
-                ?: 'Confirm your company TIN with ERCA before viewing subscriptions.';
+                ?: 'Confirm your company TIN number with ERCA before viewing subscriptions.';
 
             return response()->json([
                 'data' => [],
@@ -701,10 +701,10 @@ class ContactPortalController extends Controller
         $createNew = (bool) ($data['create_new'] ?? false);
         unset($data['create_new']);
 
-        // New companies must be created via ERCA TIN search + partner consent.
+        // New companies must be created via ERCA TIN number search + partner consent.
         if ($createNew || ! $contact->current_company_id) {
             return response()->json([
-                'message' => 'Create a company by searching your TIN in ERCA and confirming the registry details.',
+                'message' => 'Create a company by searching your TIN number in ERCA and confirming the registry details.',
             ], 422);
         }
 
@@ -722,7 +722,7 @@ class ContactPortalController extends Controller
             'company_tin' => ['required', 'string', 'max:32'],
         ]);
 
-        // When updating an existing company, allow re-checking its current TIN.
+        // When updating an existing company, allow re-checking its current TIN number.
         $ignoreCompanyId = $contact->current_company_id
             && $contact->hasActiveCompanyMembership()
             ? (int) $contact->current_company_id
@@ -731,7 +731,7 @@ class ContactPortalController extends Controller
         $preview = $ercaOnboarding->previewByTin($contact, $data['company_tin'], $ignoreCompanyId);
 
         return response()->json([
-            'message' => 'Taxpayer found in ERCA. Confirm to apply this TIN.',
+            'message' => 'Taxpayer found in ERCA. Confirm to apply this TIN number.',
             'data' => $preview,
         ]);
     }
@@ -756,7 +756,7 @@ class ContactPortalController extends Controller
         $fresh = $ercaOnboarding->updateExistingFromConsent($contact, $data['preview_token']);
 
         return response()->json([
-            'message' => 'Company TIN updated from ERCA after your consent.',
+            'message' => 'Company TIN number updated from ERCA after your consent.',
             'data' => $membership->serializeContact($fresh),
         ]);
     }
@@ -833,8 +833,8 @@ class ContactPortalController extends Controller
 
         return response()->json([
             'message' => $needsConsent
-                ? 'TIN found in ERCA, but the legal name differs from the company name you entered. Please confirm.'
-                : 'TIN submitted. We will review it shortly.',
+                ? 'TIN number found in ERCA, but the legal name differs from the company name you entered. Please confirm.'
+                : 'TIN number submitted. We will review it shortly.',
             'data' => $membership->serializeContact($fresh),
         ]);
     }
@@ -850,8 +850,18 @@ class ContactPortalController extends Controller
         }
 
         $data = $request->validate([
-            'action' => ['required', 'string', 'in:use_legal,keep_both'],
+            'action' => ['required', 'string', 'in:use_legal,keep_both,provide_name'],
+            'company_name' => ['required_if:action,provide_name', 'nullable', 'string', 'max:255'],
         ]);
+
+        if ($data['action'] === 'provide_name') {
+            $fresh = $membership->applyErcaPartnerEnteredName($contact, (string) ($data['company_name'] ?? ''));
+
+            return response()->json([
+                'message' => 'Company name saved. You can use portal services.',
+                'data' => $membership->serializeContact($fresh),
+            ]);
+        }
 
         $fresh = $membership->applyErcaNameConsent($contact, $data['action']);
 
@@ -871,7 +881,7 @@ class ContactPortalController extends Controller
 
         $company = $membership->lookupByIdentity($data['tin']);
         if (! $company) {
-            return response()->json(['message' => 'No approved company found for this TIN.', 'data' => null], 404);
+            return response()->json(['message' => 'No approved company found for this TIN number.', 'data' => null], 404);
         }
 
         return response()->json([

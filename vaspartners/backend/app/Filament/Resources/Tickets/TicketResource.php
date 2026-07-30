@@ -174,7 +174,7 @@ class TicketResource extends Resource
                             : [];
                     }),
                 TextEntry::make('company_tin')
-                    ->label('TIN')
+                    ->label('TIN number')
                     ->placeholder('—')
                     ->state(fn (Ticket $record): ?string => $record->subscription?->company?->tin
                         ?? $record->contact?->company?->tin

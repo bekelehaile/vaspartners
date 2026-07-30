@@ -90,7 +90,7 @@ class ImportBulkMessage extends Page
                             ->helperText('Placeholders: {company_name} {period} {service_type} {service_id} {amount}. Sample: Dear Teleport Technology PLC, your June 2026, API revenue with Service ID 1000000002 is ETB 10,000. Please provide the request letter with amount and ref number. Thank You Ethio Telecom'),
                     ]),
                 Section::make('Import recipients')
-                    ->description('Columns: phone (required), period, service_type, service_id, amount. Company name/TIN come from the matched company.')
+                    ->description('Columns: phone (required), period, service_type, service_id, amount. Company name/TIN number come from the matched company.')
                     ->schema([
                         FileUpload::make('spreadsheet')
                             ->label('Excel / CSV file')

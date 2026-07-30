@@ -111,7 +111,7 @@ class CompanyChangeRequestResource extends Resource
                     ->url(fn (CompanyChangeRequest $record): ?string => $record->company
                         ? CompanyResource::getUrl('view', ['record' => $record->company])
                         : null),
-                TextEntry::make('company.tin')->label('TIN'),
+                TextEntry::make('company.tin')->label('TIN number'),
                 TextEntry::make('company.phone'),
                 TextEntry::make('company.email'),
                 TextEntry::make('company.address')->columnSpanFull(),
@@ -210,7 +210,7 @@ class CompanyChangeRequestResource extends Resource
                     ->url(fn (CompanyChangeRequest $record): ?string => $record->company
                         ? CompanyResource::getUrl('view', ['record' => $record->company])
                         : null),
-                TextColumn::make('company.tin')->label('TIN'),
+                TextColumn::make('company.tin')->label('TIN number'),
                 TextColumn::make('decided_by')
                     ->label('Decided by')
                     ->state(fn (CompanyChangeRequest $record): string => $record->loadMissing(['reviewer', 'contactReviewer'])->decidedByLabel())

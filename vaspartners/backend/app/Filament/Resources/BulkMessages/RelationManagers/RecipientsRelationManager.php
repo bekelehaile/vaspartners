@@ -34,7 +34,7 @@ class RecipientsRelationManager extends RelationManager
                     ->label('Company name')
                     ->maxLength(255),
                 TextInput::make('company_tin')
-                    ->label('TIN')
+                    ->label('TIN number')
                     ->maxLength(64),
                 TextInput::make('phone_raw')
                     ->label('Phone')
@@ -75,7 +75,7 @@ class RecipientsRelationManager extends RelationManager
                     ->url(fn (BulkMessageRecipient $record): ?string => $record->company
                         ? CompanyResource::getUrl('view', ['record' => $record->company])
                         : null),
-                TextColumn::make('company_tin')->label('TIN')->toggleable(),
+                TextColumn::make('company_tin')->label('TIN number')->toggleable(),
                 TextColumn::make('phone_normalized')->label('Phone (last 9)')->searchable(),
                 TextColumn::make('variables.period')->label('Period')->toggleable(),
                 TextColumn::make('variables.service_type')->label('Service')->toggleable(),

@@ -43,7 +43,7 @@ class RevenuePortalController extends Controller
             $membership->assertCanAccessCompany($contact);
         } catch (\Illuminate\Validation\ValidationException $e) {
             $message = collect($e->errors())->flatten()->first()
-                ?: 'Confirm your company TIN with ERCA before viewing revenue.';
+                ?: 'Confirm your company TIN number with ERCA before viewing revenue.';
 
             return $this->emptyPage($message, $perPage);
         }

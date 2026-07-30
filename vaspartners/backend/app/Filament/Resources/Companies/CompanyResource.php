@@ -64,7 +64,7 @@ class CompanyResource extends Resource
     {
         /** @var Company $record */
         return array_filter([
-            'TIN' => $record->tin,
+            'TIN number' => $record->tin,
             'Phone' => $record->phone,
         ]);
     }
@@ -92,7 +92,7 @@ class CompanyResource extends Resource
                 ->disabled()
                 ->dehydrated(false),
             TextInput::make('tin')
-                ->label('TIN NUMBER')
+                ->label('TIN number')
                 ->required()
                 ->unique(ignoreRecord: true)
                 ->maxLength(32)
@@ -127,9 +127,9 @@ class CompanyResource extends Resource
             Section::make('Overview')
                 ->schema([
                     TextEntry::make('name')->label('Company name'),
-                    TextEntry::make('tin')->label('TIN'),
+                    TextEntry::make('tin')->label('TIN number'),
                     TextEntry::make('tin_ok')
-                        ->label('TIN status')
+                        ->label('TIN number status')
                         ->badge()
                         ->state(fn (Company $record): bool => $record->isTinValidated())
                         ->formatStateUsing(fn ($state) => $state ? 'Verified' : 'Not verified')
@@ -166,8 +166,8 @@ class CompanyResource extends Resource
                             ? $state->label()
                             : (\App\Enums\ErcaNameStatus::tryFrom((string) $state)?->label() ?? 'Not checked'))
                         ->color(fn ($state) => match ($state instanceof \App\Enums\ErcaNameStatus ? $state->value : (string) $state) {
-                            'matched', 'accepted_legal', 'kept_both' => 'success',
-                            'mismatch_pending' => 'warning',
+                            'matched', 'accepted_legal', 'kept_both', 'partner_entered' => 'success',
+                            'mismatch_pending', 'name_missing' => 'warning',
                             'not_found', 'failed' => 'danger',
                             default => 'gray',
                         }),
@@ -219,15 +219,15 @@ class CompanyResource extends Resource
                             ['owner'],
                         );
                     }),
-                TextColumn::make('tin')->label('TIN')->searchable()->sortable(),
+                TextColumn::make('tin')->label('TIN number')->searchable()->sortable(),
                 IconColumn::make('tin_ok')
-                    ->label('Verified')
+                    ->label('TIN number verified')
                     ->boolean()
                     ->state(fn (Company $record): bool => $record->isTinValidated())
                     ->sortable(query: function (Builder $query, string $direction): Builder {
-                        $resolved = "erca_tin_verified = true AND erca_name_status IN ('matched','accepted_legal','kept_both')";
-
-                        return $query->orderByRaw("CASE WHEN {$resolved} THEN 1 ELSE 0 END ".$direction);
+                        return $query->orderByRaw(
+                            'CASE WHEN erca_tin_verified = true THEN 1 ELSE 0 END '.$direction
+                        );
                     }),
                 TextColumn::make('erca_name_status')
                     ->label('ERCA name')
@@ -237,8 +237,8 @@ class CompanyResource extends Resource
                         ? $state->value
                         : (string) ($state ?: 'unchecked'))
                     ->color(fn ($state) => match ($state instanceof \App\Enums\ErcaNameStatus ? $state->value : (string) $state) {
-                        'matched', 'accepted_legal', 'kept_both' => 'success',
-                        'mismatch_pending' => 'warning',
+                        'matched', 'accepted_legal', 'kept_both', 'partner_entered' => 'success',
+                        'mismatch_pending', 'name_missing' => 'warning',
                         'not_found', 'failed' => 'danger',
                         default => 'gray',
                     }),
@@ -284,14 +284,15 @@ class CompanyResource extends Resource
             ->defaultSort('created_at', 'desc')
             ->filters([
                 SelectFilter::make('tin_verification')
-                    ->label('TIN verification')
+                    ->label('TIN number verification')
                     ->options([
-                        'validated' => 'Verified',
-                        'awaiting' => 'Valid TIN — awaiting verification',
+                        'validated' => 'TIN number verified',
+                        'awaiting' => 'Valid TIN number — awaiting verification',
                         'mismatch' => 'Name mismatch (consent needed)',
-                        'invalid' => 'Invalid / missing TIN',
+                        'invalid' => 'Invalid / missing TIN number',
                         'erca_matched' => 'Name matched',
-                        'erca_not_found' => 'TIN not found',
+                        'erca_not_found' => 'TIN number not found',
+                        'erca_name_missing' => 'TIN number found — name missing',
                         'erca_failed' => 'Verification failed',
                         'erca_unchecked' => 'Not checked yet',
                     ])
@@ -303,6 +304,7 @@ class CompanyResource extends Resource
                             'invalid' => $query->invalidOrMissingTin(),
                             'erca_matched' => $query->where('erca_name_status', \App\Enums\ErcaNameStatus::Matched->value),
                             'erca_not_found' => $query->where('erca_name_status', \App\Enums\ErcaNameStatus::NotFound->value),
+                            'erca_name_missing' => $query->where('erca_name_status', \App\Enums\ErcaNameStatus::NameMissing->value),
                             'erca_failed' => $query->where('erca_name_status', \App\Enums\ErcaNameStatus::Failed->value),
                             'erca_unchecked' => $query->where(function (Builder $q): void {
                                 $q->whereNull('erca_name_status')

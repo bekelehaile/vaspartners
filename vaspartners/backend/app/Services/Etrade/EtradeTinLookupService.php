@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
- * Looks up taxpayer / company info by Ethiopian TIN via eTrade (etrade.gov.et).
+ * Looks up taxpayer / company info by Ethiopian TIN number via eTrade (etrade.gov.et).
  *
  * Upstream (working as of 2026-07):
  *   GET {base}/api/Tin/checkTin/{tin}
@@ -72,7 +72,7 @@ class EtradeTinLookupService
 
             return $this->mapResult($normalized, $taxpayerRows, is_array($registrationRows) ? $registrationRows : []);
         } catch (Throwable $e) {
-            Log::error('eTrade TIN lookup failed', [
+            Log::error('eTrade TIN number lookup failed', [
                 'tin' => $normalized,
                 'message' => $e->getMessage(),
             ]);
@@ -118,7 +118,7 @@ class EtradeTinLookupService
         }
 
         if (! $response->successful()) {
-            Log::warning('eTrade TIN HTTP error', [
+            Log::warning('eTrade TIN number HTTP error', [
                 'url' => $url,
                 'status' => $response->status(),
             ]);
@@ -184,9 +184,11 @@ class EtradeTinLookupService
         $primary = $this->pickLatestTaxpayerRow($rows);
         $registration = $this->pickLatestRegistration($registrationRows);
 
-        $legalName = $this->englishName($primary);
+        $legalName = $this->englishName($primary) ?? $this->amharicName($primary);
         $legalNameAm = $this->amharicName($primary);
-        $businessName = $this->stringOrNull($registration['BusinessName'] ?? null) ?? $legalName;
+        $businessName = $this->stringOrNull($registration['BusinessName'] ?? null)
+            ?? $this->stringOrNull($registration['BusinessNameAmh'] ?? null)
+            ?? $legalName;
         $businessNameAm = $this->stringOrNull($registration['BusinessNameAmh'] ?? null) ?? $legalNameAm;
 
         $found = $primary !== [] || $registration !== [];

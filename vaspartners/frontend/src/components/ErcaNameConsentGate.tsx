@@ -8,8 +8,9 @@ import {
 import { ErcaTinConsentPanel } from "@/components/ErcaTinConsentPanel";
 
 /**
- * When ERCA finds the TIN but the legal name ≠ entered company name,
- * partner must: keep both names, use legal name, or search/update TIN via ERCA consent.
+ * ERCA name gates:
+ * - mismatch: keep both / use legal / update TIN number
+ * - name missing: partner enters company name so services are not blocked
  */
 export function ErcaNameConsentGate({ children }: { children: React.ReactNode }) {
   const { data: me } = useContact();
@@ -17,25 +18,40 @@ export function ErcaNameConsentGate({ children }: { children: React.ReactNode })
 
   const [mode, setMode] = useState<"choose" | "search">("choose");
   const [localError, setLocalError] = useState<string | null>(null);
+  const [enteredName, setEnteredName] = useState("");
 
   const company = me?.company;
-  const needsConsent =
+  const needsMismatchConsent =
     !!me?.profile_completed &&
     !!company &&
     company.needs_erca_name_consent === true;
-  const canConsent = me?.company_role === "owner" || !!me?.company_can_edit;
+  const needsNameEntry =
+    !!me?.profile_completed &&
+    !!company &&
+    company.needs_erca_name_entry === true &&
+    company.needs_erca_name_consent !== true;
+  const needsGate = needsMismatchConsent || needsNameEntry;
+  const canConsent =
+    me?.company_role === "owner" ||
+    !!me?.company_can_edit ||
+    (me?.company_permissions ?? []).includes("edit_company_profile");
   const busy = consent.isPending;
 
   useEffect(() => {
-    if (!needsConsent) return;
+    if (!needsNameEntry) return;
+    setEnteredName(company?.name?.trim() || "");
+  }, [needsNameEntry, company?.name, company?.public_id]);
+
+  useEffect(() => {
+    if (!needsGate) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = previous;
     };
-  }, [needsConsent]);
+  }, [needsGate]);
 
-  if (!needsConsent) {
+  if (!needsGate) {
     return <>{children}</>;
   }
 
@@ -54,6 +70,91 @@ export function ErcaNameConsentGate({ children }: { children: React.ReactNode })
     );
   };
 
+  const onProvideName = () => {
+    const name = enteredName.trim();
+    if (!name) {
+      setLocalError("Enter your company name to continue.");
+      return;
+    }
+    setLocalError(null);
+    consent.mutate(
+      { action: "provide_name", company_name: name },
+      {
+        onError: (err) => {
+          setLocalError(err instanceof Error ? err.message : "Could not save the company name.");
+        },
+      },
+    );
+  };
+
+  if (needsNameEntry) {
+    return (
+      <>
+        {children}
+        <div className="portal-modal-backdrop" role="presentation">
+          <div
+            className="portal-modal tin-gate-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="erca-name-entry-title"
+            aria-describedby="erca-name-entry-desc"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="erca-name-entry-title">Enter company name</h2>
+            <p id="erca-name-entry-desc" className="muted">
+              Your TIN number is verified in ERCA, but ERCA did not return a legal name. Enter your
+              company name to unlock portal services.
+            </p>
+            <p className="muted" style={{ marginTop: "0.5rem" }}>
+              TIN number: {company?.tin || "—"}
+            </p>
+
+            {(localError || consent.isError) && (
+              <p className="alert" role="alert">
+                {localError ||
+                  (consent.error instanceof Error
+                    ? consent.error.message
+                    : "Something went wrong.")}
+              </p>
+            )}
+
+            {!canConsent ? (
+              <p className="portal-modal-hint">
+                Ask your company owner to enter the company name.
+              </p>
+            ) : (
+              <>
+                <label htmlFor="erca-partner-company-name" style={{ display: "block", marginTop: "1rem" }}>
+                  Company name <span className="req">*</span>
+                </label>
+                <input
+                  id="erca-partner-company-name"
+                  type="text"
+                  value={enteredName}
+                  maxLength={255}
+                  disabled={busy}
+                  onChange={(e) => setEnteredName(e.target.value)}
+                  placeholder="Enter company name"
+                  style={{ width: "100%", marginTop: "0.35rem" }}
+                />
+                <div className="portal-modal-actions" style={{ marginTop: "1rem" }}>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={busy || !enteredName.trim()}
+                    onClick={onProvideName}
+                  >
+                    {consent.isPending ? "Saving…" : "Save and continue"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       {children}
@@ -67,18 +168,18 @@ export function ErcaNameConsentGate({ children }: { children: React.ReactNode })
           onClick={(e) => e.stopPropagation()}
         >
           <h2 id="erca-name-title">
-            {mode === "search" ? "Update company TIN" : "Confirm company name"}
+            {mode === "search" ? "Update company TIN number" : "Confirm company name"}
           </h2>
           <p id="erca-name-desc" className="muted">
             {mode === "search" ? (
               <>
-                Search ERCA for the correct TIN, then confirm the registry details — same as
-                creating a new company TIN.
+                Search ERCA for the correct TIN number, then confirm the registry details — same as
+                creating a new company TIN number.
               </>
             ) : (
               <>
-                Your TIN is valid in ERCA, but the legal name differs. Keep both names, use the
-                ERCA legal name, or update the TIN.
+                Your TIN number is valid in ERCA, but the legal name differs. Keep both names, use the
+                ERCA legal name, or update the TIN number.
               </>
             )}
           </p>
@@ -96,7 +197,7 @@ export function ErcaNameConsentGate({ children }: { children: React.ReactNode })
                   <strong>{entered}</strong>
                 </p>
                 <p className="muted" style={{ marginTop: "0.25rem" }}>
-                  TIN: {company?.tin || "—"}
+                  TIN number: {company?.tin || "—"}
                 </p>
               </div>
               <div>
@@ -121,7 +222,7 @@ export function ErcaNameConsentGate({ children }: { children: React.ReactNode })
 
           {!canConsent ? (
             <p className="portal-modal-hint">
-              Ask your company owner to confirm or update the TIN.
+              Ask your company owner to confirm or update the TIN number.
             </p>
           ) : mode === "choose" ? (
             <div className="portal-modal-actions" style={{ flexWrap: "wrap" }}>
@@ -162,7 +263,7 @@ export function ErcaNameConsentGate({ children }: { children: React.ReactNode })
                   setLocalError(null);
                 }}
               >
-                Update TIN
+                Update TIN number
               </button>
             </div>
           ) : (
@@ -170,14 +271,14 @@ export function ErcaNameConsentGate({ children }: { children: React.ReactNode })
               initialTin={company?.tin || ""}
               onBack={() => setMode("choose")}
               confirmLabel="Confirm and update company"
-              searchHint="Enter the TIN, fetch from ERCA, then consent to apply it — same as a new company TIN."
+              searchHint="Enter the TIN number, fetch from ERCA, then consent to apply it — same as a new company TIN number."
             />
           )}
 
           {mode === "choose" && (
             <p className="portal-modal-hint" style={{ marginTop: "1rem" }}>
               Keep both stores the ERCA legal name for reference. Use ERCA legal name replaces
-              your display name. Update TIN re-searches ERCA and requires consent.
+              your display name. Update TIN number re-searches ERCA and requires consent.
             </p>
           )}
         </div>

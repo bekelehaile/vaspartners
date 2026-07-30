@@ -11,7 +11,7 @@ use Illuminate\Http\Request;
 class TaxpayerController extends Controller
 {
     /**
-     * Check company / taxpayer info by Ethiopian TIN (proxies eTrade ERCA lookup).
+     * Check company / taxpayer info by Ethiopian TIN number (proxies eTrade ERCA lookup).
      *
      * GET /api/v1/taxpayers/tin/{tin}
      */
@@ -31,7 +31,7 @@ class TaxpayerController extends Controller
 
         if (! $lookup->enabled()) {
             return response()->json([
-                'message' => 'TIN lookup is temporarily unavailable.',
+                'message' => 'TIN number lookup is temporarily unavailable.',
                 'data' => [
                     'found' => false,
                     'tin' => $normalized,
@@ -43,7 +43,7 @@ class TaxpayerController extends Controller
 
         if (! empty($result['raw']['unavailable'])) {
             return response()->json([
-                'message' => 'Unable to reach the national TIN registry. Please try again shortly.',
+                'message' => 'Unable to reach the national TIN number registry. Please try again shortly.',
                 'data' => [
                     'found' => false,
                     'tin' => $normalized,
@@ -53,7 +53,7 @@ class TaxpayerController extends Controller
 
         if (! $result['found']) {
             return response()->json([
-                'message' => 'No taxpayer found for this TIN.',
+                'message' => 'No taxpayer found for this TIN number.',
                 'data' => $result,
             ], 404);
         }

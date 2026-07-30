@@ -5,16 +5,17 @@ namespace App\Services\Etrade;
 use App\Enums\ErcaNameStatus;
 use App\Models\Company;
 use App\Models\Contact;
+use App\Support\PhoneNumber;
 use App\Support\TinNumber;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Apply ERCA / eTrade TIN verification to a company, with name-mismatch consent.
+ * Apply ERCA / eTrade TIN number verification to a company, with name-mismatch consent.
  *
  * Hard rate limits:
- * - per-TIN cache lock (default 6h) — no repeat upstream calls
+ * - per-TIN-number cache lock (default 6h) — no repeat upstream calls
  * - global per-minute cap for scheduled scans
  */
 class ErcaTinVerificationService
@@ -67,7 +68,7 @@ class ErcaTinVerificationService
 
             if ($force) {
                 throw ValidationException::withMessages([
-                    'company_tin' => 'TIN verification is busy right now. Please try again in a few minutes.',
+                    'company_tin' => 'TIN number verification is busy right now. Please try again in a few minutes.',
                 ]);
             }
 
@@ -79,6 +80,9 @@ class ErcaTinVerificationService
 
         $entered = (string) ($company->name ?: '');
         $legal = $result['legal_name'] ?? $result['business_name'] ?? null;
+        if (! filled($legal)) {
+            $legal = $result['business_name_am'] ?? null;
+        }
 
         if (! empty($result['raw']['unavailable'])) {
             $company->forceFill([
@@ -89,10 +93,13 @@ class ErcaTinVerificationService
                 'erca_last_error' => 'Upstream unavailable',
             ])->save();
 
+            app(\App\Services\CompanyMembershipService::class)
+                ->syncTinValidatedFromErca($company->fresh() ?? $company);
+
             return $this->snapshot($company->fresh() ?? $company);
         }
 
-        if (! $result['found'] || ! filled($legal)) {
+        if (! $result['found']) {
             $company->forceFill([
                 'legal_name' => null,
                 'erca_tin_verified' => false,
@@ -102,6 +109,30 @@ class ErcaTinVerificationService
                 'erca_next_check_at' => now()->addHours($this->recheckHours()),
                 'erca_last_error' => null,
             ])->save();
+
+            app(\App\Services\CompanyMembershipService::class)
+                ->syncTinValidatedFromErca($company->fresh() ?? $company);
+
+            return $this->snapshot($company->fresh() ?? $company);
+        }
+
+        // TIN number exists in ERCA but no usable legal/business name was returned.
+        if (! filled($legal)) {
+            $company->forceFill(array_merge([
+                'legal_name' => null,
+                'erca_tin_verified' => true,
+                'erca_verified_at' => now(),
+                'erca_name_status' => ErcaNameStatus::NameMissing->value,
+                'erca_last_checked_at' => now(),
+                'erca_next_check_at' => now()->addHours($this->recheckHours()),
+                'erca_last_error' => null,
+            ], $this->contactFieldsFromLookup($result)))->save();
+
+            $this->syncDenormalizedCompanyName($company);
+            app(\App\Services\CompanyMembershipService::class)
+                ->syncTinValidatedFromErca($company->fresh() ?? $company);
+            app(\App\Services\CompanyMembershipService::class)
+                ->syncAllMembersDenormalizedFields($company->fresh() ?? $company);
 
             return $this->snapshot($company->fresh() ?? $company);
         }
@@ -128,16 +159,16 @@ class ErcaTinVerificationService
             }
         }
 
-        $updates = [
+        $updates = array_merge([
             'legal_name' => $legalTitle,
-            // Flag: TIN found + checked against ERCA registry.
+            // Flag: TIN number found + checked against ERCA registry.
             'erca_tin_verified' => true,
             'erca_verified_at' => now(),
             'erca_name_status' => $status,
             'erca_last_checked_at' => now(),
             'erca_next_check_at' => now()->addHours($this->recheckHours()),
             'erca_last_error' => null,
-        ];
+        ], $this->contactFieldsFromLookup($result));
 
         // Case-insensitive match → store company name in title case (ucwords-style).
         if ($status === ErcaNameStatus::Matched || $status === ErcaNameStatus::AcceptedLegal) {
@@ -147,10 +178,11 @@ class ErcaTinVerificationService
         $company->forceFill($updates)->save();
         $this->syncDenormalizedCompanyName($company);
 
-        if (in_array($status, [ErcaNameStatus::Matched, ErcaNameStatus::AcceptedLegal, ErcaNameStatus::KeptBoth], true)) {
-            app(\App\Services\CompanyMembershipService::class)
-                ->syncTinValidatedFromErca($company->fresh() ?? $company);
-        }
+        // TIN number verified whenever ERCA found it (including name mismatch).
+        app(\App\Services\CompanyMembershipService::class)
+            ->syncTinValidatedFromErca($company->fresh() ?? $company);
+        app(\App\Services\CompanyMembershipService::class)
+            ->syncAllMembersDenormalizedFields($company->fresh() ?? $company);
 
         return $this->snapshot($company->fresh() ?? $company);
     }
@@ -210,7 +242,7 @@ class ErcaTinVerificationService
 
         if (! filled($company->legal_name)) {
             throw ValidationException::withMessages([
-                'consent' => 'Legal name is missing. Re-check the TIN first.',
+                'consent' => 'Legal name is missing. Re-check the TIN number first.',
             ]);
         }
 
@@ -240,6 +272,57 @@ class ErcaTinVerificationService
             'contact_id' => $actor->id,
             'action' => $action,
             'legal_name' => $company->legal_name,
+            'name' => $company->name,
+        ]);
+
+        app(\App\Services\CompanyMembershipService::class)
+            ->syncTinValidatedFromErca($company->fresh() ?? $company);
+
+        return $company->fresh() ?? $company;
+    }
+
+    /**
+     * ERCA found the TIN number but returned no legal name — partner provides the company name.
+     */
+    public function applyPartnerEnteredName(Company $company, Contact $actor, string $name): Company
+    {
+        $status = $this->resolveStatus($company);
+        if ($status !== ErcaNameStatus::NameMissing) {
+            throw ValidationException::withMessages([
+                'company_name' => 'This company does not need a partner-entered name right now.',
+            ]);
+        }
+
+        if (! (bool) $company->erca_tin_verified) {
+            throw ValidationException::withMessages([
+                'company_tin' => 'Confirm the TIN number with ERCA before entering a company name.',
+            ]);
+        }
+
+        $title = CompanyNameMatcher::titleCase(trim($name));
+        if ($title === '') {
+            throw ValidationException::withMessages([
+                'company_name' => 'Enter your company name to continue.',
+            ]);
+        }
+
+        if (mb_strlen($title) > 255) {
+            throw ValidationException::withMessages([
+                'company_name' => 'Company name must be 255 characters or fewer.',
+            ]);
+        }
+
+        $company->forceFill([
+            'name' => $title,
+            'legal_name' => null,
+            'erca_tin_verified' => true,
+            'erca_name_status' => ErcaNameStatus::PartnerEntered,
+        ])->save();
+        $this->syncDenormalizedCompanyName($company);
+
+        Log::info('ERCA partner-entered name applied', [
+            'company_id' => $company->id,
+            'contact_id' => $actor->id,
             'name' => $company->name,
         ]);
 
@@ -285,6 +368,74 @@ class ErcaTinVerificationService
 
         return ErcaNameStatus::tryFrom((string) ($raw ?: 'unchecked'))
             ?? ErcaNameStatus::Unchecked;
+    }
+
+    /**
+     * Map ERCA registry contact fields onto company columns when present.
+     * Never clears existing phone/email/address with empty ERCA values.
+     *
+     * @param  array<string, mixed>  $result
+     * @return array{phone?: string, email?: string, address?: string}
+     */
+    public function contactFieldsFromLookup(array $result): array
+    {
+        $fields = [];
+
+        $rawPhone = null;
+        foreach ([$result['mobile'] ?? null, $result['phone'] ?? null] as $candidate) {
+            if (filled($candidate) && PhoneNumber::isValidLocalMobile($candidate)) {
+                $rawPhone = $candidate;
+                break;
+            }
+        }
+        if ($rawPhone !== null) {
+            $normalized = PhoneNumber::normalizeNullable($rawPhone);
+            if ($normalized) {
+                $fields['phone'] = $normalized;
+            }
+        }
+
+        $email = trim((string) ($result['email'] ?? ''));
+        if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $fields['email'] = strtolower($email);
+        }
+
+        $address = $this->formatAddressFromLookup($result);
+        if ($address !== null) {
+            $fields['address'] = $address;
+        }
+
+        return $fields;
+    }
+
+    /**
+     * @param  array<string, mixed>  $result
+     */
+    public function formatAddressFromLookup(array $result): ?string
+    {
+        $parts = array_values(array_filter([
+            $this->stringOrNull($result['house_no'] ?? null),
+            $this->stringOrNull($result['kebele'] ?? null),
+            $this->stringOrNull($result['locality'] ?? null),
+            $this->stringOrNull($result['city'] ?? null),
+            $this->stringOrNull($result['region'] ?? null),
+        ], fn (?string $p): bool => $p !== null && $p !== ''));
+
+        if ($parts === []) {
+            return null;
+        }
+
+        return implode(', ', $parts);
+    }
+
+    protected function stringOrNull(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+        $string = trim((string) $value);
+
+        return $string !== '' ? $string : null;
     }
 
     /**

@@ -7,8 +7,8 @@ import { ErcaTinConsentPanel } from "@/components/ErcaTinConsentPanel";
 import { isValidEthiopianTin } from "@/lib/tin";
 
 /**
- * Blocks portal use until TIN is confirmed via ERCA search + partner consent
- * (same flow as new company TIN).
+ * Blocks portal use until TIN number is confirmed via ERCA search + partner consent
+ * (same flow as new company TIN number).
  */
 export function TinValidationGate({ children }: { children: React.ReactNode }) {
   const { data: me } = useContact();
@@ -20,6 +20,7 @@ export function TinValidationGate({ children }: { children: React.ReactNode }) {
     !!company &&
     !company.tin_validated &&
     company.needs_erca_name_consent !== true &&
+    company.needs_erca_name_entry !== true &&
     company.erca_identity_locked !== true;
   const canSubmitTin =
     (me?.company_role === "owner" || !!me?.company_can_edit) &&
@@ -66,16 +67,16 @@ export function TinValidationGate({ children }: { children: React.ReactNode }) {
           aria-describedby="tin-gate-desc"
           onClick={(e) => e.stopPropagation()}
         >
-          <h2 id="tin-gate-title">Confirm company TIN</h2>
+          <h2 id="tin-gate-title">Confirm company TIN number</h2>
           <p id="tin-gate-desc" className="muted">
             {company?.name ? (
               <>
-                <strong>{company.name}</strong> needs a valid TIN from ERCA before you can use
+                <strong>{company.name}</strong> needs a valid TIN number from ERCA before you can use
                 portal services. Search, review the limited registry details, then consent.
               </>
             ) : (
               <>
-                This company needs a valid TIN from ERCA before you can use portal services.
+                This company needs a valid TIN number from ERCA before you can use portal services.
                 Search, review the limited registry details, then consent.
               </>
             )}
@@ -84,13 +85,13 @@ export function TinValidationGate({ children }: { children: React.ReactNode }) {
           {canSubmitTin ? (
             <ErcaTinConsentPanel
               initialTin={currentTinOk ? company?.tin || "" : ""}
-              confirmLabel="Confirm and apply TIN"
-              searchHint="Search ERCA by TIN. Confirm the registry details to unlock services — same as a new company TIN."
+              confirmLabel="Confirm and apply TIN number"
+              searchHint="Search ERCA by TIN number. Confirm the registry details to unlock services — same as a new company TIN number."
             />
           ) : (
             <>
               <p className="portal-modal-hint">
-                Ask your company owner to confirm the TIN with ERCA.
+                Ask your company owner to confirm the TIN number with ERCA.
               </p>
               <div className="portal-modal-actions">
                 <Link href="/portal/company" className="btn-ghost">

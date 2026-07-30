@@ -85,7 +85,7 @@ class SubscriptionResource extends Resource
                     ->url(fn (Subscription $record): ?string => $record->company
                         ? CompanyResource::getUrl('view', ['record' => $record->company])
                         : null),
-                TextEntry::make('company.tin')->label('TIN')->placeholder('—'),
+                TextEntry::make('company.tin')->label('TIN number')->placeholder('—'),
                 TextEntry::make('contact.name')
                     ->label('Activated by')
                     ->placeholder('—')

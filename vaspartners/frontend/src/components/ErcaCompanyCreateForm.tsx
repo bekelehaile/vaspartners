@@ -13,7 +13,7 @@ import {
 import { isValidEthiopianTin, normalizeEthiopianTin } from "@/lib/tin";
 
 /**
- * New company: search ERCA by TIN → limited registry info → consent to create, or logout.
+ * New company: search ERCA by TIN number → limited registry info → consent to create, or logout.
  */
 export function ErcaCompanyCreateForm({
   me,
@@ -40,7 +40,7 @@ export function ErcaCompanyCreateForm({
     setLocalError(null);
     const normalized = normalizeEthiopianTin(tin);
     if (!isValidEthiopianTin(normalized)) {
-      setLocalError("Enter a valid 10-digit TIN.");
+      setLocalError("Enter a valid 10-digit TIN number.");
       return;
     }
     previewMut.mutate(normalized, {
@@ -49,7 +49,7 @@ export function ErcaCompanyCreateForm({
       },
       onError: (err) => {
         setPreview(null);
-        setLocalError(err instanceof Error ? err.message : "TIN lookup failed.");
+        setLocalError(err instanceof Error ? err.message : "TIN number lookup failed.");
       },
     });
   };
@@ -96,7 +96,7 @@ export function ErcaCompanyCreateForm({
       <div className="company-form-head">
         <h2>Create company</h2>
         <p className="muted">
-          Search your TIN in ERCA. Confirm the registry details to create your company, or
+          Search your TIN number in ERCA. Confirm the registry details to create your company, or
           sign out if this is not your organisation.
         </p>
       </div>
@@ -130,11 +130,11 @@ export function ErcaCompanyCreateForm({
         <form onSubmit={onSearch} className="portal-stack-sm" noValidate>
           <section className="settings-block">
             <div className="settings-block-head">
-              <h3>ERCA TIN search</h3>
+              <h3>ERCA TIN number search</h3>
             </div>
             <div className="field">
               <label htmlFor="erca-tin">
-                TIN <span className="req">*</span>
+                TIN number <span className="req">*</span>
               </label>
               <input
                 id="erca-tin"
@@ -173,7 +173,7 @@ export function ErcaCompanyCreateForm({
             </div>
             <dl className="fayda-dl company-profile-dl">
               <div>
-                <dt>TIN</dt>
+                <dt>TIN number</dt>
                 <dd>{preview.tin}</dd>
               </div>
               <div>

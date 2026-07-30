@@ -10,6 +10,8 @@ enum ErcaNameStatus: string
     case AcceptedLegal = 'accepted_legal';
     case KeptBoth = 'kept_both';
     case NotFound = 'not_found';
+    case NameMissing = 'name_missing';
+    case PartnerEntered = 'partner_entered';
     case Failed = 'failed';
 
     public function label(): string
@@ -20,7 +22,9 @@ enum ErcaNameStatus: string
             self::MismatchPending => 'Name mismatch — awaiting consent',
             self::AcceptedLegal => 'Partner accepted ERCA legal name',
             self::KeptBoth => 'Partner kept entered name + legal name',
-            self::NotFound => 'TIN not found in ERCA',
+            self::NotFound => 'TIN number not found in ERCA',
+            self::NameMissing => 'TIN number found — legal name missing',
+            self::PartnerEntered => 'Partner entered company name (ERCA had no name)',
             self::Failed => 'ERCA check failed',
         };
     }
@@ -31,7 +35,15 @@ enum ErcaNameStatus: string
     }
 
     /**
-     * Partner cannot change company name or TIN once ERCA name is aligned.
+     * ERCA found the TIN number but returned no legal name — partner must enter one.
+     */
+    public function needsPartnerNameEntry(): bool
+    {
+        return $this === self::NameMissing;
+    }
+
+    /**
+     * Partner cannot change company name or TIN number once ERCA name is aligned.
      */
     public function locksPartnerIdentity(): bool
     {
@@ -44,6 +56,7 @@ enum ErcaNameStatus: string
             self::Matched,
             self::AcceptedLegal,
             self::KeptBoth,
+            self::PartnerEntered,
         ], true);
     }
 }

@@ -84,7 +84,7 @@ return [
         'timeout' => (int) env('ETRADE_TIMEOUT', 20),
         'verify_ssl' => filter_var(env('ETRADE_VERIFY_SSL', false), FILTER_VALIDATE_BOOL),
         'include_registrations' => filter_var(env('ETRADE_INCLUDE_REGISTRATIONS', true), FILTER_VALIDATE_BOOL),
-        // Anti-flood: cache each TIN lookup and cap scheduled/global calls.
+        // Anti-flood: cache each TIN number lookup and cap scheduled/global calls.
         'tin_cache_hours' => (int) env('ETRADE_TIN_CACHE_HOURS', 6),
         'global_lookups_per_minute' => (int) env('ETRADE_GLOBAL_LOOKUPS_PER_MINUTE', 20),
         'recheck_hours' => (int) env('ETRADE_RECHECK_HOURS', 168),

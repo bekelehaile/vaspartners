@@ -134,7 +134,7 @@ export default function CompanyProfilePage() {
           kicker: "Company",
           title: COMPANY_SECTION_LABEL.profile,
           description: awaitingTin
-            ? "Confirm your company TIN with ERCA to unlock services."
+            ? "Confirm your company TIN number with ERCA to unlock services."
             : `Details for ${companyName}.`,
         };
       case "members":
@@ -180,7 +180,7 @@ export default function CompanyProfilePage() {
             kicker: "Company",
             title: "Set up your company",
             description:
-              "Search your TIN in ERCA to create a company, or join an existing one.",
+              "Search your TIN number in ERCA to create a company, or join an existing one.",
           };
 
   return (
@@ -238,7 +238,7 @@ export default function CompanyProfilePage() {
                   {
                     id: "create",
                     label: "Create company",
-                    description: "ERCA TIN search",
+                    description: "ERCA TIN number search",
                   },
                   {
                     id: "attach",
@@ -350,7 +350,7 @@ export default function CompanyProfilePage() {
                       <JoinCompanyPanel
                         embedded
                         title="Join another company"
-                        description="Enter the company TIN to request access."
+                        description="Enter the company TIN number to request access."
                       />
                     )}
                   </div>
@@ -360,12 +360,12 @@ export default function CompanyProfilePage() {
                   {awaitingTin ? (
                     <>
                       <div className="alert alert-warning" role="status">
-                        Confirm your company TIN with ERCA to unlock services.
+                        Confirm your company TIN number with ERCA to unlock services.
                       </div>
                       <p className="muted">
                         {canEditCompany
-                          ? "Search ERCA and consent to apply the TIN, or update details below."
-                          : "Ask your company owner to confirm the TIN with ERCA."}
+                          ? "Search ERCA and consent to apply the TIN number, or update details below."
+                          : "Ask your company owner to confirm the TIN number with ERCA."}
                       </p>
                       <section id="company-info" className="settings-block">
                         {canEditCompany ? (
@@ -381,11 +381,11 @@ export default function CompanyProfilePage() {
                               <dd>{me?.company_name || me?.company?.name || "—"}</dd>
                             </div>
                             <div>
-                              <dt>TIN</dt>
+                              <dt>TIN number</dt>
                               <dd>{me?.company_tin || me?.company?.tin || "—"}</dd>
                             </div>
                             <div>
-                              <dt>TIN status</dt>
+                              <dt>TIN number status</dt>
                               <dd>{me?.company?.tin_validated ? "Verified" : "Not verified"}</dd>
                             </div>
                           </dl>
@@ -396,7 +396,7 @@ export default function CompanyProfilePage() {
                     <section id="company-info" className="settings-block">
                       {me?.company?.erca_identity_locked ? (
                         <p className="muted" style={{ marginBottom: "0.75rem" }}>
-                          Name and TIN are locked after ERCA verification match.
+                          Name and TIN number are locked after ERCA verification match.
                         </p>
                       ) : null}
                       <dl className="fayda-dl company-profile-dl">
@@ -405,7 +405,7 @@ export default function CompanyProfilePage() {
                           <dd>{me?.company_name || me?.company?.name || "—"}</dd>
                         </div>
                         <div>
-                          <dt>TIN</dt>
+                          <dt>TIN number</dt>
                           <dd>{me?.company_tin || me?.company?.tin || "—"}</dd>
                         </div>
                         <div>
@@ -413,7 +413,7 @@ export default function CompanyProfilePage() {
                           <dd>{me?.company?.legal_name || "—"}</dd>
                         </div>
                         <div>
-                          <dt>TIN status</dt>
+                          <dt>TIN number status</dt>
                           <dd>{me?.company?.tin_validated ? "Verified" : "Not verified"}</dd>
                         </div>
                         <div className="field-span-full">

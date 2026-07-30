@@ -264,7 +264,7 @@ class PartnerNotificationService
                 '%s requests ownership transfer of %s (%s) to %s.',
                 $request->contact?->name ?: 'Owner',
                 $request->company?->name ?: 'a company',
-                $request->company?->tin ?: 'TIN n/a',
+                $request->company?->tin ?: 'TIN number n/a',
                 $request->targetContact?->name ?: 'a member',
             ),
             default => sprintf(
@@ -272,7 +272,7 @@ class PartnerNotificationService
                 $request->contact?->name ?: 'A partner',
                 $request->type->label(),
                 $request->company?->name ?: 'a company',
-                $request->company?->tin ?: 'TIN n/a',
+                $request->company?->tin ?: 'TIN number n/a',
             ),
         };
 
@@ -366,7 +366,7 @@ class PartnerNotificationService
             $this->managementUsers(),
             'Company profile pending',
             sprintf(
-                '%s submitted company %s (TIN %s) for approval.',
+                '%s submitted company %s (TIN number %s) for approval.',
                 $contact->name ?: 'A partner',
                 $company?->name ?: 'profile',
                 $company?->tin ?: 'n/a',
@@ -452,7 +452,7 @@ class PartnerNotificationService
     }
 
     /**
-     * Milestone: admin confirmed company TIN — partners may submit service requests.
+     * Milestone: admin confirmed company TIN number — partners may submit service requests.
      * Notifies active members (SMS + portal). Bulk “welcome back” campaigns stay separate.
      */
     public function companyTinValidated(Company $company): void
@@ -499,7 +499,7 @@ class PartnerNotificationService
 
     /**
      * Daily reminder: company has a subscription but ERCA legal name ≠ company name.
-     * Owner should update TIN / confirm ERCA legal name in the portal.
+     * Owner should update TIN number / confirm ERCA legal name in the portal.
      */
     public function companyErcaNameMismatch(Company $company): void
     {
@@ -545,7 +545,7 @@ class PartnerNotificationService
     }
 
     /**
-     * Automated scan: company has an owner but TIN is not a valid 10-digit Ethiopian TIN
+     * Automated scan: company has an owner but TIN is not a valid 10-digit Ethiopian TIN number
      * (including cases where tin_validated was set incorrectly).
      */
     public function companyTinInvalid(Company $company, bool $hadFalseApproval = false): void
@@ -571,8 +571,8 @@ class PartnerNotificationService
                 'company_name' => $company->name ?: 'your organisation',
                 'company_tin' => $company->tin ?: '—',
                 'note' => $hadFalseApproval
-                    ? 'Previous TIN approval was cleared.'
-                    : 'Please submit a valid TIN for approval.',
+                    ? 'Previous TIN number approval was cleared.'
+                    : 'Please submit a valid TIN number for approval.',
             ];
 
             $smsBody = $this->render('templates', $template, $placeholders);
@@ -752,9 +752,9 @@ class PartnerNotificationService
             'company_membership_requested' => 'Membership request',
             'company_profile_pending' => 'Company waiting for approval',
             'company_profile_approved' => 'Company approved',
-            'company_tin_validated' => 'TIN confirmed',
-            'company_tin_invalid' => 'TIN invalid',
-            'company_erca_name_mismatch' => 'TIN / ERCA name mismatch',
+            'company_tin_validated' => 'TIN number confirmed',
+            'company_tin_invalid' => 'TIN number invalid',
+            'company_erca_name_mismatch' => 'TIN number / ERCA name mismatch',
             'company_profile_rejected' => 'Company needs updates',
             'company_member_left' => 'Member left company',
             'company_transfer_approved' => 'Ownership transfer approved',

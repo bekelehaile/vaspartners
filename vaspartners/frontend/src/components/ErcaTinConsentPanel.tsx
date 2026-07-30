@@ -9,14 +9,14 @@ import {
 import { isValidEthiopianTin, normalizeEthiopianTin } from "@/lib/tin";
 
 /**
- * Shared ERCA TIN search → limited registry preview → partner consent.
+ * Shared ERCA TIN number search → limited registry preview → partner consent.
  * Same pattern as new-company create, for updating an existing company’s TIN.
  */
 export function ErcaTinConsentPanel({
   initialTin = "",
   onBack,
   confirmLabel = "Confirm and update company",
-  searchHint = "Search ERCA by TIN. Confirm the registry details to update this company.",
+  searchHint = "Search ERCA by TIN number. Confirm the registry details to update this company.",
 }: {
   initialTin?: string;
   onBack?: () => void;
@@ -37,14 +37,14 @@ export function ErcaTinConsentPanel({
     setLocalError(null);
     const normalized = normalizeEthiopianTin(tin);
     if (!isValidEthiopianTin(normalized)) {
-      setLocalError("Enter a valid 10-digit TIN.");
+      setLocalError("Enter a valid 10-digit TIN number.");
       return;
     }
     previewMut.mutate(normalized, {
       onSuccess: (data) => setPreview(data),
       onError: (err) => {
         setPreview(null);
-        setLocalError(err instanceof Error ? err.message : "TIN lookup failed.");
+        setLocalError(err instanceof Error ? err.message : "TIN number lookup failed.");
       },
     });
   };
@@ -58,7 +58,7 @@ export function ErcaTinConsentPanel({
       {
         onError: (err) => {
           setLocalError(
-            err instanceof Error ? err.message : "Could not update company TIN.",
+            err instanceof Error ? err.message : "Could not update company TIN number.",
           );
         },
       },
@@ -83,7 +83,7 @@ export function ErcaTinConsentPanel({
           <p className="portal-modal-hint">{searchHint}</p>
           <div className="field">
             <label htmlFor="erca-consent-tin">
-              TIN <span className="req">*</span>
+              TIN number <span className="req">*</span>
             </label>
             <input
               id="erca-consent-tin"
@@ -116,11 +116,11 @@ export function ErcaTinConsentPanel({
       ) : (
         <form onSubmit={onConfirm} className="portal-stack-sm" noValidate>
           <p className="portal-modal-hint">
-            Confirm this is your company before applying the ERCA TIN and legal name.
+            Confirm this is your company before applying the ERCA TIN number and legal name.
           </p>
           <dl className="fayda-dl company-profile-dl">
             <div>
-              <dt>TIN</dt>
+              <dt>TIN number</dt>
               <dd>{preview.tin}</dd>
             </div>
             <div>

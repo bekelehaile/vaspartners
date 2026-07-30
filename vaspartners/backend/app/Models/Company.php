@@ -98,7 +98,19 @@ class Company extends Model
     }
 
     /**
-     * ERCA-matched (or partner-accepted legal name): name + TIN are frozen for partners.
+     * ERCA found the TIN number but returned no legal name — partner must enter a company name.
+     */
+    public function needsErcaNameEntry(): bool
+    {
+        $status = $this->erca_name_status instanceof \App\Enums\ErcaNameStatus
+            ? $this->erca_name_status
+            : \App\Enums\ErcaNameStatus::tryFrom((string) ($this->erca_name_status ?: ''));
+
+        return $status?->needsPartnerNameEntry() === true;
+    }
+
+    /**
+     * ERCA-matched (or partner-accepted legal name): name + TIN number are frozen for partners.
      */
     public function isErcaIdentityLocked(): bool
     {
@@ -146,15 +158,19 @@ class Company extends Model
     }
 
     /**
-     * TIN is OK only when ERCA found it and the name status is resolved.
+     * TIN number is verified when ERCA found it (name mismatch may still need consent).
      * Admin-only tin_validated flags are not trusted.
      */
     public function isTinValidated(): bool
     {
-        if (! $this->hasValidEthiopianTin() || ! (bool) $this->erca_tin_verified) {
-            return false;
-        }
+        return $this->hasValidEthiopianTin() && (bool) $this->erca_tin_verified;
+    }
 
+    /**
+     * Entered name aligned with ERCA (or partner already consented).
+     */
+    public function isErcaNameResolved(): bool
+    {
         $status = $this->erca_name_status instanceof \App\Enums\ErcaNameStatus
             ? $this->erca_name_status
             : \App\Enums\ErcaNameStatus::tryFrom((string) ($this->erca_name_status ?: ''));
@@ -163,15 +179,17 @@ class Company extends Model
     }
 
     /**
-     * Company is usable when ERCA TIN is OK and Active is on.
+     * Company is usable when TIN number is ERCA-verified, name is settled, and Active is on.
      */
     public function isApproved(): bool
     {
-        return $this->isTinValidated() && (bool) $this->is_active;
+        return $this->isTinValidated()
+            && $this->isErcaNameResolved()
+            && (bool) $this->is_active;
     }
 
     /**
-     * Do not permanently delete companies that have an owner, a valid approved TIN,
+     * Do not permanently delete companies that have an owner, a valid approved TIN number,
      * and at least one subscription.
      */
     public function isForcePurgeProtected(): bool
@@ -334,6 +352,8 @@ class Company extends Model
             \App\Enums\ErcaNameStatus::AcceptedLegal->value,
             \App\Enums\ErcaNameStatus::KeptBoth->value,
             \App\Enums\ErcaNameStatus::MismatchPending->value,
+            \App\Enums\ErcaNameStatus::NameMissing->value,
+            \App\Enums\ErcaNameStatus::PartnerEntered->value,
         ];
 
         return $query
@@ -348,21 +368,34 @@ class Company extends Model
     }
 
     /**
-     * ERCA confirmed TIN + resolved name (source of truth for TIN OK).
+     * ERCA found the TIN number (name may still be mismatch_pending).
      */
     public function scopeTinApproved(Builder $query): Builder
     {
         return $query
             ->where('erca_tin_verified', true)
+            ->whereNotNull('tin')
+            ->where('tin', '!=', '')
+            ->whereRaw("length(regexp_replace(coalesce(tin, ''), '[^0-9]', '', 'g')) = 10");
+    }
+
+    /**
+     * TIN number verified and name settled (ready for services when also active).
+     */
+    public function scopeErcaIdentityResolved(Builder $query): Builder
+    {
+        return $query
+            ->tinApproved()
             ->whereIn('erca_name_status', [
                 \App\Enums\ErcaNameStatus::Matched->value,
                 \App\Enums\ErcaNameStatus::AcceptedLegal->value,
                 \App\Enums\ErcaNameStatus::KeptBoth->value,
+                \App\Enums\ErcaNameStatus::PartnerEntered->value,
             ]);
     }
 
     /**
-     * Missing TIN or not a valid 10-digit Ethiopian TIN.
+     * Missing TIN or not a valid 10-digit Ethiopian TIN number.
      */
     public function scopeInvalidOrMissingTin(Builder $query): Builder
     {

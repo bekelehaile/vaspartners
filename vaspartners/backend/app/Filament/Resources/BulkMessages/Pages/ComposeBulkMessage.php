@@ -40,7 +40,7 @@ class ComposeBulkMessage extends Page
     {
         $this->form->fill([
             'title' => 'Portal upgrade notice',
-            'message' => 'Dear Our Partner, we have updated the VAS partner management portal to a new version. Please provide your TIN NUMBER to complete your profile. Wait until it is verified/approved before next system access. https://vaspartnersportal.ethiotelecom.et',
+            'message' => 'Dear Our Partner, we have updated the VAS partner management portal to a new version. Please provide your TIN number to complete your profile. Wait until it is verified/approved before next system access. https://vaspartnersportal.ethiotelecom.et',
             'is_active' => true,
             'approval_status' => CompanyApprovalStatus::Approved->value,
             'legacy_only' => true,
@@ -84,11 +84,11 @@ class ComposeBulkMessage extends Page
                         ])
                         ->native(false),
                     Select::make('tin_validated')
-                        ->label('TIN NUMBER approved')
+                        ->label('TIN number verified')
                         ->options([
                             '' => 'Any',
-                            '1' => 'Approved only',
-                            '0' => 'Not approved only',
+                            '1' => 'Verified only',
+                            '0' => 'Not verified only',
                         ])
                         ->native(false),
                     Toggle::make('legacy_only')

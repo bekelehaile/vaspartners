@@ -27,7 +27,7 @@ return [
     |
     | These limits only slow scripted / concurrent POSTs. They are not the
     | subscription quota. Business rule: one alive subscription per service
-    | per company (unique validated TIN) — enforced in SubscriptionLifecycle
+    | per company (unique validated TIN number) — enforced in SubscriptionLifecycle
     | + partial unique index subscriptions_one_alive_per_company_service.
     | Idempotency-Key replays return the same ticket for 24h (safe client retries).
     |

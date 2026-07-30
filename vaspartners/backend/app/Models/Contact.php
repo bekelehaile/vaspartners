@@ -127,7 +127,12 @@ class Contact extends Authenticatable
 
         if ($this->identity_verified_via === $viaEnum->value && $this->identity_verified_at) {
             if ($viaEnum === IdentityVerifiedVia::Crm && $crmSnapshot !== null && ! $this->crm_identity_snapshot) {
-                $this->forceFill(['crm_identity_snapshot' => $crmSnapshot])->save();
+                $this->forceFill([
+                    'crm_identity_snapshot' => $crmSnapshot,
+                    'is_active' => true,
+                ])->save();
+            } elseif (! $this->is_active) {
+                $this->forceFill(['is_active' => true])->save();
             }
 
             return;
@@ -137,6 +142,8 @@ class Contact extends Authenticatable
             'identity_verified_via' => $viaEnum->value,
             'identity_verified_at' => $this->identity_verified_at ?? now(),
             'fayda_verified' => $viaEnum === IdentityVerifiedVia::Fayda ? true : (bool) $this->fayda_verified,
+            // Fayda / CRM verified contacts are active.
+            'is_active' => true,
         ];
 
         if ($viaEnum === IdentityVerifiedVia::Crm && $crmSnapshot !== null) {

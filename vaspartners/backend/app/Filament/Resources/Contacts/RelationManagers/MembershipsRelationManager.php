@@ -34,7 +34,7 @@ class MembershipsRelationManager extends RelationManager
                     ->searchable()
                     ->sortable()
                     ->placeholder('—'),
-                TextColumn::make('company.tin')->label('TIN')->placeholder('—'),
+                TextColumn::make('company.tin')->label('TIN number')->placeholder('—'),
                 TextColumn::make('role')
                     ->badge()
                     ->formatStateUsing(fn ($state): string => $state instanceof CompanyRole

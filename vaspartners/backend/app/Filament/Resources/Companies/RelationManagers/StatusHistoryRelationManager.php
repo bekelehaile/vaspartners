@@ -30,7 +30,7 @@ class StatusHistoryRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->description('ERCA TIN confirmation and Active changes.')
+            ->description('ERCA TIN number confirmation and Active changes.')
             ->modifyQueryUsing(fn ($query) => $query->with(['actorUser', 'actorContact']))
             ->columns([
                 TextColumn::make('created_at')
@@ -67,7 +67,7 @@ class StatusHistoryRelationManager extends RelationManager
                     ->trueIcon('heroicon-o-check-circle')
                     ->falseIcon('heroicon-o-x-circle'),
                 IconColumn::make('tin_validated')
-                    ->label('Verified')
+                    ->label('TIN number verified')
                     ->boolean()
                     ->trueIcon('heroicon-o-check-badge')
                     ->falseIcon('heroicon-o-x-mark'),

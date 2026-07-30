@@ -37,6 +37,7 @@ export type Contact = {
     erca_verified_at?: string | null;
     erca_last_checked_at?: string | null;
     needs_erca_name_consent?: boolean;
+    needs_erca_name_entry?: boolean;
     erca_identity_locked?: boolean;
   } | null;
   memberships?: Array<{
@@ -399,7 +400,8 @@ export async function submitIdentityConsent(payload: {
 }
 
 export async function submitErcaNameConsent(payload: {
-  action: "use_legal" | "keep_both";
+  action: "use_legal" | "keep_both" | "provide_name";
+  company_name?: string;
 }) {
   return api<{ message: string; data: Contact }>("/profile/company/tin/name-consent", {
     method: "POST",

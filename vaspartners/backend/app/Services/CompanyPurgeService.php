@@ -305,13 +305,13 @@ class CompanyPurgeService
     }
 
     /**
-     * Established companies (owner + approved valid TIN + ≥1 subscription) cannot be purged.
+     * Established companies (owner + approved valid TIN number + ≥1 subscription) cannot be purged.
      */
     public function assertCanForcePurge(Company $company): void
     {
         if ($company->isForcePurgeProtected()) {
             throw ValidationException::withMessages([
-                'company' => 'This company has an owner, an approved valid TIN NUMBER, and at least one subscription, so it cannot be deleted.',
+                'company' => 'This company has an owner, an approved valid TIN number, and at least one subscription, so it cannot be deleted.',
             ]);
         }
     }

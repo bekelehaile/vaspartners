@@ -10,20 +10,20 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Periodic ERCA / eTrade TIN re-check — deliberately small batches with sleep.
+ * Periodic ERCA / eTrade TIN number re-check — deliberately small batches with sleep.
  * Defaults to companies that Have owner so orphan TINs are not flooded.
  */
 class ScanErcaTinCommand extends Command
 {
     protected $signature = 'vas:scan-erca-tin
                             {--dry-run : List due companies without calling ERCA}
-                            {--force : Bypass per-TIN cache / next_check (still rate-limited globally)}
+                            {--force : Bypass per-TIN-number cache / next_check (still rate-limited globally)}
                             {--include-ownerless : Also include companies with no owner}
                             {--unverified-only : Only companies not yet ERCA verified (erca_tin_verified=false)}
                             {--limit= : Max companies this run (default from ETRADE_SCHEDULE_LIMIT)}
                             {--sleep-ms= : Pause between companies (default ETRADE_SCHEDULE_SLEEP_MS)}';
 
-    protected $description = 'Re-check due company TINs against ERCA in small throttled batches (Has owner by default)';
+    protected $description = 'Re-check due company TIN numbers against ERCA in small throttled batches (Has owner by default)';
 
     public function handle(ErcaTinVerificationService $erca): int
     {
@@ -70,7 +70,7 @@ class ScanErcaTinCommand extends Command
             /** @var Company $company */
             if (! TinNumber::isValid($company->tin)) {
                 $skipped++;
-                $this->line("skip invalid TIN {$company->public_id}");
+                $this->line("skip invalid TIN number {$company->public_id}");
 
                 continue;
             }
