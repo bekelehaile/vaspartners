@@ -1902,6 +1902,8 @@ class CompanyMembershipService
 
     /**
      * Admin attests that the company TIN has been verified.
+     * Also marks the company profile approved when still pending/rejected —
+     * services require both gates; TIN approval is the stronger attestation.
      */
     public function markTinValidated(Company $company, ?User $admin = null): Company
     {
@@ -1911,24 +1913,60 @@ class CompanyMembershipService
             ]);
         }
 
-        if ($company->tin_validated) {
-            return $company->fresh(['tinValidatedBy']);
+        $admin ??= auth()->user() instanceof User ? auth()->user() : null;
+        $newlyValidated = ! $company->tin_validated;
+
+        if ($newlyValidated) {
+            $company->forceFill([
+                'tin_validated' => true,
+                'tin_validated_by_user_id' => $admin?->id,
+                'tin_validated_at' => now(),
+            ])->save();
+
+            $this->recordStatusHistory($company, 'tin_validated', $admin, null);
         }
 
-        $admin ??= auth()->user();
+        $this->ensureApprovedWhenTinValidated($company->fresh() ?? $company, $admin);
 
-        $company->forceFill([
-            'tin_validated' => true,
-            'tin_validated_by_user_id' => $admin?->id,
-            'tin_validated_at' => now(),
-        ])->save();
-
-        $this->recordStatusHistory($company, 'tin_validated', $admin instanceof User ? $admin : null);
-
-        $fresh = $company->fresh(['tinValidatedBy']);
-        $this->notifications->companyTinValidated($fresh);
+        $fresh = $company->fresh(['tinValidatedBy', 'approvedBy']);
+        if ($newlyValidated) {
+            $this->notifications->companyTinValidated($fresh);
+        }
 
         return $fresh;
+    }
+
+    /**
+     * When TIN is confirmed, unlock the company profile approval gate as well
+     * (without a separate "profile approved — wait for TIN" SMS).
+     */
+    public function ensureApprovedWhenTinValidated(Company $company, ?User $admin = null): Company
+    {
+        if ($company->isApproved()) {
+            return $company;
+        }
+
+        $admin ??= auth()->user() instanceof User ? auth()->user() : null;
+
+        $company->forceFill([
+            'approval_status' => CompanyApprovalStatus::Approved,
+            'approved_by_user_id' => $admin?->id ?? $company->approved_by_user_id,
+            'approved_at' => $company->approved_at ?? now(),
+            'approval_note' => filled($company->approval_note)
+                ? $company->approval_note
+                : 'Approved with TIN validation.',
+            'is_active' => true,
+        ])->save();
+
+        $this->recordStatusHistory(
+            $company,
+            'approved',
+            $admin,
+            null,
+            'Approved with TIN validation.',
+        );
+
+        return $company->fresh(['approvedBy']) ?? $company;
     }
 
     /**
@@ -2019,6 +2057,9 @@ class CompanyMembershipService
                     'tin_validated_by_user_id' => $admin?->id,
                     'tin_validated_at' => now(),
                 ])->save();
+                // Same unlock path as the Approve TIN action.
+                $this->ensureApprovedWhenTinValidated($company->fresh() ?? $company, $admin);
+                $company->refresh();
             } else {
                 $company->forceFill([
                     'tin_validated_by_user_id' => null,
