@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\Contacts;
 
 use App\Filament\Resources\Companies\CompanyResource;
-use App\Filament\Resources\Contacts\Pages\EditContact;
 use App\Filament\Resources\Contacts\Pages\ListContacts;
 use App\Filament\Resources\Contacts\Pages\ViewContact;
 use App\Filament\Resources\Contacts\RelationManagers\MembershipsRelationManager;
@@ -11,19 +10,12 @@ use App\Filament\Resources\Contacts\RelationManagers\ServicesRelationManager;
 use App\Filament\Resources\Contacts\RelationManagers\SubscriptionsRelationManager;
 use App\Filament\Resources\Contacts\RelationManagers\TicketsRelationManager;
 use App\Models\Contact;
-use Filament\Actions\BulkAction;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
-use Filament\Actions\ForceDeleteBulkAction;
-use Filament\Actions\RestoreBulkAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Infolists\Components\TextEntry;
-use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -35,7 +27,6 @@ use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 
 class ContactResource extends Resource
@@ -59,77 +50,57 @@ class ContactResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            Section::make('Identity')
-                ->description('Fayda / CRM identity. Fayda sub cannot be changed.')
-                ->schema([
-                    TextInput::make('public_id')
-                        ->label('Public ID')
-                        ->disabled()
-                        ->dehydrated(false),
-                    TextInput::make('sub')
-                        ->label('Fayda sub')
-                        ->disabled()
-                        ->dehydrated(false),
-                    TextInput::make('name')
-                        ->required()
-                        ->maxLength(255),
-                    TextInput::make('phone_number')
-                        ->label('Phone')
-                        ->tel()
-                        ->required()
-                        ->maxLength(32)
-                        ->unique(ignoreRecord: true)
-                        ->helperText('Last 9 digits. Unique.')
-                        ->dehydrateStateUsing(
-                            fn (?string $state): ?string => \App\Support\PhoneNumber::normalizeNullable($state)
-                        ),
-                    TextInput::make('email')
-                        ->email()
-                        ->maxLength(255)
-                        ->unique(ignoreRecord: true)
-                        ->helperText('Unique when set.')
-                        ->dehydrateStateUsing(
-                            fn (?string $state): ?string => \App\Support\EmailAddress::normalize($state)
-                        ),
-                    TextInput::make('gender')->maxLength(64),
-                    TextInput::make('nationality')->maxLength(120),
-                    TextInput::make('identification_type')->label('ID type')->maxLength(120),
-                    TextInput::make('identification_number')->label('ID number')->maxLength(120),
-                    DatePicker::make('birthdate')->native(false),
-                    Textarea::make('address')
-                        ->rows(3)
-                        ->columnSpanFull()
-                        ->formatStateUsing(function ($state): ?string {
-                            if ($state === null || $state === '') {
-                                return null;
-                            }
+            TextInput::make('name')
+                ->required()
+                ->maxLength(255),
+            TextInput::make('phone_number')
+                ->label('Phone')
+                ->tel()
+                ->required()
+                ->maxLength(32)
+                ->unique(ignoreRecord: true)
+                ->dehydrateStateUsing(
+                    fn (?string $state): ?string => \App\Support\PhoneNumber::normalizeNullable($state)
+                ),
+            TextInput::make('email')
+                ->email()
+                ->maxLength(255)
+                ->unique(ignoreRecord: true)
+                ->dehydrateStateUsing(
+                    fn (?string $state): ?string => \App\Support\EmailAddress::normalize($state)
+                ),
+            TextInput::make('gender')->maxLength(64),
+            TextInput::make('nationality')->maxLength(120),
+            TextInput::make('identification_type')->label('ID type')->maxLength(120),
+            TextInput::make('identification_number')->label('ID number')->maxLength(120),
+            DatePicker::make('birthdate')->native(false),
+            Toggle::make('is_active')->label('Active'),
+            Textarea::make('address')
+                ->rows(2)
+                ->columnSpanFull()
+                ->formatStateUsing(function ($state): ?string {
+                    if ($state === null || $state === '') {
+                        return null;
+                    }
 
-                            return is_array($state) ? json_encode($state, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) : (string) $state;
-                        })
-                        ->dehydrateStateUsing(function (?string $state): mixed {
-                            $state = trim((string) $state);
-                            if ($state === '') {
-                                return null;
-                            }
-                            $decoded = json_decode($state, true);
+                    return is_array($state) ? json_encode($state, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) : (string) $state;
+                })
+                ->dehydrateStateUsing(function (?string $state): mixed {
+                    $state = trim((string) $state);
+                    if ($state === '') {
+                        return null;
+                    }
+                    $decoded = json_decode($state, true);
 
-                            return json_last_error() === JSON_ERROR_NONE ? $decoded : $state;
-                        }),
-                ])->columns(3),
-            Section::make('Status')
-                ->schema([
-                    Toggle::make('is_active')->label('Active'),
-                    TextInput::make('legacy_mvas_id')
-                        ->label('Legacy MVAS ID')
-                        ->maxLength(64),
-                ])->columns(2),
-        ]);
+                    return json_last_error() === JSON_ERROR_NONE ? $decoded : $state;
+                }),
+        ])->columns(3);
     }
 
     public static function infolist(Schema $schema): Schema
     {
         return $schema->components([
-            Section::make('Person')
+            Section::make('Contact')
                 ->schema([
                     TextEntry::make('name'),
                     TextEntry::make('phone_number')->label('Phone'),
@@ -142,61 +113,29 @@ class ContactResource extends Resource
                             ? \App\Support\IdentityLabels::via((string) $state)
                             : 'Unverified')
                         ->color(fn ($state): string => filled($state) ? 'success' : 'warning'),
-                    TextEntry::make('identity_verified_at')
-                        ->label('Verified at')
-                        ->dateTime()
-                        ->placeholder('—'),
                     TextEntry::make('is_active')
                         ->label('Active')
                         ->badge()
                         ->formatStateUsing(fn ($state) => $state ? 'Active' : 'Inactive')
                         ->color(fn ($state) => $state ? 'success' : 'danger'),
-                ])->columns(3),
-            Section::make('ID details')
-                ->schema([
-                    TextEntry::make('identification_type')->label('ID type')->placeholder('—'),
                     TextEntry::make('identification_number')->label('ID number')->placeholder('—'),
+                    TextEntry::make('identification_type')->label('ID type')->placeholder('—'),
                     TextEntry::make('birthdate')->date()->placeholder('—'),
                     TextEntry::make('gender')->placeholder('—'),
                     TextEntry::make('nationality')->placeholder('—'),
+                    TextEntry::make('company.name')
+                        ->label('Company')
+                        ->placeholder('—')
+                        ->url(fn (Contact $record): ?string => $record->company
+                            ? CompanyResource::getUrl('view', ['record' => $record->company])
+                            : null),
+                    TextEntry::make('company_role')->label('Role')->placeholder('—'),
                     TextEntry::make('address')
                         ->formatStateUsing(fn ($state) => is_array($state)
                             ? collect($state)->filter()->implode(', ')
                             : $state)
                         ->columnSpanFull()
                         ->placeholder('—'),
-                ])->columns(3),
-            Section::make('Company')
-                ->schema([
-                    TextEntry::make('company.name')
-                        ->label('Current company')
-                        ->placeholder('—')
-                        ->url(fn (Contact $record): ?string => $record->company
-                            ? CompanyResource::getUrl('view', ['record' => $record->company])
-                            : null),
-                    TextEntry::make('company.tin')->label('TIN')->placeholder('—'),
-                    TextEntry::make('company_role')->label('Role')->placeholder('—'),
-                    TextEntry::make('company.tin_ok')
-                        ->label('Company TIN')
-                        ->badge()
-                        ->state(fn (Contact $record): ?bool => $record->company
-                            ? $record->company->isTinValidated()
-                            : null)
-                        ->formatStateUsing(fn ($state) => $state === null ? '—' : ($state ? 'Verified' : 'Not verified'))
-                        ->color(fn ($state) => $state === true ? 'success' : ($state === false ? 'warning' : 'gray'))
-                        ->placeholder('—'),
-                    TextEntry::make('memberships_count')
-                        ->label('Memberships')
-                        ->state(fn (Contact $record): int => $record->memberships()->count()),
-                ])->columns(3),
-            Section::make('Record')
-                ->collapsed()
-                ->schema([
-                    TextEntry::make('public_id')->label('ID'),
-                    TextEntry::make('sub')->label('Fayda sub')->placeholder('—'),
-                    TextEntry::make('legacy_mvas_id')->label('Legacy MVAS ID')->placeholder('—'),
-                    TextEntry::make('profile_completed_at')->label('Profile completed')->dateTime()->placeholder('—'),
-                    TextEntry::make('created_at')->dateTime(),
                 ])->columns(3),
         ]);
     }
@@ -346,68 +285,8 @@ class ContactResource extends Resource
             ])
             ->recordActions([
                 ViewAction::make(),
-                EditAction::make(),
             ])
-            ->toolbarActions([
-                BulkActionGroup::make([
-                    BulkAction::make('delete_safe')
-                        ->label('Delete selected (safe)')
-                        ->icon('heroicon-o-trash')
-                        ->color('danger')
-                        ->requiresConfirmation()
-                        ->modalHeading('Delete selected contacts?')
-                        ->modalDescription('Soft-deletes orphan contacts only. Contacts with a company, membership, tickets, subscriptions, or change requests are skipped.')
-                        ->deselectRecordsAfterCompletion()
-                        ->visible(fn (): bool => static::canDeleteAny())
-                        ->action(function (Collection $records): void {
-                            $deleted = 0;
-                            $skipped = 0;
-
-                            $records->loadMissing([
-                                'memberships',
-                                'tickets',
-                                'subscriptions',
-                                'companyChangeRequests',
-                            ]);
-
-                            foreach ($records as $contact) {
-                                /** @var Contact $contact */
-                                if (! $contact->isSafeToSoftDelete()) {
-                                    $skipped++;
-
-                                    continue;
-                                }
-
-                                $contact->delete();
-                                $deleted++;
-                            }
-
-                            if ($deleted > 0) {
-                                Notification::make()
-                                    ->title("Deleted {$deleted} contact(s)")
-                                    ->body($skipped > 0 ? "{$skipped} skipped (linked to company or activity)." : null)
-                                    ->success()
-                                    ->send();
-                            } else {
-                                Notification::make()
-                                    ->title('No contacts deleted')
-                                    ->body('Selected contacts still have a company link, membership, tickets, subscriptions, or change requests. Filter to “Orphan” first.')
-                                    ->warning()
-                                    ->send();
-                            }
-                        }),
-                    DeleteBulkAction::make()
-                        ->label('Delete selected')
-                        ->authorizeIndividualRecords('delete')
-                        ->visible(fn (): bool => static::canDeleteAny()),
-                    RestoreBulkAction::make()
-                        ->visible(fn (): bool => static::canRestoreAny()),
-                    ForceDeleteBulkAction::make()
-                        ->label('Permanently delete')
-                        ->requiresConfirmation()
-                        ->visible(fn (): bool => static::canForceDeleteAny()),
-                ]),
-            ]);
+            ->toolbarActions([]);
     }
 
     public static function getRelations(): array
@@ -425,7 +304,6 @@ class ContactResource extends Resource
         return [
             'index' => ListContacts::route('/'),
             'view' => ViewContact::route('/{record}'),
-            'edit' => EditContact::route('/{record}/edit'),
         ];
     }
 
@@ -441,36 +319,36 @@ class ContactResource extends Resource
 
     public static function canEdit(Model $record): bool
     {
-        return true;
+        return false;
     }
 
     public static function canDelete(Model $record): bool
     {
-        return $record instanceof Contact && $record->isSafeToSoftDelete();
+        return false;
     }
 
     public static function canDeleteAny(): bool
     {
-        return true;
+        return false;
     }
 
     public static function canForceDelete(Model $record): bool
     {
-        return $record instanceof Contact && $record->isSafeToSoftDelete();
+        return false;
     }
 
     public static function canForceDeleteAny(): bool
     {
-        return true;
+        return false;
     }
 
     public static function canRestore(Model $record): bool
     {
-        return true;
+        return false;
     }
 
     public static function canRestoreAny(): bool
     {
-        return true;
+        return false;
     }
 }

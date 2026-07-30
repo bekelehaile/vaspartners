@@ -5,7 +5,6 @@ namespace App\Filament\Resources\Contacts\Pages;
 use App\Filament\Resources\Contacts\ContactResource;
 use App\Models\Contact;
 use Filament\Actions\Action;
-use Filament\Actions\EditAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 
@@ -16,7 +15,6 @@ class ViewContact extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            EditAction::make(),
             Action::make('toggle_active')
                 ->label(fn (Contact $record): string => $record->is_active ? 'Deactivate' : 'Activate')
                 ->icon(fn (Contact $record): string => $record->is_active ? 'heroicon-o-x-circle' : 'heroicon-o-check-circle')
