@@ -155,6 +155,24 @@ export function ErcaTinConsentPanel({
                 </dd>
               </div>
             )}
+            {preview.address ? (
+              <div>
+                <dt>Address</dt>
+                <dd>{preview.address}</dd>
+              </div>
+            ) : null}
+            {preview.phone ? (
+              <div>
+                <dt>Phone</dt>
+                <dd>{preview.phone}</dd>
+              </div>
+            ) : null}
+            {preview.email ? (
+              <div>
+                <dt>Email</dt>
+                <dd>{preview.email}</dd>
+              </div>
+            ) : null}
           </dl>
           <div className="portal-modal-actions" style={{ flexWrap: "wrap" }}>
             <button type="submit" className="btn-primary" disabled={busy}>

@@ -330,6 +330,9 @@ export type ErcaCompanyPreview = {
   tax_centre?: string | null;
   region?: string | null;
   city?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
 };
 
 export function useErcaCompanyPreview() {

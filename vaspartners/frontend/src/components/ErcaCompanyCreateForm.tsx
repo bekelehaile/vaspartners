@@ -208,6 +208,24 @@ export function ErcaCompanyCreateForm({
                   </dd>
                 </div>
               )}
+              {preview.address ? (
+                <div>
+                  <dt>ERCA address</dt>
+                  <dd>{preview.address}</dd>
+                </div>
+              ) : null}
+              {preview.phone ? (
+                <div>
+                  <dt>Phone</dt>
+                  <dd>{preview.phone}</dd>
+                </div>
+              ) : null}
+              {preview.email ? (
+                <div>
+                  <dt>Email</dt>
+                  <dd>{preview.email}</dd>
+                </div>
+              ) : null}
             </dl>
           </section>
 
