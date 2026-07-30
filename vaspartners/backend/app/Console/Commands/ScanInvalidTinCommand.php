@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Services\CompanyMembershipService;
 use App\Support\TinNumber;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class ScanInvalidTinCommand extends Command
@@ -97,7 +98,15 @@ class ScanInvalidTinCommand extends Command
                             $notified++;
                         }
                     } elseif ($notifyAll && $notify) {
+                        $cacheKey = 'invalid-tin-sms:'.$company->id.':'.now()->format('Ymd');
+                        if (Cache::has($cacheKey)) {
+                            $skipped++;
+                            $this->line('  skip already-sent-today '.$label);
+
+                            continue;
+                        }
                         $membership->notifyInvalidTin($company, false);
+                        Cache::put($cacheKey, 1, now()->endOfDay());
                         $notified++;
                         $this->line('  notified '.$label);
                     } else {

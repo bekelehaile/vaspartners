@@ -731,7 +731,7 @@ class ContactPortalController extends Controller
         $preview = $ercaOnboarding->previewByTin($contact, $data['company_tin'], $ignoreCompanyId);
 
         return response()->json([
-            'message' => 'Taxpayer found in ERCA. Confirm to create your company.',
+            'message' => 'Taxpayer found in ERCA. Confirm to apply this TIN.',
             'data' => $preview,
         ]);
     }
@@ -756,7 +756,7 @@ class ContactPortalController extends Controller
         $fresh = $ercaOnboarding->updateExistingFromConsent($contact, $data['preview_token']);
 
         return response()->json([
-            'message' => 'Company TIN and name updated from ERCA verification.',
+            'message' => 'Company TIN updated from ERCA after your consent.',
             'data' => $membership->serializeContact($fresh),
         ]);
     }

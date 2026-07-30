@@ -147,6 +147,11 @@ class ErcaTinVerificationService
         $company->forceFill($updates)->save();
         $this->syncDenormalizedCompanyName($company);
 
+        if (in_array($status, [ErcaNameStatus::Matched, ErcaNameStatus::AcceptedLegal, ErcaNameStatus::KeptBoth], true)) {
+            app(\App\Services\CompanyMembershipService::class)
+                ->syncTinValidatedFromErca($company->fresh() ?? $company);
+        }
+
         return $this->snapshot($company->fresh() ?? $company);
     }
 
@@ -172,6 +177,8 @@ class ErcaTinVerificationService
                 'erca_last_error' => null,
             ])->save();
             $this->syncDenormalizedCompanyName($company);
+            app(\App\Services\CompanyMembershipService::class)
+                ->syncTinValidatedFromErca($company->fresh() ?? $company);
 
             return $company->fresh() ?? $company;
         }
@@ -235,6 +242,9 @@ class ErcaTinVerificationService
             'legal_name' => $company->legal_name,
             'name' => $company->name,
         ]);
+
+        app(\App\Services\CompanyMembershipService::class)
+            ->syncTinValidatedFromErca($company->fresh() ?? $company);
 
         return $company->fresh() ?? $company;
     }

@@ -10,9 +10,8 @@ import { getToken } from "@/lib/api";
 import { useContact, useLogout } from "@/hooks/use-contact";
 
 /**
- * Auth + approved-company gate for all /portal routes.
- * Partners cannot use services until their company TIN is admin-approved.
- * Incomplete / pending profiles are forced to /portal/company.
+ * Auth + TIN gate for /portal routes.
+ * Contacts use Fayda/CRM identity. Companies use ERCA TIN validation for services.
  */
 export function PortalGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -46,7 +45,7 @@ export function PortalGuard({ children }: { children: ReactNode }) {
             ? error instanceof Error
               ? error.message
               : "Session expired"
-            : "Checking your Fayda session…"}
+            : "Checking your session…"}
         </p>
       </AuthWait>
     );
@@ -55,7 +54,7 @@ export function PortalGuard({ children }: { children: ReactNode }) {
   if (!canUseServices && !onCompanyPage) {
     return (
       <AuthWait>
-        <p className="muted">Approved company required — redirecting…</p>
+        <p className="muted">Company setup required — redirecting…</p>
       </AuthWait>
     );
   }

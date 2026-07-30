@@ -129,8 +129,8 @@ class CompanyResource extends Resource
             Toggle::make('is_active')
                 ->label('Active'),
             Toggle::make('tin_validated')
-                ->label('TIN NUMBER approved')
-                ->helperText('Prefer Approve TIN NUMBER so who/when is logged.')
+                ->label('TIN validated')
+                ->helperText('Service access gate. Prefer Approve TIN so who/when is logged.')
                 ->dehydrateStateUsing(function (?bool $state, ?\App\Models\Company $record): bool {
                     if (! $state) {
                         return false;
@@ -141,17 +141,6 @@ class CompanyResource extends Resource
 
                     return true;
                 }),
-            TextInput::make('erca_name_status')
-                ->label('ERCA name status')
-                ->disabled()
-                ->dehydrated(false)
-                ->formatStateUsing(fn ($state) => $state instanceof \App\Enums\ErcaNameStatus
-                    ? $state->label()
-                    : (\App\Enums\ErcaNameStatus::tryFrom((string) $state)?->label() ?? (string) ($state ?: 'unchecked'))),
-            Toggle::make('erca_tin_verified')
-                ->label('ERCA verified')
-                ->disabled()
-                ->dehydrated(false),
         ])->columns(2);
     }
 

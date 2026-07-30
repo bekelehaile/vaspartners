@@ -323,6 +323,7 @@ class CompanyMembershipService
             ['auto' => true, 'via' => 'erca_update'],
         );
 
+        $this->ensureApprovedWhenTinValidated($company->fresh() ?? $company);
         $this->syncAllMembersDenormalizedFields($company->fresh() ?? $company);
 
         return $contact->fresh(['company', 'memberships.company']);
@@ -2013,13 +2014,6 @@ class CompanyMembershipService
             ]);
         }
 
-        $contact->loadMissing('company');
-        if (! $contact->company?->isApproved()) {
-            throw ValidationException::withMessages([
-                'company' => 'Services are locked until an administrator approves your company profile for this TIN. Complete company details and wait for approval.',
-            ]);
-        }
-
         if (! filled($contact->company->tin)) {
             throw ValidationException::withMessages([
                 'company' => 'A valid company TIN is required before using VAS services.',
@@ -2032,9 +2026,23 @@ class CompanyMembershipService
             ]);
         }
 
+        // Single service gate: validated TIN (via ERCA or admin).
         if (! $contact->company->tin_validated) {
             throw ValidationException::withMessages([
-                'company_tin' => 'This company\'s TIN is awaiting Ethio telecom validation. Switch to another company with a validated TIN, or wait until an administrator validates this one.',
+                'company_tin' => 'Update and confirm your company TIN before using VAS services.',
+            ]);
+        }
+
+        // TIN found in ERCA but name mismatch — resolve keep-both / update before services.
+        if ($contact->company->needsErcaNameConsent()) {
+            throw ValidationException::withMessages([
+                'company' => 'Confirm your company name with ERCA (keep both names, or update TIN) before using VAS services.',
+            ]);
+        }
+
+        if ($contact->company->isApproved() && ! $contact->company->is_active) {
+            throw ValidationException::withMessages([
+                'company' => 'This company is deactivated. Contact Ethio telecom.',
             ]);
         }
     }
@@ -2245,6 +2253,45 @@ class CompanyMembershipService
         }
 
         return $fresh;
+    }
+
+    /**
+     * After ERCA resolves identity (matched / accepted / kept both), unlock services.
+     */
+    public function syncTinValidatedFromErca(Company $company): Company
+    {
+        $company->refresh();
+
+        if (! $company->erca_tin_verified || ! TinNumber::isValid($company->tin)) {
+            return $company;
+        }
+
+        $status = $company->erca_name_status instanceof \App\Enums\ErcaNameStatus
+            ? $company->erca_name_status
+            : \App\Enums\ErcaNameStatus::tryFrom((string) ($company->erca_name_status ?: ''));
+
+        if (! $status?->isResolved()) {
+            return $company;
+        }
+
+        if (! $company->tin_validated) {
+            $company->forceFill([
+                'tin_validated' => true,
+                'tin_validated_by_user_id' => null,
+                'tin_validated_at' => now(),
+            ])->save();
+
+            $this->recordStatusHistory(
+                $company,
+                'tin_validated',
+                null,
+                null,
+                'TIN confirmed via ERCA',
+                ['auto' => true, 'via' => 'erca'],
+            );
+        }
+
+        return $this->ensureApprovedWhenTinValidated($company->fresh() ?? $company);
     }
 
     /**
