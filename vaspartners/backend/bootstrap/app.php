@@ -39,10 +39,11 @@ return Application::configure(basePath: dirname(__DIR__))
             ->description('Clear mistaken TIN approvals when format is invalid and SMS company owners');
 
         // Small ERCA batches only — never bulk-flood eTrade (limit/sleep in command + global cap).
-        $schedule->command('vas:scan-erca-tin')
+        // Prefer unverified Has-owner companies first.
+        $schedule->command('vas:scan-erca-tin --unverified-only')
             ->everyFifteenMinutes()
             ->withoutOverlapping(14)
-            ->description('Throttled ERCA TIN re-check for due companies');
+            ->description('Throttled ERCA TIN check for unverified Has-owner companies');
 
         $schedule->command('vas:open-due-renewals')
             ->dailyAt('01:00')

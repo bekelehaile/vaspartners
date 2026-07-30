@@ -107,7 +107,8 @@ class ErcaTinVerificationService
         }
 
         $matched = CompanyNameMatcher::matches($entered, (string) $legal);
-        $previous = ErcaNameStatus::tryFrom((string) $company->erca_name_status);
+        $previous = $this->resolveStatus($company);
+        $legalTitle = CompanyNameMatcher::titleCase((string) $legal);
 
         // Preserve partner consent if they already resolved a mismatch for the same legal name.
         $status = ErcaNameStatus::Matched;
@@ -127,15 +128,24 @@ class ErcaTinVerificationService
             }
         }
 
-        $company->forceFill([
-            'legal_name' => $legal,
+        $updates = [
+            'legal_name' => $legalTitle,
+            // Flag: TIN found + checked against ERCA registry.
             'erca_tin_verified' => true,
             'erca_verified_at' => now(),
-            'erca_name_status' => $status->value,
+            'erca_name_status' => $status,
             'erca_last_checked_at' => now(),
             'erca_next_check_at' => now()->addHours($this->recheckHours()),
             'erca_last_error' => null,
-        ])->save();
+        ];
+
+        // Case-insensitive match → store company name in title case (ucwords-style).
+        if ($status === ErcaNameStatus::Matched || $status === ErcaNameStatus::AcceptedLegal) {
+            $updates['name'] = $legalTitle;
+        }
+
+        $company->forceFill($updates)->save();
+        $this->syncDenormalizedCompanyName($company);
 
         return $this->snapshot($company->fresh() ?? $company);
     }
@@ -150,13 +160,18 @@ class ErcaTinVerificationService
         }
 
         $matched = CompanyNameMatcher::matches((string) $company->name, (string) $company->legal_name);
-        $previous = ErcaNameStatus::tryFrom((string) $company->erca_name_status);
+        $previous = $this->resolveStatus($company);
 
         if ($matched) {
+            $title = CompanyNameMatcher::titleCase((string) $company->legal_name);
             $company->forceFill([
-                'erca_name_status' => ErcaNameStatus::Matched->value,
+                'name' => $title,
+                'legal_name' => $title,
+                'erca_tin_verified' => true,
+                'erca_name_status' => ErcaNameStatus::Matched,
                 'erca_last_error' => null,
             ])->save();
+            $this->syncDenormalizedCompanyName($company);
 
             return $company->fresh() ?? $company;
         }
@@ -166,7 +181,7 @@ class ErcaTinVerificationService
         }
 
         $company->forceFill([
-            'erca_name_status' => ErcaNameStatus::MismatchPending->value,
+            'erca_name_status' => ErcaNameStatus::MismatchPending,
         ])->save();
 
         return $company->fresh() ?? $company;
@@ -179,7 +194,7 @@ class ErcaTinVerificationService
      */
     public function applyNameConsent(Company $company, Contact $actor, string $action): Company
     {
-        $status = ErcaNameStatus::tryFrom((string) $company->erca_name_status);
+        $status = $this->resolveStatus($company);
         if ($status !== ErcaNameStatus::MismatchPending) {
             throw ValidationException::withMessages([
                 'consent' => 'No pending legal-name consent for this company.',
@@ -193,13 +208,19 @@ class ErcaTinVerificationService
         }
 
         if ($action === 'use_legal') {
+            $title = CompanyNameMatcher::titleCase((string) $company->legal_name);
             $company->forceFill([
-                'name' => $company->legal_name,
-                'erca_name_status' => ErcaNameStatus::AcceptedLegal->value,
+                'name' => $title,
+                'legal_name' => $title,
+                'erca_tin_verified' => true,
+                'erca_name_status' => ErcaNameStatus::AcceptedLegal,
             ])->save();
+            $this->syncDenormalizedCompanyName($company);
         } elseif ($action === 'keep_both') {
             $company->forceFill([
-                'erca_name_status' => ErcaNameStatus::KeptBoth->value,
+                'legal_name' => CompanyNameMatcher::titleCase((string) $company->legal_name),
+                'erca_tin_verified' => true,
+                'erca_name_status' => ErcaNameStatus::KeptBoth,
             ])->save();
         } else {
             throw ValidationException::withMessages([
@@ -231,8 +252,7 @@ class ErcaTinVerificationService
      */
     public function snapshot(Company $company): array
     {
-        $status = ErcaNameStatus::tryFrom((string) ($company->erca_name_status ?: 'unchecked'))
-            ?? ErcaNameStatus::Unchecked;
+        $status = $this->resolveStatus($company);
 
         return [
             'company' => $company,
@@ -246,9 +266,44 @@ class ErcaTinVerificationService
         ];
     }
 
+    protected function resolveStatus(Company $company): ErcaNameStatus
+    {
+        $raw = $company->erca_name_status;
+        if ($raw instanceof ErcaNameStatus) {
+            return $raw;
+        }
+
+        return ErcaNameStatus::tryFrom((string) ($raw ?: 'unchecked'))
+            ?? ErcaNameStatus::Unchecked;
+    }
+
+    /**
+     * Keep contact.company_name in sync when company.name is title-cased.
+     */
+    protected function syncDenormalizedCompanyName(Company $company): void
+    {
+        $name = (string) ($company->name ?: '');
+        if ($name === '' || ! $company->id) {
+            return;
+        }
+
+        \App\Models\Contact::query()
+            ->where('current_company_id', $company->id)
+            ->update(['company_name' => $name]);
+    }
+
     protected function shouldCallUpstream(Company $company, string $tin): bool
     {
         if (Cache::has($this->tinCacheKey($tin))) {
+            return false;
+        }
+
+        // Already ERCA-verified and not due yet — do not re-hit upstream.
+        if (
+            $company->erca_tin_verified
+            && $company->erca_next_check_at
+            && $company->erca_next_check_at->isFuture()
+        ) {
             return false;
         }
 

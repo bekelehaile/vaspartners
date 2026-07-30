@@ -141,9 +141,10 @@ class CompanyResource extends Resource
                     ? $state->label()
                     : (\App\Enums\ErcaNameStatus::tryFrom((string) $state)?->label() ?? (string) ($state ?: 'unchecked'))),
             Toggle::make('erca_tin_verified')
-                ->label('ERCA TIN found')
+                ->label('ERCA verified')
                 ->disabled()
-                ->dehydrated(false),
+                ->dehydrated(false)
+                ->helperText('Set when the TIN was found in ERCA and checked.'),
         ])->columns(2);
     }
 
@@ -163,9 +164,9 @@ class CompanyResource extends Resource
                     ->formatStateUsing(fn ($state) => $state ? 'Approved' : 'Not approved')
                     ->color(fn ($state) => $state ? 'success' : 'warning'),
                 TextEntry::make('erca_tin_verified')
-                    ->label('ERCA TIN')
+                    ->label('ERCA verified')
                     ->badge()
-                    ->formatStateUsing(fn ($state) => $state ? 'Found' : 'Not found / unchecked')
+                    ->formatStateUsing(fn ($state) => $state ? 'Verified' : 'Not verified')
                     ->color(fn ($state) => $state ? 'success' : 'gray'),
                 TextEntry::make('erca_name_status')
                     ->label('ERCA name')
@@ -269,7 +270,7 @@ class CompanyResource extends Resource
                     }),
                 TextColumn::make('tin')->label('TIN NUMBER')->searchable()->sortable(),
                 IconColumn::make('tin_validated')->boolean()->label('TIN OK'),
-                IconColumn::make('erca_tin_verified')->boolean()->label('ERCA')->toggleable(),
+                IconColumn::make('erca_tin_verified')->boolean()->label('ERCA OK')->toggleable(),
                 TextColumn::make('erca_name_status')
                     ->label('ERCA name')
                     ->badge()
@@ -380,6 +381,16 @@ class CompanyResource extends Resource
                     ->queries(
                         true: fn ($query) => $query->where('tin_validated', true),
                         false: fn ($query) => $query->where('tin_validated', false),
+                        blank: fn ($query) => $query,
+                    ),
+                TernaryFilter::make('erca_tin_verified')
+                    ->label('ERCA verified')
+                    ->placeholder('Any ERCA status')
+                    ->trueLabel('ERCA verified')
+                    ->falseLabel('Not ERCA verified')
+                    ->queries(
+                        true: fn ($query) => $query->where('erca_tin_verified', true),
+                        false: fn ($query) => $query->where('erca_tin_verified', false),
                         blank: fn ($query) => $query,
                     ),
                 TernaryFilter::make('no_owner')

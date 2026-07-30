@@ -137,7 +137,9 @@ class CompanyMembershipService
         $tin = $this->normalizeEthiopianTin($data['company_tin']);
         $this->assertUniqueTin($tin);
 
-        $legal = trim((string) ($data['legal_name'] ?: $data['company_name']));
+        $legal = \App\Services\Etrade\CompanyNameMatcher::titleCase(
+            trim((string) ($data['legal_name'] ?: $data['company_name'])),
+        );
         if ($legal === '') {
             throw ValidationException::withMessages([
                 'company_name' => 'ERCA legal name is required.',
