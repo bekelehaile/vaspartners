@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { CompanyProfileForm } from "@/components/CompanyProfileForm";
+import { ErcaCompanyCreateForm } from "@/components/ErcaCompanyCreateForm";
 import { CompanyMembersTable } from "@/components/CompanyMembersTable";
 import { FaydaIdentityPanel } from "@/components/FaydaIdentityPanel";
 import { JoinCompanyPanel } from "@/components/JoinCompanyPanel";
@@ -180,7 +181,8 @@ export default function CompanyProfilePage() {
         : {
             kicker: "Company",
             title: "Set up your company",
-            description: "Create a company or join an existing one.",
+            description:
+              "Search your TIN in ERCA to create a company, or join an existing one.",
           };
 
   return (
@@ -238,7 +240,7 @@ export default function CompanyProfilePage() {
                   {
                     id: "create",
                     label: "Create company",
-                    description: "Name, TIN, address",
+                    description: "ERCA TIN search",
                   },
                   {
                     id: "attach",
@@ -250,10 +252,10 @@ export default function CompanyProfilePage() {
             }
           >
             {mode === "create" ? (
-              <CompanyProfileForm
+              <ErcaCompanyCreateForm
                 key={`${me?.public_id ?? "company"}-create`}
                 me={me}
-                redirectTo="/portal/company"
+                redirectTo="/portal"
               />
             ) : (
               <JoinCompanyPanel />
@@ -339,11 +341,10 @@ export default function CompanyProfilePage() {
                     )}
                     {orgAction === "create" && (
                       <div className="portal-stack-sm">
-                        <CompanyProfileForm
+                        <ErcaCompanyCreateForm
                           key="create-another"
                           me={me}
-                          createNew
-                          redirectTo="/portal/company"
+                          redirectTo="/portal"
                         />
                       </div>
                     )}

@@ -701,11 +701,85 @@ class ContactPortalController extends Controller
         $createNew = (bool) ($data['create_new'] ?? false);
         unset($data['create_new']);
 
-        $fresh = ($createNew || ! $contact->current_company_id)
-            ? $membership->createCompanyForContact($contact, $data)
-            : $membership->updateOwnCompany($contact, $data);
+        // New companies must be created via ERCA TIN search + partner consent.
+        if ($createNew || ! $contact->current_company_id) {
+            return response()->json([
+                'message' => 'Create a company by searching your TIN in ERCA and confirming the registry details.',
+            ], 422);
+        }
+
+        $fresh = $membership->updateOwnCompany($contact, $data);
 
         return response()->json(['data' => $membership->serializeContact($fresh)]);
+    }
+
+    public function previewErcaCompany(Request $request, \App\Services\Etrade\ErcaCompanyOnboardingService $ercaOnboarding)
+    {
+        /** @var \App\Models\Contact $contact */
+        $contact = $request->user();
+
+        $data = $request->validate([
+            'company_tin' => ['required', 'string', 'max:32'],
+        ]);
+
+        $preview = $ercaOnboarding->previewByTin($contact, $data['company_tin']);
+
+        return response()->json([
+            'message' => 'Taxpayer found in ERCA. Confirm to create your company.',
+            'data' => $preview,
+        ]);
+    }
+
+    public function createCompanyFromErcaConsent(
+        Request $request,
+        CompanyMembershipService $membership,
+        \App\Services\Etrade\ErcaCompanyOnboardingService $ercaOnboarding,
+    ) {
+        /** @var \App\Models\Contact $contact */
+        $contact = $request->user();
+        if ($contact->current_company_id && ! $contact->hasActiveCompanyMembership()) {
+            return response()->json([
+                'message' => 'Your membership for this company is disabled. Contact an administrator.',
+            ], 403);
+        }
+
+        $data = $request->validate([
+            'preview_token' => ['required', 'string', 'max:64'],
+            'company_address' => ['required', 'string', 'min:5', 'max:2000'],
+        ]);
+
+        $fresh = $ercaOnboarding->createFromConsent(
+            $contact,
+            $data['preview_token'],
+            $data['company_address'],
+        );
+
+        return response()->json([
+            'message' => 'Company created from ERCA verification.',
+            'data' => $membership->serializeContact($fresh),
+        ]);
+    }
+
+    public function declineErcaCompany(
+        Request $request,
+        \App\Services\Etrade\ErcaCompanyOnboardingService $ercaOnboarding,
+    ) {
+        /** @var \App\Models\Contact $contact */
+        $contact = $request->user();
+
+        $data = $request->validate([
+            'preview_token' => ['sometimes', 'nullable', 'string', 'max:64'],
+        ]);
+
+        $ercaOnboarding->forgetPreview((string) ($data['preview_token'] ?? ''));
+
+        // Decline = end session (partner must not create without ERCA consent).
+        $contact->currentAccessToken()?->delete();
+
+        return response()->json([
+            'message' => 'Company creation cancelled. You have been signed out.',
+            'logout' => true,
+        ]);
     }
 
     public function submitCompanyTin(Request $request, CompanyMembershipService $membership)
@@ -723,9 +797,37 @@ class ContactPortalController extends Controller
         ]);
 
         $fresh = $membership->submitCompanyTin($contact, $data['company_tin']);
+        $company = $fresh->company;
+        $needsConsent = $company?->needsErcaNameConsent() === true;
 
         return response()->json([
-            'message' => 'TIN submitted. We will review it shortly.',
+            'message' => $needsConsent
+                ? 'TIN found in ERCA, but the legal name differs from the company name you entered. Please confirm.'
+                : 'TIN submitted. We will review it shortly.',
+            'data' => $membership->serializeContact($fresh),
+        ]);
+    }
+
+    public function applyErcaNameConsent(Request $request, CompanyMembershipService $membership)
+    {
+        /** @var \App\Models\Contact $contact */
+        $contact = $request->user();
+        if ($contact->current_company_id && ! $contact->hasActiveCompanyMembership()) {
+            return response()->json([
+                'message' => 'Your membership for this company is disabled. Contact an administrator.',
+            ], 403);
+        }
+
+        $data = $request->validate([
+            'action' => ['required', 'string', 'in:use_legal,keep_both'],
+        ]);
+
+        $fresh = $membership->applyErcaNameConsent($contact, $data['action']);
+
+        return response()->json([
+            'message' => $data['action'] === 'use_legal'
+                ? 'Company name updated to the ERCA legal name.'
+                : 'Kept your company name; ERCA legal name is stored for reference.',
             'data' => $membership->serializeContact($fresh),
         ]);
     }

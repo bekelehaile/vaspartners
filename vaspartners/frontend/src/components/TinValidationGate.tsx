@@ -20,7 +20,11 @@ export function TinValidationGate({ children }: { children: React.ReactNode }) {
   const [localError, setLocalError] = useState<string | null>(null);
 
   const company = me?.company;
-  const needsGate = !!me?.profile_completed && !!company && !company.tin_validated;
+  const needsGate =
+    !!me?.profile_completed &&
+    !!company &&
+    !company.tin_validated &&
+    company.needs_erca_name_consent !== true;
   const canSubmitTin = me?.company_role === "owner" || !!me?.company_can_edit;
 
   const otherReady = useMemo(() => {

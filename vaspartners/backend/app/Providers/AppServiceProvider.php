@@ -25,6 +25,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureSmsRateLimiters();
         $this->configurePortalOtpRateLimiters();
         $this->configurePortalTicketCreateRateLimiters();
+        $this->configurePortalTinLookupRateLimiters();
 
         // All admin tables: newest first, no clickable row navigation (use explicit actions).
         Table::configureUsing(function (Table $table): void {
@@ -106,6 +107,18 @@ class AppServiceProvider extends ServiceProvider
             }
 
             return $limits;
+        });
+    }
+
+    private function configurePortalTinLookupRateLimiters(): void
+    {
+        RateLimiter::for('portal-tin-lookup', function ($request) {
+            $userId = $request->user()?->id ?? 'guest';
+
+            return [
+                Limit::perMinute(20)->by('portal-tin-user:'.$userId),
+                Limit::perMinute(60)->by('portal-tin-ip:'.$request->ip()),
+            ];
         });
     }
 }

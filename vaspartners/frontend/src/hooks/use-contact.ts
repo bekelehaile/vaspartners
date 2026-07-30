@@ -321,6 +321,84 @@ export function useCompleteCompanyProfile() {
   });
 }
 
+export type ErcaCompanyPreview = {
+  preview_token: string;
+  tin: string;
+  legal_name: string;
+  business_name?: string | null;
+  entity_type?: string | null;
+  tax_centre?: string | null;
+  region?: string | null;
+  city?: string | null;
+};
+
+export function useErcaCompanyPreview() {
+  return useMutation({
+    mutationFn: async (company_tin: string) => {
+      const res = await api<{ message?: string; data: ErcaCompanyPreview }>(
+        "/profile/company/erca/preview",
+        {
+          method: "POST",
+          body: JSON.stringify({ company_tin }),
+        },
+      );
+      return res.data;
+    },
+  });
+}
+
+export function useCreateCompanyFromErca() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: {
+      preview_token: string;
+      company_address: string;
+    }) => {
+      const res = await api<{ message?: string; data: Contact }>(
+        "/profile/company/erca/create",
+        {
+          method: "POST",
+          body: JSON.stringify(payload),
+        },
+      );
+      return res.data;
+    },
+    onSuccess: (contact) => {
+      queryClient.setQueryData(queryKeys.contact.me, contact);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.contact.me });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.notifications });
+      void queryClient.invalidateQueries({ queryKey: ["company-requests-inbox"] });
+    },
+  });
+}
+
+export function useDeclineErcaCompany() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload?: { preview_token?: string }) => {
+      const res = await api<{ message?: string; logout?: boolean }>(
+        "/profile/company/erca/decline",
+        {
+          method: "POST",
+          body: JSON.stringify(payload ?? {}),
+        },
+      );
+      return res;
+    },
+    onSettled: async () => {
+      try {
+        await queryClient.cancelQueries();
+      } catch {
+        /* ignore */
+      }
+      queryClient.clear();
+      clearClientSession();
+    },
+  });
+}
+
 export function useSubmitCompanyTin() {
   const queryClient = useQueryClient();
 
@@ -330,6 +408,27 @@ export function useSubmitCompanyTin() {
         method: "POST",
         body: JSON.stringify(payload),
       });
+      return res.data;
+    },
+    onSuccess: (contact) => {
+      queryClient.setQueryData(queryKeys.contact.me, contact);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.contact.me });
+    },
+  });
+}
+
+export function useSubmitErcaNameConsent() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: { action: "use_legal" | "keep_both" }) => {
+      const res = await api<{ message?: string; data: Contact }>(
+        "/profile/company/tin/name-consent",
+        {
+          method: "POST",
+          body: JSON.stringify(payload),
+        },
+      );
       return res.data;
     },
     onSuccess: (contact) => {

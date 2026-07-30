@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { AuthWait } from "@/components/AuthWait";
 import { SiteShell } from "@/components/SiteShell";
 import { TinValidationGate } from "@/components/TinValidationGate";
+import { ErcaNameConsentGate } from "@/components/ErcaNameConsentGate";
 import { getToken } from "@/lib/api";
 import { useContact, useLogout } from "@/hooks/use-contact";
 
@@ -59,10 +60,10 @@ export function PortalGuard({ children }: { children: ReactNode }) {
     );
   }
 
-  const body = onCompanyPage ? (
-    children
-  ) : (
-    <TinValidationGate>{children}</TinValidationGate>
+  const body = (
+    <ErcaNameConsentGate>
+      {onCompanyPage ? children : <TinValidationGate>{children}</TinValidationGate>}
+    </ErcaNameConsentGate>
   );
 
   return (

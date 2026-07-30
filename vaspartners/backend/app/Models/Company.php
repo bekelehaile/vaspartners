@@ -23,10 +23,17 @@ class Company extends Model
     protected $fillable = [
         'public_id',
         'name',
+        'legal_name',
         'tin',
         'tin_validated',
         'tin_validated_by_user_id',
         'tin_validated_at',
+        'erca_name_status',
+        'erca_tin_verified',
+        'erca_verified_at',
+        'erca_last_checked_at',
+        'erca_next_check_at',
+        'erca_last_error',
         'phone',
         'email',
         'address',
@@ -44,9 +51,14 @@ class Company extends Model
         return [
             'is_active' => 'boolean',
             'tin_validated' => 'boolean',
+            'erca_tin_verified' => 'boolean',
             'approval_status' => CompanyApprovalStatus::class,
+            'erca_name_status' => \App\Enums\ErcaNameStatus::class,
             'approved_at' => 'datetime',
             'tin_validated_at' => 'datetime',
+            'erca_verified_at' => 'datetime',
+            'erca_last_checked_at' => 'datetime',
+            'erca_next_check_at' => 'datetime',
         ];
     }
 
@@ -65,13 +77,35 @@ class Company extends Model
                 );
             }
 
-            // Changing TIN requires admin to re-validate.
+            // Changing TIN requires admin to re-validate and a fresh ERCA check.
             if ($company->isDirty('tin')) {
                 $company->tin_validated = false;
                 $company->tin_validated_by_user_id = null;
                 $company->tin_validated_at = null;
+                $company->legal_name = null;
+                $company->erca_tin_verified = false;
+                $company->erca_verified_at = null;
+                $company->erca_name_status = \App\Enums\ErcaNameStatus::Unchecked->value;
+                $company->erca_last_error = null;
+                $company->erca_next_check_at = null;
             }
         });
+    }
+
+    public function needsErcaNameConsent(): bool
+    {
+        $status = $this->erca_name_status instanceof \App\Enums\ErcaNameStatus
+            ? $this->erca_name_status
+            : \App\Enums\ErcaNameStatus::tryFrom((string) $this->erca_name_status);
+
+        return $status?->needsPartnerConsent() === true;
+    }
+
+    public function ercaDisplayLegalName(): ?string
+    {
+        $name = trim((string) ($this->legal_name ?: ''));
+
+        return $name !== '' ? $name : null;
     }
 
     public function setPhoneAttribute(mixed $value): void

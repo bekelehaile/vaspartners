@@ -38,6 +38,12 @@ return Application::configure(basePath: dirname(__DIR__))
             ->withoutOverlapping(55)
             ->description('Clear mistaken TIN approvals when format is invalid and SMS company owners');
 
+        // Small ERCA batches only — never bulk-flood eTrade (limit/sleep in command + global cap).
+        $schedule->command('vas:scan-erca-tin')
+            ->everyFifteenMinutes()
+            ->withoutOverlapping(14)
+            ->description('Throttled ERCA TIN re-check for due companies');
+
         $schedule->command('vas:open-due-renewals')
             ->dailyAt('01:00')
             ->description('Open renewal service requests for subscriptions in the renewal lead window');

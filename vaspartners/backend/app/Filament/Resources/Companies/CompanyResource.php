@@ -90,6 +90,11 @@ class CompanyResource extends Resource
     {
         return $schema->components([
             TextInput::make('name')->required()->maxLength(255),
+            TextInput::make('legal_name')
+                ->label('ERCA legal name')
+                ->disabled()
+                ->dehydrated(false)
+                ->helperText('From eTrade / ERCA. Partner can accept this name or keep both when there is a mismatch.'),
             TextInput::make('tin')
                 ->label('TIN NUMBER')
                 ->required()
@@ -128,6 +133,17 @@ class CompanyResource extends Resource
 
                     return true;
                 }),
+            TextInput::make('erca_name_status')
+                ->label('ERCA name status')
+                ->disabled()
+                ->dehydrated(false)
+                ->formatStateUsing(fn ($state) => $state instanceof \App\Enums\ErcaNameStatus
+                    ? $state->label()
+                    : (\App\Enums\ErcaNameStatus::tryFrom((string) $state)?->label() ?? (string) ($state ?: 'unchecked'))),
+            Toggle::make('erca_tin_verified')
+                ->label('ERCA TIN found')
+                ->disabled()
+                ->dehydrated(false),
         ])->columns(2);
     }
 
@@ -137,12 +153,40 @@ class CompanyResource extends Resource
             Section::make('Company')->schema([
                 TextEntry::make('public_id')->label('ID'),
                 TextEntry::make('name'),
+                TextEntry::make('legal_name')
+                    ->label('ERCA legal name')
+                    ->placeholder('—'),
                 TextEntry::make('tin')->label('TIN NUMBER'),
                 TextEntry::make('tin_validated')
                     ->label('TIN NUMBER status')
                     ->badge()
                     ->formatStateUsing(fn ($state) => $state ? 'Approved' : 'Not approved')
                     ->color(fn ($state) => $state ? 'success' : 'warning'),
+                TextEntry::make('erca_tin_verified')
+                    ->label('ERCA TIN')
+                    ->badge()
+                    ->formatStateUsing(fn ($state) => $state ? 'Found' : 'Not found / unchecked')
+                    ->color(fn ($state) => $state ? 'success' : 'gray'),
+                TextEntry::make('erca_name_status')
+                    ->label('ERCA name')
+                    ->badge()
+                    ->formatStateUsing(fn ($state) => $state instanceof \App\Enums\ErcaNameStatus
+                        ? $state->label()
+                        : (\App\Enums\ErcaNameStatus::tryFrom((string) $state)?->label() ?? (string) $state))
+                    ->color(fn ($state) => match ($state instanceof \App\Enums\ErcaNameStatus ? $state->value : (string) $state) {
+                        'matched', 'accepted_legal', 'kept_both' => 'success',
+                        'mismatch_pending' => 'warning',
+                        'not_found', 'failed' => 'danger',
+                        default => 'gray',
+                    }),
+                TextEntry::make('erca_last_checked_at')
+                    ->label('ERCA last checked')
+                    ->dateTime()
+                    ->placeholder('—'),
+                TextEntry::make('erca_next_check_at')
+                    ->label('ERCA next check')
+                    ->dateTime()
+                    ->placeholder('—'),
                 TextEntry::make('tinValidatedBy.name')
                     ->label('TIN NUMBER approved by')
                     ->placeholder('—')
@@ -207,6 +251,11 @@ class CompanyResource extends Resource
                 ]))
             ->columns([
                 TextColumn::make('name')->searchable()->sortable(),
+                TextColumn::make('legal_name')
+                    ->label('Legal name')
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->placeholder('—')
+                    ->searchable(),
                 TextColumn::make('ownership_flag')
                     ->label('Ownership')
                     ->badge()
@@ -220,6 +269,20 @@ class CompanyResource extends Resource
                     }),
                 TextColumn::make('tin')->label('TIN NUMBER')->searchable()->sortable(),
                 IconColumn::make('tin_validated')->boolean()->label('TIN OK'),
+                IconColumn::make('erca_tin_verified')->boolean()->label('ERCA')->toggleable(),
+                TextColumn::make('erca_name_status')
+                    ->label('ERCA name')
+                    ->badge()
+                    ->toggleable()
+                    ->formatStateUsing(fn ($state) => $state instanceof \App\Enums\ErcaNameStatus
+                        ? $state->value
+                        : (string) ($state ?: 'unchecked'))
+                    ->color(fn ($state) => match ($state instanceof \App\Enums\ErcaNameStatus ? $state->value : (string) $state) {
+                        'matched', 'accepted_legal', 'kept_both' => 'success',
+                        'mismatch_pending' => 'warning',
+                        'not_found', 'failed' => 'danger',
+                        default => 'gray',
+                    }),
                 TextColumn::make('tinValidatedBy.name')
                     ->label('TIN approved by')
                     ->placeholder('—')

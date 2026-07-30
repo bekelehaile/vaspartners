@@ -14,6 +14,7 @@ use App\Models\CompanyStatusHistory;
 use App\Models\Contact;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Services\Etrade\ErcaTinVerificationService;
 use App\Support\TinNumber;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -26,6 +27,7 @@ class CompanyMembershipService
 {
     public function __construct(
         protected PartnerNotificationService $notifications,
+        protected ErcaTinVerificationService $ercaTin,
     ) {}
 
     public function maxDocKb(): int
@@ -69,7 +71,7 @@ class CompanyMembershipService
             && $contact->hasActiveCompanyMembership()
             && $contact->company?->isApproved();
 
-        return DB::transaction(function () use (
+        $result = DB::transaction(function () use (
             $contact,
             $data,
             $tin,
@@ -99,8 +101,134 @@ class CompanyMembershipService
             $this->notifications->companyProfileSubmitted($fresh, $company);
             $this->autoApproveOwnedCompaniesAfterIdentityVerification($fresh);
 
-            return $fresh->fresh(['company', 'memberships.company']);
+            return [
+                'contact' => $fresh->fresh(['company', 'memberships.company']),
+                'company' => $company->fresh() ?? $company,
+            ];
         });
+
+        $this->safeErcaVerify($result['company'], force: true);
+
+        return $result['contact']->fresh(['company', 'memberships.company']);
+    }
+
+    /**
+     * Public TIN uniqueness check for ERCA onboarding preview.
+     */
+    public function assertTinAvailableForCreate(string $tin, ?int $ignoreCompanyId = null): void
+    {
+        $this->assertUniqueTin($this->normalizeEthiopianTin($tin), $ignoreCompanyId);
+    }
+
+    /**
+     * Create company after partner consents to ERCA registry match.
+     * Auto-approves + marks TIN validated (ERCA is the attestation).
+     *
+     * @param  array{company_name: string, company_tin: string, company_address: string, legal_name: string}  $data
+     */
+    public function createApprovedCompanyFromErca(Contact $contact, array $data): Contact
+    {
+        if ($this->pendingRequestFor($contact)) {
+            throw ValidationException::withMessages([
+                'company' => 'You already have a pending company request. Wait for a decision.',
+            ]);
+        }
+
+        $tin = $this->normalizeEthiopianTin($data['company_tin']);
+        $this->assertUniqueTin($tin);
+
+        $legal = trim((string) ($data['legal_name'] ?: $data['company_name']));
+        if ($legal === '') {
+            throw ValidationException::withMessages([
+                'company_name' => 'ERCA legal name is required.',
+            ]);
+        }
+
+        $contact->loadMissing(['memberships.company', 'company']);
+        $creatingAdditional = $contact->memberships->isNotEmpty();
+        [$companyPhone, $companyEmail] = $this->resolveSharedCompanyContacts($contact);
+
+        if ($companyPhone === '' || ! \App\Support\PhoneNumber::isValidLocalMobile($companyPhone)) {
+            throw ValidationException::withMessages([
+                'company' => $creatingAdditional
+                    ? 'Your existing company has no usable phone. Update that company or sign in again.'
+                    : 'Your signed-in phone number is required to create a company. Sign in again.',
+            ]);
+        }
+
+        $keepApprovedContext = $creatingAdditional
+            && (bool) $contact->current_company_id
+            && $contact->hasActiveCompanyMembership()
+            && $contact->company?->isApproved();
+
+        $result = DB::transaction(function () use (
+            $contact,
+            $data,
+            $tin,
+            $legal,
+            $companyPhone,
+            $companyEmail,
+            $keepApprovedContext,
+        ) {
+            $company = Company::query()->create([
+                'name' => $legal,
+                'legal_name' => $legal,
+                'tin' => $tin,
+                'tin_validated' => true,
+                'tin_validated_by_user_id' => null,
+                'tin_validated_at' => now(),
+                'erca_tin_verified' => true,
+                'erca_verified_at' => now(),
+                'erca_name_status' => \App\Enums\ErcaNameStatus::Matched->value,
+                'erca_last_checked_at' => now(),
+                'erca_next_check_at' => now()->addHours(max(24, (int) config('services.etrade.recheck_hours', 168))),
+                'erca_last_error' => null,
+                'phone' => $companyPhone,
+                'email' => $companyEmail,
+                'address' => trim($data['company_address']),
+                'is_active' => true,
+                'approval_status' => CompanyApprovalStatus::Approved,
+                'approved_by_user_id' => null,
+                'approved_at' => now(),
+                'approval_note' => 'Auto-approved after partner ERCA TIN consent.',
+                'created_by_contact_id' => $contact->id,
+            ]);
+
+            $this->linkContact(
+                $contact,
+                $company,
+                CompanyRole::Owner,
+                switchTo: ! $keepApprovedContext,
+            );
+
+            $this->recordStatusHistory(
+                $company,
+                'approved',
+                null,
+                $contact,
+                'Auto-approved after partner ERCA TIN consent.',
+                ['auto' => true, 'via' => 'erca'],
+            );
+            $this->recordStatusHistory(
+                $company,
+                'tin_validated',
+                null,
+                $contact,
+                'TIN confirmed via ERCA / eTrade',
+                ['auto' => true, 'via' => 'erca'],
+            );
+
+            $fresh = $contact->fresh(['company', 'memberships.company']);
+            $this->notifications->companyTinValidated($company->fresh() ?? $company);
+            $this->notifications->companyProfileDecided($company->fresh() ?? $company, $fresh, approved: true);
+
+            return [
+                'contact' => $fresh->fresh(['company', 'memberships.company']),
+                'company' => $company->fresh() ?? $company,
+            ];
+        });
+
+        return $result['contact']->fresh(['company', 'memberships.company']);
     }
 
     /**
@@ -149,7 +277,10 @@ class CompanyMembershipService
         $tin = $this->normalizeEthiopianTin($data['company_tin']);
         $this->assertUniqueTin($tin, $company->id);
 
-        return DB::transaction(function () use ($contact, $company, $data, $tin, $phone, $email) {
+        $previousTin = (string) $company->tin;
+        $previousName = (string) $company->name;
+
+        $fresh = DB::transaction(function () use ($contact, $company, $data, $tin, $phone, $email) {
             $company->fill([
                 'name' => trim($data['company_name']),
                 'tin' => $tin,
@@ -166,12 +297,21 @@ class CompanyMembershipService
 
             $this->syncAllMembersDenormalizedFields($company);
 
-            $fresh = $contact->fresh(['company', 'memberships.company']);
-            $this->notifications->companyProfileSubmitted($fresh, $company);
-            $this->autoApproveOwnedCompaniesAfterIdentityVerification($fresh);
+            $result = $contact->fresh(['company', 'memberships.company']);
+            $this->notifications->companyProfileSubmitted($result, $company);
+            $this->autoApproveOwnedCompaniesAfterIdentityVerification($result);
 
-            return $fresh->fresh(['company', 'memberships.company']);
+            return $result->fresh(['company', 'memberships.company']);
         });
+
+        $updated = $company->fresh() ?? $company;
+        if ($previousTin !== $tin) {
+            $this->safeErcaVerify($updated, force: true);
+        } elseif ($previousName !== (string) $updated->name) {
+            $this->ercaTin->rematchEnteredName($updated);
+        }
+
+        return $fresh->fresh(['company', 'memberships.company']);
     }
 
     /**
@@ -1897,7 +2037,62 @@ class CompanyMembershipService
 
         $this->syncAllMembersDenormalizedFields($company);
 
+        // One ERCA check per partner submit (force bypasses cache; global rate limit still applies).
+        $this->ercaTin->verifyCompany($company->fresh() ?? $company, force: true);
+
         return $contact->fresh(['company', 'memberships.company']);
+    }
+
+    /**
+     * Partner consents after ERCA legal name ≠ entered company name.
+     *
+     * @param  'use_legal'|'keep_both'  $action
+     */
+    public function applyErcaNameConsent(Contact $contact, string $action): Contact
+    {
+        if (! $contact->current_company_id || ! $contact->hasActiveCompanyMembership()) {
+            throw ValidationException::withMessages([
+                'company' => 'Link an active company before confirming the legal name.',
+            ]);
+        }
+
+        $isOwner = $this->roleOf($contact) === CompanyRole::Owner;
+        if (! $isOwner && ! $this->contactHasPermission($contact, CompanyMemberPermission::EditCompanyProfile)) {
+            throw ValidationException::withMessages([
+                'consent' => 'Only the company owner (or a member with edit permission) can confirm the legal name.',
+            ]);
+        }
+
+        $company = $contact->company;
+        if (! $company) {
+            throw ValidationException::withMessages(['company' => 'Company not found.']);
+        }
+
+        $this->ercaTin->applyNameConsent($company, $contact, $action);
+        $this->syncAllMembersDenormalizedFields($company->fresh() ?? $company);
+
+        return $contact->fresh(['company', 'memberships.company']);
+    }
+
+    /**
+     * Best-effort ERCA verify — never block company create/update on upstream outages.
+     */
+    protected function safeErcaVerify(Company $company, bool $force = false): void
+    {
+        try {
+            $this->ercaTin->verifyCompany($company, force: $force);
+        } catch (ValidationException $e) {
+            // Rate-limit / validation during create: leave schedule fields; partner can retry via TIN submit.
+            Log::info('ERCA verify deferred', [
+                'company_id' => $company->id,
+                'errors' => $e->errors(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('ERCA verify failed', [
+                'company_id' => $company->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -2321,6 +2516,7 @@ class CompanyMembershipService
         $data['company'] = ($company && $membershipActive !== false && $contact->current_company_id) ? [
             'public_id' => $company->public_id,
             'name' => $company->name,
+            'legal_name' => $company->legal_name,
             'tin' => $company->tin,
             'phone' => $company->phone,
             'email' => $company->email,
@@ -2331,6 +2527,13 @@ class CompanyMembershipService
             'is_approved' => $companyApproved,
             'tin_validated' => (bool) $company->tin_validated,
             'tin_format_valid' => TinNumber::isValid($company->tin),
+            'erca_tin_verified' => (bool) $company->erca_tin_verified,
+            'erca_name_status' => $company->erca_name_status instanceof \App\Enums\ErcaNameStatus
+                ? $company->erca_name_status->value
+                : (string) ($company->erca_name_status ?: 'unchecked'),
+            'erca_verified_at' => optional($company->erca_verified_at)?->toIso8601String(),
+            'erca_last_checked_at' => optional($company->erca_last_checked_at)?->toIso8601String(),
+            'needs_erca_name_consent' => $company->needsErcaNameConsent(),
         ] : null;
         $data['company_role'] = $contact->company_role;
         $data['company_membership_active'] = $membershipActive;

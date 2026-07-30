@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\FeedbackController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\PortalAuthController;
 use App\Http\Controllers\Api\V1\RevenuePortalController;
+use App\Http\Controllers\Api\V1\TaxpayerController;
 use App\Http\Controllers\Api\V1\WebsiteContentController;
 use Illuminate\Support\Facades\Route;
 
@@ -27,14 +28,26 @@ Route::prefix('v1')->group(function () {
     Route::get('blog-posts/{slug}', [WebsiteContentController::class, 'blogPost']);
     Route::get('gallery', [WebsiteContentController::class, 'gallery']);
 
+    // National TIN / company registry lookup (eTrade). Throttled; auth required.
+    Route::get('taxpayers/tin/{tin}', [TaxpayerController::class, 'show'])
+        ->middleware(['auth:sanctum', 'throttle:portal-tin-lookup']);
+
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('auth/me', [FaydaAuthController::class, 'me']);
         Route::post('auth/logout', [FaydaAuthController::class, 'logout']);
         Route::post('auth/identity/consent', [PortalAuthController::class, 'identityConsent'])
             ->middleware('throttle:portal-otp-verify');
         Route::post('profile/company', [ContactPortalController::class, 'completeCompanyProfile']);
+        Route::post('profile/company/erca/preview', [ContactPortalController::class, 'previewErcaCompany'])
+            ->middleware('throttle:portal-tin-lookup');
+        Route::post('profile/company/erca/create', [ContactPortalController::class, 'createCompanyFromErcaConsent'])
+            ->middleware('throttle:portal-tin-lookup');
+        Route::post('profile/company/erca/decline', [ContactPortalController::class, 'declineErcaCompany'])
+            ->middleware('throttle:portal-tin-lookup');
         // TIN NUMBER submit — accept POST (portal) and PUT/PATCH for clients that use update verbs.
         Route::match(['post', 'put', 'patch'], 'profile/company/tin', [ContactPortalController::class, 'submitCompanyTin']);
+        Route::post('profile/company/tin/name-consent', [ContactPortalController::class, 'applyErcaNameConsent'])
+            ->middleware('throttle:portal-tin-lookup');
         Route::get('profile/company/lookup', [ContactPortalController::class, 'lookupCompany']);
         Route::post('profile/company/attach', [ContactPortalController::class, 'requestAttachCompany']);
         Route::post('profile/company/detach', [ContactPortalController::class, 'requestDetachCompany']);

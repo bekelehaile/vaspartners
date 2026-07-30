@@ -21,6 +21,7 @@ export type Contact = {
   company?: {
     public_id: string;
     name: string;
+    legal_name?: string | null;
     tin: string;
     phone?: string | null;
     email?: string | null;
@@ -31,6 +32,11 @@ export type Contact = {
     is_approved?: boolean;
     tin_validated?: boolean;
     tin_format_valid?: boolean;
+    erca_tin_verified?: boolean;
+    erca_name_status?: string | null;
+    erca_verified_at?: string | null;
+    erca_last_checked_at?: string | null;
+    needs_erca_name_consent?: boolean;
   } | null;
   memberships?: Array<{
     company_public_id?: string | null;
@@ -386,6 +392,15 @@ export async function submitIdentityConsent(payload: {
     message: string;
     data: { identity: IdentityAuthState; contact: Contact };
   }>("/auth/identity/consent", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function submitErcaNameConsent(payload: {
+  action: "use_legal" | "keep_both";
+}) {
+  return api<{ message: string; data: Contact }>("/profile/company/tin/name-consent", {
     method: "POST",
     body: JSON.stringify(payload),
   });

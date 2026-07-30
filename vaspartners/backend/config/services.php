@@ -72,4 +72,25 @@ return [
         'timeout' => (int) env('CRM_TIMEOUT', env('TIMEOUT', 15)),
     ],
 
+    /*
+    | eTrade (etrade.gov.et) — Ministry of Trade TIN / registration lookup.
+    | Official browser app uses /api/Tin/checkTin/{tin} (api/v1/taxpayers/tin/{tin} currently 404s).
+    */
+    'etrade' => [
+        'enabled' => filter_var(env('ETRADE_ENABLED', true), FILTER_VALIDATE_BOOL),
+        'base_url' => rtrim((string) env('ETRADE_BASE_URL', 'https://etrade.gov.et'), '/'),
+        'tin_path' => (string) env('ETRADE_TIN_PATH', '/api/Tin/checkTin/{tin}'),
+        'registrations_path' => (string) env('ETRADE_REGISTRATIONS_PATH', '/api/Registration/GetRegistrationsByTin/{tin}'),
+        'timeout' => (int) env('ETRADE_TIMEOUT', 20),
+        'verify_ssl' => filter_var(env('ETRADE_VERIFY_SSL', false), FILTER_VALIDATE_BOOL),
+        'include_registrations' => filter_var(env('ETRADE_INCLUDE_REGISTRATIONS', true), FILTER_VALIDATE_BOOL),
+        // Anti-flood: cache each TIN lookup and cap scheduled/global calls.
+        'tin_cache_hours' => (int) env('ETRADE_TIN_CACHE_HOURS', 6),
+        'global_lookups_per_minute' => (int) env('ETRADE_GLOBAL_LOOKUPS_PER_MINUTE', 8),
+        'recheck_hours' => (int) env('ETRADE_RECHECK_HOURS', 168),
+        'retry_hours' => (int) env('ETRADE_RETRY_HOURS', 6),
+        'schedule_limit' => (int) env('ETRADE_SCHEDULE_LIMIT', 10),
+        'schedule_sleep_ms' => (int) env('ETRADE_SCHEDULE_SLEEP_MS', 1500),
+    ],
+
 ];
