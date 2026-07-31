@@ -17,6 +17,7 @@ use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\EmbeddedSchema;
 use Filament\Schemas\Components\Form;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
 use Illuminate\Support\Arr;
@@ -48,7 +49,6 @@ class ComposeBulkMessage extends Page
             'tin_validated' => '0',
             'service_ids' => [],
             'alive_subscriptions_only' => false,
-            'legacy_only' => false,
             'require_phone' => true,
             'queue_after_create' => false,
         ]);
@@ -105,23 +105,24 @@ class ComposeBulkMessage extends Page
                     Select::make('service_ids')
                         ->label('Services')
                         ->multiple()
+                        ->native(false)
                         ->searchable()
                         ->preload()
+                        ->default([])
+                        ->placeholder('Select one or more services')
                         ->options(fn (): array => Service::query()
                             ->where('is_active', true)
                             ->orderBy('sort_order')
                             ->orderBy('name')
                             ->pluck('name', 'id')
+                            ->mapWithKeys(fn ($name, $id) => [(string) $id => $name])
                             ->all())
-                        ->helperText('Leave empty for all services. Matches companies with a subscription to any selected service.')
+                        ->helperText('Multi-select. Leave empty for all services. Matches companies with a subscription to any selected service.')
                         ->columnSpanFull(),
                     Toggle::make('alive_subscriptions_only')
                         ->label('Alive subscriptions only')
-                        ->helperText('When services are selected: only Active / Pending renewal / Grace (ignore expired / deactive).'),
-                    Toggle::make('legacy_only')
-                        ->label('Migrated MVAS partners only')
-                        ->default(false)
-                        ->helperText('Companies with a legacy MVAS id.'),
+                        ->helperText('Only when services are selected: Active / Pending renewal / Grace (ignore expired / deactive).')
+                        ->visible(fn (Get $get): bool => filled($get('service_ids'))),
                     Toggle::make('require_phone')
                         ->label('Must have phone')
                         ->default(true),
@@ -185,7 +186,6 @@ class ComposeBulkMessage extends Page
                     'tin_validated' => $tinValidated,
                     'service_ids' => $serviceIds,
                     'alive_subscriptions_only' => (bool) ($data['alive_subscriptions_only'] ?? false),
-                    'legacy_only' => (bool) ($data['legacy_only'] ?? false),
                     'require_phone' => (bool) ($data['require_phone'] ?? true),
                 ],
             );
