@@ -4,6 +4,7 @@ namespace App\Filament\Resources\BulkMessages\Pages;
 
 use App\Enums\CompanyApprovalStatus;
 use App\Filament\Resources\BulkMessages\BulkMessageResource;
+use App\Models\Service;
 use App\Services\BulkMessageService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
@@ -18,6 +19,7 @@ use Filament\Schemas\Components\Form;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
+use Illuminate\Support\Arr;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -39,11 +41,14 @@ class ComposeBulkMessage extends Page
     public function mount(): void
     {
         $this->form->fill([
-            'title' => 'Portal upgrade notice',
-            'message' => 'Dear Our Partner, we have updated the VAS partner management portal to a new version. Please provide your TIN number to complete your profile. Wait until it is verified/approved before next system access. https://vaspartnersportal.ethiotelecom.et',
-            'is_active' => true,
-            'approval_status' => CompanyApprovalStatus::Approved->value,
-            'legacy_only' => true,
+            'title' => 'TIN update required — portal upgrade',
+            'message' => 'Dear Partner, We are updating the VAS partner portal and you are requested to update your TIN number for your company {company_name}. The access will be revoked if failed to update your TIN number in the VAS Partners portal. https://vaspartnersportal.ethiotelecom.et/login — Ethio telecom',
+            'is_active' => '',
+            'approval_status' => '',
+            'tin_validated' => '0',
+            'service_ids' => [],
+            'alive_subscriptions_only' => false,
+            'legacy_only' => false,
             'require_phone' => true,
             'queue_after_create' => false,
         ]);
@@ -71,9 +76,14 @@ class ComposeBulkMessage extends Page
                         ->helperText('Include the portal URL. Max 640 characters. Placeholders like {company_name} are supported.'),
                 ]),
                 Section::make('Audience filters')->schema([
-                    Toggle::make('is_active')
-                        ->label('Active companies only')
-                        ->default(true),
+                    Select::make('is_active')
+                        ->label('Company active status')
+                        ->options([
+                            '' => 'Any',
+                            '1' => 'Active only',
+                            '0' => 'Inactive only',
+                        ])
+                        ->native(false),
                     Select::make('approval_status')
                         ->label('Approval status')
                         ->options([
@@ -84,16 +94,33 @@ class ComposeBulkMessage extends Page
                         ])
                         ->native(false),
                     Select::make('tin_validated')
-                        ->label('TIN number verified')
+                        ->label('TIN number verified (ERCA)')
                         ->options([
                             '' => 'Any',
                             '1' => 'Verified only',
                             '0' => 'Not verified only',
                         ])
-                        ->native(false),
+                        ->native(false)
+                        ->helperText('Not verified = companies that still need to activate / update their TIN.'),
+                    Select::make('service_ids')
+                        ->label('Services')
+                        ->multiple()
+                        ->searchable()
+                        ->preload()
+                        ->options(fn (): array => Service::query()
+                            ->where('is_active', true)
+                            ->orderBy('sort_order')
+                            ->orderBy('name')
+                            ->pluck('name', 'id')
+                            ->all())
+                        ->helperText('Leave empty for all services. Matches companies with a subscription to any selected service.')
+                        ->columnSpanFull(),
+                    Toggle::make('alive_subscriptions_only')
+                        ->label('Alive subscriptions only')
+                        ->helperText('When services are selected: only Active / Pending renewal / Grace (ignore expired / deactive).'),
                     Toggle::make('legacy_only')
                         ->label('Migrated MVAS partners only')
-                        ->default(true)
+                        ->default(false)
                         ->helperText('Companies with a legacy MVAS id.'),
                     Toggle::make('require_phone')
                         ->label('Must have phone')
@@ -137,6 +164,15 @@ class ComposeBulkMessage extends Page
         $tinValidated = $tin === '' || $tin === null ? null : ((string) $tin === '1');
 
         $approval = trim((string) ($data['approval_status'] ?? ''));
+        $activeRaw = $data['is_active'] ?? '';
+        $isActive = $activeRaw === '' || $activeRaw === null ? null : ((string) $activeRaw === '1');
+
+        $serviceIds = collect(Arr::wrap($data['service_ids'] ?? []))
+            ->filter(fn ($id) => filled($id))
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
 
         try {
             $campaign = $bulkMessages->createFromCompanies(
@@ -144,9 +180,11 @@ class ComposeBulkMessage extends Page
                 (string) ($data['title'] ?? ''),
                 (string) ($data['message'] ?? ''),
                 [
-                    'is_active' => (bool) ($data['is_active'] ?? true),
+                    'is_active' => $isActive,
                     'approval_status' => $approval !== '' ? $approval : null,
                     'tin_validated' => $tinValidated,
+                    'service_ids' => $serviceIds,
+                    'alive_subscriptions_only' => (bool) ($data['alive_subscriptions_only'] ?? false),
                     'legacy_only' => (bool) ($data['legacy_only'] ?? false),
                     'require_phone' => (bool) ($data['require_phone'] ?? true),
                 ],

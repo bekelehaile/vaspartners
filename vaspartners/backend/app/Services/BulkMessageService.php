@@ -12,6 +12,7 @@ use App\Models\BulkMessage;
 use App\Models\BulkMessageRecipient;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -142,7 +143,9 @@ class BulkMessageService
      *   approval_status?: string|null,
      *   tin_validated?: bool|null,
      *   legacy_only?: bool,
-     *   require_phone?: bool
+     *   require_phone?: bool,
+     *   service_ids?: list<int>|null,
+     *   alive_subscriptions_only?: bool
      * }  $filters
      */
     public function createFromCompanies(User $actor, string $title, string $message, array $filters = []): BulkMessage
@@ -166,6 +169,15 @@ class BulkMessageService
             ? (bool) $filters['require_phone']
             : true;
 
+        $serviceIds = collect(Arr::wrap($filters['service_ids'] ?? []))
+            ->filter(fn ($id) => filled($id))
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        $aliveOnly = ! empty($filters['alive_subscriptions_only']);
+
         $query = Company::query()->orderBy('id');
 
         if (array_key_exists('is_active', $filters) && $filters['is_active'] !== null) {
@@ -177,7 +189,8 @@ class BulkMessageService
         }
 
         if (array_key_exists('tin_validated', $filters) && $filters['tin_validated'] !== null) {
-            $query->where('tin_validated', (bool) $filters['tin_validated']);
+            // "TIN activated / verified" means ERCA confirmed the TIN number.
+            $query->where('erca_tin_verified', (bool) $filters['tin_validated']);
         }
 
         if (! empty($filters['legacy_only'])) {
@@ -186,6 +199,22 @@ class BulkMessageService
 
         if ($requirePhone) {
             $query->whereNotNull('phone')->where('phone', '!=', '');
+        }
+
+        if ($serviceIds !== []) {
+            $query->whereHas(
+                'subscriptions',
+                function ($subscriptions) use ($serviceIds, $aliveOnly): void {
+                    $subscriptions->whereIn('service_id', $serviceIds);
+                    if ($aliveOnly) {
+                        $subscriptions->whereIn('status', [
+                            \App\Enums\SubscriptionStatus::Active->value,
+                            \App\Enums\SubscriptionStatus::PendingRenewal->value,
+                            \App\Enums\SubscriptionStatus::Grace->value,
+                        ]);
+                    }
+                },
+            );
         }
 
         return DB::transaction(function () use ($actor, $title, $message, $query, $filters): BulkMessage {
