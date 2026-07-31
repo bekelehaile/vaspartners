@@ -23,12 +23,27 @@ class TicketCommentService
     /**
      * @param  Contact|User  $author
      */
-    public function post(Ticket $ticket, Contact|User $author, ?string $body, ?UploadedFile $file = null): TicketComment
-    {
-        if ($ticket->status instanceof TicketStatus && $ticket->status->locksContactChat()) {
+    public function post(
+        Ticket $ticket,
+        Contact|User $author,
+        ?string $body,
+        ?UploadedFile $file = null,
+        bool $isPublic = true,
+        bool $allowWhenLocked = false,
+    ): TicketComment {
+        if (
+            ! $allowWhenLocked
+            && $ticket->status instanceof TicketStatus
+            && $ticket->status->locksContactChat()
+        ) {
             throw ValidationException::withMessages([
                 'body' => 'This request is closed for new messages.',
             ]);
+        }
+
+        // Partners can only post public messages.
+        if ($author instanceof Contact) {
+            $isPublic = true;
         }
 
         $body = filled($body) ? trim((string) $body) : '';
@@ -46,13 +61,13 @@ class TicketCommentService
 
         $attachment = $file ? $this->storePdf($ticket, $file) : null;
 
-        return DB::transaction(function () use ($ticket, $author, $body, $attachment) {
+        return DB::transaction(function () use ($ticket, $author, $body, $attachment, $isPublic) {
             return TicketComment::query()->create([
                 'ticket_id' => $ticket->id,
                 'author_type' => $author::class,
                 'author_id' => $author->id,
                 'body' => $body !== '' ? $body : '(PDF attachment)',
-                'is_public' => true,
+                'is_public' => $isPublic,
                 'attachment_disk' => $attachment['disk'] ?? null,
                 'attachment_path' => $attachment['path'] ?? null,
                 'attachment_original_name' => $attachment['original_name'] ?? null,
@@ -60,6 +75,30 @@ class TicketCommentService
                 'attachment_size_bytes' => $attachment['size'] ?? null,
             ]);
         });
+    }
+
+    /**
+     * Staff note from approve / reject / verify — optional partner visibility (MVAS notify toggle).
+     */
+    public function postStaffDecisionNote(
+        Ticket $ticket,
+        User $author,
+        ?string $note,
+        bool $notifyPartner,
+    ): ?TicketComment {
+        $note = filled($note) ? trim((string) $note) : '';
+        if ($note === '') {
+            return null;
+        }
+
+        return $this->post(
+            $ticket,
+            $author,
+            $note,
+            null,
+            isPublic: $notifyPartner,
+            allowWhenLocked: true,
+        );
     }
 
     /** @return array{disk: string, path: string, original_name: string, mime: string, size: int} */

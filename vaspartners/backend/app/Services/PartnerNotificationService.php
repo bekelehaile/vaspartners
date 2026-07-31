@@ -175,7 +175,7 @@ class PartnerNotificationService
             return;
         }
 
-        // Staff → partner (portal notification only — debounced to avoid spam)
+        // Staff → partner (portal + SMS — debounced to avoid spam)
         if (! $this->shouldNotifyForChatMessage($ticket, $author, $comment)) {
             return;
         }
@@ -193,9 +193,15 @@ class PartnerNotificationService
             'service' => $ticket->service?->name ?: 'VAS service',
             'requisition' => $ticket->requisition?->name ?: 'request',
             'status' => $ticket->status?->label() ?: (string) $ticket->status?->value,
-            'note' => $preview,
+            'note' => $preview !== '' ? $preview : 'Sent an attachment',
         ];
+        $smsBody = $this->render('templates', 'ticket_message', $placeholders);
         $portalBody = $this->render('portal', 'ticket_message', $placeholders);
+
+        if (filled($contact->phone_number)) {
+            $this->sms->send($contact->phone_number, $smsBody);
+        }
+
         $contact->notify(new PartnerPortalNotification(
             title: $this->titleFor('ticket_message'),
             body: Str::limit($portalBody, 280),

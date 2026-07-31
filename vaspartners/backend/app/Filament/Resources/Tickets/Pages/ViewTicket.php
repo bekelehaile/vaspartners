@@ -13,6 +13,7 @@ use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Illuminate\Contracts\Support\Htmlable;
@@ -86,6 +87,17 @@ class ViewTicket extends ViewRecord
             : 'Details, messages, attachments, approvals, and status history.';
     }
 
+    /**
+     * MVAS-style: note is internal unless staff ticks Notify partner (SMS + portal).
+     */
+    protected function notifyPartnerToggle(): Toggle
+    {
+        return Toggle::make('notify_partner')
+            ->label('Notify partner')
+            ->helperText('Off = internal only (staff log). On = partner gets portal + SMS for this action/note.')
+            ->default(false);
+    }
+
     protected function getHeaderActions(): array
     {
         return [
@@ -126,7 +138,10 @@ class ViewTicket extends ViewRecord
                         DocumentReviewStatus::Passed->value => 'All documents OK',
                         DocumentReviewStatus::Failed->value => 'Documents missing/failed',
                     ])->required(),
-                    Textarea::make('note'),
+                    Textarea::make('note')
+                        ->label('Note (optional)')
+                        ->helperText('Internal unless you turn on Notify partner.'),
+                    $this->notifyPartnerToggle(),
                 ])
                 ->action(function (Ticket $record, array $data, TicketWorkflowService $workflow) {
                     try {
@@ -135,6 +150,7 @@ class ViewTicket extends ViewRecord
                             auth()->user(),
                             DocumentReviewStatus::from($data['result']),
                             $data['note'] ?? null,
+                            (bool) ($data['notify_partner'] ?? false),
                         );
                     } catch (\Illuminate\Validation\ValidationException $e) {
                         $message = collect($e->errors())->flatten()->first() ?: $e->getMessage();
@@ -155,9 +171,26 @@ class ViewTicket extends ViewRecord
                 ->visible(fn (Ticket $record) => $record->current_approver_user_id === auth()->id())
                 ->modalHeading('Approve this request')
                 ->modalDescription(fn (): string => 'Logged as '.(auth()->user()?->name ?? 'you').' with a timestamp.')
-                ->form([
-                    Textarea::make('note')->label('Note (optional)'),
-                ])
+                ->form(function (Ticket $record): array {
+                    $fields = [
+                        Textarea::make('note')->label('Note (optional)'),
+                    ];
+
+                    // Intermediate hand-off stays internal (MVAS). Only final / reject surfaces notify.
+                    $isFinal = app(TicketWorkflowService::class)->isFinalApprover($record, auth()->user());
+                    if ($isFinal) {
+                        $fields[] = $this->notifyPartnerToggle();
+                    } else {
+                        $fields[] = Toggle::make('notify_partner')
+                            ->label('Notify partner')
+                            ->helperText('Disabled while handing off to the next approver (internal only).')
+                            ->default(false)
+                            ->disabled()
+                            ->dehydrated(true);
+                    }
+
+                    return $fields;
+                })
                 ->requiresConfirmation()
                 ->action(function (Ticket $record, array $data, TicketWorkflowService $workflow) {
                     try {
@@ -166,6 +199,7 @@ class ViewTicket extends ViewRecord
                             auth()->user(),
                             ApprovalAction::Approved,
                             $data['note'] ?? null,
+                            (bool) ($data['notify_partner'] ?? false),
                         );
                     } catch (\Illuminate\Validation\ValidationException $e) {
                         $message = collect($e->errors())->flatten()->first() ?: $e->getMessage();
@@ -195,7 +229,8 @@ class ViewTicket extends ViewRecord
                         ->label('Reason')
                         ->required()
                         ->minLength(3)
-                        ->helperText('Shown on the approval log and used when sending the request back.'),
+                        ->helperText('Required for the approval log. Partner only sees it if Notify partner is on.'),
+                    $this->notifyPartnerToggle(),
                 ])
                 ->requiresConfirmation()
                 ->action(function (Ticket $record, array $data, TicketWorkflowService $workflow) {
@@ -204,14 +239,26 @@ class ViewTicket extends ViewRecord
                         auth()->user(),
                         ApprovalAction::Rejected,
                         $data['note'] ?? null,
+                        (bool) ($data['notify_partner'] ?? false),
                     );
                 }),
             Action::make('close')
                 ->label('Close')
                 ->visible(fn (Ticket $record) => $record->status === TicketStatus::Completed
                     && ($record->assigned_to_user_id === auth()->id() || auth()->user()?->is_management))
+                ->form([
+                    Textarea::make('note')->label('Note (optional)'),
+                    $this->notifyPartnerToggle(),
+                ])
                 ->requiresConfirmation()
-                ->action(fn (Ticket $record, TicketWorkflowService $workflow) => $workflow->close($record, auth()->user())),
+                ->action(function (Ticket $record, array $data, TicketWorkflowService $workflow) {
+                    $workflow->close(
+                        $record,
+                        auth()->user(),
+                        $data['note'] ?? null,
+                        (bool) ($data['notify_partner'] ?? false),
+                    );
+                }),
             DeleteAction::make()
                 ->visible(fn (Ticket $record): bool => (bool) auth()->user()?->can('delete', $record)
                     && $record->status === TicketStatus::Open)

@@ -1002,13 +1002,18 @@ class TicketWorkflowService
         });
     }
 
-    public function reviewDocuments(Ticket $ticket, User $reviewer, DocumentReviewStatus $result, ?string $note = null): Ticket
-    {
+    public function reviewDocuments(
+        Ticket $ticket,
+        User $reviewer,
+        DocumentReviewStatus $result,
+        ?string $note = null,
+        bool $notifyPartner = false,
+    ): Ticket {
         if (! in_array($result, [DocumentReviewStatus::Passed, DocumentReviewStatus::Failed], true)) {
             throw new InvalidArgumentException('Document review must be passed or failed.');
         }
 
-        return DB::transaction(function () use ($ticket, $reviewer, $result, $note) {
+        return DB::transaction(function () use ($ticket, $reviewer, $result, $note, $notifyPartner) {
             if ($ticket->assigned_to_user_id !== $reviewer->id) {
                 throw ValidationException::withMessages(['ticket' => 'Only the assigned account manager can verify documents.']);
             }
@@ -1023,6 +1028,9 @@ class TicketWorkflowService
             $ticket->document_review_status = $result;
             $ticket->needs_reverification = false;
 
+            $comment = app(TicketCommentService::class)
+                ->postStaffDecisionNote($ticket, $reviewer, $note, $notifyPartner);
+
             if ($result === DocumentReviewStatus::Failed) {
                 $ticket->current_approver_user_id = null;
                 $ticket->needs_reverification = true;
@@ -1033,16 +1041,23 @@ class TicketWorkflowService
                     TicketStatus::Rejected,
                     $reviewer,
                     $note ?? 'Documents need correction by the partner',
+                    [
+                        'skip_partner_notification' => ! $notifyPartner,
+                    ],
                 );
 
-                $notifyTicket = $ticket;
-                $notifyNote = $note;
-                DB::afterCommit(function () use ($notifyTicket, $notifyNote) {
-                    $this->notifications->documentsNeedAttention(
-                        $notifyTicket->fresh(['contact', 'service', 'requisition']),
-                        $notifyNote,
-                    );
-                });
+                if ($notifyPartner) {
+                    $notifyTicket = $ticket;
+                    $notifyNote = $note;
+                    $notifyComment = $comment;
+                    DB::afterCommit(function () use ($notifyTicket, $notifyNote, $reviewer, $notifyComment) {
+                        $fresh = $notifyTicket->fresh(['contact', 'service', 'requisition']);
+                        $this->notifications->documentsNeedAttention($fresh, $notifyNote);
+                        if ($notifyComment) {
+                            $this->notifications->ticketMessagePosted($fresh, $reviewer, $notifyComment);
+                        }
+                    });
+                }
 
                 return $ticket->fresh(['contact', 'service', 'requisition']);
             }
@@ -1060,6 +1075,9 @@ class TicketWorkflowService
                     $note ?? ($ticket->status === TicketStatus::Open
                         ? 'Documents verified after partner resubmit — continuing review'
                         : 'Documents re-verified — continuing review'),
+                    [
+                        'skip_partner_notification' => ! $notifyPartner,
+                    ],
                 );
             }
 
@@ -1072,8 +1090,14 @@ class TicketWorkflowService
             $fresh = $ticket->fresh(['contact', 'service', 'requisition']);
             $approverId = $nextApprover->id;
             $notifyNote = $note;
-            DB::afterCommit(function () use ($fresh, $approverId, $notifyNote) {
-                $this->notifications->documentsPassed($fresh, $notifyNote);
+            $notifyComment = $comment;
+            DB::afterCommit(function () use ($fresh, $approverId, $notifyNote, $notifyPartner, $reviewer, $notifyComment) {
+                if ($notifyPartner) {
+                    $this->notifications->documentsPassed($fresh, $notifyNote);
+                    if ($notifyComment) {
+                        $this->notifications->ticketMessagePosted($fresh, $reviewer, $notifyComment);
+                    }
+                }
 
                 $approver = User::query()->find($approverId);
                 if ($approver) {
@@ -1085,15 +1109,20 @@ class TicketWorkflowService
         });
     }
 
-    public function decide(Ticket $ticket, User $approver, ApprovalAction $action, ?string $note = null): Ticket
-    {
+    public function decide(
+        Ticket $ticket,
+        User $approver,
+        ApprovalAction $action,
+        ?string $note = null,
+        bool $notifyPartner = false,
+    ): Ticket {
         if ($action === ApprovalAction::Rejected && blank(trim((string) $note))) {
             throw ValidationException::withMessages([
                 'note' => 'A reason is required when rejecting a request.',
             ]);
         }
 
-        return DB::transaction(function () use ($ticket, $approver, $action, $note) {
+        return DB::transaction(function () use ($ticket, $approver, $action, $note, $notifyPartner) {
             if ($ticket->current_approver_user_id !== $approver->id) {
                 throw ValidationException::withMessages(['ticket' => 'You are not the current approver for this ticket.']);
             }
@@ -1133,6 +1162,11 @@ class TicketWorkflowService
                 $nextStatus = TicketStatus::Rejected;
             }
 
+            // MVAS: hand-off to next approver is always internal (no client notify).
+            if ($escalatedTo !== null && $action === ApprovalAction::Approved) {
+                $notifyPartner = false;
+            }
+
             TicketApprovalStep::query()->create([
                 'ticket_id' => $ticket->id,
                 'approver_user_id' => $approver->id,
@@ -1142,6 +1176,9 @@ class TicketWorkflowService
                 'escalated_to_user_id' => $escalatedTo,
                 'note' => $note,
             ]);
+
+            $comment = app(TicketCommentService::class)
+                ->postStaffDecisionNote($ticket, $approver, $note, $notifyPartner);
 
             $ticket->save();
             if ($nextStatus) {
@@ -1157,6 +1194,8 @@ class TicketWorkflowService
                     'is_final' => $isFinal && $nextStatus === TicketStatus::Completed,
                     'escalated_to_user_id' => $escalatedTo,
                     'document_review_snapshot' => $docStatus->value,
+                    'skip_partner_notification' => ! $notifyPartner,
+                    'notify_partner' => $notifyPartner,
                 ]);
             }
 
@@ -1170,13 +1209,23 @@ class TicketWorkflowService
                 });
             }
 
+            if ($notifyPartner && $comment) {
+                DB::afterCommit(function () use ($fresh, $approver, $comment) {
+                    $this->notifications->ticketMessagePosted(
+                        $fresh->fresh(['contact', 'service', 'requisition']) ?? $fresh,
+                        $approver,
+                        $comment,
+                    );
+                });
+            }
+
             return $fresh;
         });
     }
 
-    public function close(Ticket $ticket, User $actor, ?string $note = null): Ticket
+    public function close(Ticket $ticket, User $actor, ?string $note = null, bool $notifyPartner = false): Ticket
     {
-        return DB::transaction(function () use ($ticket, $actor, $note) {
+        return DB::transaction(function () use ($ticket, $actor, $note, $notifyPartner) {
             if ($ticket->assigned_to_user_id !== $actor->id && ! $actor->is_management) {
                 throw ValidationException::withMessages(['ticket' => 'Only the assignee or a supervisor can close.']);
             }
@@ -1191,11 +1240,22 @@ class TicketWorkflowService
                 throw ValidationException::withMessages(['ticket' => 'Complete approval before closing.']);
             }
 
+            $comment = app(TicketCommentService::class)
+                ->postStaffDecisionNote($ticket, $actor, $note, $notifyPartner);
+
             $ticket->current_approver_user_id = null;
             $ticket->save();
             $this->transition($ticket, TicketStatus::Closed, $actor, $note ?? 'Ticket closed', [
                 'event' => 'closed',
+                'skip_partner_notification' => ! $notifyPartner,
             ]);
+
+            if ($notifyPartner && $comment) {
+                $fresh = $ticket->fresh(['contact', 'service', 'requisition']);
+                DB::afterCommit(function () use ($fresh, $actor, $comment) {
+                    $this->notifications->ticketMessagePosted($fresh, $actor, $comment);
+                });
+            }
 
             return $ticket->fresh();
         });

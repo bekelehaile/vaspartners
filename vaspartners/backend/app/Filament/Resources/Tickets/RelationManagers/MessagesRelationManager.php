@@ -11,10 +11,12 @@ use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\Toggle;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\UploadedFile;
@@ -35,7 +37,7 @@ class MessagesRelationManager extends RelationManager
 
     public static function getBadge(Model $ownerRecord, string $pageClass): ?string
     {
-        $count = $ownerRecord->comments()->where('is_public', true)->count();
+        $count = $ownerRecord->comments()->count();
 
         return $count > 0 ? (string) $count : null;
     }
@@ -48,7 +50,7 @@ class MessagesRelationManager extends RelationManager
             ->columns(1)
             ->components([
                 Textarea::make('body')
-                    ->label('Description')
+                    ->label('Message')
                     ->rows(5)
                     ->maxLength(5000)
                     ->columnSpanFull()
@@ -60,6 +62,11 @@ class MessagesRelationManager extends RelationManager
                     ->storeFiles(false)
                     ->columnSpanFull()
                     ->helperText("Optional. PDF only, max {$maxKb} KB."),
+                Toggle::make('notify_partner')
+                    ->label('Notify partner')
+                    ->helperText('Off = internal only (staff). On = visible to partner + portal/SMS alert.')
+                    ->default(false)
+                    ->columnSpanFull(),
             ]);
     }
 
@@ -71,10 +78,15 @@ class MessagesRelationManager extends RelationManager
 
         return $table
             ->description($locked
-                ? 'Messaging is closed for completed/closed requests.'
-                : 'Chat with the partner about missing documents or extra information. Small PDF attachments allowed.')
-            ->modifyQueryUsing(fn ($query) => $query->where('is_public', true)->with('author'))
+                ? 'Partner chat is closed for completed/closed requests. You can still log internal notes via Approve/Reject/Close.'
+                : 'Messages default to internal. Tick Notify partner to make them visible and send portal/SMS.')
+            ->modifyQueryUsing(fn ($query) => $query->with('author'))
             ->columns([
+                TextColumn::make('visibility')
+                    ->label('Visibility')
+                    ->badge()
+                    ->state(fn (TicketComment $record): string => $record->is_public ? 'Partner' : 'Internal')
+                    ->color(fn (TicketComment $record): string => $record->is_public ? 'success' : 'gray'),
                 TextColumn::make('author_label')
                     ->label('From')
                     ->state(function (TicketComment $record): string {
@@ -103,11 +115,18 @@ class MessagesRelationManager extends RelationManager
                     ->dateTime()
                     ->sortable(),
             ])
+            ->filters([
+                TernaryFilter::make('is_public')
+                    ->label('Partner-visible')
+                    ->trueLabel('Partner only')
+                    ->falseLabel('Internal only')
+                    ->placeholder('All'),
+            ])
             ->defaultSort('created_at', 'desc')
             ->headerActions([
                 CreateAction::make()
-                    ->label('Send message')
-                    ->modalHeading('Message the partner')
+                    ->label('Add message')
+                    ->modalHeading('Staff message')
                     ->createAnother(false)
                     ->visible(fn (): bool => ! $locked && auth()->user()?->can('update', $ticket))
                     ->using(function (array $data) use ($ticket): Model {
@@ -115,9 +134,19 @@ class MessagesRelationManager extends RelationManager
                         $user = auth()->user();
                         $service = app(TicketCommentService::class);
                         $file = $this->resolveUploadedFile($data['attachment'] ?? null);
+                        $notifyPartner = (bool) ($data['notify_partner'] ?? false);
 
-                        $comment = $service->post($ticket, $user, $data['body'] ?? null, $file);
-                        app(PartnerNotificationService::class)->ticketMessagePosted($ticket, $user, $comment);
+                        $comment = $service->post(
+                            $ticket,
+                            $user,
+                            $data['body'] ?? null,
+                            $file,
+                            isPublic: $notifyPartner,
+                        );
+
+                        if ($notifyPartner) {
+                            app(PartnerNotificationService::class)->ticketMessagePosted($ticket, $user, $comment);
+                        }
 
                         return $comment;
                     }),
@@ -135,7 +164,7 @@ class MessagesRelationManager extends RelationManager
             ->toolbarActions([])
             ->bulkActions([])
             ->emptyStateHeading('No messages yet')
-            ->emptyStateDescription('Start a conversation when documents are missing or you need more detail from the partner.')
+            ->emptyStateDescription('Add an internal note, or tick Notify partner to message the partner.')
             ->defaultPaginationPageOption(25)
             ->paginated([25, 50, 100]);
     }
