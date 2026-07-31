@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\BulkMessages\Pages;
 
-use App\Enums\CompanyApprovalStatus;
 use App\Filament\Resources\BulkMessages\BulkMessageResource;
 use App\Models\Service;
 use App\Services\BulkMessageService;
@@ -24,7 +23,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Compose a bulk SMS from company filters (Active, approval, TIN, etc.).
+ * Compose a bulk SMS from company filters (services, TIN, active, phone).
  *
  * @property-read Schema $form
  */
@@ -44,11 +43,10 @@ class ComposeBulkMessage extends Page
         $this->form->fill([
             'title' => 'TIN update required — portal upgrade',
             'message' => 'Dear Partner, We are updating the VAS partner portal and you are requested to update your TIN number for your company {company_name}. The access will be revoked if failed to update your TIN number in the VAS Partners portal. https://vaspartnersportal.ethiotelecom.et/login — Ethio telecom',
-            'is_active' => '',
-            'approval_status' => '',
-            'tin_validated' => '0',
             'service_ids' => [],
             'alive_subscriptions_only' => false,
+            'tin_validated' => '0',
+            'is_active' => '',
             'require_phone' => true,
             'queue_after_create' => false,
         ]);
@@ -76,32 +74,6 @@ class ComposeBulkMessage extends Page
                         ->helperText('Include the portal URL. Max 640 characters. Placeholders like {company_name} are supported.'),
                 ]),
                 Section::make('Audience filters')->schema([
-                    Select::make('is_active')
-                        ->label('Company active status')
-                        ->options([
-                            '' => 'Any',
-                            '1' => 'Active only',
-                            '0' => 'Inactive only',
-                        ])
-                        ->native(false),
-                    Select::make('approval_status')
-                        ->label('Approval status')
-                        ->options([
-                            '' => 'Any',
-                            CompanyApprovalStatus::Approved->value => 'Approved',
-                            CompanyApprovalStatus::Pending->value => 'Pending',
-                            CompanyApprovalStatus::Rejected->value => 'Rejected',
-                        ])
-                        ->native(false),
-                    Select::make('tin_validated')
-                        ->label('TIN number verified (ERCA)')
-                        ->options([
-                            '' => 'Any',
-                            '1' => 'Verified only',
-                            '0' => 'Not verified only',
-                        ])
-                        ->native(false)
-                        ->helperText('Not verified = companies that still need to activate / update their TIN.'),
                     Select::make('service_ids')
                         ->label('Services')
                         ->multiple()
@@ -123,6 +95,23 @@ class ComposeBulkMessage extends Page
                         ->label('Alive subscriptions only')
                         ->helperText('Only when services are selected: Active / Pending renewal / Grace (ignore expired / deactive).')
                         ->visible(fn (Get $get): bool => filled($get('service_ids'))),
+                    Select::make('tin_validated')
+                        ->label('TIN number verified (ERCA)')
+                        ->options([
+                            '' => 'Any',
+                            '1' => 'Verified only',
+                            '0' => 'Not verified only',
+                        ])
+                        ->native(false)
+                        ->helperText('Not verified = companies that still need to activate / update their TIN.'),
+                    Select::make('is_active')
+                        ->label('Company active status')
+                        ->options([
+                            '' => 'Any',
+                            '1' => 'Active only',
+                            '0' => 'Inactive only',
+                        ])
+                        ->native(false),
                     Toggle::make('require_phone')
                         ->label('Must have phone')
                         ->default(true),
@@ -164,7 +153,6 @@ class ComposeBulkMessage extends Page
         $tin = $data['tin_validated'] ?? '';
         $tinValidated = $tin === '' || $tin === null ? null : ((string) $tin === '1');
 
-        $approval = trim((string) ($data['approval_status'] ?? ''));
         $activeRaw = $data['is_active'] ?? '';
         $isActive = $activeRaw === '' || $activeRaw === null ? null : ((string) $activeRaw === '1');
 
@@ -182,7 +170,6 @@ class ComposeBulkMessage extends Page
                 (string) ($data['message'] ?? ''),
                 [
                     'is_active' => $isActive,
-                    'approval_status' => $approval !== '' ? $approval : null,
                     'tin_validated' => $tinValidated,
                     'service_ids' => $serviceIds,
                     'alive_subscriptions_only' => (bool) ($data['alive_subscriptions_only'] ?? false),

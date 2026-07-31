@@ -115,6 +115,10 @@ class MonthlyRevenueImporter extends Importer
         $this->data['service_id'] = $serviceId;
         $this->data['short_code'] = $shortCode;
 
+        // Catalog service is chosen on the import options form, not in the CSV.
+        $vasServiceId = (int) ($this->options['vas_service_id'] ?? 0);
+        $this->data['vas_service_id'] = $vasServiceId > 0 ? $vasServiceId : null;
+
         if ($serviceId === null) {
             throw ValidationException::withMessages([
                 'service_id' => 'Service ID is required.',
@@ -239,6 +243,12 @@ class MonthlyRevenueImporter extends Importer
     protected function ensureBatch(): RevenueImport
     {
         $vasServiceId = (int) ($this->options['vas_service_id'] ?? 0);
+        if ($vasServiceId <= 0) {
+            throw ValidationException::withMessages([
+                'vas_service_id' => 'Select a catalog service before importing.',
+            ]);
+        }
+
         $period = trim((string) ($this->options['period'] ?? ''));
         $template = trim((string) ($this->options['message_template'] ?? BulkMessageService::DEFAULT_MESSAGE));
         $service = Service::query()->find($vasServiceId);
