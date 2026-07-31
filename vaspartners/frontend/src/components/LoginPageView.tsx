@@ -47,8 +47,20 @@ export function LoginPageView() {
   const title = useMemo(() => {
     if (otpOn && faydaOn) return "Sign in to VAS Partners";
     if (otpOn) return "Sign in with phone";
-    return "Sign in with Fayda";
+    return "VAS Partners";
   }, [otpOn, faydaOn]);
+
+  const subtitle = useMemo(() => {
+    if (otpOn && faydaOn) {
+      return "Access the Ethio telecom partner portal for Value Added Services.";
+    }
+    if (otpOn) {
+      return "Enter your mobile number to receive a one-time verification code.";
+    }
+    return "Secure partner access for Value Added Services. Sign in with your Fayda National ID.";
+  }, [otpOn, faydaOn]);
+
+  const faydaOnly = faydaOn && !otpOn;
 
   function applyIdentityGate(identity: IdentityAuthState, contact: { profile_completed?: boolean }) {
     if (identity.needs_consent && identity.proposal) {
@@ -206,12 +218,20 @@ export function LoginPageView() {
 
   return (
     <SiteShell me={null} landing>
-      <section className="section login-page">
-        <div className="login-card">
-          <h1>{title}</h1>
-          <p className="muted">
-            Partner portal access for Value Added Services.
-          </p>
+      <section className={faydaOnly ? "section login-page login-page--fayda" : "section login-page"}>
+        <div className={faydaOnly ? "login-card login-card--fayda" : "login-card"}>
+          {faydaOnly ? (
+            <>
+              <p className="login-kicker">Partner portal</p>
+              <h1>{title}</h1>
+              <p className="login-lead">{subtitle}</p>
+            </>
+          ) : (
+            <>
+              <h1>{title}</h1>
+              <p className="muted">{subtitle}</p>
+            </>
+          )}
 
           {authConfig?.note && (
             <p className="alert alert-info" role="status">
@@ -330,11 +350,25 @@ export function LoginPageView() {
           )}
 
           {faydaOn && step === "phone" && (
-            <div className="login-alt">
-              {otpOn ? <p className="muted">Or</p> : null}
-              <a className="btn-secondary" href={faydaLoginUrl()}>
-                Sign in with Fayda
+            <div className={faydaOnly ? "login-fayda-panel" : "login-alt"}>
+              {otpOn ? (
+                <div className="login-divider" role="separator">
+                  <span>Or</span>
+                </div>
+              ) : null}
+              <a
+                className={faydaOnly ? "btn-hero login-fayda-cta" : "btn-secondary login-fayda"}
+                href={faydaLoginUrl()}
+              >
+                {faydaOnly ? "Continue with Fayda" : "Sign in with Fayda"}
               </a>
+              {faydaOnly ? (
+                <ul className="login-trust">
+                  <li>Verified with Fayda National ID</li>
+                  <li>Your identity details stay protected</li>
+                  <li>Session stays active for 30 minutes</li>
+                </ul>
+              ) : null}
             </div>
           )}
         </div>

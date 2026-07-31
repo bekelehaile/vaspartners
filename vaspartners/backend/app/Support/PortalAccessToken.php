@@ -15,7 +15,7 @@ final class PortalAccessToken
     public const NAME_FAYDA = 'fayda';
 
     /**
-     * Default 24h; override with SANCTUM_TOKEN_EXPIRATION (minutes).
+     * Default 30 minutes; override with SANCTUM_TOKEN_EXPIRATION (minutes).
      */
     public static function ttlMinutes(): int
     {

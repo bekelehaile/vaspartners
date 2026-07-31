@@ -2,13 +2,8 @@
 # OPTIONAL — Fayda staging callback hop on host :443 (fixedservices pattern)
 # ============================================================================
 #
-# Problem:
-#   Staging VAS Partners is on :8443, while production mvasportal keeps :443.
-#   Fayda redirect_uri must match the whitelist EXACTLY. Prefer a portless
-#   URI on :443 that hops to :8443 (same idea as fixedservices /staging/callback).
-#
-# Do NOT replace the whole mvasportal.conf — only ADD this location inside the
-# existing `listen 443` server for vaspartnersportal.ethiotelecom.et:
+# Prefer adding this location to /etc/nginx/conf.d/vaspartners.conf
+# (not mvasportal.conf — that file is for legacy MVAS):
 #
 #   location = /staging/callback {
 #       return 301 https://vaspartnersportal.ethiotelecom.et:8443/callback$is_args$args;
@@ -16,14 +11,9 @@
 #
 # Then set:
 #   FAYDA_REDIRECT_URI=https://vaspartnersportal.ethiotelecom.et/staging/callback
-# and whitelist THAT exact string on the Fayda client
-# (same client_id as fixedservices: orauXeA7snQSWr4yvVae2LYSRQAsXxpe6ex4rkVi3Q0).
-#
-# Until this hop exists, keep using:
-#   FAYDA_REDIRECT_URI=https://vaspartnersportal.ethiotelecom.et:8443/callback
-# (must be whitelisted with :8443 included).
+# and whitelist THAT exact string on the Fayda client.
 #
 # Apply (example):
-#   sudo nano /etc/nginx/conf.d/mvasportal.conf   # add location above
+#   sudo nano /etc/nginx/conf.d/vaspartners.conf   # add location above
 #   sudo nginx -t && sudo systemctl reload nginx
 # ============================================================================

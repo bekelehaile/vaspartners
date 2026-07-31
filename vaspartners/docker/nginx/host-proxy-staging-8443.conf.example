@@ -4,10 +4,10 @@
 #
 # Prefer the default staging setup: Docker nginx terminates Tele SSL and
 # binds host port 8443 directly (see compose.staging.yml). Use THIS file only
-# if you want host Nginx to terminate SSL (same pattern as mvasportal :443).
+# if you want host Nginx to terminate SSL on :8443.
 #
-# CRITICAL: Do NOT change /etc/nginx/conf.d/mvasportal.conf — production
-# vaspartnersportal.ethiotelecom.et:443 must keep proxying to :30011.
+# Production :443 lives in /etc/nginx/conf.d/vaspartners.conf
+# (see host-vaspartners.conf.example). Old mvasportal.conf should be removed.
 #
 # ACCESS: https://vaspartnersportal.ethiotelecom.et:8443
 #
