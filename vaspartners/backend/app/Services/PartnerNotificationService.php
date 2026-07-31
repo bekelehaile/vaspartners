@@ -42,15 +42,19 @@ class PartnerNotificationService
         );
     }
 
-    /** Partner fixed a rejected request — staff should re-check (Pending again). */
+    /** Partner fixed a rejected request — route back to the AM handler when known. */
     public function ticketResubmitted(Ticket $ticket): void
     {
         $ticket->loadMissing(['contact', 'service', 'assignee']);
+        $statusLine = $ticket->assignee
+            ? sprintf('Returned to account manager %s (In progress).', $ticket->assignee->name)
+            : 'Status is Pending (unassigned).';
         $body = sprintf(
-            '%s updated and resubmitted request number %s for %s. Status is Pending.',
+            '%s updated and resubmitted request number %s for %s. %s',
             $ticket->contact?->name ?: 'A partner',
             $ticket->tt_number,
             $ticket->service?->name ?: 'a service',
+            $statusLine,
         );
 
         $recipients = $this->managementUsers();

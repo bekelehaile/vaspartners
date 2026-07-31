@@ -151,7 +151,9 @@ class TicketWorkflowService
     }
 
     /**
-     * Partner corrected a rejected request — return it to Pending (open) for re-check.
+     * Partner corrected a rejected request — return it to the account manager
+     * who handled it (In progress). If no handler was ever assigned, leave it
+     * Pending (open) for the unassigned queue.
      */
     public function resubmitByContact(Ticket $ticket, Contact $contact): Ticket
     {
@@ -164,9 +166,16 @@ class TicketWorkflowService
 
             $this->assertRequiredDocumentsUploaded($ticket);
 
+            $handlerId = $this->resolveAccountManagerUserId($ticket);
+            $handler = $handlerId ? User::query()->find($handlerId) : null;
+
             $ticket->document_review_status = DocumentReviewStatus::Pending;
             $ticket->needs_reverification = false;
             $ticket->current_approver_user_id = null;
+            if ($handler) {
+                $ticket->assigned_to_user_id = $handler->id;
+                $ticket->assigned_at = now();
+            }
             $ticket->save();
 
             $this->transition(
@@ -174,7 +183,35 @@ class TicketWorkflowService
                 TicketStatus::Open,
                 $contact,
                 'Partner updated the request and submitted it for re-check',
+                [
+                    'event' => 'resubmitted',
+                    'skip_partner_notification' => true,
+                ],
             );
+
+            if ($handler) {
+                TicketAssignment::query()->create([
+                    'ticket_id' => $ticket->id,
+                    'assigned_by_user_id' => $handler->id,
+                    'assigned_to_user_id' => $handler->id,
+                    'priority_id' => $ticket->priority_id,
+                    'note' => 'Auto-returned to account manager after partner resubmit',
+                ]);
+
+                $this->transition(
+                    $ticket,
+                    TicketStatus::InProgress,
+                    $contact,
+                    'Resubmitted — returned to account manager '.$handler->name,
+                    [
+                        'event' => 'assigned',
+                        'assignee_user_id' => $handler->id,
+                        'assignee_name' => $handler->name,
+                        'source' => 'partner_resubmit',
+                        'skip_partner_notification' => true,
+                    ],
+                );
+            }
 
             $fresh = $ticket->fresh(['contact', 'service', 'requisition', 'assignee']);
             DB::afterCommit(function () use ($fresh) {
@@ -183,6 +220,31 @@ class TicketWorkflowService
 
             return $fresh;
         });
+    }
+
+    /**
+     * Prefer the current assignee, else the latest assignment / doc-review AM.
+     */
+    protected function resolveAccountManagerUserId(Ticket $ticket): ?int
+    {
+        if (filled($ticket->assigned_to_user_id)) {
+            return (int) $ticket->assigned_to_user_id;
+        }
+
+        $fromAssignment = TicketAssignment::query()
+            ->where('ticket_id', $ticket->id)
+            ->orderByDesc('id')
+            ->value('assigned_to_user_id');
+        if ($fromAssignment) {
+            return (int) $fromAssignment;
+        }
+
+        $fromReview = TicketDocumentReview::query()
+            ->where('ticket_id', $ticket->id)
+            ->orderByDesc('id')
+            ->value('reviewed_by_user_id');
+
+        return $fromReview ? (int) $fromReview : null;
     }
 
     public function requiredDocumentTypeIds(int $serviceId, int $requisitionId): array

@@ -239,7 +239,7 @@ class ContactPortalController extends Controller
 
     /**
      * Partner updates request details while status is open or rejected (sent back).
-     * Rejected requests return to Pending (open) after a successful submit.
+     * Rejected requests return to the previous AM handler (In progress) when known.
      */
     public function updateTicket(
         Request $request,
@@ -311,7 +311,9 @@ class ContactPortalController extends Controller
 
         return response()->json([
             'message' => $wasRejected
-                ? 'Request submitted. Status is now Pending for re-check.'
+                ? ($ticket->assigned_to_user_id
+                    ? 'Request submitted. It was returned to your account manager for review.'
+                    : 'Request submitted. Status is now Pending for re-check.')
                 : 'Request updated.',
             'data' => $payload,
         ]);
