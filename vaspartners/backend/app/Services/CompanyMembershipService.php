@@ -55,6 +55,9 @@ class CompanyMembershipService
         $tin = $this->normalizeEthiopianTin($data['company_tin']);
         $this->assertUniqueTin($tin);
 
+        // Must exist in ERCA before any local company row is created.
+        $this->ercaTin->assertTinExistsInErca($tin);
+
         $contact->loadMissing(['memberships.company', 'company']);
         $creatingAdditional = $contact->memberships->isNotEmpty();
         [$companyPhone, $companyEmail] = $this->resolveSharedCompanyContacts($contact);
@@ -154,6 +157,9 @@ class CompanyMembershipService
 
         $tin = $this->normalizeEthiopianTin($data['company_tin']);
         $this->assertUniqueTin($tin);
+
+        // Never trust caller-supplied TIN without ERCA (blocks service/API misuse).
+        $this->ercaTin->assertTinExistsInErca($tin);
 
         $legal = \App\Services\Etrade\CompanyNameMatcher::titleCase(
             trim((string) ($data['legal_name'] ?: $data['company_name'])),
@@ -308,6 +314,11 @@ class CompanyMembershipService
         $tin = $this->normalizeEthiopianTin($data['company_tin']);
         $this->assertUniqueTin($tin, $company->id);
 
+        // Preview consent path must have approved; re-assert live if somehow missing.
+        if (! \App\Support\ErcaTinWriteGuard::isApproved($tin)) {
+            $this->ercaTin->assertTinExistsInErca($tin);
+        }
+
         $legal = \App\Services\Etrade\CompanyNameMatcher::titleCase(
             trim((string) ($data['legal_name'] ?? '')),
         );
@@ -438,6 +449,10 @@ class CompanyMembershipService
 
         $previousTin = (string) $company->tin;
         $previousName = (string) $company->name;
+
+        if ($previousTin !== $tin) {
+            $this->ercaTin->assertTinExistsInErca($tin);
+        }
 
         $fresh = DB::transaction(function () use ($contact, $company, $data, $tin, $name, $phone, $email) {
             $company->fill([
@@ -2132,6 +2147,9 @@ class CompanyMembershipService
         $this->ercaSearchGuard->assertCanSearch($contact, $tin);
         $this->assertUniqueTin($tin, $company->id);
 
+        // Never persist a TIN that ERCA does not recognize.
+        $this->ercaTin->assertTinExistsInErca($tin);
+
         $wasValidated = (bool) $company->tin_validated;
 
         $company->fill([
@@ -2147,7 +2165,7 @@ class CompanyMembershipService
 
         $this->ercaSearchGuard->recordSearch($contact, $tin);
 
-        // One ERCA check per partner submit (force bypasses company next-check; result cache still applies).
+        // Apply name-match / consent state from the lookup (uses cache from assert).
         $this->ercaTin->verifyCompany($company->fresh() ?? $company, force: true);
 
         return $contact->fresh(['company', 'memberships.company']);

@@ -16,7 +16,6 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Spatie\Permission\Models\Role;
 use STS\FilamentImpersonate\Actions\Impersonate;
 use UnitEnum;
 
@@ -44,10 +43,9 @@ class UserResource extends Resource
                 ->label('Username')
                 ->required()
                 ->unique(ignoreRecord: true)
-                ->maxLength(64)
-                ->helperText('Shown in SMS with temporary credentials on create. Sign-in uses phone number only.'),
+                ->maxLength(64),
             TextInput::make('email')
-                ->label('Email address')
+                ->label('Email')
                 ->email()
                 ->required()
                 ->unique(ignoreRecord: true)
@@ -58,10 +56,10 @@ class UserResource extends Resource
                 ->required()
                 ->unique(ignoreRecord: true)
                 ->maxLength(32)
-                ->placeholder('e.g. 0912345678')
-                ->helperText('Saved as last 9 digits (e.g. 912345678). Used to sign in to admin.')
+                ->placeholder('0912345678')
                 ->dehydrateStateUsing(fn (?string $state): ?string => \App\Support\PhoneNumber::normalizeNullable($state)),
             Select::make('roles')
+                ->label('Roles')
                 ->relationship(
                     name: 'roles',
                     titleAttribute: 'name',
@@ -72,13 +70,10 @@ class UserResource extends Resource
                 ->multiple()
                 ->preload()
                 ->searchable()
-                ->default(fn (): array => array_filter([
-                    Role::findOrCreate('account_manager', 'web')->getKey(),
-                ]))
-                ->helperText('Default is account_manager (My Tickets). Super admin cannot be assigned here.')
+                ->required()
                 ->columnSpanFull(),
             Select::make('manager_id')
-                ->label('Manager')
+                ->label('Reports to')
                 ->relationship(
                     name: 'manager',
                     titleAttribute: 'name',
@@ -99,19 +94,16 @@ class UserResource extends Resource
                 ->multiple()
                 ->preload()
                 ->searchable()
-                ->helperText('Limit this user to tickets in these groups. Leave empty for no group filter (role rules still apply).')
                 ->columnSpanFull(),
             Toggle::make('is_management')
-                ->label('Management / supervisor')
-                ->helperText('Receives new ticket alerts and can close tickets.'),
+                ->label('Can close tickets / receive new-ticket alerts')
+                ->default(false),
             Toggle::make('must_change_password')
-                ->label('Must change password')
-                ->default(true)
-                ->helperText('When enabled, the user must set a new password on next login.'),
+                ->label('Must change password on next login')
+                ->default(true),
             Toggle::make('is_active')
                 ->label('Active')
-                ->default(true)
-                ->helperText('Off = no admin sign-in.'),
+                ->default(true),
         ])->columns(2);
     }
 
@@ -127,8 +119,8 @@ class UserResource extends Resource
                     ->label('Roles')
                     ->badge()
                     ->separator(','),
-                TextColumn::make('manager.name')->label('Manager')->toggleable(),
-                IconColumn::make('is_management')->label('Mgmt')->boolean(),
+                TextColumn::make('manager.name')->label('Reports to')->toggleable(),
+                IconColumn::make('is_management')->label('Alerts')->boolean()->toggleable(),
                 IconColumn::make('must_change_password')->label('Temp PW')->boolean()->toggleable(),
                 IconColumn::make('is_active')->label('Active')->boolean(),
                 TextColumn::make('last_login_at')

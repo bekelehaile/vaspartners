@@ -5,6 +5,7 @@ namespace App\Services\Etrade;
 use App\Models\Contact;
 use App\Services\CompanyMembershipService;
 use App\Support\TinNumber;
+use App\Support\ErcaTinWriteGuard;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -97,6 +98,9 @@ class ErcaCompanyOnboardingService
 
         Cache::put($this->tokenKey($token), $payload, now()->addMinutes(15));
 
+        // Preview already hit ERCA successfully — allow consent create/update in this request.
+        ErcaTinWriteGuard::approve($tin);
+
         return [
             'preview_token' => $token,
             'tin' => $tin,
@@ -143,6 +147,9 @@ class ErcaCompanyOnboardingService
         // Fail fast before create — TIN must never be duplicated.
         $this->membership->assertTinAvailableForCreate($tin);
 
+        // Re-confirm against ERCA (or result cache) before the local insert.
+        app(ErcaTinVerificationService::class)->assertTinExistsInErca($tin);
+
         $ercaPhone = isset($cached['phone']) ? trim((string) $cached['phone']) : '';
         $ercaEmail = isset($cached['email']) ? trim((string) $cached['email']) : '';
         $ercaAddress = isset($cached['address']) ? trim((string) $cached['address']) : '';
@@ -184,6 +191,11 @@ class ErcaCompanyOnboardingService
                 'preview_token' => 'Invalid ERCA preview. Search the TIN number again.',
             ]);
         }
+
+        ErcaTinWriteGuard::approve($tin);
+
+        // Prefer live/cached ERCA confirmation over token alone.
+        app(ErcaTinVerificationService::class)->assertTinExistsInErca($tin);
 
         $updated = $this->membership->updateCompanyFromErcaPreview(
             $contact,

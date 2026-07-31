@@ -28,13 +28,10 @@ class EditUser extends EditRecord
 
     protected function afterSave(): void
     {
-        // Role select intentionally hides super_admin; keep it if the user already had it.
+        // Keep existing super_admin; do not allow adding it from this form.
         if ($this->wasSuperAdmin) {
             $this->record->assignRole(Utils::getSuperAdminName());
-        }
-
-        // Never allow assigning super_admin through the user form.
-        if (! $this->wasSuperAdmin && $this->record->hasRole(Utils::getSuperAdminName())) {
+        } elseif ($this->record->hasRole(Utils::getSuperAdminName())) {
             $this->record->removeRole(Utils::getSuperAdminName());
         }
     }
@@ -48,7 +45,7 @@ class EditUser extends EditRecord
                 ->color('warning')
                 ->requiresConfirmation()
                 ->modalHeading('Reset temporary password?')
-                ->modalDescription('Generates a new temporary password, requires change on next login, and sends username + password by SMS.')
+                ->modalDescription('Generates a new temporary password, requires change on next login, and sends it by SMS.')
                 ->action(function (): void {
                     $plain = Str::password(10);
                     $this->record->forceFill([
@@ -80,7 +77,6 @@ class EditUser extends EditRecord
 
                     Notification::make()
                         ->title('Temporary password sent')
-                        ->body('Username and temporary password were sent by SMS.')
                         ->success()
                         ->send();
                 }),

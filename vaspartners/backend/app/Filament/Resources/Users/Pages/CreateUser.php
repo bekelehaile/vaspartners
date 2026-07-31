@@ -31,32 +31,20 @@ class CreateUser extends CreateRecord
 
     protected function afterCreate(): void
     {
-        // Never allow assigning super_admin through the user form.
+        // Super admin is not assignable from this form.
         if ($this->record->hasRole('super_admin')) {
             $this->record->removeRole('super_admin');
         }
 
-        if ($this->record->roles()->count() === 0) {
-            $this->record->assignRole(
-                \Spatie\Permission\Models\Role::findOrCreate('account_manager', 'web')
-            );
-        }
-
         $sent = $this->sendTemporaryCredentialsSms();
 
-        if ($sent) {
-            Notification::make()
-                ->title('User created')
-                ->body('Temporary username and password were sent by SMS. The user must change the password on first login.')
-                ->success()
-                ->send();
-        } else {
-            Notification::make()
-                ->title('User created')
-                ->body('User created with a temporary password, but SMS could not be sent (missing phone or SMS disabled).')
-                ->warning()
-                ->send();
-        }
+        Notification::make()
+            ->title('User created')
+            ->body($sent
+                ? 'Temporary password sent by SMS. User must change it on first login.'
+                : 'User created. SMS could not be sent (missing phone or SMS disabled).')
+            ->{$sent ? 'success' : 'warning'}()
+            ->send();
     }
 
     protected function sendTemporaryCredentialsSms(): bool

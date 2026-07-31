@@ -84,9 +84,8 @@ class User extends Authenticatable implements CanResetPasswordContract, Filament
     }
 
     /**
-     * Super admin / management admins see all revenue data (unscoped).
-     * Operational account managers stay scoped to partners they own —
-     * even if they also have the admin role.
+     * Super admin and users flagged for ticket supervision see all revenue data.
+     * Everyone else stays scoped to partners they own.
      */
     public function canAccessAllRevenue(): bool
     {
@@ -94,11 +93,7 @@ class User extends Authenticatable implements CanResetPasswordContract, Filament
             return true;
         }
 
-        if ($this->hasRole('account_manager') && ! $this->is_management) {
-            return false;
-        }
-
-        return $this->hasRole('admin');
+        return (bool) $this->is_management;
     }
 
     /**
@@ -122,8 +117,8 @@ class User extends Authenticatable implements CanResetPasswordContract, Filament
     }
 
     /**
-     * Active account managers eligible to handle a ticket in the given group.
-     * Users with no group scope remain eligible for any group.
+     * Active staff eligible to handle a ticket in the given group
+     * (excludes users marked for ticket supervision alerts).
      *
      * @return \Illuminate\Support\Collection<int, string>
      */
@@ -143,8 +138,7 @@ class User extends Authenticatable implements CanResetPasswordContract, Filament
     }
 
     /**
-     * Filament denies panel access in non-local envs unless FilamentUser is implemented.
-     * Staging/production would otherwise 403 after a successful login.
+     * Active user with any role can open admin; menu follows role permissions.
      */
     public function canAccessPanel(Panel $panel): bool
     {
@@ -152,7 +146,7 @@ class User extends Authenticatable implements CanResetPasswordContract, Filament
             return false;
         }
 
-        return $this->hasAnyRole(['super_admin', 'admin', 'account_manager']);
+        return $this->roles()->exists();
     }
 
     /**

@@ -10,8 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useContact, useServices, useSubscription } from "@/hooks/use-contact";
-import type { Service } from "@/lib/api";
+import { useContact, useSubscription } from "@/hooks/use-contact";
 import {
   contactCanManageServices,
   isAliveSubscriptionStatus,
@@ -39,26 +38,16 @@ function formatDate(value?: string | null): string {
   });
 }
 
-function serviceAllowsTermination(services: Service[], serviceId?: number): boolean {
-  if (!serviceId) return false;
-  const svc = services.find((s) => s.id === serviceId);
-  if (!svc || svc.is_subscription_based === false) return false;
-  return (svc.requisitions ?? []).some((r) => !!r.terminates_subscription);
-}
-
 export default function SubscriptionDetailPage() {
   const params = useParams<{ public_id: string | string[] }>();
   const raw = params.public_id;
   const publicId = decodeURIComponent(Array.isArray(raw) ? raw[0] ?? "" : raw ?? "");
 
   const { data: me } = useContact();
-  const { data: services = [] } = useServices();
   const { data: sub, isLoading, isError, error } = useSubscription(publicId);
 
   const canManage = contactCanManageServices(me);
   const alive = isAliveSubscriptionStatus(sub?.status);
-  const canTerminate =
-    !!sub && alive && canManage && serviceAllowsTermination(services, sub.service?.id);
 
   return (
     <>
@@ -75,22 +64,12 @@ export default function SubscriptionDetailPage() {
               Back to subscriptions
             </Link>
             {sub && canManage && alive ? (
-              <>
-                <Link
-                  href={`/portal/requests/new?intent=manage&subscription_id=${sub.id}`}
-                  className="btn-ghost"
-                >
-                  Manage
-                </Link>
-                {canTerminate ? (
-                  <Link
-                    href={`/portal/requests/new?intent=manage&subscription_id=${sub.id}&action=terminate`}
-                    className="btn-ghost"
-                  >
-                    Terminate
-                  </Link>
-                ) : null}
-              </>
+              <Link
+                href={`/portal/requests/new?intent=manage&subscription_id=${sub.id}`}
+                className="btn-ghost"
+              >
+                Manage
+              </Link>
             ) : (
               <JourneyLaunchActions />
             )}

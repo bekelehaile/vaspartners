@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\CompanyApprovalStatus;
 use App\Enums\CompanyRole;
 use App\Support\EmailAddress;
+use App\Support\ErcaTinWriteGuard;
 use App\Support\PhoneNumber;
 use App\Support\TinNumber;
 use Illuminate\Database\Eloquent\Builder;
@@ -78,9 +79,13 @@ class Company extends Model
             // via spaces/dashes. Leave legacy placeholders (e.g. MVAS-*) unchanged.
             if (array_key_exists('tin', $company->getAttributes()) || $company->isDirty('tin')) {
                 $raw = (string) ($company->attributes['tin'] ?? '');
-                $digits = TinNumber::normalize($raw);
-                if (TinNumber::isValid($digits)) {
-                    $company->attributes['tin'] = $digits;
+                if ($raw !== '' && preg_match('/[A-Za-z]/', $raw)) {
+                    // Placeholder identity — do not coerce to digits.
+                } else {
+                    $digits = TinNumber::normalize($raw);
+                    if (TinNumber::isValid($digits)) {
+                        $company->attributes['tin'] = $digits;
+                    }
                 }
             }
 
@@ -94,6 +99,21 @@ class Company extends Model
                 $company->erca_name_status = \App\Enums\ErcaNameStatus::Unchecked->value;
                 $company->erca_last_error = null;
                 $company->erca_next_check_at = null;
+            }
+
+            // Hard gate: never persist a valid Ethiopian TIN (or mark it ERCA-verified)
+            // unless this request already confirmed it in ERCA.
+            $tinValue = (string) ($company->attributes['tin'] ?? '');
+            $tinIsNewOrChanged = ! $company->exists || $company->isDirty('tin');
+            $markingVerified = $company->isDirty('erca_tin_verified')
+                && filter_var($company->attributes['erca_tin_verified'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
+            if ($tinIsNewOrChanged && TinNumber::isValid($tinValue)) {
+                ErcaTinWriteGuard::assertCanCommit($tinValue, 'tin');
+            }
+
+            if ($markingVerified && TinNumber::isValid($tinValue)) {
+                ErcaTinWriteGuard::assertCanCommit($tinValue, 'tin');
             }
         });
     }
@@ -151,14 +171,23 @@ class Company extends Model
 
     public function setTinAttribute(?string $value): void
     {
-        $digits = TinNumber::normalize($value);
+        $raw = trim((string) $value);
+
+        // Legacy / placeholder codes (e.g. MVAS-509) keep their letter prefix.
+        // Do not strip to digits — a trailing timestamp could look like a fake TIN.
+        if ($raw !== '' && preg_match('/[A-Za-z]/', $raw)) {
+            $this->attributes['tin'] = self::normalizeIdentityCode($raw) ?? $raw;
+
+            return;
+        }
+
+        $digits = TinNumber::normalize($raw);
         if (TinNumber::isValid($digits)) {
             $this->attributes['tin'] = $digits;
 
             return;
         }
 
-        // Legacy / placeholder TINs (e.g. migrated MVAS ids) until partner updates.
         $this->attributes['tin'] = self::normalizeIdentityCode($value) ?? '';
     }
 

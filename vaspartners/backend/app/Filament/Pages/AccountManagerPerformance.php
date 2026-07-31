@@ -84,15 +84,6 @@ class AccountManagerPerformance extends Page implements HasSchemas, HasTable
 
     public static function canAccess(): bool
     {
-        $user = auth()->user();
-        if (! $user instanceof User) {
-            return false;
-        }
-
-        if ($user->hasRole('super_admin') || (bool) $user->is_management) {
-            return true;
-        }
-
         return parent::canAccess();
     }
 

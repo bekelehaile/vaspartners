@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\Contact;
 use App\Support\PhoneNumber;
 use App\Support\TinNumber;
+use App\Support\ErcaTinWriteGuard;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -23,6 +24,55 @@ class ErcaTinVerificationService
     public function __construct(
         protected EtradeTinLookupService $lookup,
     ) {}
+
+    /**
+     * Live ERCA check before any local DB write of this TIN.
+     * Approves the TIN for Company saves in this request on success.
+     *
+     * @return array<string, mixed> lookup payload from EtradeTinLookupService
+     *
+     * @throws ValidationException
+     */
+    public function assertTinExistsInErca(string $rawTin, string $field = 'company_tin'): array
+    {
+        $tin = TinNumber::normalize($rawTin);
+        if (! TinNumber::isValid($tin)) {
+            throw ValidationException::withMessages([
+                $field => TinNumber::message(),
+            ]);
+        }
+
+        if (! $this->lookup->enabled()) {
+            throw ValidationException::withMessages([
+                $field => 'TIN number verification is temporarily unavailable. Try again shortly.',
+            ]);
+        }
+
+        if (! $this->lookup->hasCachedResult($tin) && ! $this->acquireGlobalSlot()) {
+            throw ValidationException::withMessages([
+                $field => 'TIN number verification is busy right now. Please try again in a few minutes.',
+            ]);
+        }
+
+        $result = $this->lookup->lookup($tin);
+        $this->rememberTinLookup($tin);
+
+        if (! empty($result['raw']['unavailable'])) {
+            throw ValidationException::withMessages([
+                $field => 'Unable to reach the national TIN number registry. Please try again shortly.',
+            ]);
+        }
+
+        if (empty($result['found'])) {
+            throw ValidationException::withMessages([
+                $field => 'No taxpayer found for this TIN number in ERCA. It cannot be saved.',
+            ]);
+        }
+
+        ErcaTinWriteGuard::approve($tin);
+
+        return $result;
+    }
 
     /**
      * @return array{
@@ -118,6 +168,7 @@ class ErcaTinVerificationService
 
         // TIN number exists in ERCA but no usable legal/business name was returned.
         if (! filled($legal)) {
+            ErcaTinWriteGuard::approve($tin);
             $company->forceFill(array_merge([
                 'legal_name' => null,
                 'erca_tin_verified' => true,
@@ -175,6 +226,7 @@ class ErcaTinVerificationService
             $updates['name'] = $legalTitle;
         }
 
+        ErcaTinWriteGuard::approve($tin);
         $company->forceFill($updates)->save();
         $this->syncDenormalizedCompanyName($company);
 
@@ -201,6 +253,7 @@ class ErcaTinVerificationService
 
         if ($matched) {
             $title = CompanyNameMatcher::titleCase((string) $company->legal_name);
+            ErcaTinWriteGuard::approve((string) $company->tin);
             $company->forceFill([
                 'name' => $title,
                 'legal_name' => $title,
@@ -248,6 +301,7 @@ class ErcaTinVerificationService
 
         if ($action === 'use_legal') {
             $title = CompanyNameMatcher::titleCase((string) $company->legal_name);
+            ErcaTinWriteGuard::approve((string) $company->tin);
             $company->forceFill([
                 'name' => $title,
                 'legal_name' => $title,
@@ -256,6 +310,7 @@ class ErcaTinVerificationService
             ])->save();
             $this->syncDenormalizedCompanyName($company);
         } elseif ($action === 'keep_both') {
+            ErcaTinWriteGuard::approve((string) $company->tin);
             $company->forceFill([
                 'legal_name' => CompanyNameMatcher::titleCase((string) $company->legal_name),
                 'erca_tin_verified' => true,
@@ -312,6 +367,7 @@ class ErcaTinVerificationService
             ]);
         }
 
+        ErcaTinWriteGuard::approve((string) $company->tin);
         $company->forceFill([
             'name' => $title,
             'legal_name' => null,
