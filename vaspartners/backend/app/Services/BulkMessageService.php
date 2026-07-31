@@ -35,13 +35,14 @@ class BulkMessageService
      * Create a campaign from an Excel/CSV upload and build recipient rows.
      *
      * Spreadsheet columns:
-     * - phone (required) — last 9 digits; company matched from DB
+     * - phone (required) — last 9 digits; matched against companies.phone only
      * - period — e.g. June 2026
      * - service_type — e.g. API
      * - service_id
      * - amount — e.g. 10,000
      *
      * Message may use {company_name}, {period}, {service_type}, {service_id}, {amount}.
+     * SMS is always sent to the matched company's phone on file (never contact phones).
      */
     public function createFromUpload(User $actor, string $title, string $message, UploadedFile $file): BulkMessage
     {
@@ -703,8 +704,9 @@ class BulkMessageService
     }
 
     /**
-     * Match company by phone (last 9 digits). Name, TIN, and send number come from DB.
-     * Spreadsheet period / service_type / service_id / amount are stored for message placeholders.
+     * Match company by phone (last 9 digits on companies.phone).
+     * SMS is always sent to that company phone only — never the spreadsheet number,
+     * and never contact/owner phones.
      *
      * @param  array{phone:?string, period:?string, service_type:?string, service_id:?string, amount:?string, company_name:?string}  $row
      * @param  array<string, true>  $seenKeys
@@ -777,13 +779,14 @@ class BulkMessageService
                 'variables' => $variables,
                 'row_number' => $rowNumber,
                 'status' => BulkMessageRecipientStatus::Skipped,
-                'error' => 'No company matched for this phone.',
+                'error' => 'No company matched for this phone (companies.phone only).',
             ];
         }
 
+        // Send only to the company record phone — never fall back to the spreadsheet MSISDN.
         $sendPhone = filled($company->phone)
-            ? $this->sms->normalizePhone($company->phone)
-            : $normalizedFromFile;
+            ? $this->sms->normalizePhone((string) $company->phone)
+            : '';
 
         if ($sendPhone === '' || strlen($sendPhone) !== 9
             || ! preg_match('/^(9|7)\d{8}$/', $sendPhone)
@@ -798,14 +801,14 @@ class BulkMessageService
                 'variables' => $variables,
                 'row_number' => $rowNumber,
                 'status' => BulkMessageRecipientStatus::Skipped,
-                'error' => 'Matched company has no usable mobile on file.',
+                'error' => 'Matched company has no usable company phone on file.',
             ];
         }
 
         return [
             'campaign_id' => $campaign->id,
             'company_id' => $company->id,
-            'phone_raw' => $company->phone ?: $phoneRaw,
+            'phone_raw' => (string) $company->phone,
             'phone_normalized' => $sendPhone,
             'company_name' => $company->name,
             'company_tin' => $company->tin,

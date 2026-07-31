@@ -45,7 +45,7 @@ class ImportBulkMessage extends Page
 
     public function getSubheading(): ?string
     {
-        return 'Upload phones + revenue fields (CSV/Excel). Company is matched by phone; SMS uses the template placeholders below.';
+        return 'Upload phones + revenue fields (CSV/Excel). Rows match companies.phone only; SMS is sent to that company phone (not contact/owner numbers).';
     }
 
     protected function getHeaderActions(): array
