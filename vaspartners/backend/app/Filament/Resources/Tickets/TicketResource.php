@@ -17,6 +17,7 @@ use App\Filament\Resources\Tickets\RelationManagers\DocumentsRelationManager;
 use App\Filament\Resources\Tickets\RelationManagers\MessagesRelationManager;
 use App\Filament\Resources\Tickets\RelationManagers\StatusHistoryRelationManager;
 use App\Models\Priority;
+use App\Models\Service;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Services\SmsService;
@@ -40,6 +41,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Arr;
 use Throwable;
 
 class TicketResource extends Resource
@@ -259,7 +261,10 @@ class TicketResource extends Resource
         return $table
             ->modifyQueryUsing(fn (Builder $query) => $query->with([
                 'subscription.company',
+                'subscription',
+                'requisition',
                 'contact.company',
+                'service',
             ]))
             ->columns([
                 TextColumn::make('tt_number')->label('Request number')->searchable()->sortable(),
@@ -286,9 +291,40 @@ class TicketResource extends Resource
                     ->label('Subscription')
                     ->badge()
                     ->placeholder('—')
-                    ->toggleable(isToggledHiddenByDefault: true)
-                    ->formatStateUsing(fn ($state): string => SubscriptionStatus::tryLabel($state))
-                    ->color(fn ($state): string => SubscriptionStatus::tryColor($state)),
+                    ->toggleable()
+                    ->state(function (Ticket $record): ?string {
+                        if ($record->subscription?->status) {
+                            $status = $record->subscription->status;
+
+                            return $status instanceof SubscriptionStatus
+                                ? $status->value
+                                : (string) $status;
+                        }
+
+                        // New-subscription requests have no row until approved.
+                        if ($record->requisition?->creates_subscription) {
+                            return 'pending_create';
+                        }
+
+                        return null;
+                    })
+                    ->formatStateUsing(function (?string $state): string {
+                        if ($state === 'pending_create') {
+                            return 'Not created yet';
+                        }
+
+                        return $state ? SubscriptionStatus::tryLabel($state) : '—';
+                    })
+                    ->color(function (?string $state): string {
+                        if ($state === 'pending_create') {
+                            return 'gray';
+                        }
+
+                        return $state ? SubscriptionStatus::tryColor($state) : 'gray';
+                    })
+                    ->url(fn (Ticket $record): ?string => $record->subscription
+                        ? SubscriptionResource::getUrl('view', ['record' => $record->subscription])
+                        : null),
                 TextColumn::make('category.name')->label('Group')->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('requisition.name')->label('Request type')->toggleable(),
                 TextColumn::make('status')->badge()
@@ -331,6 +367,32 @@ class TicketResource extends Resource
                 SelectFilter::make('status')->options(collect(TicketStatus::cases())->mapWithKeys(
                     fn (TicketStatus $s) => [$s->value => $s->label()]
                 )),
+                SelectFilter::make('service_id')
+                    ->label('Services')
+                    ->multiple()
+                    ->searchable()
+                    ->preload()
+                    ->options(fn (): array => Service::query()
+                        ->where('is_active', true)
+                        ->orderBy('sort_order')
+                        ->orderBy('name')
+                        ->pluck('name', 'id')
+                        ->mapWithKeys(fn ($name, $id) => [(string) $id => $name])
+                        ->all())
+                    ->query(function (Builder $query, array $data): Builder {
+                        $serviceIds = collect(Arr::wrap($data['values'] ?? []))
+                            ->filter(fn ($id) => filled($id))
+                            ->map(fn ($id) => (int) $id)
+                            ->unique()
+                            ->values()
+                            ->all();
+
+                        if ($serviceIds === []) {
+                            return $query;
+                        }
+
+                        return $query->whereIn('service_id', $serviceIds);
+                    }),
                 SelectFilter::make('subscription_status')
                     ->label('Subscription status')
                     ->options(SubscriptionStatus::options())
@@ -347,14 +409,7 @@ class TicketResource extends Resource
                     }),
                 SelectFilter::make('assigned_to_user_id')
                     ->label('Account handler')
-                    ->relationship(
-                        name: 'assignee',
-                        titleAttribute: 'name',
-                        modifyQueryUsing: fn (Builder $query) => $query
-                            ->role(User::ROLE_ACCOUNT_MANAGER)
-                            ->where('is_active', true)
-                            ->orderBy('name'),
-                    )
+                    ->options(fn (): array => User::assignableManagersForCategory(null)->all())
                     ->searchable()
                     ->preload(),
                 SelectFilter::make('category_id')

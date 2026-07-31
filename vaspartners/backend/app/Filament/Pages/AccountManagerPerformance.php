@@ -50,7 +50,7 @@ class AccountManagerPerformance extends Page implements HasSchemas, HasTable
     /**
      * Passed to header widgets as pageFilters (see Filament Page::getWidgetsSchemaComponents).
      *
-     * @var array{start_date?: ?string, end_date?: ?string, service_id?: int|string|null, user_id?: int|string|null}
+     * @var array{start_date?: ?string, end_date?: ?string, service_ids?: array<int|string>|null, user_id?: int|string|null}
      */
     #[Url]
     public array $filters = [];
@@ -63,7 +63,7 @@ class AccountManagerPerformance extends Page implements HasSchemas, HasTable
         $this->filters = [
             'start_date' => $this->filters['start_date'] ?? now()->subMonth()->toDateString(),
             'end_date' => $this->filters['end_date'] ?? now()->toDateString(),
-            'service_id' => $this->filters['service_id'] ?? null,
+            'service_ids' => $this->filters['service_ids'] ?? [],
             'user_id' => $this->filters['user_id'] ?? null,
         ];
 
@@ -144,12 +144,16 @@ class AccountManagerPerformance extends Page implements HasSchemas, HasTable
                             ->live()
                             ->suffixIcon(Heroicon::Calendar, isInline: true)
                             ->minDate(fn (callable $get): mixed => $get('start_date') ?: null),
-                        Select::make('service_id')
-                            ->label('Service')
+                        Select::make('service_ids')
+                            ->label('Services')
+                            ->multiple()
+                            ->native(false)
                             ->options(fn (): array => Service::query()
+                                ->where('is_active', true)
                                 ->orderBy('sort_order')
                                 ->orderBy('name')
                                 ->pluck('name', 'id')
+                                ->mapWithKeys(fn ($name, $id) => [(string) $id => $name])
                                 ->all())
                             ->searchable()
                             ->preload()
@@ -157,12 +161,7 @@ class AccountManagerPerformance extends Page implements HasSchemas, HasTable
                             ->live(),
                         Select::make('user_id')
                             ->label('Account handler')
-                            ->options(fn (): array => User::query()
-                                ->where('is_active', true)
-                                ->where('is_management', false)
-                                ->orderBy('name')
-                                ->pluck('name', 'id')
-                                ->all())
+                            ->options(fn (): array => User::assignableManagersForCategory(null)->all())
                             ->searchable()
                             ->preload()
                             ->placeholder('All handlers')
@@ -323,16 +322,23 @@ class AccountManagerPerformance extends Page implements HasSchemas, HasTable
     }
 
     /**
-     * @return array{start?: ?string, end?: ?string, service_id?: ?int, user_id?: ?int}
+     * @return array{start?: ?string, end?: ?string, service_ids?: list<int>, user_id?: ?int}
      */
     protected function reportFilters(): array
     {
         $filters = $this->filters ?? [];
+        $serviceIds = collect(\Illuminate\Support\Arr::wrap($filters['service_ids'] ?? []))
+            ->filter(fn ($id) => filled($id))
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
 
         return [
             'start' => $filters['start_date'] ?? null,
             'end' => $filters['end_date'] ?? null,
-            'service_id' => filled($filters['service_id'] ?? null) ? (int) $filters['service_id'] : null,
+            'service_ids' => $serviceIds,
             'user_id' => filled($filters['user_id'] ?? null) ? (int) $filters['user_id'] : null,
         ];
     }

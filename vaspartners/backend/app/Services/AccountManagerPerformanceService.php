@@ -26,7 +26,7 @@ use Illuminate\Support\Collection;
 class AccountManagerPerformanceService
 {
     /**
-     * @param  array{start?: ?string, end?: ?string, service_id?: ?int, user_id?: ?int}  $filters
+     * @param  array{start?: ?string, end?: ?string, service_id?: ?int, service_ids?: list<int>|null, user_id?: ?int}  $filters
      * @return Collection<int, array{
      *   user_id: int,
      *   name: string,
@@ -48,7 +48,7 @@ class AccountManagerPerformanceService
     public function rows(array $filters = []): Collection
     {
         [$start, $end] = $this->resolvePeriod($filters['start'] ?? null, $filters['end'] ?? null);
-        $serviceId = isset($filters['service_id']) ? (int) $filters['service_id'] : 0;
+        $serviceIds = $this->resolveServiceIds($filters);
         $userId = isset($filters['user_id']) ? (int) $filters['user_id'] : 0;
 
         $open = TicketStatus::Open->value;
@@ -61,7 +61,7 @@ class AccountManagerPerformanceService
 
         $query = Ticket::query()
             ->whereNotNull('assigned_to_user_id')
-            ->when($serviceId > 0, fn ($q) => $q->where('service_id', $serviceId))
+            ->when($serviceIds !== [], fn ($q) => $q->whereIn('service_id', $serviceIds))
             ->when($userId > 0, fn ($q) => $q->where('assigned_to_user_id', $userId));
 
         $aggregates = $query
@@ -261,7 +261,7 @@ class AccountManagerPerformanceService
     /**
      * Team-wide KPI strip for the report header.
      *
-     * @param  array{start?: ?string, end?: ?string, service_id?: ?int, user_id?: ?int}  $filters
+     * @param  array{start?: ?string, end?: ?string, service_id?: ?int, service_ids?: list<int>|null, user_id?: ?int}  $filters
      * @return array{
      *   handlers: int,
      *   backlog: int,
@@ -276,7 +276,7 @@ class AccountManagerPerformanceService
     public function teamSummary(array $filters = []): array
     {
         $rows = $this->rows($filters);
-        $serviceId = isset($filters['service_id']) ? (int) $filters['service_id'] : 0;
+        $serviceIds = $this->resolveServiceIds($filters);
 
         $completed = (int) $rows->sum('completed');
         $rejected = (int) $rows->sum('rejected');
@@ -311,7 +311,7 @@ class AccountManagerPerformanceService
         $unassigned = Ticket::query()
             ->where('status', TicketStatus::Open)
             ->whereNull('assigned_to_user_id')
-            ->when($serviceId > 0, fn ($q) => $q->where('service_id', $serviceId))
+            ->when($serviceIds !== [], fn ($q) => $q->whereIn('service_id', $serviceIds))
             ->count();
 
         return [
@@ -425,5 +425,25 @@ class AccountManagerPerformanceService
         }
 
         return round(max(0.0, min(100.0, $score)), 1);
+    }
+
+    /**
+     * @param  array{service_id?: ?int, service_ids?: list<int>|mixed}  $filters
+     * @return list<int>
+     */
+    protected function resolveServiceIds(array $filters): array
+    {
+        $ids = collect(\Illuminate\Support\Arr::wrap($filters['service_ids'] ?? []))
+            ->filter(fn ($id) => filled($id))
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty() && isset($filters['service_id']) && (int) $filters['service_id'] > 0) {
+            $ids = collect([(int) $filters['service_id']]);
+        }
+
+        return $ids->all();
     }
 }

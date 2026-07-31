@@ -23,10 +23,18 @@ class AccountManagerPerformanceOverview extends StatsOverviewWidget
     protected function getStats(): array
     {
         $filters = $this->pageFilters ?? [];
+        $serviceIds = collect(\Illuminate\Support\Arr::wrap($filters['service_ids'] ?? []))
+            ->filter(fn ($id) => filled($id))
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
         $summary = app(AccountManagerPerformanceService::class)->teamSummary([
             'start' => $filters['start_date'] ?? null,
             'end' => $filters['end_date'] ?? null,
-            'service_id' => filled($filters['service_id'] ?? null) ? (int) $filters['service_id'] : null,
+            'service_ids' => $serviceIds,
             'user_id' => filled($filters['user_id'] ?? null) ? (int) $filters['user_id'] : null,
         ]);
 
@@ -45,22 +53,22 @@ class AccountManagerPerformanceOverview extends StatsOverviewWidget
                 ->description($summary['unassigned_open'].' still unassigned (open)')
                 ->descriptionIcon(Heroicon::OutlinedInboxStack)
                 ->color($summary['backlog'] > 0 ? 'warning' : 'success')
-                ->url($this->ticketsUrl('backlog', $handlerId)),
+                ->url($this->ticketsUrl('backlog', $handlerId, $serviceIds)),
             Stat::make('Completed', $summary['completed'])
                 ->description('Completed in period')
                 ->descriptionIcon(Heroicon::OutlinedCheckCircle)
                 ->color('success')
-                ->url($this->ticketsUrl('completed', $handlerId)),
+                ->url($this->ticketsUrl('completed', $handlerId, $serviceIds)),
             Stat::make('Closed', $summary['closed'] ?? 0)
                 ->description('Closed in period')
                 ->descriptionIcon(Heroicon::OutlinedArchiveBox)
                 ->color('gray')
-                ->url($this->ticketsUrl('closed', $handlerId)),
+                ->url($this->ticketsUrl('closed', $handlerId, $serviceIds)),
             Stat::make('Rejected', $summary['rejected'] ?? 0)
                 ->description('Rejected in period')
                 ->descriptionIcon(Heroicon::OutlinedExclamationTriangle)
                 ->color(($summary['rejected'] ?? 0) > 0 ? 'danger' : 'gray')
-                ->url($this->ticketsUrl('rejected', $handlerId)),
+                ->url($this->ticketsUrl('rejected', $handlerId, $serviceIds)),
             Stat::make('Avg cycle', $cycle !== null ? $cycle.' h' : '—')
                 ->description('Assign → outcome')
                 ->color($cycle !== null && $cycle > 72 ? 'danger' : 'gray'),
@@ -70,20 +78,28 @@ class AccountManagerPerformanceOverview extends StatsOverviewWidget
             Stat::make('Rejection rate', $reject !== null ? $reject.'%' : '—')
                 ->description('Of closed + rejected in period')
                 ->color($reject !== null && $reject >= 20 ? 'danger' : 'gray')
-                ->url($this->ticketsUrl('rejected', $handlerId)),
+                ->url($this->ticketsUrl('rejected', $handlerId, $serviceIds)),
         ];
     }
 
-    protected function ticketsUrl(string $tab, ?int $handlerId = null): string
+    /**
+     * @param  list<int>  $serviceIds
+     */
+    protected function ticketsUrl(string $tab, ?int $handlerId = null, array $serviceIds = []): string
     {
         $url = TicketResource::getUrl('index').'?tab='.urlencode($tab);
+        $tableFilters = [];
 
         if ($handlerId) {
-            $url .= '&'.http_build_query([
-                'tableFilters' => [
-                    'assigned_to_user_id' => ['value' => $handlerId],
-                ],
-            ]);
+            $tableFilters['assigned_to_user_id'] = ['value' => $handlerId];
+        }
+
+        if ($serviceIds !== []) {
+            $tableFilters['service_id'] = ['values' => array_map('strval', $serviceIds)];
+        }
+
+        if ($tableFilters !== []) {
+            $url .= '&'.http_build_query(['tableFilters' => $tableFilters]);
         }
 
         return $url;
