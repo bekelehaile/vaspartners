@@ -82,6 +82,7 @@ Route::prefix('v1')->group(function () {
         Route::post('tickets/{ticket}/comments', [ContactPortalController::class, 'comment']);
         Route::get('tickets/{ticket}/comments/{comment}/attachment', [ContactPortalController::class, 'downloadCommentAttachment']);
         Route::get('subscriptions', [ContactPortalController::class, 'subscriptions']);
+        Route::get('subscriptions/{subscription}', [ContactPortalController::class, 'showSubscription']);
         Route::get('revenue', [RevenuePortalController::class, 'index']);
 
         Route::get('feedback', [FeedbackController::class, 'index']);

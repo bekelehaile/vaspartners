@@ -61,15 +61,8 @@ class SubscriptionResource extends Resource
                 TextEntry::make('public_id')->label('Subscription ID'),
                 TextEntry::make('status')
                     ->badge()
-                    ->formatStateUsing(fn ($state) => $state instanceof SubscriptionStatus
-                        ? $state->label()
-                        : (SubscriptionStatus::tryFrom((string) $state)?->label() ?? (string) $state))
-                    ->color(fn ($state): string => match ($state instanceof SubscriptionStatus ? $state : SubscriptionStatus::tryFrom((string) $state)) {
-                        SubscriptionStatus::Active => 'success',
-                        SubscriptionStatus::PendingRenewal, SubscriptionStatus::Grace => 'warning',
-                        SubscriptionStatus::Expired, SubscriptionStatus::Deactive => 'danger',
-                        default => 'gray',
-                    }),
+                    ->formatStateUsing(fn ($state) => SubscriptionStatus::tryLabel($state))
+                    ->color(fn ($state): string => SubscriptionStatus::tryColor($state)),
                 TextEntry::make('service.name')->label('Service'),
                 TextEntry::make('renewal_interval')->badge()->placeholder('—'),
                 TextEntry::make('current_period_start')->dateTime()->placeholder('—'),
@@ -119,7 +112,10 @@ class SubscriptionResource extends Resource
         return $table->columns([
             TextColumn::make('company.name')->label('Company')->searchable()->placeholder('—'),
             TextColumn::make('service.name')->sortable(),
-            TextColumn::make('status')->badge(),
+            TextColumn::make('status')
+                ->badge()
+                ->formatStateUsing(fn ($state) => SubscriptionStatus::tryLabel($state))
+                ->color(fn ($state): string => SubscriptionStatus::tryColor($state)),
             TextColumn::make('contact.name')->label('Activated by')->searchable()->toggleable(),
             TextColumn::make('renewal_interval')->badge(),
             TextColumn::make('current_period_end')->dateTime()->sortable()->toggleable(),

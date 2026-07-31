@@ -152,13 +152,40 @@ export type Subscription = {
   id: number;
   public_id: string;
   status: string;
+  status_label?: string;
   service_id?: number;
-  service?: { id: number; name: string; slug: string; renewal_interval?: string | null };
+  service?: {
+    id: number;
+    name: string;
+    slug: string;
+    renewal_interval?: string | null;
+    is_subscription_based?: boolean;
+  };
   started_at?: string | null;
   current_period_start?: string | null;
   current_period_end?: string | null;
   next_renewal_due_at?: string | null;
   terminated_at?: string | null;
+  renewal_interval?: string | null;
+  renewal_interval_label?: string | null;
+  company?: { id: number; name: string; tin?: string | null } | null;
+  activated_by_contact?: {
+    public_id?: string;
+    name?: string;
+    phone_number?: string | null;
+  } | null;
+  activated_by_ticket?: SubscriptionLinkedTicket | null;
+  terminated_by_ticket?: SubscriptionLinkedTicket | null;
+  tickets?: SubscriptionLinkedTicket[];
+};
+
+export type SubscriptionLinkedTicket = {
+  tt_number: string;
+  public_id?: string;
+  status: string;
+  requisition?: { id: number; name: string } | null;
+  service?: { id: number; name: string } | null;
+  created_at?: string | null;
 };
 
 export type PartnerRevenueRow = {

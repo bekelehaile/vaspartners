@@ -580,6 +580,104 @@ class ContactPortalController extends Controller
         ]);
     }
 
+    public function showSubscription(Request $request, Subscription $subscription, CompanyMembershipService $membership)
+    {
+        /** @var \App\Models\Contact $contact */
+        $contact = $request->user();
+        $membership->assertCanAccessCompany($contact);
+
+        abort_unless(
+            (int) $subscription->company_id === (int) $contact->current_company_id,
+            404
+        );
+
+        $subscription->load([
+            'service:id,name,slug,renewal_interval,is_subscription_based',
+            'company:id,name,tin',
+            'contact:id,public_id,name,phone_number',
+            'activatedByTicket:id,tt_number,public_id,status,requisition_id,created_at',
+            'activatedByTicket.requisition:id,name',
+            'terminatedByTicket:id,tt_number,public_id,status,requisition_id,created_at',
+            'terminatedByTicket.requisition:id,name',
+        ]);
+
+        $relatedTickets = Ticket::query()
+            ->with(['requisition:id,name', 'service:id,name'])
+            ->where('subscription_id', $subscription->id)
+            ->latest('id')
+            ->limit(50)
+            ->get(['id', 'tt_number', 'public_id', 'status', 'service_id', 'requisition_id', 'created_at', 'subscription_id']);
+
+        $status = $subscription->status instanceof \App\Enums\SubscriptionStatus
+            ? $subscription->status
+            : \App\Enums\SubscriptionStatus::tryFrom((string) $subscription->status);
+
+        $renewal = $subscription->renewal_interval instanceof \App\Enums\RenewalInterval
+            ? $subscription->renewal_interval
+            : \App\Enums\RenewalInterval::tryFrom((string) ($subscription->renewal_interval ?? ''));
+
+        $mapTicket = static function (?Ticket $ticket): ?array {
+            if (! $ticket) {
+                return null;
+            }
+
+            return [
+                'tt_number' => $ticket->tt_number,
+                'public_id' => $ticket->public_id,
+                'status' => $ticket->status instanceof \BackedEnum ? $ticket->status->value : (string) $ticket->status,
+                'requisition' => $ticket->requisition
+                    ? ['id' => $ticket->requisition->id, 'name' => $ticket->requisition->name]
+                    : null,
+                'service' => $ticket->service
+                    ? ['id' => $ticket->service->id, 'name' => $ticket->service->name]
+                    : null,
+                'created_at' => optional($ticket->created_at)?->toIso8601String(),
+            ];
+        };
+
+        return response()->json([
+            'data' => [
+                'id' => $subscription->id,
+                'public_id' => $subscription->public_id,
+                'status' => $status?->value ?? (string) $subscription->status,
+                'status_label' => $status?->label() ?? (string) $subscription->status,
+                'renewal_interval' => $renewal?->value,
+                'renewal_interval_label' => $renewal?->label(),
+                'started_at' => optional($subscription->started_at)?->toIso8601String(),
+                'current_period_start' => optional($subscription->current_period_start)?->toIso8601String(),
+                'current_period_end' => optional($subscription->current_period_end)?->toIso8601String(),
+                'next_renewal_due_at' => optional($subscription->next_renewal_due_at)?->toIso8601String(),
+                'terminated_at' => optional($subscription->terminated_at)?->toIso8601String(),
+                'service' => $subscription->service
+                    ? [
+                        'id' => $subscription->service->id,
+                        'name' => $subscription->service->name,
+                        'slug' => $subscription->service->slug,
+                        'renewal_interval' => $subscription->service->renewal_interval,
+                        'is_subscription_based' => (bool) $subscription->service->is_subscription_based,
+                    ]
+                    : null,
+                'company' => $subscription->company
+                    ? [
+                        'id' => $subscription->company->id,
+                        'name' => $subscription->company->name,
+                        'tin' => $subscription->company->tin,
+                    ]
+                    : null,
+                'activated_by_contact' => $subscription->contact
+                    ? [
+                        'public_id' => $subscription->contact->public_id,
+                        'name' => $subscription->contact->name,
+                        'phone_number' => $subscription->contact->phone_number,
+                    ]
+                    : null,
+                'activated_by_ticket' => $mapTicket($subscription->activatedByTicket),
+                'terminated_by_ticket' => $mapTicket($subscription->terminatedByTicket),
+                'tickets' => $relatedTickets->map($mapTicket)->values()->all(),
+            ],
+        ]);
+    }
+
     public function uploadDocument(Request $request, Ticket $ticket, TicketDocumentService $documents, CompanyMembershipService $membership)
     {
         $membership->assertCanAccessCompanyTicket($request->user(), $ticket);

@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Tickets;
 
 use App\Enums\ApprovalAction;
 use App\Enums\DocumentReviewStatus;
+use App\Enums\SubscriptionStatus;
 use App\Enums\TicketStatus;
 use App\Filament\Resources\Companies\CompanyResource;
 use App\Filament\Resources\Contacts\ContactResource;
@@ -224,6 +225,12 @@ class TicketResource extends Resource
                     ->url(fn (Ticket $record): ?string => $record->subscription
                         ? SubscriptionResource::getUrl('view', ['record' => $record->subscription])
                         : null),
+                TextEntry::make('subscription.status')
+                    ->label('Subscription status')
+                    ->badge()
+                    ->placeholder('—')
+                    ->formatStateUsing(fn ($state): string => SubscriptionStatus::tryLabel($state))
+                    ->color(fn ($state): string => SubscriptionStatus::tryColor($state)),
                 TextEntry::make('parentTicket.tt_number')
                     ->label('Parent request')
                     ->placeholder('—')
@@ -276,7 +283,7 @@ class TicketResource extends Resource
                 TextColumn::make('contact.phone_number')->label('Phone')->toggleable(),
                 TextColumn::make('service.name')->sortable(),
                 TextColumn::make('category.name')->label('Group')->toggleable(),
-                TextColumn::make('requisition.name')->label('Type')->toggleable(),
+                TextColumn::make('requisition.name')->label('Request type')->toggleable(),
                 TextColumn::make('status')->badge()
                     ->formatStateUsing(fn ($state) => $state instanceof TicketStatus
                         ? $state->label()
@@ -285,6 +292,13 @@ class TicketResource extends Resource
                         ? $state
                         : TicketStatus::tryFrom((string) $state)
                     )?->getColor() ?? 'gray'),
+                TextColumn::make('subscription.status')
+                    ->label('Subscription')
+                    ->badge()
+                    ->placeholder('—')
+                    ->toggleable()
+                    ->formatStateUsing(fn ($state): string => SubscriptionStatus::tryLabel($state))
+                    ->color(fn ($state): string => SubscriptionStatus::tryColor($state)),
                 TextColumn::make('attachments')
                     ->label('Attachments')
                     ->badge()
@@ -317,6 +331,20 @@ class TicketResource extends Resource
                 SelectFilter::make('status')->options(collect(TicketStatus::cases())->mapWithKeys(
                     fn (TicketStatus $s) => [$s->value => $s->label()]
                 )),
+                SelectFilter::make('subscription_status')
+                    ->label('Subscription status')
+                    ->options(SubscriptionStatus::options())
+                    ->query(function (Builder $query, array $data): Builder {
+                        $value = $data['value'] ?? null;
+                        if (! filled($value)) {
+                            return $query;
+                        }
+
+                        return $query->whereHas(
+                            'subscription',
+                            fn (Builder $q) => $q->where('status', $value),
+                        );
+                    }),
                 SelectFilter::make('assigned_to_user_id')
                     ->label('Account handler')
                     ->relationship(

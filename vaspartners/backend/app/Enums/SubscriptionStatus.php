@@ -22,9 +22,36 @@ enum SubscriptionStatus: string
         };
     }
 
+    public function color(): string
+    {
+        return match ($this) {
+            self::Active => 'success',
+            self::PendingRenewal, self::Grace => 'warning',
+            self::Expired, self::Deactive => 'danger',
+        };
+    }
+
     public function isAlive(): bool
     {
         return in_array($this, [self::Active, self::PendingRenewal, self::Grace], true);
+    }
+
+    public static function tryLabel(mixed $state): string
+    {
+        if ($state instanceof self) {
+            return $state->label();
+        }
+
+        return self::tryFrom((string) $state)?->label() ?? (string) $state;
+    }
+
+    public static function tryColor(mixed $state): string
+    {
+        if ($state instanceof self) {
+            return $state->color();
+        }
+
+        return self::tryFrom((string) $state)?->color() ?? 'gray';
     }
 
     public static function options(): array

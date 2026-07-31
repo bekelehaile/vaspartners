@@ -31,6 +31,7 @@ class SubscriptionStatsOverview extends StatsOverviewWidget
         $active = (clone $base)->where('status', SubscriptionStatus::Active)->count();
         $pendingRenewal = (clone $base)->where('status', SubscriptionStatus::PendingRenewal)->count();
         $grace = (clone $base)->where('status', SubscriptionStatus::Grace)->count();
+        $deactive = (clone $base)->where('status', SubscriptionStatus::Deactive)->count();
         $dueSoon = (clone $base)
             ->whereIn('status', [
                 SubscriptionStatus::Active,
@@ -46,22 +47,27 @@ class SubscriptionStatsOverview extends StatsOverviewWidget
                 ->description('Live entitlements')
                 ->descriptionIcon(Heroicon::OutlinedBolt)
                 ->color('success')
-                ->url(SubscriptionResource::getUrl('index')),
+                ->url(SubscriptionResource::getUrl('index').'?tab=active'),
             Stat::make('Pending renewal', $pendingRenewal)
                 ->description('Renewal in flight')
                 ->descriptionIcon(Heroicon::OutlinedArrowPath)
                 ->color($pendingRenewal > 0 ? 'warning' : 'gray')
-                ->url(SubscriptionResource::getUrl('index')),
+                ->url(SubscriptionResource::getUrl('index').'?tab=pending_renewal'),
             Stat::make('Grace', $grace)
                 ->description('Past due — still alive')
                 ->descriptionIcon(Heroicon::OutlinedExclamationTriangle)
                 ->color($grace > 0 ? 'warning' : 'gray')
-                ->url(SubscriptionResource::getUrl('index')),
+                ->url(SubscriptionResource::getUrl('index').'?tab=grace'),
+            Stat::make('Deactive', $deactive)
+                ->description('Partner quit (terminated request closed)')
+                ->descriptionIcon(Heroicon::OutlinedNoSymbol)
+                ->color($deactive > 0 ? 'danger' : 'gray')
+                ->url(SubscriptionResource::getUrl('index').'?tab=deactive'),
             Stat::make('Due in 30 days', $dueSoon)
                 ->description('Period ending soon')
                 ->descriptionIcon(Heroicon::OutlinedCalendarDays)
                 ->color($dueSoon > 0 ? 'danger' : 'gray')
-                ->url(SubscriptionResource::getUrl('index')),
+                ->url(SubscriptionResource::getUrl('index').'?tab=active'),
         ];
     }
 }

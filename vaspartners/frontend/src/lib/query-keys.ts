@@ -22,6 +22,7 @@ export const queryKeys = {
       ["catalog", "document-requirements", serviceId, requisitionId] as const,
   },
   subscriptions: ["contact", "subscriptions"] as const,
+  subscription: (publicId: string) => ["contact", "subscriptions", publicId] as const,
   revenue: ["contact", "revenue"] as const,
   revenueFiltered: (filters: Record<string, unknown>) =>
     ["contact", "revenue", filters] as const,

@@ -58,7 +58,14 @@ export function SubscriptionsTable() {
     () => [
       columnHelper.accessor("public_id", {
         header: "Subscription",
-        cell: (info) => <span className="table-link">{info.getValue()}</span>,
+        cell: (info) => (
+          <Link
+            href={`/portal/subscriptions/${encodeURIComponent(info.row.original.public_id)}`}
+            className="table-link"
+          >
+            {info.getValue()}
+          </Link>
+        ),
       }),
       columnHelper.accessor((row) => row.service?.name ?? "—", {
         id: "service",
@@ -92,25 +99,35 @@ export function SubscriptionsTable() {
         header: "",
         cell: (info) => {
           const sub = info.row.original;
-          if (!canManage || !isAliveSubscriptionStatus(sub.status)) {
-            return null;
-          }
-          const canTerminate = serviceAllowsTermination(services, sub);
+          const canTerminate =
+            canManage &&
+            isAliveSubscriptionStatus(sub.status) &&
+            serviceAllowsTermination(services, sub);
           return (
             <span className="table-actions">
               <Link
-                href={`/portal/requests/new?intent=manage&subscription_id=${sub.id}`}
+                href={`/portal/subscriptions/${encodeURIComponent(sub.public_id)}`}
                 className="btn-ghost table-action"
               >
-                Manage
+                View
               </Link>
-              {canTerminate ? (
-                <Link
-                  href={`/portal/requests/new?intent=manage&subscription_id=${sub.id}&action=terminate`}
-                  className="btn-ghost table-action"
-                >
-                  Terminate
-                </Link>
+              {canManage && isAliveSubscriptionStatus(sub.status) ? (
+                <>
+                  <Link
+                    href={`/portal/requests/new?intent=manage&subscription_id=${sub.id}`}
+                    className="btn-ghost table-action"
+                  >
+                    Manage
+                  </Link>
+                  {canTerminate ? (
+                    <Link
+                      href={`/portal/requests/new?intent=manage&subscription_id=${sub.id}&action=terminate`}
+                      className="btn-ghost table-action"
+                    >
+                      Terminate
+                    </Link>
+                  ) : null}
+                </>
               ) : null}
             </span>
           );
@@ -184,24 +201,32 @@ export function SubscriptionsTable() {
                       <span>Started {formatDate(sub.started_at)}</span>
                       <span>Renewal {formatDate(sub.next_renewal_due_at)}</span>
                     </div>
-                    {canManage && alive && (
-                      <div className="portal-mobile-card-actions">
-                        <Link
-                          href={`/portal/requests/new?intent=manage&subscription_id=${sub.id}`}
-                          className="btn-ghost table-action"
-                        >
-                          Manage
-                        </Link>
-                        {canTerminate ? (
+                    <div className="portal-mobile-card-actions">
+                      <Link
+                        href={`/portal/subscriptions/${encodeURIComponent(sub.public_id)}`}
+                        className="btn-ghost table-action"
+                      >
+                        View
+                      </Link>
+                      {canManage && alive ? (
+                        <>
                           <Link
-                            href={`/portal/requests/new?intent=manage&subscription_id=${sub.id}&action=terminate`}
+                            href={`/portal/requests/new?intent=manage&subscription_id=${sub.id}`}
                             className="btn-ghost table-action"
                           >
-                            Terminate
+                            Manage
                           </Link>
-                        ) : null}
-                      </div>
-                    )}
+                          {canTerminate ? (
+                            <Link
+                              href={`/portal/requests/new?intent=manage&subscription_id=${sub.id}&action=terminate`}
+                              className="btn-ghost table-action"
+                            >
+                              Terminate
+                            </Link>
+                          ) : null}
+                        </>
+                      ) : null}
+                    </div>
                   </div>
                 </li>
               );

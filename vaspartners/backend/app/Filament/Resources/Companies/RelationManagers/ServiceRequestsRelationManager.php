@@ -48,7 +48,7 @@ class ServiceRequestsRelationManager extends RelationManager
         return $table
             ->query(fn (): Builder => $company->serviceRequests())
             ->relationship(null)
-            ->description('New subscriptions and manage-service requests for this company (via members, legacy client match, or subscription).')
+            ->description('Service requests for this company. Request type is separate from subscription status (Active / Deactive).')
             ->defaultSort('created_at', 'desc')
             ->modifyQueryUsing(fn (Builder $query) => $query->with([
                 'service',
@@ -58,16 +58,10 @@ class ServiceRequestsRelationManager extends RelationManager
             ]))
             ->columns([
                 TextColumn::make('tt_number')->label('Request number')->searchable()->sortable(),
-                TextColumn::make('journey')
-                    ->label('Journey')
-                    ->state(fn (Ticket $record): string => $record->requisition?->creates_subscription
-                        ? 'New subscription'
-                        : 'Manage service')
-                    ->badge()
-                    ->color(fn (string $state): string => $state === 'New subscription' ? 'success' : 'info'),
-                TextColumn::make('requisition.name')->label('Type')->toggleable(),
+                TextColumn::make('requisition.name')->label('Request type')->searchable()->wrap(),
                 TextColumn::make('service.name')->label('Service')->searchable()->wrap(),
                 TextColumn::make('status')
+                    ->label('Request status')
                     ->badge()
                     ->formatStateUsing(fn ($state) => $state instanceof TicketStatus
                         ? $state->label()
@@ -76,20 +70,26 @@ class ServiceRequestsRelationManager extends RelationManager
                         ? $state
                         : TicketStatus::tryFrom((string) $state)
                     )?->getColor() ?? 'gray'),
+                TextColumn::make('subscription.status')
+                    ->label('Subscription')
+                    ->badge()
+                    ->placeholder('—')
+                    ->formatStateUsing(fn ($state): string => \App\Enums\SubscriptionStatus::tryLabel($state))
+                    ->color(fn ($state): string => \App\Enums\SubscriptionStatus::tryColor($state)),
                 TextColumn::make('contact.name')->label('Partner')->toggleable(),
                 TextColumn::make('created_at')->dateTime()->sortable(),
             ])
             ->filters([
-                TernaryFilter::make('manage_only')
-                    ->label('Manage service only')
+                TernaryFilter::make('creates_subscription')
+                    ->label('Creates subscription')
                     ->queries(
                         true: fn (Builder $query) => $query->whereHas(
                             'requisition',
-                            fn (Builder $q) => $q->where('creates_subscription', false),
+                            fn (Builder $q) => $q->where('creates_subscription', true),
                         ),
                         false: fn (Builder $query) => $query->whereHas(
                             'requisition',
-                            fn (Builder $q) => $q->where('creates_subscription', true),
+                            fn (Builder $q) => $q->where('creates_subscription', false),
                         ),
                         blank: fn (Builder $query) => $query,
                     ),

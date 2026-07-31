@@ -134,6 +134,20 @@ export function useSubscriptions(options?: { enabled?: boolean }) {
   });
 }
 
+export function useSubscription(publicId: string, options?: { enabled?: boolean }) {
+  const enabled = options?.enabled ?? true;
+  return useQuery({
+    queryKey: queryKeys.subscription(publicId),
+    enabled: enabled && !!getToken() && !!publicId,
+    queryFn: async () => {
+      const res = await api<{ data: Subscription }>(
+        `/subscriptions/${encodeURIComponent(publicId)}`,
+      );
+      return res.data;
+    },
+  });
+}
+
 export type RevenueFilters = {
   page?: number;
   per_page?: number;
