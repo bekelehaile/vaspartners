@@ -263,6 +263,10 @@ class CompanyMembershipService
             ];
         });
 
+        // Bring over alive subscriptions left on abandoned MVAS / unverified companies.
+        app(RemountSubscriptionsToVerifiedTinService::class)
+            ->remountForCompany($result['company'], dryRun: false);
+
         return $result['contact']->fresh(['company', 'memberships.company']);
     }
 
