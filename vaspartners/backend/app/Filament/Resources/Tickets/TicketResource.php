@@ -267,20 +267,11 @@ class TicketResource extends Resource
                 'service',
             ]))
             ->columns([
-                TextColumn::make('tt_number')->label('Request number')->searchable()->sortable(),
+                TextColumn::make('tt_number')->label('Request number')->sortable(),
                 TextColumn::make('company_name')
                     ->label('Company')
                     ->placeholder('—')
                     ->toggleable()
-                    ->searchable(query: function (Builder $query, string $search): Builder {
-                        $like = '%'.$search.'%';
-
-                        return $query->where(function (Builder $q) use ($like): void {
-                            $q->whereHas('subscription.company', fn (Builder $c) => $c->where('name', 'like', $like))
-                                ->orWhereHas('contact.company', fn (Builder $c) => $c->where('name', 'like', $like))
-                                ->orWhereHas('contact', fn (Builder $c) => $c->where('company_name', 'like', $like));
-                        });
-                    })
                     ->state(fn (Ticket $record): ?string => $record->subscription?->company?->name
                         ?? $record->contact?->company?->name
                         ?? $record->contact?->company_name),
@@ -363,6 +354,33 @@ class TicketResource extends Resource
                 TextColumn::make('created_at')->dateTime()->sortable(),
             ])
             ->defaultSort('created_at', 'desc')
+            ->searchable()
+            ->searchPlaceholder('Search request number or company name…')
+            ->splitSearchTerms(false)
+            ->searchUsing(function (Builder $query, string $search): void {
+                $term = trim($search);
+                if ($term === '') {
+                    return;
+                }
+
+                $like = '%'.addcslashes($term, '%_\\').'%';
+
+                $query->where(function (Builder $q) use ($like): void {
+                    $q->where('tt_number', 'ilike', $like)
+                        ->orWhereHas('subscription.company', function (Builder $c) use ($like): void {
+                            $c->where('name', 'ilike', $like)
+                                ->orWhere('legal_name', 'ilike', $like);
+                        })
+                        ->orWhereHas('contact.company', function (Builder $c) use ($like): void {
+                            $c->where('name', 'ilike', $like)
+                                ->orWhere('legal_name', 'ilike', $like);
+                        })
+                        ->orWhereHas(
+                            'contact',
+                            fn (Builder $c) => $c->where('company_name', 'ilike', $like),
+                        );
+                });
+            })
             ->filters([
                 SelectFilter::make('status')->options(collect(TicketStatus::cases())->mapWithKeys(
                     fn (TicketStatus $s) => [$s->value => $s->label()]
