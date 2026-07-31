@@ -13,7 +13,7 @@ class ListRevenueImports extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'Monthly revenue only — import CSV (service ID + amount), match partners, then send revenue-collection SMS. General / special announcements use Bulk messages.';
+        return 'Monthly revenue only — import a CSV (service ID + amount), match partners, then send revenue-collection SMS. General / special announcements use Bulk messages.';
     }
 
     protected function getHeaderActions(): array

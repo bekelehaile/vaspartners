@@ -19,6 +19,35 @@ class RevenuePartnerResolver
     }
 
     /**
+     * Find a partner by service ID, tolerating a dropped leading zero
+     * (Excel/CSV often turns 0102132000005008 into 102132000005008).
+     */
+    protected function findByServiceId(Builder $query, string $serviceId): ?RevenuePartner
+    {
+        $exact = (clone $query)->where('service_id', $serviceId)->first();
+        if ($exact) {
+            return $exact;
+        }
+
+        // Only for long numeric service IDs — never for short codes.
+        if (! preg_match('/^\d{10,}$/', $serviceId)) {
+            return null;
+        }
+
+        $stripped = ltrim($serviceId, '0');
+        if ($stripped === '') {
+            return null;
+        }
+
+        $candidates = (clone $query)
+            ->whereRaw("NULLIF(LTRIM(service_id, '0'), '') = ?", [$stripped])
+            ->limit(2)
+            ->get();
+
+        return $candidates->count() === 1 ? $candidates->first() : null;
+    }
+
+    /**
      * @return array{
      *   ok: true,
      *   partner: ?RevenuePartner,
@@ -43,7 +72,7 @@ class RevenuePartnerResolver
         }
 
         $byServiceId = $serviceId !== null
-            ? $this->baseQuery($ownerUserId)->where('service_id', $serviceId)->first()
+            ? $this->findByServiceId($this->baseQuery($ownerUserId), $serviceId)
             : null;
 
         $byShortCode = null;
@@ -87,7 +116,12 @@ class RevenuePartnerResolver
         }
 
         if ($partner) {
-            if ($serviceId !== null && $partner->service_id !== $serviceId) {
+            // When CSV service_id matched via leading-zero tolerance, accept master service_id.
+            $masterServiceId = self::normalize($partner->service_id);
+            if ($serviceId !== null
+                && $masterServiceId !== null
+                && $masterServiceId !== $serviceId
+                && ! $this->serviceIdsEquivalent($masterServiceId, $serviceId)) {
                 return $this->fail(
                     "Short code matches partner {$partner->service_id}, but CSV service_id does not.",
                     $serviceId,
@@ -108,7 +142,8 @@ class RevenuePartnerResolver
         return [
             'ok' => true,
             'partner' => $partner,
-            'service_id' => $serviceId ?? $partner?->service_id,
+            // Prefer master service_id when matched (keeps leading zero).
+            'service_id' => $partner?->service_id ? self::normalize($partner->service_id) : $serviceId,
             'short_code' => $shortCode ?? self::normalize($partner?->short_code),
             'error' => null,
         ];
@@ -194,12 +229,34 @@ class RevenuePartnerResolver
             ->where(function ($q) use ($serviceId, $shortCode): void {
                 if ($serviceId !== null) {
                     $q->orWhere('service_id', $serviceId);
+                    if (preg_match('/^\d{10,}$/', $serviceId)) {
+                        $stripped = ltrim($serviceId, '0');
+                        if ($stripped !== '') {
+                            $q->orWhereRaw("NULLIF(LTRIM(service_id, '0'), '') = ?", [$stripped]);
+                        }
+                    }
                 }
                 if ($shortCode !== null) {
                     $q->orWhere('short_code', $shortCode);
                 }
             })
             ->exists();
+    }
+
+    protected function serviceIdsEquivalent(string $a, string $b): bool
+    {
+        if ($a === $b) {
+            return true;
+        }
+
+        if (! preg_match('/^\d{10,}$/', $a) || ! preg_match('/^\d{10,}$/', $b)) {
+            return false;
+        }
+
+        $sa = ltrim($a, '0');
+        $sb = ltrim($b, '0');
+
+        return $sa !== '' && $sa === $sb;
     }
 
     /**
