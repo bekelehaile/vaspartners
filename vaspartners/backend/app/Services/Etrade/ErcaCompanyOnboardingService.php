@@ -117,7 +117,8 @@ class ErcaCompanyOnboardingService
      */
     public function createFromConsent(Contact $contact, string $previewToken, string $address): Contact
     {
-        $cached = Cache::pull($this->tokenKey($previewToken));
+        // Read (do not consume) until create succeeds — uniqueness failures must not burn the token.
+        $cached = Cache::get($this->tokenKey($previewToken));
         if (! is_array($cached) || (int) ($cached['contact_id'] ?? 0) !== (int) $contact->id) {
             throw ValidationException::withMessages([
                 'preview_token' => 'ERCA preview expired. Search the TIN number again.',
@@ -139,13 +140,14 @@ class ErcaCompanyOnboardingService
             ]);
         }
 
+        // Fail fast before create — TIN must never be duplicated.
         $this->membership->assertTinAvailableForCreate($tin);
 
         $ercaPhone = isset($cached['phone']) ? trim((string) $cached['phone']) : '';
         $ercaEmail = isset($cached['email']) ? trim((string) $cached['email']) : '';
         $ercaAddress = isset($cached['address']) ? trim((string) $cached['address']) : '';
 
-        return $this->membership->createApprovedCompanyFromErca(
+        $created = $this->membership->createApprovedCompanyFromErca(
             $contact,
             [
                 'company_name' => $legal,
@@ -157,6 +159,10 @@ class ErcaCompanyOnboardingService
                 'erca_address' => $ercaAddress !== '' ? $ercaAddress : null,
             ],
         );
+
+        Cache::forget($this->tokenKey($previewToken));
+
+        return $created;
     }
 
     /**
@@ -164,7 +170,7 @@ class ErcaCompanyOnboardingService
      */
     public function updateExistingFromConsent(Contact $contact, string $previewToken): Contact
     {
-        $cached = Cache::pull($this->tokenKey($previewToken));
+        $cached = Cache::get($this->tokenKey($previewToken));
         if (! is_array($cached) || (int) ($cached['contact_id'] ?? 0) !== (int) $contact->id) {
             throw ValidationException::withMessages([
                 'preview_token' => 'ERCA preview expired. Search the TIN number again.',
@@ -179,7 +185,7 @@ class ErcaCompanyOnboardingService
             ]);
         }
 
-        return $this->membership->updateCompanyFromErcaPreview(
+        $updated = $this->membership->updateCompanyFromErcaPreview(
             $contact,
             [
                 'company_tin' => $tin,
@@ -189,6 +195,10 @@ class ErcaCompanyOnboardingService
                 'company_address' => isset($cached['address']) ? (string) $cached['address'] : null,
             ],
         );
+
+        Cache::forget($this->tokenKey($previewToken));
+
+        return $updated;
     }
 
     public function forgetPreview(string $previewToken): void

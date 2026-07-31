@@ -1,9 +1,11 @@
 <?php
 
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Validation\ValidationException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -25,7 +27,17 @@ return Application::configure(basePath: dirname(__DIR__))
         );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // Last line of defence: DB unique index on companies.tin must never surface as a 500.
+        $exceptions->render(function (UniqueConstraintViolationException $e) {
+            if (! str_contains($e->getMessage(), 'companies_tin_unique')) {
+                return null;
+            }
+
+            throw ValidationException::withMessages([
+                'company_tin' => 'This TIN is already registered to another company. TIN numbers are unique — use “Join existing company”, or contact an administrator.',
+                'tin' => 'This TIN is already registered to another company. TIN numbers are unique.',
+            ]);
+        });
     })
     ->withSchedule(function (Schedule $schedule): void {
         $schedule->command('vas:scan-document-missing')

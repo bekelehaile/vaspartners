@@ -74,6 +74,16 @@ class Company extends Model
                 );
             }
 
+            // Always store Ethiopian TINs as digits-only so uniqueness cannot be bypassed
+            // via spaces/dashes. Leave legacy placeholders (e.g. MVAS-*) unchanged.
+            if (array_key_exists('tin', $company->getAttributes()) || $company->isDirty('tin')) {
+                $raw = (string) ($company->attributes['tin'] ?? '');
+                $digits = TinNumber::normalize($raw);
+                if (TinNumber::isValid($digits)) {
+                    $company->attributes['tin'] = $digits;
+                }
+            }
+
             // Changing TIN on an existing company clears validation (TIN is the service gate).
             // (Skip on create so ERCA-consent create can set verified/approved in the same insert.)
             if ($company->exists && $company->isDirty('tin')) {

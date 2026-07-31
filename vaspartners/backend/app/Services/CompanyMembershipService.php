@@ -2866,7 +2866,8 @@ class CompanyMembershipService
 
     protected function assertUniqueTin(string $tin, ?int $ignoreCompanyId = null): void
     {
-        $tinQuery = Company::query()->where('tin', $tin);
+        // Include soft-deleted rows — a removed company must still block TIN reuse.
+        $tinQuery = Company::withTrashed()->where('tin', $tin);
         if ($ignoreCompanyId) {
             $tinQuery->where('id', '!=', $ignoreCompanyId);
         }
@@ -2874,6 +2875,7 @@ class CompanyMembershipService
         if ($tinQuery->exists()) {
             throw ValidationException::withMessages([
                 'company_tin' => 'This TIN is already registered to another company. TIN numbers are unique — use “Join existing company”, or contact an administrator.',
+                'tin' => 'This TIN is already registered to another company. TIN numbers are unique.',
             ]);
         }
     }

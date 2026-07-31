@@ -101,6 +101,7 @@ class CompanyResource extends Resource
                 ->maxLength(32)
                 ->disabled(fn (?Company $record): bool => (bool) $record?->isErcaIdentityLocked())
                 ->dehydrated(fn (?Company $record): bool => ! (bool) $record?->isErcaIdentityLocked())
+                ->dehydrateStateUsing(fn (?string $state): string => TinNumber::normalize((string) $state))
                 ->rule(fn () => function (string $attribute, mixed $value, \Closure $fail): void {
                     if (! TinNumber::isValid($value)) {
                         $fail(TinNumber::message());
@@ -108,7 +109,7 @@ class CompanyResource extends Resource
                 })
                 ->helperText(fn (?Company $record): ?string => $record?->isErcaIdentityLocked()
                     ? 'Locked after ERCA match.'
-                    : 'Exactly 10 digits. Unique.'),
+                    : 'Exactly 10 digits. Unique — never duplicated.'),
             TextInput::make('phone')
                 ->tel()
                 ->maxLength(32)
