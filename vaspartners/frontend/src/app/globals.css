@@ -3498,6 +3498,13 @@ button.portal-mobile-card-hit {
   white-space: nowrap;
 }
 
+.table-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
 .data-table-empty {
   text-align: center;
   color: var(--et-muted);

@@ -73,6 +73,17 @@ function manageRequisitions(service: Service): Requisition[] {
   );
 }
 
+/** Service-configured Termination request type (same pattern as New subscription). */
+function terminationRequisitions(service: Service): Requisition[] {
+  if (service.is_subscription_based === false) return [];
+  return (service.requisitions ?? []).filter((r) => !!r.terminates_subscription);
+}
+
+function primaryTerminationRequisitionId(service: Service): string {
+  const terms = terminationRequisitions(service);
+  return terms.length ? String(terms[0].id) : "";
+}
+
 function stepLabels(intent: Intent): string[] {
   return intent === "subscribe"
     ? ["Service", "Confirm"]
@@ -85,6 +96,7 @@ export default function NewRequestWizard() {
   const presetService = params.get("service") || "";
   const presetSubscription = params.get("subscription_id") || "";
   const presetIntentParam = params.get("intent");
+  const presetAction = params.get("action") || ""; // e.g. terminate
   const presetIntent: Intent | "" =
     presetIntentParam === "subscribe" || presetIntentParam === "manage"
       ? presetIntentParam
@@ -230,7 +242,11 @@ export default function NewRequestWizard() {
     manageOneOffServices.find((s) => String(s.id) === String(serviceId));
   const managingOneOff = !!selectedManage && selectedManage.is_subscription_based === false;
   const starterTypes = selectedSubscribe ? starterRequisitions(selectedSubscribe) : [];
-  const manageTypes = selectedManage ? manageRequisitions(selectedManage) : [];
+  const manageTypesAll = selectedManage ? manageRequisitions(selectedManage) : [];
+  const manageTypes =
+    presetAction === "terminate"
+      ? manageTypesAll.filter((r) => !!r.terminates_subscription)
+      : manageTypesAll;
   const selectedManageType = manageTypes.find((r) => String(r.id) === String(requisitionId));
   const isTerminationRequest = !!selectedManageType?.terminates_subscription;
 
@@ -327,7 +343,22 @@ export default function NewRequestWizard() {
             "service_id",
             String(sub.service?.id ?? sub.service_id ?? "")
           );
-          setStep(1);
+          const svc =
+            services.find(
+              (s) => String(s.id) === String(sub.service?.id ?? sub.service_id),
+            ) || null;
+          // Mirror subscribe: auto-use this service's configured Termination request type.
+          if (presetAction === "terminate" && svc) {
+            const termId = primaryTerminationRequisitionId(svc);
+            if (termId) {
+              form.setFieldValue("requisition_id", termId);
+              setStep(2);
+            } else {
+              setStep(1);
+            }
+          } else {
+            setStep(1);
+          }
         }
       } else if (presetService) {
         const oneOff = manageOneOffServices.find((s) => String(s.id) === presetService);
@@ -907,7 +938,9 @@ export default function NewRequestWizard() {
                     </p>
                     {!manageTypes.length ? (
                       <div className="empty">
-                        No request types are enabled for this service.
+                        {presetAction === "terminate"
+                          ? "Termination is not configured for this service. Ask an administrator to enable the Termination request type (same as New subscription is configured per service)."
+                          : "No request types are enabled for this service."}
                       </div>
                     ) : (
                       <div className="journey-option-list">

@@ -185,6 +185,21 @@ class CatalogSeeder extends Seeder
             }
         }
 
+        // Same pattern as New subscription: every subscription-based service must expose Termination.
+        $terminationId = Requisition::query()
+            ->where('terminates_subscription', true)
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->value('id');
+
+        if ($terminationId) {
+            Service::query()
+                ->where('is_active', true)
+                ->where('is_subscription_based', true)
+                ->whereDoesntHave('requisitions', fn ($q) => $q->where('requisitions.id', $terminationId))
+                ->each(fn (Service $service) => $service->requisitions()->syncWithoutDetaching([$terminationId]));
+        }
+
         foreach ($data['document_matrix'] as $row) {
             $serviceId = $serviceMap[(int) $row['legacy_service_id']] ?? null;
             $requisitionId = $requisitionMap[(int) $row['legacy_requisition_id']] ?? null;
