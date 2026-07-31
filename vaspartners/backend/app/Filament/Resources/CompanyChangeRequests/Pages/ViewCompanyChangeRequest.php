@@ -8,6 +8,7 @@ use App\Filament\Resources\CompanyChangeRequests\CompanyChangeRequestResource;
 use App\Models\CompanyChangeRequest;
 use App\Services\CompanyMembershipService;
 use Filament\Actions\Action;
+use Filament\Actions\DeleteAction;
 use Filament\Forms\Components\Textarea;
 use Filament\Resources\Pages\ViewRecord;
 use Illuminate\Support\Facades\Storage;
@@ -72,6 +73,11 @@ class ViewCompanyChangeRequest extends ViewRecord
                     $membership->reject($record, auth()->user(), $data['admin_note'] ?? null);
                     $this->refreshFormData(['status', 'admin_note', 'reviewed_at', 'reviewed_by_user_id', 'reviewed_by_contact_id']);
                 }),
+            DeleteAction::make()
+                ->visible(fn (): bool => CompanyChangeRequestResource::canDelete($record))
+                ->requiresConfirmation()
+                ->modalHeading('Delete change request')
+                ->modalDescription('Super admin only. Removes this change request from the active list.'),
         ];
     }
 }

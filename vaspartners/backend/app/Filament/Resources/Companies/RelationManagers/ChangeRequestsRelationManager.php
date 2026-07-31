@@ -6,6 +6,7 @@ use App\Enums\CompanyChangeStatus;
 use App\Enums\CompanyChangeType;
 use App\Filament\Resources\CompanyChangeRequests\CompanyChangeRequestResource;
 use App\Models\CompanyChangeRequest;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\ViewAction;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\TextColumn;
@@ -19,7 +20,8 @@ class ChangeRequestsRelationManager extends RelationManager
 
     public function isReadOnly(): bool
     {
-        return true;
+        // Super admin may delete from this relation; others stay view-only.
+        return ! CompanyChangeRequestResource::canDeleteAny();
     }
 
     public function table(Table $table): Table
@@ -45,6 +47,9 @@ class ChangeRequestsRelationManager extends RelationManager
             ->recordActions([
                 ViewAction::make()
                     ->url(fn (CompanyChangeRequest $record): string => CompanyChangeRequestResource::getUrl('view', ['record' => $record])),
+                DeleteAction::make()
+                    ->visible(fn (CompanyChangeRequest $record): bool => CompanyChangeRequestResource::canDelete($record))
+                    ->requiresConfirmation(),
             ])
             ->headerActions([])
             ->toolbarActions([]);

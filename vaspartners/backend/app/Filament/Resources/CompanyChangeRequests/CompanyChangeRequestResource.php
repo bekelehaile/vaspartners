@@ -11,6 +11,7 @@ use App\Filament\Resources\Contacts\ContactResource;
 use App\Models\CompanyChangeRequest;
 use App\Services\CompanyMembershipService;
 use Filament\Actions\Action;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Textarea;
 use Filament\Infolists\Components\TextEntry;
@@ -230,6 +231,11 @@ class CompanyChangeRequestResource extends Resource
             ])
             ->recordActions([
                 ViewAction::make(),
+                DeleteAction::make()
+                    ->visible(fn (CompanyChangeRequest $record): bool => static::canDelete($record))
+                    ->requiresConfirmation()
+                    ->modalHeading('Delete change request')
+                    ->modalDescription('Super admin only. This permanently removes the change request record from the active list (soft delete).'),
                 Action::make('approve')
                     ->label('Approve')
                     ->color('success')
@@ -281,6 +287,13 @@ class CompanyChangeRequestResource extends Resource
 
     public static function canDelete(Model $record): bool
     {
-        return false;
+        $user = auth()->user();
+
+        return (bool) ($user && method_exists($user, 'hasRole') && $user->hasRole('super_admin'));
+    }
+
+    public static function canDeleteAny(): bool
+    {
+        return static::canDelete(new CompanyChangeRequest);
     }
 }
