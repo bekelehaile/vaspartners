@@ -339,6 +339,22 @@ Manual UI checks:
 
 ---
 
+## Related: ERCA TIN consolidation (after partners verify TIN)
+
+Partners who create a **new ERCA company** leave subscriptions / bulk recipients on the old `MVAS-*` shell. Repair:
+
+```bash
+docker exec vaspartners-app php artisan vas:remount-subscriptions-to-verified-tin --dry-run
+docker exec vaspartners-app php artisan vas:remount-subscriptions-to-verified-tin --force
+docker exec vaspartners-app php artisan vas:consolidate-mvas-into-verified-tin --dry-run
+docker exec vaspartners-app php artisan vas:consolidate-mvas-into-verified-tin --force
+# optional: --tin=0024173476
+```
+
+Full runbook: [erca-mvas-consolidation.md](./erca-mvas-consolidation.md).
+
+---
+
 ## Related: revenue partner phone sync (not MVAS dump)
 
 Abay Service ID → phone fill for **Revenue partners** (separate from MVAS dump):

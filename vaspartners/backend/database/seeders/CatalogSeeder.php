@@ -303,51 +303,89 @@ class CatalogSeeder extends Seeder
             $coreTypes->put($code, $created);
         }
 
-        $newRequisitionId = Requisition::query()
+        // Apply core docs to every creates_subscription request type (New subscription,
+        // Revenue Request, Additional Services, Merchant, …) — not only the first by sort.
+        $subscribeRequisitionIds = Requisition::query()
             ->where('creates_subscription', true)
             ->where('is_active', true)
             ->orderBy('sort_order')
-            ->value('id');
+            ->pluck('id');
 
-        if (! $newRequisitionId) {
+        if ($subscribeRequisitionIds->isEmpty()) {
             return;
         }
+
+        $newRequisitionId = $subscribeRequisitionIds->first();
 
         $services = Service::query()
             ->where('is_active', true)
             ->where('is_subscription_based', true)
-            ->whereHas('requisitions', fn ($q) => $q->where('requisitions.id', $newRequisitionId))
+            ->whereHas('requisitions', fn ($q) => $q->whereIn('requisitions.id', $subscribeRequisitionIds))
             ->get(['id']);
 
         foreach ($services as $service) {
-            $order = (int) ServiceRequisitionDocument::query()
+            // Prefer this service's existing "New subscription" matrix as the full template
+            // (includes ECA VAS license, articles, etc. beyond the core list).
+            $templateRows = ServiceRequisitionDocument::query()
                 ->where('service_id', $service->id)
                 ->where('requisition_id', $newRequisitionId)
-                ->max('sort_order');
+                ->get(['document_type_id', 'is_required', 'sort_order']);
 
-            foreach ($coreCodes as $code) {
-                $documentTypeId = $coreTypes->get($code)?->id;
-                if (! $documentTypeId) {
-                    continue;
-                }
+            if ($templateRows->isEmpty()) {
+                $templateRows = collect($coreCodes)->map(function (string $code, int $i) use ($coreTypes) {
+                    $typeId = $coreTypes->get($code)?->id;
 
-                $exists = ServiceRequisitionDocument::query()
+                    return $typeId
+                        ? (object) [
+                            'document_type_id' => $typeId,
+                            'is_required' => true,
+                            'sort_order' => $i,
+                        ]
+                        : null;
+                })->filter()->values();
+            }
+
+            $attachedSubscribeIds = $service->requisitions()
+                ->whereIn('requisitions.id', $subscribeRequisitionIds)
+                ->pluck('requisitions.id');
+
+            // Also seed the New subscription matrix itself even if that type is not pivoted yet
+            // (legacy catalogs stored docs under New while partners open Revenue Request).
+            $targetRequisitionIds = $attachedSubscribeIds
+                ->push($newRequisitionId)
+                ->unique()
+                ->values();
+
+            foreach ($targetRequisitionIds as $requisitionId) {
+                $order = (int) ServiceRequisitionDocument::query()
                     ->where('service_id', $service->id)
-                    ->where('requisition_id', $newRequisitionId)
-                    ->where('document_type_id', $documentTypeId)
-                    ->exists();
+                    ->where('requisition_id', $requisitionId)
+                    ->max('sort_order');
 
-                if ($exists) {
-                    continue;
+                foreach ($templateRows as $row) {
+                    $documentTypeId = (int) $row->document_type_id;
+                    if (! $documentTypeId) {
+                        continue;
+                    }
+
+                    $exists = ServiceRequisitionDocument::query()
+                        ->where('service_id', $service->id)
+                        ->where('requisition_id', $requisitionId)
+                        ->where('document_type_id', $documentTypeId)
+                        ->exists();
+
+                    if ($exists) {
+                        continue;
+                    }
+
+                    ServiceRequisitionDocument::query()->create([
+                        'service_id' => $service->id,
+                        'requisition_id' => $requisitionId,
+                        'document_type_id' => $documentTypeId,
+                        'is_required' => (bool) $row->is_required,
+                        'sort_order' => ++$order,
+                    ]);
                 }
-
-                ServiceRequisitionDocument::query()->create([
-                    'service_id' => $service->id,
-                    'requisition_id' => $newRequisitionId,
-                    'document_type_id' => $documentTypeId,
-                    'is_required' => true,
-                    'sort_order' => ++$order,
-                ]);
             }
         }
     }
