@@ -117,24 +117,49 @@ class User extends Authenticatable implements CanResetPasswordContract, Filament
     }
 
     /**
-     * Active staff eligible to handle a ticket in the given group
-     * (excludes users marked for ticket supervision alerts).
-     *
-     * @return \Illuminate\Support\Collection<int, string>
+     * Spatie role name for operational ticket handlers.
      */
-    public static function assignableManagersForCategory(?int $categoryId)
+    public const ROLE_ACCOUNT_MANAGER = 'account_manager';
+
+    /**
+     * Active staff with the Account Manager role (eligible to own tickets).
+     */
+    public function isAssignableAccountManager(): bool
+    {
+        if (! $this->is_active) {
+            return false;
+        }
+
+        return $this->hasRole(self::ROLE_ACCOUNT_MANAGER);
+    }
+
+    /**
+     * Active Account Managers eligible to handle a ticket in the given group.
+     *
+     * @return \Illuminate\Database\Eloquent\Builder<static>
+     */
+    public static function assignableAccountManagersQuery(?int $categoryId = null)
     {
         return self::query()
+            ->role(self::ROLE_ACCOUNT_MANAGER)
             ->where('is_active', true)
-            ->where('is_management', false)
             ->when($categoryId, function ($q) use ($categoryId) {
                 $q->where(function ($inner) use ($categoryId) {
                     $inner->whereDoesntHave('categories')
                         ->orWhereHas('categories', fn ($c) => $c->where('categories.id', $categoryId));
                 });
             })
-            ->orderBy('name')
-            ->pluck('name', 'id');
+            ->orderBy('name');
+    }
+
+    /**
+     * Active Account Managers eligible to handle a ticket in the given group.
+     *
+     * @return \Illuminate\Support\Collection<int, string>
+     */
+    public static function assignableManagersForCategory(?int $categoryId)
+    {
+        return static::assignableAccountManagersQuery($categoryId)->pluck('name', 'id');
     }
 
     /**

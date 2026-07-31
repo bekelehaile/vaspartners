@@ -168,6 +168,9 @@ class TicketWorkflowService
 
             $handlerId = $this->resolveAccountManagerUserId($ticket);
             $handler = $handlerId ? User::query()->find($handlerId) : null;
+            if ($handler && ! $handler->isAssignableAccountManager()) {
+                $handler = null;
+            }
 
             $ticket->document_review_status = DocumentReviewStatus::Pending;
             $ticket->needs_reverification = false;
@@ -175,6 +178,9 @@ class TicketWorkflowService
             if ($handler) {
                 $ticket->assigned_to_user_id = $handler->id;
                 $ticket->assigned_at = now();
+            } else {
+                // Previous handler inactive / not an Account Manager — release for claim.
+                $ticket->assigned_to_user_id = null;
             }
             $ticket->save();
 
@@ -223,12 +229,14 @@ class TicketWorkflowService
     }
 
     /**
-     * Prefer the current assignee, else the latest assignment / doc-review AM.
+     * Prefer the current assignee, else the latest assignment / doc-review AM —
+     * only when that user is still an active Account Manager.
      */
     protected function resolveAccountManagerUserId(Ticket $ticket): ?int
     {
+        $candidates = [];
         if (filled($ticket->assigned_to_user_id)) {
-            return (int) $ticket->assigned_to_user_id;
+            $candidates[] = (int) $ticket->assigned_to_user_id;
         }
 
         $fromAssignment = TicketAssignment::query()
@@ -236,15 +244,25 @@ class TicketWorkflowService
             ->orderByDesc('id')
             ->value('assigned_to_user_id');
         if ($fromAssignment) {
-            return (int) $fromAssignment;
+            $candidates[] = (int) $fromAssignment;
         }
 
         $fromReview = TicketDocumentReview::query()
             ->where('ticket_id', $ticket->id)
             ->orderByDesc('id')
             ->value('reviewed_by_user_id');
+        if ($fromReview) {
+            $candidates[] = (int) $fromReview;
+        }
 
-        return $fromReview ? (int) $fromReview : null;
+        foreach (array_values(array_unique($candidates)) as $userId) {
+            $user = User::query()->find($userId);
+            if ($user?->isAssignableAccountManager()) {
+                return (int) $user->id;
+            }
+        }
+
+        return null;
     }
 
     public function requiredDocumentTypeIds(int $serviceId, int $requisitionId): array
@@ -784,6 +802,12 @@ class TicketWorkflowService
     public function assign(Ticket $ticket, User $assigner, User $assignee, ?int $priorityId = null, ?string $note = null): Ticket
     {
         return DB::transaction(function () use ($ticket, $assigner, $assignee, $priorityId, $note) {
+            if (! $assignee->isAssignableAccountManager()) {
+                throw ValidationException::withMessages([
+                    'assigned_to_user_id' => 'Select an active user with the Account Manager role.',
+                ]);
+            }
+
             $this->assertRequiredDocumentsUploaded($ticket);
 
             $ticket->assigned_to_user_id = $assignee->id;

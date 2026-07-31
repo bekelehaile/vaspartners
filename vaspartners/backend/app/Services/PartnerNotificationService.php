@@ -46,8 +46,9 @@ class PartnerNotificationService
     public function ticketResubmitted(Ticket $ticket): void
     {
         $ticket->loadMissing(['contact', 'service', 'assignee']);
-        $statusLine = $ticket->assignee
-            ? sprintf('Returned to account manager %s (In progress).', $ticket->assignee->name)
+        $handler = $this->activeAccountManager($ticket->assignee);
+        $statusLine = $handler
+            ? sprintf('Returned to account manager %s (In progress).', $handler->name)
             : 'Status is Pending (unassigned).';
         $body = sprintf(
             '%s updated and resubmitted request number %s for %s. %s',
@@ -58,8 +59,8 @@ class PartnerNotificationService
         );
 
         $recipients = $this->managementUsers();
-        if ($ticket->assignee) {
-            $recipients = $recipients->push($ticket->assignee)->unique('id');
+        if ($handler) {
+            $recipients = $recipients->push($handler)->unique('id');
         }
 
         $this->notifyStaffDatabase(
@@ -85,7 +86,7 @@ class PartnerNotificationService
         }
 
         if ($to === TicketStatus::InProgress && $from === TicketStatus::Open && $ticket->assigned_to_user_id) {
-            $assignee = User::query()->find($ticket->assigned_to_user_id);
+            $assignee = $this->activeAccountManager(User::query()->find($ticket->assigned_to_user_id));
             if ($assignee) {
                 $this->notifyStaffDatabase(
                     collect([$assignee]),
@@ -135,15 +136,17 @@ class PartnerNotificationService
         // Partner → account manager (admin in-app). Always notify so AMs see portal replies.
         if ($author instanceof Contact) {
             $recipients = collect();
-            if ($ticket->assignee) {
-                $recipients->push($ticket->assignee);
+            $assignee = $this->activeAccountManager($ticket->assignee);
+            if ($assignee) {
+                $recipients->push($assignee);
             }
             if ($ticket->currentApprover
-                && (! $ticket->assignee || (int) $ticket->currentApprover->id !== (int) $ticket->assignee->id)) {
+                && $ticket->currentApprover->is_active
+                && (! $assignee || (int) $ticket->currentApprover->id !== (int) $assignee->id)) {
                 $recipients->push($ticket->currentApprover);
             }
             if ($recipients->isEmpty()) {
-                // Unassigned: alert managers who can take this group's tickets (+ supervisors).
+                // Unassigned: alert active Account Managers who can take this group's tickets (+ supervisors).
                 $categoryId = (int) ($ticket->category_id ?: $ticket->service?->category_id ?: 0);
                 $managerIds = User::assignableManagersForCategory($categoryId > 0 ? $categoryId : null)->keys();
                 if ($managerIds->isNotEmpty()) {
@@ -737,6 +740,16 @@ class PartnerNotificationService
 
             $notification->sendToDatabase($user);
         }
+    }
+
+    /** Active user with the Account Manager role — otherwise null (do not notify / route). */
+    protected function activeAccountManager(?User $user): ?User
+    {
+        if (! $user || ! $user->isAssignableAccountManager()) {
+            return null;
+        }
+
+        return $user;
     }
 
     /** @return \Illuminate\Support\Collection<int, User> */

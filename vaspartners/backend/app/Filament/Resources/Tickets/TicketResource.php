@@ -351,8 +351,8 @@ class TicketResource extends Resource
                         name: 'assignee',
                         titleAttribute: 'name',
                         modifyQueryUsing: fn (Builder $query) => $query
+                            ->role(User::ROLE_ACCOUNT_MANAGER)
                             ->where('is_active', true)
-                            ->where('is_management', false)
                             ->orderBy('name'),
                     )
                     ->searchable()
@@ -451,8 +451,7 @@ class TicketResource extends Resource
                     ->color('primary')
                     ->visible(fn (Ticket $record) => $record->status === TicketStatus::Open
                         && blank($record->assigned_to_user_id)
-                        && auth()->user()
-                        && ! auth()->user()->is_management)
+                        && auth()->user()?->isAssignableAccountManager())
                     ->requiresConfirmation()
                     ->modalHeading('Take this ticket')
                     ->modalDescription('Assign this service request to yourself as account manager.')
@@ -643,11 +642,7 @@ class TicketResource extends Resource
                         ->form([
                             Select::make('assigned_to_user_id')
                                 ->label('Account manager')
-                                ->options(fn () => User::query()
-                                    ->where('is_active', true)
-                                    ->where('is_management', false)
-                                    ->orderBy('name')
-                                    ->pluck('name', 'id'))
+                                ->options(fn () => User::assignableManagersForCategory(null))
                                 ->required()
                                 ->searchable()
                                 ->preload(),
