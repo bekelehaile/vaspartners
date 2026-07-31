@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FaydaIdentityPanel } from "@/components/FaydaIdentityPanel";
 import { Contact } from "@/lib/api";
+import { useAuthConfig } from "@/hooks/use-auth-config";
 import {
   useDeclineErcaCompany,
   useErcaCompanyPreview,
@@ -23,6 +24,11 @@ export function ErcaCompanyCreateForm({
   redirectTo?: string;
 }) {
   const router = useRouter();
+  const { data: authConfig } = useAuthConfig();
+  const ercaDown = authConfig?.erca_tin?.available === false;
+  const ercaMessage =
+    authConfig?.erca_tin?.message ||
+    "TIN number verification is temporarily unavailable. Please try again shortly.";
   const previewMut = useErcaCompanyPreview();
   const createMut = useCreateCompanyFromErca();
   const declineMut = useDeclineErcaCompany();
@@ -38,6 +44,10 @@ export function ErcaCompanyCreateForm({
   const onSearch = (e: FormEvent) => {
     e.preventDefault();
     setLocalError(null);
+    if (ercaDown) {
+      setLocalError(ercaMessage);
+      return;
+    }
     const normalized = normalizeEthiopianTin(tin);
     if (!isValidEthiopianTin(normalized)) {
       setLocalError("Enter a valid 10-digit TIN number.");
@@ -115,6 +125,12 @@ export function ErcaCompanyCreateForm({
         />
       )}
 
+      {ercaDown && (
+        <div className="alert" role="status">
+          {ercaMessage}
+        </div>
+      )}
+
       {(localError || previewMut.isError || createMut.isError) && (
         <div className="alert" role="alert">
           {localError ||
@@ -146,12 +162,12 @@ export function ErcaCompanyCreateForm({
                 value={tin}
                 onChange={(e) => setTin(e.target.value.replace(/[^\d\s-]/g, ""))}
                 required
-                disabled={busy}
+                disabled={busy || ercaDown}
               />
             </div>
           </section>
           <div className="form-actions">
-            <button type="submit" className="btn-primary" disabled={busy}>
+            <button type="submit" className="btn-primary" disabled={busy || ercaDown}>
               {previewMut.isPending ? "Searching…" : "Search ERCA"}
             </button>
             <button

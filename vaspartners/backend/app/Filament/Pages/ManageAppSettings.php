@@ -18,7 +18,7 @@ use Filament\Support\Enums\Alignment;
 use Filament\Support\Icons\Heroicon;
 
 /**
- * Controls partner (customer) portal sign-in: Fayda and/or phone OTP.
+ * Controls partner portal sign-in and external endpoint outage behaviour.
  *
  * @property-read Schema $form
  */
@@ -45,15 +45,12 @@ class ManageAppSettings extends Page
 
     public function mount(): void
     {
-        $this->form->fill([
-            'auth_mode' => AppSetting::authMode(),
-            'auth_mode_note' => AppSetting::getValue('auth_mode_note'),
-        ]);
+        $this->form->fill($this->formStateFromStore());
     }
 
     public function getSubheading(): ?string
     {
-        return 'Partner portal login only (not admin). Use phone OTP while Fayda production is unstable, then switch to Fayda only when ready.';
+        return 'Partner portal login and external registry outages (ERCA TIN). Admin Filament login is unchanged.';
     }
 
     public function form(Schema $schema): Schema
@@ -78,6 +75,25 @@ class ManageAppSettings extends Page
                             ->rows(2)
                             ->maxLength(500)
                             ->helperText('Shown on the partner login screen (e.g. temporary Fayda outage message).'),
+                    ]),
+                Section::make('External endpoints')
+                    ->description('When a national registry is down, put it in maintenance. TIN writes stay fail-closed (no bypass). Partners see your outage message.')
+                    ->schema([
+                        Select::make('erca_tin_mode')
+                            ->label('ERCA TIN number lookup')
+                            ->options([
+                                AppSetting::ERCA_TIN_MODE_LIVE => 'Live (call ERCA / eTrade)',
+                                AppSetting::ERCA_TIN_MODE_MAINTENANCE => 'Maintenance (outage — block TIN create/update)',
+                            ])
+                            ->required()
+                            ->native(false)
+                            ->helperText('Maintenance stops new TIN verification and company create/update that need ERCA. Cached successful lookups are not used while maintenance is on.'),
+                        Textarea::make('erca_tin_outage_message')
+                            ->label('ERCA outage message')
+                            ->rows(3)
+                            ->maxLength(500)
+                            ->placeholder(AppSetting::DEFAULT_ERCA_TIN_OUTAGE_MESSAGE)
+                            ->helperText('Shown to partners when ERCA is in maintenance or the upstream call fails. Leave blank for the default message.'),
                     ]),
             ])
             ->statePath('data');
@@ -114,6 +130,14 @@ class ManageAppSettings extends Page
             $mode = AppSetting::AUTH_MODE_BOTH;
         }
 
+        $ercaMode = (string) ($data['erca_tin_mode'] ?? AppSetting::ERCA_TIN_MODE_LIVE);
+        if (! in_array($ercaMode, [
+            AppSetting::ERCA_TIN_MODE_LIVE,
+            AppSetting::ERCA_TIN_MODE_MAINTENANCE,
+        ], true)) {
+            $ercaMode = AppSetting::ERCA_TIN_MODE_LIVE;
+        }
+
         AppSetting::setValue(AppSetting::KEY_AUTH_MODE, $mode);
         AppSetting::setValue(
             'auth_mode_note',
@@ -121,17 +145,37 @@ class ManageAppSettings extends Page
                 ? trim((string) $data['auth_mode_note'])
                 : null
         );
+        AppSetting::setValue(AppSetting::KEY_ERCA_TIN_MODE, $ercaMode);
+        AppSetting::setValue(
+            AppSetting::KEY_ERCA_TIN_OUTAGE_MESSAGE,
+            filled($data['erca_tin_outage_message'] ?? null)
+                ? trim((string) $data['erca_tin_outage_message'])
+                : null
+        );
 
-        $this->form->fill([
-            'auth_mode' => $mode,
-            'auth_mode_note' => AppSetting::getValue('auth_mode_note'),
-        ]);
+        $this->form->fill($this->formStateFromStore());
 
         Notification::make()
             ->title('App settings saved')
-            ->body('Partner portal sign-in: '.$this->authModeLabel($mode))
+            ->body(
+                'Sign-in: '.$this->authModeLabel($mode)
+                .' · ERCA TIN: '.$this->ercaTinModeLabel($ercaMode)
+            )
             ->success()
             ->send();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function formStateFromStore(): array
+    {
+        return [
+            'auth_mode' => AppSetting::authMode(),
+            'auth_mode_note' => AppSetting::getValue('auth_mode_note'),
+            'erca_tin_mode' => AppSetting::ercaTinMode(),
+            'erca_tin_outage_message' => AppSetting::getValue(AppSetting::KEY_ERCA_TIN_OUTAGE_MESSAGE),
+        ];
     }
 
     protected function authModeLabel(string $mode): string
@@ -141,5 +185,12 @@ class ManageAppSettings extends Page
             AppSetting::AUTH_MODE_PHONE_OTP => 'Phone OTP only',
             default => 'Both (Fayda + Phone OTP)',
         };
+    }
+
+    protected function ercaTinModeLabel(string $mode): string
+    {
+        return $mode === AppSetting::ERCA_TIN_MODE_MAINTENANCE
+            ? 'Maintenance'
+            : 'Live';
     }
 }

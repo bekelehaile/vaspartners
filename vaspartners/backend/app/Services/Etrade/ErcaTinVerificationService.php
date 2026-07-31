@@ -3,6 +3,7 @@
 namespace App\Services\Etrade;
 
 use App\Enums\ErcaNameStatus;
+use App\Models\AppSetting;
 use App\Models\Company;
 use App\Models\Contact;
 use App\Support\PhoneNumber;
@@ -44,7 +45,7 @@ class ErcaTinVerificationService
 
         if (! $this->lookup->enabled()) {
             throw ValidationException::withMessages([
-                $field => 'TIN number verification is temporarily unavailable. Try again shortly.',
+                $field => $this->lookup->unavailableMessage(),
             ]);
         }
 
@@ -59,7 +60,7 @@ class ErcaTinVerificationService
 
         if (! empty($result['raw']['unavailable'])) {
             throw ValidationException::withMessages([
-                $field => 'Unable to reach the national TIN number registry. Please try again shortly.',
+                $field => $this->lookup->unavailableMessage(),
             ]);
         }
 
@@ -104,7 +105,9 @@ class ErcaTinVerificationService
                 'erca_name_status' => ErcaNameStatus::Failed->value,
                 'erca_last_checked_at' => now(),
                 'erca_next_check_at' => now()->addHours($this->retryHours()),
-                'erca_last_error' => 'ERCA lookup disabled',
+                'erca_last_error' => AppSetting::ercaTinInMaintenance()
+                    ? 'ERCA TIN lookup in maintenance'
+                    : 'ERCA lookup disabled',
             ])->save();
 
             return $this->snapshot($company->fresh() ?? $company);

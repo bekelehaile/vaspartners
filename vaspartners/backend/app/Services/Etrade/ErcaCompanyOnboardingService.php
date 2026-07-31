@@ -48,7 +48,7 @@ class ErcaCompanyOnboardingService
 
         if (! $this->lookup->enabled()) {
             throw ValidationException::withMessages([
-                'company_tin' => 'TIN number verification is temporarily unavailable. Try again shortly.',
+                'company_tin' => $this->lookup->unavailableMessage(),
             ]);
         }
 
@@ -65,7 +65,7 @@ class ErcaCompanyOnboardingService
 
         if (! empty($result['raw']['unavailable'])) {
             throw ValidationException::withMessages([
-                'company_tin' => 'Unable to reach the national TIN number registry. Please try again shortly.',
+                'company_tin' => $this->lookup->unavailableMessage(),
             ]);
         }
 

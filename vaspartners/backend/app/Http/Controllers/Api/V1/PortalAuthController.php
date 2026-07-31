@@ -21,6 +21,7 @@ class PortalAuthController extends Controller
         return response()->json([
             'data' => [
                 ...AppSetting::authConfig(),
+                'erca_tin' => AppSetting::ercaTinConfig(),
                 'genders' => PortalProfileOptions::GENDERS,
                 'nationalities' => PortalProfileOptions::nationalities(),
                 'default_nationality' => PortalProfileOptions::DEFAULT_NATIONALITY,

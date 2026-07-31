@@ -3,6 +3,7 @@
 namespace App\Services\Etrade;
 
 use App\Support\TinNumber;
+use App\Models\AppSetting;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -23,8 +24,18 @@ class EtradeTinLookupService
 {
     public function enabled(): bool
     {
+        if (AppSetting::ercaTinInMaintenance()) {
+            return false;
+        }
+
         return (bool) config('services.etrade.enabled', true)
             && filled(config('services.etrade.base_url'));
+    }
+
+    /** Partner-facing copy when lookup is off or upstream is unreachable. */
+    public function unavailableMessage(): string
+    {
+        return AppSetting::ercaTinOutageMessage();
     }
 
     /**

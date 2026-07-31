@@ -370,6 +370,11 @@ export type AuthConfig = {
   fayda_enabled: boolean;
   phone_otp_enabled: boolean;
   note?: string | null;
+  erca_tin?: {
+    mode: "live" | "maintenance";
+    available: boolean;
+    message?: string | null;
+  };
   genders?: string[];
   nationalities?: string[];
   default_nationality?: string;
