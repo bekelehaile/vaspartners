@@ -15,7 +15,7 @@ class ScanDocumentMissingCommand extends Command
                             {--limit=0 : Max tickets to process (0 = no limit)}
                             {--chunk=100 : Tickets loaded per batch}';
 
-    protected $description = 'Reject open/in-progress/closed/completed requests missing any hard-required document and notify partners';
+    protected $description = 'Reject open/in-progress requests missing any hard-required document and notify partners (skips finished tickets / active services)';
 
     public function handle(TicketWorkflowService $workflow): int
     {
@@ -36,7 +36,7 @@ class ScanDocumentMissingCommand extends Command
         $skipped = 0;
         $errors = 0;
 
-        $this->info(($dryRun ? '[dry-run] ' : '').'Scanning requests for missing required documents (incl. closed)…');
+        $this->info(($dryRun ? '[dry-run] ' : '').'Scanning open/in-progress requests for missing required documents…');
 
         $query->chunkById($chunk, function ($tickets) use (
             $workflow,

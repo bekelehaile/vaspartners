@@ -90,6 +90,7 @@ class Ticket extends Model
     /**
      * Doc-review badge status for UI.
      * Closed/Completed with all required docs must not stay Pending.
+     * Active service + legacy incomplete docs must not show Failed.
      */
     public function effectiveDocumentReviewStatus(): ?DocumentReviewStatus
     {
@@ -101,6 +102,15 @@ class Ticket extends Model
         $stored = $this->document_review_status instanceof DocumentReviewStatus
             ? $this->document_review_status
             : DocumentReviewStatus::tryFrom((string) $this->document_review_status);
+
+        $workflow = app(\App\Services\TicketWorkflowService::class);
+        if (
+            $stored === DocumentReviewStatus::Failed
+            && in_array($this->status, [TicketStatus::Closed, TicketStatus::Completed], true)
+            && $workflow->ticketHasAliveService($this)
+        ) {
+            return DocumentReviewStatus::Passed;
+        }
 
         if (
             $stored === DocumentReviewStatus::Pending

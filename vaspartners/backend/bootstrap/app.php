@@ -43,7 +43,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('vas:scan-document-missing')
             ->hourly()
             ->withoutOverlapping(55)
-            ->description('Reject open/in-progress/closed/completed requests missing required documents and SMS partners');
+            ->description('Reject open/in-progress requests missing required documents and SMS partners');
 
         $schedule->command('vas:scan-invalid-tin --notify-all')
             ->dailyAt('09:15')

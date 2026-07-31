@@ -4,12 +4,14 @@ namespace App\Services;
 
 use App\Enums\ApprovalAction;
 use App\Enums\DocumentReviewStatus;
+use App\Enums\SubscriptionStatus;
 use App\Enums\TicketStatus;
 use App\Models\Contact;
 use App\Models\Requisition;
 use App\Models\Service;
 use App\Models\ServiceFinalApprover;
 use App\Models\ServiceRequisitionDocument;
+use App\Models\Subscription;
 use App\Models\Ticket;
 use App\Models\TicketApprovalStep;
 use App\Models\TicketAssignment;
@@ -97,8 +99,13 @@ class TicketWorkflowService
             'created_at' => $stampedAt,
         ]);
 
-        if ($to === TicketStatus::Completed
-            || ($to === TicketStatus::Closed && $from !== TicketStatus::Completed)) {
+        if (
+            empty($meta['skip_subscription_apply'])
+            && (
+                $to === TicketStatus::Completed
+                || ($to === TicketStatus::Closed && $from !== TicketStatus::Completed)
+            )
+        ) {
             $this->subscriptions->applyFromTicket($ticket->fresh(['requisition', 'service', 'subscription']));
         }
 
@@ -382,7 +389,10 @@ class TicketWorkflowService
     }
 
     /**
-     * Statuses that must not remain active/finished while hard-required docs are missing.
+     * Statuses that must not stay open while hard-required docs are missing.
+     *
+     * Closed / Completed are excluded: legacy MVAS tickets often lack today's matrix,
+     * and an already-activated service must not be flipped to Rejected/Failed review.
      *
      * @return list<TicketStatus>
      */
@@ -391,14 +401,67 @@ class TicketWorkflowService
         return [
             TicketStatus::Open,
             TicketStatus::InProgress,
-            TicketStatus::Closed,
-            TicketStatus::Completed,
         ];
     }
 
     /**
-     * System / schedule / on-read: if a request is missing hard-required docs, force Rejected
-     * (including Closed / Completed — partners must resubmit with a complete set).
+     * True when this request already backs (or is linked to) a live subscription.
+     * Old-system doc gaps must not reject or fail review in that case.
+     */
+    public function ticketHasAliveService(Ticket $ticket): bool
+    {
+        $ticket->loadMissing('subscription');
+
+        $linked = $ticket->subscription;
+        if ($linked instanceof Subscription && $linked->status instanceof SubscriptionStatus && $linked->status->isAlive()) {
+            return true;
+        }
+
+        $activated = Subscription::query()
+            ->where('activated_by_ticket_id', $ticket->id)
+            ->get(['id', 'status']);
+
+        foreach ($activated as $subscription) {
+            if ($subscription->status instanceof SubscriptionStatus && $subscription->status->isAlive()) {
+                return true;
+            }
+        }
+
+        if (! $ticket->service_id || ! $ticket->contact_id) {
+            return false;
+        }
+
+        $alive = array_map(
+            fn (SubscriptionStatus $s) => $s->value,
+            array_filter(SubscriptionStatus::cases(), fn (SubscriptionStatus $s) => $s->isAlive()),
+        );
+
+        // Same partner contact + service with a live subscription (legacy link gaps).
+        if (
+            Subscription::query()
+                ->where('contact_id', $ticket->contact_id)
+                ->where('service_id', $ticket->service_id)
+                ->whereIn('status', $alive)
+                ->exists()
+        ) {
+            return true;
+        }
+
+        $companyId = Contact::query()->whereKey($ticket->contact_id)->value('current_company_id');
+        if (! $companyId) {
+            return false;
+        }
+
+        return Subscription::query()
+            ->where('company_id', $companyId)
+            ->where('service_id', $ticket->service_id)
+            ->whereIn('status', $alive)
+            ->exists();
+    }
+
+    /**
+     * System / schedule / on-read: if an open/in-progress request is missing hard-required
+     * docs, force Rejected. Never touches finished tickets that already have an active service.
      *
      * @return array{rejected: bool, skipped: bool, reason?: string, missing_names?: list<string>}
      */
@@ -412,6 +475,15 @@ class TicketWorkflowService
                     'rejected' => false,
                     'skipped' => true,
                     'reason' => 'status_'.$ticket->status?->value,
+                ];
+            }
+
+            // Active service wins over incomplete legacy / matrix docs.
+            if ($this->ticketHasAliveService($ticket)) {
+                return [
+                    'rejected' => false,
+                    'skipped' => true,
+                    'reason' => 'alive_service',
                 ];
             }
 
@@ -461,7 +533,74 @@ class TicketWorkflowService
     }
 
     /**
-     * Keep status consistent: incomplete hard-required docs → Rejected.
+     * Undo auto-rejects that left an active service looking "rejected / review failed".
+     *
+     * @return array{restored: bool, skipped: bool, reason?: string, to_status?: string}
+     */
+    public function restoreAutoRejectWhenServiceAlive(Ticket $ticket): array
+    {
+        return DB::transaction(function () use ($ticket) {
+            $ticket->refresh();
+
+            if ($ticket->status !== TicketStatus::Rejected) {
+                return ['restored' => false, 'skipped' => true, 'reason' => 'not_rejected'];
+            }
+
+            if (! $this->ticketHasAliveService($ticket)) {
+                return ['restored' => false, 'skipped' => true, 'reason' => 'no_alive_service'];
+            }
+
+            $autoReject = TicketStatusHistory::query()
+                ->where('ticket_id', $ticket->id)
+                ->where('to_status', TicketStatus::Rejected->value)
+                ->where(function ($q) {
+                    $q->where('note', 'like', 'Automated document check:%')
+                        ->orWhere('meta->source', 'vas:scan-document-missing');
+                })
+                ->orderByDesc('id')
+                ->first();
+
+            if (! $autoReject) {
+                return ['restored' => false, 'skipped' => true, 'reason' => 'not_auto_doc_reject'];
+            }
+
+            $from = $autoReject->from_status instanceof TicketStatus
+                ? $autoReject->from_status
+                : TicketStatus::tryFrom((string) $autoReject->from_status);
+
+            $to = in_array($from, [TicketStatus::Closed, TicketStatus::Completed], true)
+                ? $from
+                : TicketStatus::Closed;
+
+            $ticket->forceFill([
+                'document_review_status' => DocumentReviewStatus::Passed,
+                'needs_reverification' => false,
+                'rejected_at' => null,
+            ])->save();
+
+            $this->transition(
+                $ticket,
+                $to,
+                null,
+                'Restored: service is active — incomplete legacy documents must not keep the request rejected or review failed.',
+                [
+                    'skip_partner_notification' => true,
+                    'skip_document_assert' => true,
+                    'skip_subscription_apply' => true,
+                    'source' => 'vas:restore-active-service-doc-rejects',
+                ],
+            );
+
+            return [
+                'restored' => true,
+                'skipped' => false,
+                'to_status' => $to->value,
+            ];
+        });
+    }
+
+    /**
+     * Keep status consistent: incomplete hard-required docs → Rejected (open/in-progress only).
      * Safe to call on portal/admin reads.
      */
     public function enforceIncompleteMustBeRejected(Ticket $ticket, bool $notify = true): Ticket
