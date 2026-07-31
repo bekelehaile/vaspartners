@@ -282,6 +282,13 @@ class TicketResource extends Resource
                 TextColumn::make('contact.name')->label('Contact')->toggleable(),
                 TextColumn::make('contact.phone_number')->label('Phone')->toggleable(),
                 TextColumn::make('service.name')->sortable(),
+                TextColumn::make('subscription.status')
+                    ->label('Subscription')
+                    ->badge()
+                    ->placeholder('—')
+                    ->toggleable()
+                    ->formatStateUsing(fn ($state): string => SubscriptionStatus::tryLabel($state))
+                    ->color(fn ($state): string => SubscriptionStatus::tryColor($state)),
                 TextColumn::make('category.name')->label('Group')->toggleable(),
                 TextColumn::make('requisition.name')->label('Request type')->toggleable(),
                 TextColumn::make('status')->badge()
@@ -292,13 +299,6 @@ class TicketResource extends Resource
                         ? $state
                         : TicketStatus::tryFrom((string) $state)
                     )?->getColor() ?? 'gray'),
-                TextColumn::make('subscription.status')
-                    ->label('Subscription')
-                    ->badge()
-                    ->placeholder('—')
-                    ->toggleable()
-                    ->formatStateUsing(fn ($state): string => SubscriptionStatus::tryLabel($state))
-                    ->color(fn ($state): string => SubscriptionStatus::tryColor($state)),
                 TextColumn::make('attachments')
                     ->label('Attachments')
                     ->badge()
