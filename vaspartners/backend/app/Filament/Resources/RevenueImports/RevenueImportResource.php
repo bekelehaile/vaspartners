@@ -11,7 +11,6 @@ use App\Filament\Resources\RevenueImports\RelationManagers\RowsRelationManager;
 use App\Filament\Resources\RevenueImports\RelationManagers\SentSmsRelationManager;
 use App\Models\RevenueImport;
 use App\Models\User;
-use App\Services\BulkMessageService;
 use App\Services\RevenueImportService;
 use App\Support\RevenueCatalogServices;
 use Filament\Actions\BulkAction;
@@ -83,8 +82,8 @@ class RevenueImportResource extends Resource
                     ->rows(4)
                     ->required()
                     ->maxLength(640)
-                    ->default(BulkMessageService::DEFAULT_MESSAGE)
-                    ->helperText('{company_name} {period} {service_type} {service_id} {amount}')
+                    ->default(RevenueImportService::DEFAULT_SMS_TEMPLATE)
+                    ->helperText('Revenue SMS placeholders: {company_name} {period} {service_type} {service_id} {amount}')
                     ->columnSpanFull(),
             ])->columns(2),
         ]);

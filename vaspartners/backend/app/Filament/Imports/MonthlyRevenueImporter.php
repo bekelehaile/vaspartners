@@ -9,7 +9,6 @@ use App\Models\RevenueImportRow;
 use App\Models\RevenuePartner;
 use App\Models\Service;
 use App\Models\User;
-use App\Services\BulkMessageService;
 use App\Services\RevenueImportService;
 use App\Services\RevenuePartnerResolver;
 use App\Support\RevenueCatalogServices;
@@ -72,8 +71,8 @@ class MonthlyRevenueImporter extends Importer
                 ->label('SMS template')
                 ->rows(4)
                 ->maxLength(640)
-                ->default(BulkMessageService::DEFAULT_MESSAGE)
-                ->helperText('{company_name} {period} {service_type} {service_id} {amount}'),
+                ->default(RevenueImportService::DEFAULT_SMS_TEMPLATE)
+                ->helperText('Revenue SMS placeholders: {company_name} {period} {service_type} {service_id} {amount}'),
         ];
     }
 
@@ -250,7 +249,7 @@ class MonthlyRevenueImporter extends Importer
         }
 
         $period = trim((string) ($this->options['period'] ?? ''));
-        $template = trim((string) ($this->options['message_template'] ?? BulkMessageService::DEFAULT_MESSAGE));
+        $template = trim((string) ($this->options['message_template'] ?? RevenueImportService::DEFAULT_SMS_TEMPLATE));
         $service = Service::query()->find($vasServiceId);
 
         return RevenueImport::query()->firstOrCreate(
@@ -261,7 +260,7 @@ class MonthlyRevenueImporter extends Importer
                 'vas_service_id' => $vasServiceId,
                 'source_filename' => $this->import->file_name,
                 'status' => RevenueImportStatus::Draft->value,
-                'message_template' => $template !== '' ? $template : BulkMessageService::DEFAULT_MESSAGE,
+                'message_template' => $template !== '' ? $template : RevenueImportService::DEFAULT_SMS_TEMPLATE,
                 'created_by_user_id' => $this->import->user_id,
                 'imported_at' => now(),
             ],

@@ -9,7 +9,7 @@ use App\Models\RevenueImport;
 use App\Models\RevenueImportRow;
 use App\Models\RevenuePartner;
 use App\Models\Service;
-use App\Services\BulkMessageService;
+use App\Services\RevenueImportService;
 use App\Services\RevenuePartnerPhoneSyncService;
 use App\Services\RevenuePartnerResolver;
 use App\Support\PhoneNumber;
@@ -305,7 +305,7 @@ class SeedRevenueExcelSnapshotService
                         'period' => $period,
                         'vas_service_id' => $vasServiceId,
                         'status' => RevenueImportStatus::Draft,
-                        'message_template' => BulkMessageService::DEFAULT_MESSAGE,
+                        'message_template' => RevenueImportService::DEFAULT_SMS_TEMPLATE,
                         'imported_at' => now(),
                     ])->save();
                 } else {
@@ -315,7 +315,7 @@ class SeedRevenueExcelSnapshotService
                         'vas_service_id' => $vasServiceId,
                         'source_filename' => $source,
                         'status' => RevenueImportStatus::Draft,
-                        'message_template' => BulkMessageService::DEFAULT_MESSAGE,
+                        'message_template' => RevenueImportService::DEFAULT_SMS_TEMPLATE,
                         'created_by_user_id' => null,
                         'imported_at' => now(),
                     ]);

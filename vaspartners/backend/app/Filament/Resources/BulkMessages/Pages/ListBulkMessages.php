@@ -3,10 +3,8 @@
 namespace App\Filament\Resources\BulkMessages\Pages;
 
 use App\Filament\Resources\BulkMessages\BulkMessageResource;
-use App\Services\BulkMessageService;
 use Filament\Actions\Action;
 use Filament\Resources\Pages\ListRecords;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ListBulkMessages extends ListRecords
 {
@@ -19,27 +17,12 @@ class ListBulkMessages extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'Compose from companies (Active / approval / TIN number filters) or import a CSV. Review recipients, Send pending, then Re-send failed as needed.';
+        return 'Special bulk SMS only — compose from companies or import a phone list. Monthly revenue collection is under Monthly revenue.';
     }
 
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('template')
-                ->label('Download template')
-                ->icon('heroicon-o-arrow-down-tray')
-                ->color('gray')
-                ->action(function (BulkMessageService $bulkMessages): StreamedResponse {
-                    $csv = $bulkMessages->templateCsv();
-
-                    return response()->streamDownload(
-                        function () use ($csv): void {
-                            echo $csv;
-                        },
-                        'bulk-message-template.csv',
-                        ['Content-Type' => 'text/csv; charset=UTF-8'],
-                    );
-                }),
             Action::make('compose')
                 ->label('Compose from companies')
                 ->icon('heroicon-o-building-office-2')

@@ -41,11 +41,11 @@ class ComposeBulkMessage extends Page
     public function mount(): void
     {
         $this->form->fill([
-            'title' => 'TIN update required — portal upgrade',
-            'message' => 'Dear Partner, We are updating the VAS partner portal and you are requested to update your TIN number for your company {company_name}. The access will be revoked if failed to update your TIN number in the VAS Partners portal. https://vaspartnersportal.ethiotelecom.et/login — Ethio telecom',
+            'title' => '',
+            'message' => BulkMessageService::DEFAULT_MESSAGE,
             'service_ids' => [],
             'alive_subscriptions_only' => false,
-            'tin_validated' => '0',
+            'tin_validated' => '',
             'is_active' => '',
             'require_phone' => true,
             'queue_after_create' => false,
@@ -54,7 +54,7 @@ class ComposeBulkMessage extends Page
 
     public function getSubheading(): ?string
     {
-        return 'Build recipients from company filters. Review the draft, then Send / Re-send failed from the campaign page.';
+        return 'Special bulk only — filter companies and send one announcement SMS. For monthly revenue collection use Monthly revenue.';
     }
 
     public function form(Schema $schema): Schema
@@ -71,7 +71,7 @@ class ComposeBulkMessage extends Page
                         ->required()
                         ->rows(6)
                         ->maxLength(640)
-                        ->helperText('Include the portal URL. Max 640 characters. Placeholders like {company_name} are supported.'),
+                        ->helperText('Placeholder: {company_name}. Max 640 characters.'),
                 ]),
                 Section::make('Audience filters')->schema([
                     Select::make('service_ids')

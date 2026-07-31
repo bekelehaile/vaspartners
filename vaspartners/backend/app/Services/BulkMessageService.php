@@ -24,8 +24,8 @@ use Throwable;
 
 class BulkMessageService
 {
-    /** Default revenue-collection SMS body (placeholders filled per spreadsheet row). */
-    public const DEFAULT_MESSAGE = 'Dear {company_name}, your {period}, {service_type} revenue with Service ID {service_id} is ETB {amount}. Please provide the request letter with amount and ref number. Thank You Ethio Telecom';
+    /** Default body for special-list / company-filter bulk SMS (not monthly revenue). */
+    public const DEFAULT_MESSAGE = 'Dear Partner, {company_name}. — Ethio telecom';
 
     public function __construct(
         private readonly SmsService $sms,
@@ -34,14 +34,11 @@ class BulkMessageService
     /**
      * Create a campaign from an Excel/CSV upload and build recipient rows.
      *
-     * Spreadsheet columns:
+     * Spreadsheet columns (special list):
      * - phone (required) — last 9 digits; matched against companies.phone only
-     * - period — e.g. June 2026
-     * - service_type — e.g. API
-     * - service_id
-     * - amount — e.g. 10,000
+     * Optional extras (if present) can fill placeholders: period, service_type, service_id, amount
      *
-     * Message may use {company_name}, {period}, {service_type}, {service_id}, {amount}.
+     * Message may use {company_name} and any optional columns above.
      * SMS is always sent to the matched company's phone on file (never contact phones).
      */
     public function createFromUpload(User $actor, string $title, string $message, UploadedFile $file): BulkMessage

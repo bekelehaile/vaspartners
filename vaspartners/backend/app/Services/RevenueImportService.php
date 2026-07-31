@@ -24,6 +24,9 @@ use Illuminate\Validation\ValidationException;
  */
 class RevenueImportService
 {
+    /** Default SMS body for monthly revenue collection (not Bulk messages). */
+    public const DEFAULT_SMS_TEMPLATE = 'Dear {company_name}, your {period}, {service_type} revenue with Service ID {service_id} is ETB {amount}. Please provide the request letter with amount and ref number. Thank You Ethio Telecom';
+
     public function __construct(
         private readonly BulkMessageService $bulkMessages,
         private readonly RevenuePartnerResolver $partners,
@@ -553,7 +556,7 @@ class RevenueImportService
             ]);
         }
 
-        $template = trim((string) ($messageTemplate ?? $import->message_template ?: BulkMessageService::DEFAULT_MESSAGE));
+        $template = trim((string) ($messageTemplate ?? $import->message_template ?: self::DEFAULT_SMS_TEMPLATE));
         if ($template === '' || mb_strlen($template) > 640) {
             throw ValidationException::withMessages(['message' => 'SMS template is required (max 640).']);
         }

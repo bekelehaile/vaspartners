@@ -18,10 +18,9 @@ use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * Dedicated import screen for bulk company SMS.
+ * Dedicated import screen for special-list bulk SMS (not monthly revenue).
  *
  * @property-read Schema $form
  */
@@ -29,7 +28,7 @@ class ImportBulkMessage extends Page
 {
     protected static string $resource = BulkMessageResource::class;
 
-    protected static ?string $title = 'Import bulk message';
+    protected static ?string $title = 'Import special list';
 
     /**
      * @var array<string, mixed>|null
@@ -45,28 +44,12 @@ class ImportBulkMessage extends Page
 
     public function getSubheading(): ?string
     {
-        return 'Upload phones + revenue fields (CSV/Excel). Rows match companies.phone only; SMS is sent to that company phone (not contact/owner numbers).';
+        return 'Special bulk only — upload a phone list (CSV/Excel). Rows match companies.phone; SMS goes to that company phone. For revenue collection use Monthly revenue.';
     }
 
     protected function getHeaderActions(): array
     {
-        return [
-            Action::make('template')
-                ->label('Download template')
-                ->icon('heroicon-o-arrow-down-tray')
-                ->color('gray')
-                ->action(function (BulkMessageService $bulkMessages): StreamedResponse {
-                    $csv = $bulkMessages->templateCsv();
-
-                    return response()->streamDownload(
-                        function () use ($csv): void {
-                            echo $csv;
-                        },
-                        'bulk-message-template.csv',
-                        ['Content-Type' => 'text/csv; charset=UTF-8'],
-                    );
-                }),
-        ];
+        return [];
     }
 
     public function form(Schema $schema): Schema
@@ -74,23 +57,23 @@ class ImportBulkMessage extends Page
         return $schema
             ->components([
                 Section::make('Message')
-                    ->description('Template format: Dear {company_name}, your {period}, {service_type} revenue with Service ID {service_id} is ETB {amount}. Please provide the request letter with amount and ref number. Thank You Ethio Telecom')
+                    ->description('Write any special announcement. Use {company_name} for the matched company name.')
                     ->schema([
                         TextInput::make('title')
                             ->label('Title')
                             ->required()
                             ->maxLength(160)
-                            ->placeholder('e.g. June 2026 revenue collection'),
+                            ->placeholder('e.g. Portal maintenance notice'),
                         Textarea::make('message')
                             ->label('SMS body')
                             ->required()
                             ->rows(6)
                             ->maxLength(640)
                             ->default(BulkMessageService::DEFAULT_MESSAGE)
-                            ->helperText('Placeholders: {company_name} {period} {service_type} {service_id} {amount}. Sample: Dear Teleport Technology PLC, your June 2026, API revenue with Service ID 1000000002 is ETB 10,000. Please provide the request letter with amount and ref number. Thank You Ethio Telecom'),
+                            ->helperText('Placeholder: {company_name}. Max 640 characters.'),
                     ]),
-                Section::make('Import recipients')
-                    ->description('Columns: phone (required), period, service_type, service_id, amount. Company name/TIN number come from the matched company.')
+                Section::make('Phone list')
+                    ->description('Column: phone')
                     ->schema([
                         FileUpload::make('spreadsheet')
                             ->label('Excel / CSV file')
@@ -104,7 +87,7 @@ class ImportBulkMessage extends Page
                             ->directory('bulk-messages/imports')
                             ->visibility('private')
                             ->required()
-                            ->helperText('Download the template for the expected headers.'),
+                            ->helperText('Header: phone'),
                     ]),
             ])
             ->statePath('data');
@@ -124,21 +107,6 @@ class ImportBulkMessage extends Page
                                 ->submit('import')
                                 ->color('primary')
                                 ->icon('heroicon-o-arrow-up-tray'),
-                            Action::make('template')
-                                ->label('Download template')
-                                ->color('gray')
-                                ->icon('heroicon-o-arrow-down-tray')
-                                ->action(function (BulkMessageService $bulkMessages): StreamedResponse {
-                                    $csv = $bulkMessages->templateCsv();
-
-                                    return response()->streamDownload(
-                                        function () use ($csv): void {
-                                            echo $csv;
-                                        },
-                                        'bulk-message-template.csv',
-                                        ['Content-Type' => 'text/csv; charset=UTF-8'],
-                                    );
-                                }),
                             Action::make('cancel')
                                 ->label('Cancel')
                                 ->color('gray')

@@ -21,6 +21,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\ValidationException;
 
@@ -58,7 +59,20 @@ class BulkMessageResource extends Resource
 
     public static function getNavigationBadgeTooltip(): ?string
     {
-        return 'Bulk SMS campaigns — import CSV or compose from companies; retry failed recipients';
+        return 'Special bulk SMS only — compose from companies or import a phone list. Monthly revenue SMS lives under Monthly revenue.';
+    }
+
+    /**
+     * Hide campaigns created from Monthly revenue (those are managed on the import).
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->whereNotIn('id', function ($query): void {
+                $query->select('bulk_message_id')
+                    ->from('revenue_imports')
+                    ->whereNotNull('bulk_message_id');
+            });
     }
 
     public static function form(Schema $schema): Schema

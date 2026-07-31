@@ -115,7 +115,7 @@ Dear {contact_name}, the TIN number for {company_name} is confirmed. Log in to t
 SMS,
 
         'company_tin_invalid' => <<<'SMS'
-Dear Partner, from now on you cannot get any VAS service because of an invalid TIN number ({company_tin}) for {company_name}. If you want to continue, update your TIN number in the VAS Partners portal. {portal_url} — Ethio telecom
+Dear Partner, We are updating the VAS partner portal and you are requested to update your TIN number for your company {company_name}. The access will be revoked if you fail to update your TIN number in the VAS Partners portal. {portal_url} — Ethio telecom
 SMS,
 
         'company_tin_not_found_erca' => <<<'SMS'
@@ -184,7 +184,7 @@ SMS,
 
         'company_tin_validated' => 'TIN number for {company_name} is confirmed. Log in and submit service requests.',
 
-        'company_tin_invalid' => 'Dear Partner, from now on you cannot get any VAS service because of an invalid TIN number ({company_tin}) for {company_name}. If you want to continue, update your TIN number in the VAS Partners portal. {portal_url}',
+        'company_tin_invalid' => 'Dear Partner, We are updating the VAS partner portal and you are requested to update your TIN number for your company {company_name}. The access will be revoked if you fail to update your TIN number in the VAS Partners portal. {portal_url}',
 
         'company_tin_not_found_erca' => 'Dear Partner, your TIN number ({company_tin}) for {company_name} was not found in ERCA. Update your TIN number in the VAS Partners portal. {portal_url}',
 
