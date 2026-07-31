@@ -3,10 +3,13 @@
 namespace App\Filament\Pages;
 
 use App\Models\AppSetting;
+use App\Services\Etrade\EtradeTinLookupService;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Actions;
@@ -16,6 +19,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\HtmlString;
 
 /**
  * Controls partner portal sign-in and external endpoint outage behaviour.
@@ -42,6 +46,13 @@ class ManageAppSettings extends Page
      * @var array<string, mixed>|null
      */
     public ?array $data = [];
+
+    /**
+     * Latest admin ERCA probe result (not persisted).
+     *
+     * @var array<string, mixed>|null
+     */
+    public ?array $ercaProbe = null;
 
     public function mount(): void
     {
@@ -94,6 +105,25 @@ class ManageAppSettings extends Page
                             ->maxLength(500)
                             ->placeholder(AppSetting::DEFAULT_ERCA_TIN_OUTAGE_MESSAGE)
                             ->helperText('Shown to partners when ERCA is in maintenance or the upstream call fails. Leave blank for the default message.'),
+                        TextInput::make('test_erca_tin')
+                            ->label('Test TIN number')
+                            ->placeholder('10 digits')
+                            ->maxLength(14)
+                            ->dehydrated(false)
+                            ->helperText('Admin probe only — calls ERCA live (ignores Maintenance mode; does not bypass TIN write rules).'),
+                        Actions::make([
+                            Action::make('search_erca_tin')
+                                ->label('Search ERCA')
+                                ->icon('heroicon-o-magnifying-glass')
+                                ->color('gray')
+                                ->action(function (EtradeTinLookupService $lookup): void {
+                                    $this->runErcaProbe($lookup);
+                                }),
+                        ])->alignment(Alignment::Start),
+                        Placeholder::make('erca_probe_result')
+                            ->label('Test result')
+                            ->content(fn (): HtmlString => new HtmlString($this->ercaProbeHtml()))
+                            ->visible(fn (): bool => $this->ercaProbe !== null),
                     ]),
             ])
             ->statePath('data');
@@ -153,7 +183,10 @@ class ManageAppSettings extends Page
                 : null
         );
 
-        $this->form->fill($this->formStateFromStore());
+        $this->form->fill([
+            ...$this->formStateFromStore(),
+            'test_erca_tin' => $this->data['test_erca_tin'] ?? null,
+        ]);
 
         Notification::make()
             ->title('App settings saved')
@@ -163,6 +196,81 @@ class ManageAppSettings extends Page
             )
             ->success()
             ->send();
+    }
+
+    public function runErcaProbe(EtradeTinLookupService $lookup): void
+    {
+        $raw = (string) ($this->data['test_erca_tin'] ?? '');
+        if (! filled(trim($raw))) {
+            Notification::make()
+                ->title('Enter a TIN number')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $this->ercaProbe = $lookup->adminProbe($raw, useCache: false);
+
+        $probe = $this->ercaProbe;
+        $title = match ($probe['status'] ?? '') {
+            'found' => 'ERCA: TIN found',
+            'not_found' => 'ERCA: TIN not found',
+            'invalid_tin' => 'Invalid TIN number',
+            'disabled' => 'eTrade not configured',
+            'upstream_error', 'unavailable' => 'ERCA unreachable',
+            default => 'ERCA probe finished',
+        };
+
+        $notification = Notification::make()
+            ->title($title)
+            ->body((string) ($probe['message'] ?? ''));
+
+        if (($probe['ok'] ?? false) && ($probe['found'] ?? false)) {
+            $notification->success();
+        } elseif (($probe['status'] ?? '') === 'not_found') {
+            $notification->warning();
+        } else {
+            $notification->danger();
+        }
+
+        $notification->send();
+    }
+
+    protected function ercaProbeHtml(): string
+    {
+        $probe = $this->ercaProbe;
+        if (! is_array($probe)) {
+            return '<span class="text-sm text-gray-500">—</span>';
+        }
+
+        $rows = [
+            'Status' => e((string) ($probe['status'] ?? '—')),
+            'TIN number' => e((string) ($probe['tin'] ?? '—')),
+            'Found' => ($probe['found'] ?? false) ? 'Yes' : 'No',
+            'Legal name' => e((string) ($probe['legal_name'] ?: '—')),
+            'Business name' => e((string) ($probe['business_name'] ?: '—')),
+            'Entity type' => e((string) ($probe['entity_type'] ?: '—')),
+            'Tax centre' => e((string) ($probe['tax_centre'] ?: '—')),
+            'Region' => e((string) ($probe['region'] ?: '—')),
+            'City' => e((string) ($probe['city'] ?: '—')),
+            'Message' => e((string) ($probe['message'] ?: '—')),
+        ];
+
+        $html = '<dl class="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">';
+        foreach ($rows as $label => $value) {
+            $html .= '<div><dt class="font-medium text-gray-500 dark:text-gray-400">'.$label
+                .'</dt><dd class="text-gray-950 dark:text-white">'.$value.'</dd></div>';
+        }
+        $html .= '</dl>';
+
+        if (AppSetting::ercaTinInMaintenance()) {
+            $html .= '<p class="mt-3 text-sm text-warning-600 dark:text-warning-400">'
+                .'App setting is Maintenance — partners are blocked. This admin search still called ERCA live.'
+                .'</p>';
+        }
+
+        return $html;
     }
 
     /**

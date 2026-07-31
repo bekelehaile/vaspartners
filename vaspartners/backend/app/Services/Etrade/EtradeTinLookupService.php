@@ -39,6 +39,169 @@ class EtradeTinLookupService
     }
 
     /**
+     * Admin diagnostic: live upstream call, ignores App settings maintenance mode.
+     * Does not write "unavailable" into the partner result cache.
+     *
+     * @return array{
+     *   ok: bool,
+     *   status: string,
+     *   tin: string,
+     *   found: bool,
+     *   legal_name: ?string,
+     *   business_name: ?string,
+     *   entity_type: ?string,
+     *   tax_centre: ?string,
+     *   region: ?string,
+     *   city: ?string,
+     *   message: string,
+     *   from_cache: bool
+     * }
+     */
+    public function adminProbe(string $tin, bool $useCache = false): array
+    {
+        $normalized = TinNumber::normalize($tin);
+
+        if (! TinNumber::isValid($normalized)) {
+            return [
+                'ok' => false,
+                'status' => 'invalid_tin',
+                'tin' => $normalized,
+                'found' => false,
+                'legal_name' => null,
+                'business_name' => null,
+                'entity_type' => null,
+                'tax_centre' => null,
+                'region' => null,
+                'city' => null,
+                'message' => TinNumber::message(),
+                'from_cache' => false,
+            ];
+        }
+
+        $configLive = (bool) config('services.etrade.enabled', true)
+            && filled(config('services.etrade.base_url'));
+
+        if (! $configLive) {
+            return [
+                'ok' => false,
+                'status' => 'disabled',
+                'tin' => $normalized,
+                'found' => false,
+                'legal_name' => null,
+                'business_name' => null,
+                'entity_type' => null,
+                'tax_centre' => null,
+                'region' => null,
+                'city' => null,
+                'message' => 'eTrade is disabled in server config (ETRADE_ENABLED / ETRADE_BASE_URL).',
+                'from_cache' => false,
+            ];
+        }
+
+        $cacheKey = $this->resultCacheKey($normalized);
+        if ($useCache) {
+            $cached = Cache::get($cacheKey);
+            if (is_array($cached) && array_key_exists('found', $cached)) {
+                return $this->probePayload($cached, fromCache: true, ok: empty($cached['raw']['unavailable']));
+            }
+        } else {
+            Cache::forget($cacheKey);
+        }
+
+        try {
+            $taxpayerRows = $this->fetchJson($this->url(config('services.etrade.tin_path'), $normalized));
+            $registrationRows = [];
+
+            if ((bool) config('services.etrade.include_registrations', true)) {
+                $registrationRows = $this->fetchJson(
+                    $this->url(config('services.etrade.registrations_path'), $normalized),
+                ) ?? [];
+            }
+
+            $result = $this->mapResult($normalized, $taxpayerRows, is_array($registrationRows) ? $registrationRows : []);
+            $this->rememberResult($normalized, $result);
+
+            return $this->probePayload($result, fromCache: false, ok: true);
+        } catch (Throwable $e) {
+            Log::error('eTrade TIN number admin probe failed', [
+                'tin' => $normalized,
+                'message' => $e->getMessage(),
+            ]);
+
+            return [
+                'ok' => false,
+                'status' => 'upstream_error',
+                'tin' => $normalized,
+                'found' => false,
+                'legal_name' => null,
+                'business_name' => null,
+                'entity_type' => null,
+                'tax_centre' => null,
+                'region' => null,
+                'city' => null,
+                'message' => 'Upstream error: '.$e->getMessage(),
+                'from_cache' => false,
+            ];
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $result
+     * @return array{
+     *   ok: bool,
+     *   status: string,
+     *   tin: string,
+     *   found: bool,
+     *   legal_name: ?string,
+     *   business_name: ?string,
+     *   entity_type: ?string,
+     *   tax_centre: ?string,
+     *   region: ?string,
+     *   city: ?string,
+     *   message: string,
+     *   from_cache: bool
+     * }
+     */
+    protected function probePayload(array $result, bool $fromCache, bool $ok): array
+    {
+        if (! empty($result['raw']['unavailable'])) {
+            return [
+                'ok' => false,
+                'status' => 'unavailable',
+                'tin' => (string) ($result['tin'] ?? ''),
+                'found' => false,
+                'legal_name' => null,
+                'business_name' => null,
+                'entity_type' => null,
+                'tax_centre' => null,
+                'region' => null,
+                'city' => null,
+                'message' => $this->unavailableMessage(),
+                'from_cache' => $fromCache,
+            ];
+        }
+
+        $found = (bool) ($result['found'] ?? false);
+
+        return [
+            'ok' => $ok,
+            'status' => $found ? 'found' : 'not_found',
+            'tin' => (string) ($result['tin'] ?? ''),
+            'found' => $found,
+            'legal_name' => $result['legal_name'] ?? null,
+            'business_name' => $result['business_name'] ?? null,
+            'entity_type' => $result['entity_type'] ?? null,
+            'tax_centre' => $result['tax_centre'] ?? null,
+            'region' => $result['region'] ?? null,
+            'city' => $result['city'] ?? null,
+            'message' => $found
+                ? 'TIN number found in ERCA.'
+                : 'No taxpayer found for this TIN number in ERCA.',
+            'from_cache' => $fromCache,
+        ];
+    }
+
+    /**
      * @return array{
      *   found: bool,
      *   tin: string,
