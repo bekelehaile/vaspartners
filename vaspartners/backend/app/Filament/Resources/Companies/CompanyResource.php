@@ -226,11 +226,7 @@ class CompanyResource extends Resource
                 TextColumn::make('tin')
                     ->label('TIN number')
                     ->searchable()
-                    ->sortable()
-                    ->url(fn (Company $record): string => static::getUrl('view', ['record' => $record]))
-                    ->color('primary')
-                    ->weight(FontWeight::SemiBold)
-                    ->tooltip('View company details'),
+                    ->sortable(),
                 IconColumn::make('tin_ok')
                     ->label('TIN number verified')
                     ->boolean()
