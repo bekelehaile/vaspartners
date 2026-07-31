@@ -166,15 +166,15 @@ class CompanyResource extends Resource
                     TextEntry::make('erca_name_status')
                         ->label('Name match')
                         ->badge()
-                        ->formatStateUsing(fn ($state) => $state instanceof \App\Enums\ErcaNameStatus
-                            ? $state->label()
-                            : (\App\Enums\ErcaNameStatus::tryFrom((string) $state)?->label() ?? 'Not checked'))
+                        ->formatStateUsing(fn ($state): string => static::ercaNameMatchLabel($state))
                         ->color(fn ($state) => match ($state instanceof \App\Enums\ErcaNameStatus ? $state->value : (string) $state) {
-                            'matched', 'accepted_legal', 'kept_both', 'partner_entered' => 'success',
-                            'mismatch_pending', 'name_missing' => 'warning',
+                            'matched', 'accepted_legal' => 'success',
+                            'mismatch_pending', 'kept_both' => 'danger',
+                            'name_missing', 'partner_entered' => 'warning',
                             'not_found', 'failed' => 'danger',
                             default => 'gray',
-                        }),
+                        })
+                        ->tooltip(fn ($state): ?string => static::ercaNameStatusDetail($state)),
                     TextEntry::make('erca_verified_at')
                         ->label('Verified at')
                         ->dateTime()
@@ -241,18 +241,18 @@ class CompanyResource extends Resource
                         );
                     }),
                 TextColumn::make('erca_name_status')
-                    ->label('ERCA name')
+                    ->label('Name match')
                     ->badge()
                     ->toggleable(isToggledHiddenByDefault: true)
-                    ->formatStateUsing(fn ($state) => $state instanceof \App\Enums\ErcaNameStatus
-                        ? $state->value
-                        : (string) ($state ?: 'unchecked'))
+                    ->formatStateUsing(fn ($state): string => static::ercaNameMatchLabel($state))
                     ->color(fn ($state) => match ($state instanceof \App\Enums\ErcaNameStatus ? $state->value : (string) $state) {
-                        'matched', 'accepted_legal', 'kept_both', 'partner_entered' => 'success',
-                        'mismatch_pending', 'name_missing' => 'warning',
+                        'matched', 'accepted_legal' => 'success',
+                        'mismatch_pending', 'kept_both' => 'danger',
+                        'name_missing', 'partner_entered' => 'warning',
                         'not_found', 'failed' => 'danger',
                         default => 'gray',
-                    }),
+                    })
+                    ->tooltip(fn ($state): ?string => static::ercaNameStatusDetail($state)),
                 TextColumn::make('erca_verified_at')
                     ->label('ERCA verified at')
                     ->dateTime()
@@ -602,5 +602,52 @@ class CompanyResource extends Resource
             ->action(function (Company $record, CompanyPurgeService $purge): void {
                 static::purgeCompanyRecord($record, $purge);
             });
+    }
+
+    /**
+     * Short Yes/No answer for the "Name match" column/field.
+     */
+    public static function ercaNameMatchLabel(mixed $state): string
+    {
+        $status = $state instanceof \App\Enums\ErcaNameStatus
+            ? $state
+            : \App\Enums\ErcaNameStatus::tryFrom((string) $state);
+
+        return match ($status) {
+            \App\Enums\ErcaNameStatus::Matched,
+            \App\Enums\ErcaNameStatus::AcceptedLegal => 'Yes',
+            \App\Enums\ErcaNameStatus::MismatchPending,
+            \App\Enums\ErcaNameStatus::KeptBoth => 'No',
+            \App\Enums\ErcaNameStatus::Unchecked, null => '—',
+            \App\Enums\ErcaNameStatus::NameMissing => '—',
+            \App\Enums\ErcaNameStatus::PartnerEntered => '—',
+            \App\Enums\ErcaNameStatus::NotFound,
+            \App\Enums\ErcaNameStatus::Failed => 'No',
+        };
+    }
+
+    /** Fuller status text for tooltips when the badge is Yes/No/—. */
+    public static function ercaNameStatusDetail(mixed $state): ?string
+    {
+        $status = $state instanceof \App\Enums\ErcaNameStatus
+            ? $state
+            : \App\Enums\ErcaNameStatus::tryFrom((string) $state);
+
+        if (! $status) {
+            return 'Not checked';
+        }
+
+        // Keep tooltip useful when badge is already Yes/No.
+        return match ($status) {
+            \App\Enums\ErcaNameStatus::Matched => 'Entered name matches ERCA legal name',
+            \App\Enums\ErcaNameStatus::MismatchPending => 'Name mismatch — awaiting partner consent',
+            \App\Enums\ErcaNameStatus::AcceptedLegal => 'Partner accepted ERCA legal name',
+            \App\Enums\ErcaNameStatus::KeptBoth => 'Partner kept entered name + legal name',
+            \App\Enums\ErcaNameStatus::NotFound => 'TIN number not found in ERCA',
+            \App\Enums\ErcaNameStatus::NameMissing => 'TIN number found — legal name missing',
+            \App\Enums\ErcaNameStatus::PartnerEntered => 'Partner entered company name (ERCA had no name)',
+            \App\Enums\ErcaNameStatus::Failed => 'ERCA check failed',
+            \App\Enums\ErcaNameStatus::Unchecked => 'Not checked',
+        };
     }
 }

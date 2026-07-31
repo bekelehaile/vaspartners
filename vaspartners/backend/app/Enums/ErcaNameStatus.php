@@ -18,8 +18,8 @@ enum ErcaNameStatus: string
     {
         return match ($this) {
             self::Unchecked => 'Not checked',
-            self::Matched => 'Name matches ERCA',
-            self::MismatchPending => 'Name mismatch — awaiting consent',
+            self::Matched => 'Yes',
+            self::MismatchPending => 'No',
             self::AcceptedLegal => 'Partner accepted ERCA legal name',
             self::KeptBoth => 'Partner kept entered name + legal name',
             self::NotFound => 'TIN number not found in ERCA',
