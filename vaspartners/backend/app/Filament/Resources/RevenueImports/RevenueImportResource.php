@@ -121,6 +121,18 @@ class RevenueImportResource extends Resource
                 TextEntry::make('missing_phone_count')->label('Missing phone'),
                 TextEntry::make('invalid_count')->label('Invalid / duplicate'),
             ])->columns(6),
+            Section::make('Reason')->schema([
+                TextEntry::make('status')
+                    ->hiddenLabel()
+                    ->formatStateUsing(function ($state): string {
+                        $status = $state instanceof RevenueImportStatus
+                            ? $state
+                            : RevenueImportStatus::tryFrom((string) $state);
+
+                        return $status?->description() ?? '—';
+                    })
+                    ->columnSpanFull(),
+            ]),
         ]);
     }
 
@@ -140,7 +152,10 @@ class RevenueImportResource extends Resource
                         RevenueImportStatus::Failed => 'danger',
                         RevenueImportStatus::Sending => 'info',
                         default => 'gray',
-                    }),
+                    })
+                    ->tooltip(fn ($state): ?string => ($state instanceof RevenueImportStatus
+                        ? $state
+                        : RevenueImportStatus::tryFrom((string) $state))?->description()),
                 TextColumn::make('creator.name')->label('Imported by')->toggleable(),
                 TextColumn::make('imported_at')->dateTime()->sortable(),
                 TextColumn::make('sender.name')->label('Sent by')->toggleable(),
