@@ -11,6 +11,7 @@ use Filament\Actions\ViewAction;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 
 class ChangeRequestsRelationManager extends RelationManager
 {
@@ -22,6 +23,13 @@ class ChangeRequestsRelationManager extends RelationManager
     {
         // Super admin may delete from this relation; others stay view-only.
         return ! CompanyChangeRequestResource::canDeleteAny();
+    }
+
+    public static function getBadge(Model $ownerRecord, string $pageClass): ?string
+    {
+        $count = $ownerRecord->changeRequests()->count();
+
+        return $count > 0 ? (string) $count : null;
     }
 
     public function table(Table $table): Table

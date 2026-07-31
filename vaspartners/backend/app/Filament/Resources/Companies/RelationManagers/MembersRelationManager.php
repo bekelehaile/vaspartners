@@ -13,6 +13,7 @@ use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use Throwable;
 
 class MembersRelationManager extends RelationManager
@@ -24,6 +25,13 @@ class MembersRelationManager extends RelationManager
     public function isReadOnly(): bool
     {
         return false;
+    }
+
+    public static function getBadge(Model $ownerRecord, string $pageClass): ?string
+    {
+        $count = $ownerRecord->memberships()->count();
+
+        return $count > 0 ? (string) $count : null;
     }
 
     public function table(Table $table): Table

@@ -9,6 +9,7 @@ use Filament\Actions\ViewAction;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 
 class SubscriptionsRelationManager extends RelationManager
 {
@@ -19,6 +20,13 @@ class SubscriptionsRelationManager extends RelationManager
     public function isReadOnly(): bool
     {
         return true;
+    }
+
+    public static function getBadge(Model $ownerRecord, string $pageClass): ?string
+    {
+        $count = $ownerRecord->subscriptions()->count();
+
+        return $count > 0 ? (string) $count : null;
     }
 
     public function table(Table $table): Table

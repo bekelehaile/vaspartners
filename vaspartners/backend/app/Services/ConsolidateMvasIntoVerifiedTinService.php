@@ -126,8 +126,49 @@ class ConsolidateMvasIntoVerifiedTinService
               AND oldc.created_by_contact_id IS NOT NULL
         ", [CompanyRole::Owner->value]);
 
+        // Tertiary: unique normalized name / legal_name match (abandoned MVAS with no membership link).
+        $byName = DB::select("
+            WITH norm AS (
+                SELECT
+                    id,
+                    tin,
+                    name,
+                    regexp_replace(lower(trim(name)), '[^a-z0-9]+', '', 'g') AS n_name,
+                    regexp_replace(lower(trim(COALESCE(legal_name, ''))), '[^a-z0-9]+', '', 'g') AS n_legal,
+                    tin_validated,
+                    erca_tin_verified
+                FROM companies
+                WHERE deleted_at IS NULL
+            ),
+            candidates AS (
+                SELECT
+                    o.id AS old_id,
+                    o.tin AS old_tin,
+                    o.name AS old_name,
+                    v.id AS new_id,
+                    v.tin AS new_tin,
+                    v.name AS new_name,
+                    COUNT(*) OVER (PARTITION BY o.id) AS match_count
+                FROM norm o
+                JOIN norm v
+                    ON v.id <> o.id
+                    AND v.tin_validated = true
+                    AND v.erca_tin_verified = true
+                    AND v.tin ~ '^[0-9]{10}$'
+                    AND o.n_name <> ''
+                    AND (
+                        v.n_name = o.n_name
+                        OR (v.n_legal <> '' AND v.n_legal = o.n_name)
+                    )
+                WHERE o.tin LIKE 'MVAS-%'
+            )
+            SELECT old_id, old_tin, old_name, new_id, new_tin, new_name
+            FROM candidates
+            WHERE match_count = 1
+        ");
+
         $keyed = [];
-        foreach (array_merge($byLegacy, $byCreator) as $row) {
+        foreach (array_merge($byLegacy, $byCreator, $byName) as $row) {
             $key = ((int) $row->old_id).':'.((int) $row->new_id);
             $keyed[$key] = $row;
         }
@@ -136,6 +177,42 @@ class ConsolidateMvasIntoVerifiedTinService
         usort($pairs, fn ($a, $b) => strcmp((string) $a->new_name, (string) $b->new_name));
 
         return $pairs;
+    }
+
+    /**
+     * Soft-delete abandoned MVAS placeholders with no memberships, live subscriptions, or change requests.
+     *
+     * @return array{pruned: int, dry_run: bool}
+     */
+    public function pruneEmptyShells(bool $dryRun = false): array
+    {
+        $query = Company::query()
+            ->where('tin', 'like', 'MVAS-%')
+            ->whereDoesntHave('memberships')
+            ->whereDoesntHave('subscriptions')
+            ->whereDoesntHave('changeRequests');
+
+        $ids = $query->pluck('id');
+        $count = $ids->count();
+
+        if ($dryRun || $count === 0) {
+            return ['pruned' => $count, 'dry_run' => $dryRun];
+        }
+
+        $pruned = 0;
+        foreach ($ids->chunk(200) as $chunk) {
+            $pruned += Company::query()
+                ->whereIn('id', $chunk->all())
+                ->update([
+                    'is_active' => false,
+                    'updated_at' => now(),
+                    'deleted_at' => now(),
+                ]);
+        }
+
+        Log::info('Pruned empty MVAS company shells', ['pruned' => $pruned]);
+
+        return ['pruned' => $pruned, 'dry_run' => false];
     }
 
     /**

@@ -14,14 +14,17 @@ use App\Filament\Resources\Subscriptions\RelationManagers\TicketsRelationManager
 use App\Filament\Resources\Tickets\TicketResource;
 use App\Models\Subscription;
 use Filament\Actions\ViewAction;
+use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 class SubscriptionResource extends Resource
@@ -79,6 +82,10 @@ class SubscriptionResource extends Resource
                         ? CompanyResource::getUrl('view', ['record' => $record->company])
                         : null),
                 TextEntry::make('company.tin')->label('TIN number')->placeholder('—'),
+                IconEntry::make('company_tin_ok')
+                    ->label('TIN number status')
+                    ->boolean()
+                    ->state(fn (Subscription $record): bool => (bool) $record->company?->isTinValidated()),
                 TextEntry::make('contact.name')
                     ->label('Activated by')
                     ->placeholder('—')
@@ -109,28 +116,69 @@ class SubscriptionResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table->columns([
-            TextColumn::make('company.name')->label('Company')->searchable()->placeholder('—'),
-            TextColumn::make('service.name')->sortable(),
-            TextColumn::make('status')
-                ->badge()
-                ->formatStateUsing(fn ($state) => SubscriptionStatus::tryLabel($state))
-                ->color(fn ($state): string => SubscriptionStatus::tryColor($state)),
-            TextColumn::make('contact.name')->label('Activated by')->searchable()->toggleable(),
-            TextColumn::make('renewal_interval')->badge(),
-            TextColumn::make('current_period_end')->dateTime()->sortable()->toggleable(),
-            TextColumn::make('next_renewal_due_at')->dateTime()->toggleable(),
-        ])->filters([
-            SelectFilter::make('status')->options(SubscriptionStatus::options()),
-            SelectFilter::make('service_id')
-                ->label('Service')
-                ->relationship('service', 'name')
-                ->searchable()
-                ->preload(),
-        ])->recordActions([
-            ViewAction::make()
-                ->url(fn (Subscription $record): string => static::getUrl('view', ['record' => $record])),
-        ]);
+        return $table
+            ->modifyQueryUsing(fn (Builder $query) => $query->with(['company', 'service', 'contact']))
+            ->columns([
+                TextColumn::make('company.name')->label('Company')->searchable()->placeholder('—'),
+                TextColumn::make('company.tin')
+                    ->label('TIN number')
+                    ->searchable()
+                    ->placeholder('—')
+                    ->url(fn (Subscription $record): ?string => $record->company
+                        ? CompanyResource::getUrl('view', ['record' => $record->company])
+                        : null),
+                IconColumn::make('company_tin_ok')
+                    ->label('TIN number status')
+                    ->boolean()
+                    ->state(fn (Subscription $record): bool => (bool) $record->company?->isTinValidated())
+                    ->sortable(query: function (Builder $query, string $direction): Builder {
+                        return $query->orderByRaw(
+                            '(SELECT CASE WHEN companies.erca_tin_verified = true AND companies.tin ~ \'^[0-9]{10}$\' THEN 1 ELSE 0 END FROM companies WHERE companies.id = subscriptions.company_id) '.$direction
+                        );
+                    }),
+                TextColumn::make('service.name')->sortable(),
+                TextColumn::make('status')
+                    ->badge()
+                    ->formatStateUsing(fn ($state) => SubscriptionStatus::tryLabel($state))
+                    ->color(fn ($state): string => SubscriptionStatus::tryColor($state)),
+                TextColumn::make('contact.name')->label('Activated by')->searchable()->toggleable(),
+                TextColumn::make('renewal_interval')->badge(),
+                TextColumn::make('current_period_end')->dateTime()->sortable()->toggleable(),
+                TextColumn::make('next_renewal_due_at')->dateTime()->toggleable(),
+            ])->filters([
+                SelectFilter::make('status')->options(SubscriptionStatus::options()),
+                SelectFilter::make('service_id')
+                    ->label('Service')
+                    ->relationship('service', 'name')
+                    ->searchable()
+                    ->preload(),
+                SelectFilter::make('tin_status')
+                    ->label('TIN number status')
+                    ->options([
+                        'verified' => 'Verified',
+                        'unverified' => 'Not verified',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return match ($data['value'] ?? null) {
+                            'verified' => $query->whereHas('company', fn (Builder $q) => $q
+                                ->where('erca_tin_verified', true)
+                                ->whereRaw("tin ~ '^[0-9]{10}$'")),
+                            'unverified' => $query->where(function (Builder $q): void {
+                                $q->whereDoesntHave('company')
+                                    ->orWhereHas('company', fn (Builder $inner) => $inner
+                                        ->where(function (Builder $c): void {
+                                            $c->where('erca_tin_verified', false)
+                                                ->orWhereNull('erca_tin_verified')
+                                                ->orWhereRaw("tin !~ '^[0-9]{10}$'");
+                                        }));
+                            }),
+                            default => $query,
+                        };
+                    }),
+            ])->recordActions([
+                ViewAction::make()
+                    ->url(fn (Subscription $record): string => static::getUrl('view', ['record' => $record])),
+            ]);
     }
 
     public static function getRelations(): array

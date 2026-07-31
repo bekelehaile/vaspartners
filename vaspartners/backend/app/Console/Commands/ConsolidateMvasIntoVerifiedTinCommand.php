@@ -11,7 +11,8 @@ class ConsolidateMvasIntoVerifiedTinCommand extends Command
     protected $signature = 'vas:consolidate-mvas-into-verified-tin
                             {--dry-run : Preview merges without writing}
                             {--force : Required to write changes}
-                            {--tin= : Only consolidate into this verified TIN number}';
+                            {--tin= : Only consolidate into this verified TIN number}
+                            {--prune-empty : Soft-delete abandoned MVAS shells with no members/subs/change requests}';
 
     protected $description = 'Move leftover MVAS placeholder company data onto live ERCA TIN-verified companies and soft-delete the shells';
 
@@ -19,6 +20,7 @@ class ConsolidateMvasIntoVerifiedTinCommand extends Command
     {
         $dryRun = (bool) $this->option('dry-run') || ! $this->option('force');
         $onlyTin = trim((string) $this->option('tin'));
+        $pruneEmpty = (bool) $this->option('prune-empty');
 
         if ($dryRun && ! $this->option('dry-run')) {
             $this->warn('Refusing to write without --force (pass --dry-run to preview).');
@@ -81,12 +83,20 @@ class ConsolidateMvasIntoVerifiedTinCommand extends Command
             );
         }
 
+        $pruned = 0;
+        if ($pruneEmpty) {
+            $prune = $service->pruneEmptyShells($dryRun);
+            $pruned = $prune['pruned'];
+            $this->info(($dryRun ? '[dry-run] ' : '')."Empty MVAS shells to prune: {$pruned}");
+        }
+
         $this->table(
             ['Metric', 'Count'],
             [
                 ['pairs', $result['pairs']],
                 ...collect($result['moved'])->map(fn ($v, $k) => [$k, $v])->values()->all(),
                 ['soft_deleted', $result['soft_deleted']],
+                ['empty_shells_pruned', $pruned],
                 ['mode', $dryRun ? 'dry-run' : 'written'],
             ],
         );
@@ -97,6 +107,7 @@ class ConsolidateMvasIntoVerifiedTinCommand extends Command
             'pairs' => $result['pairs'],
             'moved' => $result['moved'],
             'soft_deleted' => $result['soft_deleted'],
+            'empty_shells_pruned' => $pruned,
         ]);
 
         return self::SUCCESS;
