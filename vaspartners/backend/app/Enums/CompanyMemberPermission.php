@@ -23,7 +23,7 @@ enum CompanyMemberPermission: string
     {
         return match ($this) {
             self::CreateSubscriptions => 'Start new VAS subscriptions for the company.',
-            self::ManageServices => 'Change, renew, or terminate existing services, and request non-subscription services.',
+            self::ManageServices => 'Change, renew, or terminate (partner consent) existing services, and request non-subscription services.',
             self::ManageMembershipRequests => 'Approve or reject partners asking to join the company.',
             self::EditCompanyProfile => 'Update company details while waiting for admin approval.',
         };

@@ -45,8 +45,9 @@ export function subscriptionStatusLabel(status?: string | null): string {
       return "Grace period";
     case "expired":
       return "Expired";
-    case "terminated":
-      return "Terminated";
+    case "deactive":
+    case "terminated": // legacy value
+      return "Deactive";
     default:
       return status ? String(status) : "—";
   }

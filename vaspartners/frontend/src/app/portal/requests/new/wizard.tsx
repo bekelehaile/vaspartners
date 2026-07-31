@@ -161,6 +161,7 @@ export default function NewRequestWizard() {
   const [attachError, setAttachError] = useState<string | null>(null);
   const [uploadingDocs, setUploadingDocs] = useState(false);
   const [approverPopup, setApproverPopup] = useState<string | null>(null);
+  const [terminateConsent, setTerminateConsent] = useState(false);
 
   const isApproverMissingError = (err: unknown): boolean =>
     err instanceof Error && /approver is not found/i.test(err.message);
@@ -230,6 +231,8 @@ export default function NewRequestWizard() {
   const managingOneOff = !!selectedManage && selectedManage.is_subscription_based === false;
   const starterTypes = selectedSubscribe ? starterRequisitions(selectedSubscribe) : [];
   const manageTypes = selectedManage ? manageRequisitions(selectedManage) : [];
+  const selectedManageType = manageTypes.find((r) => String(r.id) === String(requisitionId));
+  const isTerminationRequest = !!selectedManageType?.terminates_subscription;
 
   const confirmServiceId =
     intent === "manage" ? (manageServiceId ? String(manageServiceId) : "") : String(serviceId || "");
@@ -249,6 +252,7 @@ export default function NewRequestWizard() {
   useEffect(() => {
     setStagedFiles({});
     setAttachError(null);
+    setTerminateConsent(false);
   }, [serviceId, requisitionId, subscriptionId, intent]);
 
   // Wizard step within a journey (0-based after intent is chosen)
@@ -942,7 +946,7 @@ export default function NewRequestWizard() {
                                   : managingOneOff
                                     ? "Non-subscription request"
                                     : r.terminates_subscription
-                                      ? "Ends the subscription"
+                                      ? "Your consent to quit — we mark the subscription deactive after approval"
                                       : r.renews_subscription
                                         ? "Extends the subscription period"
                                         : "Requires an active subscription"}
@@ -998,12 +1002,28 @@ export default function NewRequestWizard() {
                             placeholder={
                               managingOneOff
                                 ? "Describe what you need"
-                                : "Describe the change or issue"
+                                : isTerminationRequest
+                                  ? "Optional note about why you are quitting this service"
+                                  : "Describe the change or issue"
                             }
                           />
                         </div>
                       )}
                     </form.Field>
+                    {isTerminationRequest && (
+                      <label className="company-add-member-active" htmlFor="terminate-consent">
+                        <input
+                          id="terminate-consent"
+                          type="checkbox"
+                          checked={terminateConsent}
+                          onChange={(e) => setTerminateConsent(e.target.checked)}
+                        />
+                        <span>
+                          I consent to terminate this subscription. After approval, Ethio telecom
+                          will mark it <strong>deactive</strong> in the system.
+                        </span>
+                      </label>
+                    )}
                     <RequirementsPreview
                       serviceId={manageServiceId ? String(manageServiceId) : ""}
                       requisitionId={String(requisitionId || "")}
@@ -1021,7 +1041,8 @@ export default function NewRequestWizard() {
                           !requisitionId ||
                           (!managingOneOff && !subscriptionId) ||
                           !description.trim() ||
-                          !attachmentsReady
+                          !attachmentsReady ||
+                          (isTerminationRequest && !terminateConsent)
                         }
                       >
                         {createTicket.isPending || uploadingDocs
@@ -1030,7 +1051,9 @@ export default function NewRequestWizard() {
                             : "Creating…"
                           : managingOneOff
                             ? "Submit request"
-                            : "Submit management request"}
+                            : isTerminationRequest
+                              ? "Submit termination request"
+                              : "Submit management request"}
                       </button>
                       <button type="button" className="btn-ghost" onClick={() => setStep(1)}>
                         Back

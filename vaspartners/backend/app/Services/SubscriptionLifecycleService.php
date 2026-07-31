@@ -17,10 +17,12 @@ use Illuminate\Validation\ValidationException;
  * Subscription lifecycle driven by configurable requisition behaviors.
  *
  * Subscriptions belong to the company once the partner is linked.
- * - creates_subscription (new) → activate on ticket completed/closed
+ * - creates_subscription (new) → Active on ticket completed/closed
  * - renews_subscription (renew) → extend period on completed/closed
- * - terminates_subscription (terminate) → end subscription on completed/closed
+ * - terminates_subscription (terminate) → Deactive on completed/closed (partner consent via request)
  * Renewal cadence (yearly / bi-yearly) is configured per service.
+ *
+ * Request status "closed" is never a subscription status.
  */
 class SubscriptionLifecycleService
 {
@@ -169,9 +171,9 @@ class SubscriptionLifecycleService
             /** @var Subscription $subscription */
             $subscription = $ticket->subscription()->lockForUpdate()->firstOrFail();
 
-            if ($subscription->status === SubscriptionStatus::Terminated) {
+            if ($subscription->status === SubscriptionStatus::Deactive) {
                 throw ValidationException::withMessages([
-                    'subscription' => 'Cannot renew a terminated subscription.',
+                    'subscription' => 'Cannot renew a deactive subscription.',
                 ]);
             }
 
@@ -199,7 +201,7 @@ class SubscriptionLifecycleService
             $subscription = $ticket->subscription()->lockForUpdate()->firstOrFail();
 
             $subscription->fill([
-                'status' => SubscriptionStatus::Terminated,
+                'status' => SubscriptionStatus::Deactive,
                 'terminated_at' => now(),
                 'terminated_by_ticket_id' => $ticket->id,
                 'next_renewal_due_at' => null,

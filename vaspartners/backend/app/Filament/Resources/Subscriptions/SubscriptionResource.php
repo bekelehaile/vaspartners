@@ -67,7 +67,7 @@ class SubscriptionResource extends Resource
                     ->color(fn ($state): string => match ($state instanceof SubscriptionStatus ? $state : SubscriptionStatus::tryFrom((string) $state)) {
                         SubscriptionStatus::Active => 'success',
                         SubscriptionStatus::PendingRenewal, SubscriptionStatus::Grace => 'warning',
-                        SubscriptionStatus::Expired, SubscriptionStatus::Terminated => 'danger',
+                        SubscriptionStatus::Expired, SubscriptionStatus::Deactive => 'danger',
                         default => 'gray',
                     }),
                 TextEntry::make('service.name')->label('Service'),
@@ -76,7 +76,7 @@ class SubscriptionResource extends Resource
                 TextEntry::make('current_period_end')->dateTime()->placeholder('—'),
                 TextEntry::make('next_renewal_due_at')->dateTime()->placeholder('—'),
                 TextEntry::make('started_at')->dateTime()->placeholder('—'),
-                TextEntry::make('terminated_at')->dateTime()->placeholder('—'),
+                TextEntry::make('terminated_at')->label('Deactivated at')->dateTime()->placeholder('—'),
             ])->columns(2),
             Section::make('Company & partner')->schema([
                 TextEntry::make('company.name')
@@ -102,7 +102,7 @@ class SubscriptionResource extends Resource
                         ? TicketResource::getUrl('view', ['record' => $record->activatedByTicket])
                         : null),
                 TextEntry::make('terminatedByTicket.tt_number')
-                    ->label('Terminated by')
+                    ->label('Deactivated by')
                     ->placeholder('—')
                     ->url(fn (Subscription $record): ?string => $record->terminatedByTicket
                         ? TicketResource::getUrl('view', ['record' => $record->terminatedByTicket])

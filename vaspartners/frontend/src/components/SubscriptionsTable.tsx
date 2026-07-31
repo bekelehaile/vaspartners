@@ -120,7 +120,7 @@ export function SubscriptionsTable() {
           >
             <option value="all">All subscriptions</option>
             <option value="alive">Active / renewing</option>
-            <option value="ended">Ended</option>
+            <option value="ended">Deactive / ended</option>
           </select>
         </div>
       </div>

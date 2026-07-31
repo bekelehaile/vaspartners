@@ -363,7 +363,7 @@ class MvasDumpEnrichmentService
 
                 if (! $dryRun) {
                     $sub->forceFill([
-                        'status' => SubscriptionStatus::Terminated,
+                        'status' => SubscriptionStatus::Deactive,
                         'terminated_at' => $ticket->closed_at ?? $ticket->completed_at ?? now(),
                         'terminated_by_ticket_id' => $ticket->id,
                     ])->save();

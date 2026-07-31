@@ -40,7 +40,7 @@ return new class extends Migration
             DB::table('subscriptions')
                 ->whereIn('id', $ids->all())
                 ->update([
-                    'status' => SubscriptionStatus::Terminated->value,
+                    'status' => 'terminated',
                     'terminated_at' => now(),
                     'updated_at' => now(),
                 ]);

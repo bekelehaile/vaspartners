@@ -8,7 +8,8 @@ enum SubscriptionStatus: string
     case PendingRenewal = 'pending_renewal';
     case Grace = 'grace';
     case Expired = 'expired';
-    case Terminated = 'terminated';
+    /** Partner consented to quit (termination request closed) — system marks deactive. */
+    case Deactive = 'deactive';
 
     public function label(): string
     {
@@ -17,7 +18,7 @@ enum SubscriptionStatus: string
             self::PendingRenewal => 'Pending renewal',
             self::Grace => 'Grace period',
             self::Expired => 'Expired',
-            self::Terminated => 'Terminated',
+            self::Deactive => 'Deactive',
         };
     }
 
