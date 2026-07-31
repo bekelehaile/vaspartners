@@ -184,13 +184,14 @@ class BulkMessageResource extends Resource
                         }
                     }),
                 DeleteAction::make()
+                    ->visible(fn (BulkMessage $record): bool => (bool) auth()->user()?->can('delete', $record))
                     ->successNotificationTitle('Bulk message deleted'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
                         ->authorizeIndividualRecords('delete')
-                        ->visible(fn (): bool => (bool) auth()->user()?->can('DeleteAny:BulkMessage')),
+                        ->visible(fn (): bool => (bool) auth()->user()?->can('Delete:BulkMessage')),
                 ]),
             ]);
     }

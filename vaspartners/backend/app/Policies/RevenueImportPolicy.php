@@ -64,10 +64,7 @@ class RevenueImportPolicy
             return false;
         }
 
-        if ($user->canAccessAllRevenue()) {
-            return true;
-        }
-
+        // Only the import owner may delete (including drafts with no SMS sent).
         return (int) $revenueImport->created_by_user_id === (int) $user->id;
     }
 

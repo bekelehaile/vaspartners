@@ -34,6 +34,11 @@ class BulkMessagePolicy
             return false;
         }
 
+        // Only the campaign owner may delete (including drafts with no SMS sent).
+        if ((int) $bulkMessage->created_by_user_id !== (int) $user->id) {
+            return false;
+        }
+
         return ! in_array($bulkMessage->status, [
             BulkMessageStatus::Importing,
             BulkMessageStatus::Queued,

@@ -94,6 +94,7 @@ class ViewBulkMessage extends ViewRecord
                     }
                 }),
             DeleteAction::make()
+                ->visible(fn (): bool => (bool) auth()->user()?->can('delete', $record->fresh() ?? $record))
                 ->successNotificationTitle('Bulk message deleted')
                 ->successRedirectUrl(BulkMessageResource::getUrl('index')),
         ];

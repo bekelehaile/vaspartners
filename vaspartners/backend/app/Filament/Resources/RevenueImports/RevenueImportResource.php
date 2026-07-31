@@ -169,13 +169,13 @@ class RevenueImportResource extends Resource
                 DeleteAction::make()
                     ->visible(fn (RevenueImport $record): bool => static::canDelete($record))
                     ->modalHeading('Delete monthly revenue import')
-                    ->modalDescription('Deletes this import and its payload rows. Only allowed when no SMS has been queued or sent.'),
+                    ->modalDescription('Deletes this import and its payload rows. Only the owner can delete, and only when no SMS has been queued or sent.'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
                         ->modalHeading('Delete selected imports')
-                        ->modalDescription('Only imports with no queued/sent SMS will be deleted. Others are skipped.')
+                        ->modalDescription('Only your own imports with no queued/sent SMS will be deleted. Others are skipped.')
                         ->action(function (Collection $records): void {
                             $deleted = 0;
                             $skipped = 0;
@@ -194,7 +194,7 @@ class RevenueImportResource extends Resource
                             }
                             Notification::make()
                                 ->title($deleted > 0 ? "Deleted {$deleted} import(s)" : 'Nothing deleted')
-                                ->body($skipped > 0 ? "{$skipped} skipped (SMS already queued/sent or not allowed)." : null)
+                                ->body($skipped > 0 ? "{$skipped} skipped (not yours, or SMS already queued/sent)." : null)
                                 ->color($deleted > 0 ? 'success' : 'warning')
                                 ->send();
                         }),
