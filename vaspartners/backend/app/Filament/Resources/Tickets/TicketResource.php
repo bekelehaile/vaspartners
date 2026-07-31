@@ -286,10 +286,10 @@ class TicketResource extends Resource
                     ->label('Subscription')
                     ->badge()
                     ->placeholder('—')
-                    ->toggleable()
+                    ->toggleable(isToggledHiddenByDefault: true)
                     ->formatStateUsing(fn ($state): string => SubscriptionStatus::tryLabel($state))
                     ->color(fn ($state): string => SubscriptionStatus::tryColor($state)),
-                TextColumn::make('category.name')->label('Group')->toggleable(),
+                TextColumn::make('category.name')->label('Group')->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('requisition.name')->label('Request type')->toggleable(),
                 TextColumn::make('status')->badge()
                     ->formatStateUsing(fn ($state) => $state instanceof TicketStatus
