@@ -45,7 +45,7 @@ class SubscriptionsRelationManager extends RelationManager
             ])
             ->recordActions([
                 ViewAction::make()
-                    ->label('View details')
+                    ->label('View')
                     ->url(fn (Subscription $record): string => SubscriptionResource::getUrl('view', ['record' => $record])),
             ])
             ->headerActions([])

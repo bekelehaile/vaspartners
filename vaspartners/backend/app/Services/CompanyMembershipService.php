@@ -267,6 +267,14 @@ class CompanyMembershipService
         app(RemountSubscriptionsToVerifiedTinService::class)
             ->remountForCompany($result['company'], dryRun: false);
 
+        // Merge any leftover MVAS placeholder shell for this owner into the verified company.
+        $consolidator = app(ConsolidateMvasIntoVerifiedTinService::class);
+        foreach ($consolidator->discoverPairs() as $pair) {
+            if ((int) $pair->new_id === (int) $result['company']->id) {
+                $consolidator->consolidatePair((int) $pair->old_id, (int) $pair->new_id, dryRun: false);
+            }
+        }
+
         return $result['contact']->fresh(['company', 'memberships.company']);
     }
 

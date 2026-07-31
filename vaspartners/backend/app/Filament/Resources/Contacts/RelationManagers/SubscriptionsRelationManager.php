@@ -34,7 +34,7 @@ class SubscriptionsRelationManager extends RelationManager
             ])
             ->recordActions([
                 Action::make('open_subscription')
-                    ->label('View details')
+                    ->label('View')
                     ->icon('heroicon-o-eye')
                     ->url(fn ($record) => SubscriptionResource::getUrl('view', ['record' => $record])),
                 Action::make('open_service')

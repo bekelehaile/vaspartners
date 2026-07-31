@@ -64,7 +64,7 @@ export function LandingServicesSection() {
                 <span className="service-card-body">
                   <strong>{service.name}</strong>
                   <span className="service-card-cta">
-                    View details
+                    View
                     <svg viewBox="0 0 20 20" fill="none" aria-hidden>
                       <path
                         d="M4 10h11M11 5l5 5-5 5"

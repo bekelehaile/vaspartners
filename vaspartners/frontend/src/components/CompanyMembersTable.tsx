@@ -399,7 +399,7 @@ export function CompanyMembersTable({ enabled }: { enabled: boolean }) {
     const actions: MemberAction[] = [
       {
         key: "details",
-        label: showDetails ? "Hide details" : "View details",
+        label: showDetails ? "Hide details" : "View",
         onSelect: () =>
           setDetailsId(showDetails ? null : member.public_id || null),
       },
@@ -587,9 +587,8 @@ export function CompanyMembersTable({ enabled }: { enabled: boolean }) {
                       </p>
                     </div>
                     <span
-                      className={`company-request-status ${
-                        active ? "is-approved" : "is-rejected"
-                      }`}
+                      className={`company-request-status ${active ? "is-approved" : "is-rejected"
+                        }`}
                     >
                       {active ? "Enabled" : "Disabled"}
                     </span>
@@ -606,8 +605,8 @@ export function CompanyMembersTable({ enabled }: { enabled: boolean }) {
                       : (member.permissions?.length ?? 0) === 0
                         ? "Permissions: None"
                         : `Permissions: ${(member.permissions ?? [])
-                            .map((key) => permissionLabel(key, catalog))
-                            .join(", ")}`}
+                          .map((key) => permissionLabel(key, catalog))
+                          .join(", ")}`}
                   </div>
                   {actions.length > 0 ? (
                     <div className="portal-mobile-card-actions company-member-mobile-actions">
@@ -691,9 +690,8 @@ export function CompanyMembersTable({ enabled }: { enabled: boolean }) {
                       <td>{isOwnerRow ? "Owner" : "Member"}</td>
                       <td>
                         <span
-                          className={`company-request-status ${
-                            active ? "is-approved" : "is-rejected"
-                          }`}
+                          className={`company-request-status ${active ? "is-approved" : "is-rejected"
+                            }`}
                         >
                           {active ? "Enabled" : "Disabled"}
                         </span>

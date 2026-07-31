@@ -175,83 +175,83 @@ export function NotificationBell() {
   const panel =
     open && mounted
       ? createPortal(
-          <div
-            ref={panelRef}
-            className="notif-panel notif-panel-portal"
-            role="dialog"
-            aria-label="Notifications"
-            id={panelId}
-            style={panelStyle}
-          >
-            <div className="notif-panel-head">
-              <div>
-                <strong>Notifications</strong>
-                <p className="notif-panel-sub">
-                  {isError
-                    ? "Could not load notifications"
-                    : unread > 0
-                      ? `${unread} unread update${unread === 1 ? "" : "s"}`
-                      : "You are up to date"}
-                </p>
+        <div
+          ref={panelRef}
+          className="notif-panel notif-panel-portal"
+          role="dialog"
+          aria-label="Notifications"
+          id={panelId}
+          style={panelStyle}
+        >
+          <div className="notif-panel-head">
+            <div>
+              <strong>Notifications</strong>
+              <p className="notif-panel-sub">
+                {isError
+                  ? "Could not load notifications"
+                  : unread > 0
+                    ? `${unread} unread update${unread === 1 ? "" : "s"}`
+                    : "You are up to date"}
+              </p>
+            </div>
+            {(unread > 0 || items.length > 0) && (
+              <div className="notif-panel-actions">
+                {unread > 0 && (
+                  <button
+                    type="button"
+                    className="notif-mark-all"
+                    disabled={markAll.isPending || clearAll.isPending}
+                    onClick={() => markAll.mutate()}
+                  >
+                    Mark all read
+                  </button>
+                )}
+                {items.length > 0 && (
+                  <button
+                    type="button"
+                    className="notif-clear-all"
+                    disabled={clearAll.isPending || markAll.isPending}
+                    onClick={() => clearAll.mutate()}
+                  >
+                    Clear all
+                  </button>
+                )}
               </div>
-              {(unread > 0 || items.length > 0) && (
-                <div className="notif-panel-actions">
-                  {unread > 0 && (
-                    <button
-                      type="button"
-                      className="notif-mark-all"
-                      disabled={markAll.isPending || clearAll.isPending}
-                      onClick={() => markAll.mutate()}
-                    >
-                      Mark all read
-                    </button>
-                  )}
-                  {items.length > 0 && (
-                    <button
-                      type="button"
-                      className="notif-clear-all"
-                      disabled={clearAll.isPending || markAll.isPending}
-                      onClick={() => clearAll.mutate()}
-                    >
-                      Clear all
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
+            )}
+          </div>
 
-            <div className="notif-panel-body">
-              {isLoading && <p className="muted notif-empty">Loading notifications…</p>}
-              {isError && (
-                <p className="alert notif-empty" role="alert">
-                  {error instanceof Error ? error.message : "Could not load notifications."}
-                </p>
-              )}
-              {!isLoading && !isError && !items.length && (
-                <div className="notif-empty-state">
-                  <IconFor template="ticket_submitted" />
-                  <p>No notifications yet</p>
-                  <span className="muted">
-                    Updates about your company and service requests will appear here.
-                  </span>
-                </div>
-              )}
-              {items.map((n) => (
-                <NotificationRow
-                  key={n.id}
-                  notification={n}
-                  clearing={clearOne.isPending && clearOne.variables === n.id}
-                  onOpen={() => {
-                    if (!n.read_at) markRead.mutate(n.id);
-                    setOpen(false);
-                  }}
-                  onClear={() => clearOne.mutate(n.id)}
-                />
-              ))}
-            </div>
-          </div>,
-          document.body,
-        )
+          <div className="notif-panel-body">
+            {isLoading && <p className="muted notif-empty">Loading notifications…</p>}
+            {isError && (
+              <p className="alert notif-empty" role="alert">
+                {error instanceof Error ? error.message : "Could not load notifications."}
+              </p>
+            )}
+            {!isLoading && !isError && !items.length && (
+              <div className="notif-empty-state">
+                <IconFor template="ticket_submitted" />
+                <p>No notifications yet</p>
+                <span className="muted">
+                  Updates about your company and service requests will appear here.
+                </span>
+              </div>
+            )}
+            {items.map((n) => (
+              <NotificationRow
+                key={n.id}
+                notification={n}
+                clearing={clearOne.isPending && clearOne.variables === n.id}
+                onOpen={() => {
+                  if (!n.read_at) markRead.mutate(n.id);
+                  setOpen(false);
+                }}
+                onClear={() => clearOne.mutate(n.id)}
+              />
+            ))}
+          </div>
+        </div>,
+        document.body,
+      )
       : null;
 
   return (
@@ -305,7 +305,7 @@ function NotificationRow({
           <p className="notif-body">{n.body}</p>
           <div className="notif-item-meta">
             {n.tt_number && <span className="notif-ref">{n.tt_number}</span>}
-            <span className="notif-cta">View details</span>
+            <span className="notif-cta">View</span>
           </div>
         </div>
       </Link>
