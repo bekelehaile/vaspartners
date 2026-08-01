@@ -8,6 +8,7 @@ use App\Models\Contact;
 use App\Models\ServiceFinalApprover;
 use App\Models\Subscription;
 use App\Models\Ticket;
+use App\Models\TicketComment;
 use App\Models\TicketDocument;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -35,6 +36,7 @@ class MvasDumpClearService
 
         $stats = [
             'ticket_documents' => 0,
+            'ticket_comments' => 0,
             'attachment_files_removed' => 0,
             'tickets' => 0,
             'subscriptions' => 0,
@@ -67,6 +69,9 @@ class MvasDumpClearService
             ->get(['id', 'disk', 'path', 'legacy_mvas_file_id']);
 
         $stats['ticket_documents'] = $documents->count();
+        $stats['ticket_comments'] = TicketComment::withTrashed()
+            ->whereNotNull('legacy_mvas_comment_id')
+            ->count();
 
         if (! $dryRun && $clearFiles) {
             foreach ($documents as $doc) {
@@ -138,6 +143,10 @@ class MvasDumpClearService
             if ($documents->isNotEmpty()) {
                 TicketDocument::withTrashed()->whereIn('id', $documents->pluck('id'))->forceDelete();
             }
+
+            TicketComment::withTrashed()
+                ->whereNotNull('legacy_mvas_comment_id')
+                ->forceDelete();
 
             // Break subscription FKs on tickets before deleting subscriptions/tickets.
             if ($ticketIds->isNotEmpty()) {

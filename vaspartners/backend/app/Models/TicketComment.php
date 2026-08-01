@@ -22,6 +22,7 @@ class TicketComment extends Model
         'attachment_original_name',
         'attachment_mime',
         'attachment_size_bytes',
+        'legacy_mvas_comment_id',
     ];
 
     protected function casts(): array
