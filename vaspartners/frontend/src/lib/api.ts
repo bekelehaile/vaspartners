@@ -24,6 +24,9 @@ export type Contact = {
     legal_name?: string | null;
     tin: string;
     phone?: string | null;
+    otp_phone?: string | null;
+    erca_phone?: string | null;
+    revenue_phone?: string | null;
     email?: string | null;
     address?: string | null;
     member_count?: number;

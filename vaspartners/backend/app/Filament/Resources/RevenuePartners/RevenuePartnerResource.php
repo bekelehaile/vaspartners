@@ -96,7 +96,7 @@ class RevenuePartnerResource extends Resource
                             // Portal company is validated here; only fill phone when empty.
                             // Partner name stays the finance-system value.
                             if (! filled($get('phone'))) {
-                                $set('phone', PhoneNumber::normalizeNullable($company->phone));
+                                $set('phone', PhoneNumber::normalizeNullable($company->revenuePhone()));
                             }
                         })
                         ->helperText('Optional validated portal company. Search by name, phone, or TIN number.')

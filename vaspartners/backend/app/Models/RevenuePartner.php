@@ -38,8 +38,8 @@ class RevenuePartner extends Model
             // Company is our validated portal record. Partner name comes from finance — never overwrite it.
             if ($partner->company_id) {
                 $company = Company::query()->find($partner->company_id);
-                if ($company && ! filled($partner->phone) && filled($company->phone)) {
-                    $partner->phone = PhoneNumber::normalizeNullable($company->phone);
+                if ($company && ! filled($partner->phone) && filled($company->revenuePhone())) {
+                    $partner->phone = PhoneNumber::normalizeNullable($company->revenuePhone());
                 }
             }
 
@@ -51,12 +51,17 @@ class RevenuePartner extends Model
             // Abay contact phones are often reused across unrelated partners.
             if (! $partner->company_id && filled($partner->phone)) {
                 $candidates = Company::query()
-                    ->whereRaw(
-                        "RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9) = ?",
-                        [(string) $partner->phone]
-                    )
+                    ->where(function ($q) use ($partner): void {
+                        $q->whereRaw(
+                            "RIGHT(REGEXP_REPLACE(COALESCE(revenue_phone, ''), '[^0-9]', '', 'g'), 9) = ?",
+                            [(string) $partner->phone],
+                        )->orWhereRaw(
+                            "RIGHT(REGEXP_REPLACE(COALESCE(otp_phone, phone, ''), '[^0-9]', '', 'g'), 9) = ?",
+                            [(string) $partner->phone],
+                        );
+                    })
                     ->orderBy('id')
-                    ->get(['id', 'name', 'phone']);
+                    ->get(['id', 'name', 'phone', 'otp_phone', 'revenue_phone']);
 
                 $match = $candidates->first(
                     fn (Company $company) => PartnerCompanyNameMatcher::matches(

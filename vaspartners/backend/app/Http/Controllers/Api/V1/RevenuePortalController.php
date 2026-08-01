@@ -55,12 +55,12 @@ class RevenuePortalController extends Controller
             return $this->emptyPage('Company not found.', $perPage);
         }
 
-        $companyPhone = PhoneNumber::normalizeNullable($company->phone);
+        $companyPhone = PhoneNumber::normalizeNullable($company->revenuePhone());
         $partnerIds = $this->partnerIdsForCompany($company, $companyPhone);
         if ($partnerIds === []) {
             return $this->emptyPage(
                 $companyPhone === null
-                    ? 'This company has no phone on file and no linked revenue partners yet.'
+                    ? 'This company has no revenue phone on file and no linked revenue partners yet.'
                     : 'No revenue partners match this company yet (phone + partner name).',
                 $perPage,
             );

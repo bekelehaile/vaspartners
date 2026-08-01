@@ -59,7 +59,7 @@ class CompanyResource extends Resource
      */
     public static function getGloballySearchableAttributes(): array
     {
-        return ['name', 'tin', 'phone', 'email'];
+        return ['name', 'tin', 'otp_phone', 'erca_phone', 'revenue_phone', 'phone', 'email'];
     }
 
     public static function getGlobalSearchResultDetails(\Illuminate\Database\Eloquent\Model $record): array
@@ -67,7 +67,7 @@ class CompanyResource extends Resource
         /** @var Company $record */
         return array_filter([
             'TIN number' => $record->tin,
-            'Phone' => $record->phone,
+            'OTP phone' => $record->otpPhone(),
         ]);
     }
 
@@ -109,10 +109,23 @@ class CompanyResource extends Resource
                 ->helperText(fn (?Company $record): ?string => $record?->isErcaIdentityLocked()
                     ? 'Locked after ERCA match.'
                     : 'Exactly 10 digits. Unique — never duplicated.'),
-            TextInput::make('phone')
+            TextInput::make('otp_phone')
+                ->label('OTP phone')
                 ->tel()
                 ->maxLength(32)
-                ->helperText('Last 9 digits.')
+                ->helperText('Partner portal sign-in / auto-claim. Last 9 digits. Revenue phone stays the same unless updated by request.')
+                ->dehydrateStateUsing(fn (?string $state): ?string => \App\Support\PhoneNumber::normalizeNullable($state)),
+            TextInput::make('erca_phone')
+                ->label('ERCA phone')
+                ->tel()
+                ->maxLength(32)
+                ->helperText('Ministry of Revenues registry phone. Synced on TIN verification.')
+                ->dehydrateStateUsing(fn (?string $state): ?string => \App\Support\PhoneNumber::normalizeNullable($state)),
+            TextInput::make('revenue_phone')
+                ->label('Revenue phone')
+                ->tel()
+                ->maxLength(32)
+                ->helperText('Same as OTP phone for now. Change only via an approved request.')
                 ->dehydrateStateUsing(fn (?string $state): ?string => \App\Support\PhoneNumber::normalizeNullable($state)),
             TextInput::make('email')
                 ->email()
@@ -151,12 +164,23 @@ class CompanyResource extends Resource
                         ->label('Members')
                         ->state(fn (Company $record): int => $record->memberCount()),
                 ])->columns(3),
-            Section::make('Contact')
+            Section::make('Phones')
                 ->schema([
-                    TextEntry::make('phone')->placeholder('—'),
+                    TextEntry::make('otp_phone')
+                        ->label('OTP phone')
+                        ->state(fn (Company $record): ?string => $record->otpPhone())
+                        ->placeholder('—'),
+                    TextEntry::make('erca_phone')
+                        ->label('ERCA phone')
+                        ->state(fn (Company $record): ?string => $record->ercaPhone())
+                        ->placeholder('—'),
+                    TextEntry::make('revenue_phone')
+                        ->label('Revenue phone')
+                        ->state(fn (Company $record): ?string => $record->revenuePhone())
+                        ->placeholder('—'),
                     TextEntry::make('email')->placeholder('—'),
                     TextEntry::make('address')->columnSpanFull()->placeholder('—'),
-                ])->columns(2),
+                ])->columns(3),
             Section::make('ERCA')
                 ->schema([
                     TextEntry::make('legal_name')
@@ -254,26 +278,44 @@ class CompanyResource extends Resource
                     ->placeholder('—')
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->sortable(),
-                TextColumn::make('phone')
-                    ->label('Phone')
+                TextColumn::make('otp_phone')
+                    ->label('OTP phone')
+                    ->state(fn (Company $record): ?string => $record->otpPhone())
                     ->toggleable()
                     ->placeholder('—')
                     ->searchable(query: function (Builder $query, string $search): Builder {
                         $digits = preg_replace('/\D+/', '', $search) ?? '';
                         if ($digits === '') {
-                            return $query->where('phone', 'ilike', '%'.$search.'%');
+                            return $query->where(function (Builder $q) use ($search): void {
+                                $q->where('otp_phone', 'ilike', '%'.$search.'%')
+                                    ->orWhere('phone', 'ilike', '%'.$search.'%')
+                                    ->orWhere('erca_phone', 'ilike', '%'.$search.'%')
+                                    ->orWhere('revenue_phone', 'ilike', '%'.$search.'%');
+                            });
                         }
 
                         $normalized = PhoneNumber::normalizeNullable($digits) ?? $digits;
                         $tail = strlen($digits) >= 9 ? substr($digits, -9) : $digits;
 
                         return $query->where(function (Builder $q) use ($search, $digits, $normalized, $tail): void {
-                            $q->where('phone', 'ilike', '%'.$search.'%')
-                                ->orWhere('phone', 'ilike', '%'.$digits.'%')
-                                ->orWhere('phone', 'ilike', '%'.$normalized.'%')
-                                ->orWhere('phone', 'ilike', '%'.$tail.'%');
+                            foreach (['otp_phone', 'phone', 'erca_phone', 'revenue_phone'] as $col) {
+                                $q->orWhere($col, 'ilike', '%'.$search.'%')
+                                    ->orWhere($col, 'ilike', '%'.$digits.'%')
+                                    ->orWhere($col, 'ilike', '%'.$normalized.'%')
+                                    ->orWhere($col, 'ilike', '%'.$tail.'%');
+                            }
                         });
                     }),
+                TextColumn::make('erca_phone')
+                    ->label('ERCA phone')
+                    ->state(fn (Company $record): ?string => $record->ercaPhone())
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->placeholder('—'),
+                TextColumn::make('revenue_phone')
+                    ->label('Revenue phone')
+                    ->state(fn (Company $record): ?string => $record->revenuePhone())
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->placeholder('—'),
                 TextColumn::make('email')->label('Email')->toggleable()->placeholder('—')->searchable(),
                 TextColumn::make('owner_name')
                     ->label('Owner')
@@ -370,7 +412,7 @@ class CompanyResource extends Resource
                     ->icon('heroicon-o-chat-bubble-left-ellipsis')
                     ->color('primary')
                     ->visible(fn (Company $record): bool => (bool) auth()->user()?->canSendCompanySms()
-                        && filled($record->phone))
+                        && filled($record->otpPhone()))
                     ->form([
                         Textarea::make('message')
                             ->label('SMS message')
@@ -454,13 +496,14 @@ class CompanyResource extends Resource
                 continue;
             }
 
-            if (! filled($company->phone) || ! $sms->ensurePhoneIsLocal($company->phone)) {
+            $dest = $company->otpPhone();
+            if (! filled($dest) || ! $sms->ensurePhoneIsLocal($dest)) {
                 $skipped++;
 
                 continue;
             }
 
-            $sms->send($company->phone, $message);
+            $sms->send($dest, $message);
             $queued++;
         }
 
@@ -474,7 +517,7 @@ class CompanyResource extends Resource
         if ($result['queued'] < 1) {
             Notification::make()
                 ->title('Cannot send SMS')
-                ->body('Company has no usable local mobile number on file.')
+                ->body('Company has no usable OTP phone on file.')
                 ->danger()
                 ->send();
 
@@ -483,7 +526,7 @@ class CompanyResource extends Resource
 
         Notification::make()
             ->title('SMS queued')
-            ->body('Message queued for '.$company->phone)
+            ->body('Message queued for '.$company->otpPhone())
             ->success()
             ->send();
     }

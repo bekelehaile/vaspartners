@@ -432,9 +432,10 @@ class ErcaTinVerificationService
     /**
      * Map ERCA registry contact fields onto company columns when present.
      * Never clears existing phone/email/address with empty ERCA values.
+     * Phone from ERCA is stored only on erca_phone — never overwrites OTP or revenue phones.
      *
      * @param  array<string, mixed>  $result
-     * @return array{phone?: string, email?: string, address?: string}
+     * @return array{erca_phone?: string, email?: string, address?: string}
      */
     public function contactFieldsFromLookup(array $result): array
     {
@@ -450,7 +451,7 @@ class ErcaTinVerificationService
         if ($rawPhone !== null) {
             $normalized = PhoneNumber::normalizeNullable($rawPhone);
             if ($normalized) {
-                $fields['phone'] = $normalized;
+                $fields['erca_phone'] = $normalized;
             }
         }
 

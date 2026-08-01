@@ -196,7 +196,15 @@ class BulkMessageService
         }
 
         if ($requirePhone) {
-            $query->whereNotNull('phone')->where('phone', '!=', '');
+            $query->where(function ($q): void {
+                $q->where(function ($inner): void {
+                    $inner->whereNotNull('revenue_phone')->where('revenue_phone', '!=', '');
+                })->orWhere(function ($inner): void {
+                    $inner->whereNotNull('otp_phone')->where('otp_phone', '!=', '');
+                })->orWhere(function ($inner): void {
+                    $inner->whereNotNull('phone')->where('phone', '!=', '');
+                });
+            });
         }
 
         if ($serviceIds !== []) {
@@ -237,7 +245,7 @@ class BulkMessageService
                 }
 
                 $row++;
-                $rawPhone = trim((string) ($company->phone ?? ''));
+                $rawPhone = trim((string) ($company->revenuePhone() ?? ''));
                 $normalized = $rawPhone !== '' && $this->sms->ensurePhoneIsLocal($rawPhone)
                     ? $this->sms->normalizePhone($rawPhone)
                     : null;
@@ -702,8 +710,8 @@ class BulkMessageService
     }
 
     /**
-     * Match company by phone (last 9 digits on companies.phone).
-     * SMS is always sent to that company phone only — never the spreadsheet number,
+     * Match company by revenue / OTP / legacy phone (last 9).
+     * SMS is always sent to revenue_phone (falls back to OTP phone) — never the spreadsheet number,
      * and never contact/owner phones.
      *
      * @param  array{phone:?string, period:?string, service_type:?string, service_id:?string, amount:?string, company_name:?string}  $row
@@ -777,13 +785,14 @@ class BulkMessageService
                 'variables' => $variables,
                 'row_number' => $rowNumber,
                 'status' => BulkMessageRecipientStatus::Skipped,
-                'error' => 'No company matched for this phone (companies.phone only).',
+                'error' => 'No company matched for this phone (revenue / OTP phone).',
             ];
         }
 
-        // Send only to the company record phone — never fall back to the spreadsheet MSISDN.
-        $sendPhone = filled($company->phone)
-            ? $this->sms->normalizePhone((string) $company->phone)
+        // Send only to the company revenue phone — never fall back to the spreadsheet MSISDN.
+        $sendPhoneRaw = (string) ($company->revenuePhone() ?? '');
+        $sendPhone = filled($sendPhoneRaw)
+            ? $this->sms->normalizePhone($sendPhoneRaw)
             : '';
 
         if ($sendPhone === '' || strlen($sendPhone) !== 9
@@ -792,21 +801,21 @@ class BulkMessageService
             return [
                 'campaign_id' => $campaign->id,
                 'company_id' => $company->id,
-                'phone_raw' => $company->phone ?: $phoneRaw,
+                'phone_raw' => $sendPhoneRaw !== '' ? $sendPhoneRaw : $phoneRaw,
                 'phone_normalized' => $sendPhone ?: null,
                 'company_name' => $company->name,
                 'company_tin' => $company->tin,
                 'variables' => $variables,
                 'row_number' => $rowNumber,
                 'status' => BulkMessageRecipientStatus::Skipped,
-                'error' => 'Matched company has no usable company phone on file.',
+                'error' => 'Matched company has no usable revenue phone on file.',
             ];
         }
 
         return [
             'campaign_id' => $campaign->id,
             'company_id' => $company->id,
-            'phone_raw' => (string) $company->phone,
+            'phone_raw' => $sendPhoneRaw,
             'phone_normalized' => $sendPhone,
             'company_name' => $company->name,
             'company_tin' => $company->tin,
@@ -837,10 +846,15 @@ class BulkMessageService
     protected function findCompanyByLastNine(string $lastNine): ?Company
     {
         return Company::query()
-            ->whereRaw(
-                "RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9) = ?",
-                [$lastNine]
-            )
+            ->where(function ($q) use ($lastNine): void {
+                $q->whereRaw(
+                    "RIGHT(REGEXP_REPLACE(COALESCE(revenue_phone, ''), '[^0-9]', '', 'g'), 9) = ?",
+                    [$lastNine],
+                )->orWhereRaw(
+                    "RIGHT(REGEXP_REPLACE(COALESCE(otp_phone, phone, ''), '[^0-9]', '', 'g'), 9) = ?",
+                    [$lastNine],
+                );
+            })
             ->orderBy('id')
             ->first();
     }

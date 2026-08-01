@@ -603,7 +603,7 @@ class PartnerNotificationService
             ));
         }
 
-        $queueSms($company->phone);
+        $queueSms($company->otpPhone());
 
         if ($sentPhones === []) {
             foreach ($company->activeMembers as $contact) {

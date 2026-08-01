@@ -34,6 +34,9 @@ class Company extends Model
         'erca_next_check_at',
         'erca_last_error',
         'phone',
+        'otp_phone',
+        'erca_phone',
+        'revenue_phone',
         'email',
         'address',
         'is_active',
@@ -63,10 +66,40 @@ class Company extends Model
     protected static function booted(): void
     {
         static::saving(function (Company $company): void {
-            if (array_key_exists('phone', $company->getAttributes()) || $company->isDirty('phone')) {
-                $company->attributes['phone'] = PhoneNumber::normalizeNullable(
-                    $company->attributes['phone'] ?? null,
-                );
+            foreach (['phone', 'otp_phone', 'erca_phone', 'revenue_phone'] as $phoneCol) {
+                if (array_key_exists($phoneCol, $company->getAttributes()) || $company->isDirty($phoneCol)) {
+                    $company->attributes[$phoneCol] = PhoneNumber::normalizeNullable(
+                        $company->attributes[$phoneCol] ?? null,
+                    );
+                }
+            }
+
+            // Legacy phone column mirrors OTP phone (portal claim / partner contact).
+            if ($company->isDirty('otp_phone') && ! $company->isDirty('phone')) {
+                $company->attributes['phone'] = $company->attributes['otp_phone'] ?? null;
+            } elseif ($company->isDirty('phone') && ! $company->isDirty('otp_phone')) {
+                $company->attributes['otp_phone'] = $company->attributes['phone'] ?? null;
+            }
+
+            $otp = $company->attributes['otp_phone']
+                ?? $company->attributes['phone']
+                ?? null;
+            $oldOtp = PhoneNumber::normalizeNullable(
+                $company->getOriginal('otp_phone') ?: $company->getOriginal('phone'),
+            );
+            $revenueWas = PhoneNumber::normalizeNullable($company->getOriginal('revenue_phone'));
+            $revenueDirty = $company->isDirty('revenue_phone');
+
+            // Revenue phone stays equal to OTP unless explicitly updated (e.g. approved request).
+            if (! $revenueDirty) {
+                if (
+                    ! $company->exists
+                    || $revenueWas === null
+                    || $revenueWas === ''
+                    || $revenueWas === $oldOtp
+                ) {
+                    $company->attributes['revenue_phone'] = $otp;
+                }
             }
 
             if (array_key_exists('email', $company->getAttributes()) || $company->isDirty('email')) {
@@ -162,6 +195,63 @@ class Company extends Model
     public function setPhoneAttribute(mixed $value): void
     {
         $this->attributes['phone'] = PhoneNumber::normalizeNullable($value);
+    }
+
+    public function setOtpPhoneAttribute(mixed $value): void
+    {
+        $this->attributes['otp_phone'] = PhoneNumber::normalizeNullable($value);
+    }
+
+    public function setErcaPhoneAttribute(mixed $value): void
+    {
+        $this->attributes['erca_phone'] = PhoneNumber::normalizeNullable($value);
+    }
+
+    public function setRevenuePhoneAttribute(mixed $value): void
+    {
+        $this->attributes['revenue_phone'] = PhoneNumber::normalizeNullable($value);
+    }
+
+    /**
+     * Partner OTP / portal auto-claim phone (customer-facing). Falls back to legacy phone.
+     */
+    public function otpPhone(): ?string
+    {
+        $otp = PhoneNumber::normalizeNullable($this->otp_phone);
+
+        return $otp ?: PhoneNumber::normalizeNullable($this->phone);
+    }
+
+    /**
+     * ERCA / Ministry of Revenues registry phone (synced on TIN verification).
+     */
+    public function ercaPhone(): ?string
+    {
+        return PhoneNumber::normalizeNullable($this->erca_phone);
+    }
+
+    /**
+     * Revenue collection & bulk SMS destination.
+     * Same as OTP phone unless revenue_phone was explicitly updated (e.g. by request).
+     */
+    public function revenuePhone(): ?string
+    {
+        $revenue = PhoneNumber::normalizeNullable($this->revenue_phone);
+
+        return $revenue ?: $this->otpPhone();
+    }
+
+    /**
+     * Apply an approved revenue-phone change request. Empty resets to OTP phone.
+     */
+    public function applyRevenuePhoneFromRequest(?string $phone): void
+    {
+        $normalized = PhoneNumber::normalizeNullable($phone);
+        $otp = $this->otpPhone();
+
+        $this->forceFill([
+            'revenue_phone' => ($normalized !== null && $normalized !== '') ? $normalized : $otp,
+        ])->save();
     }
 
     public function setEmailAttribute(mixed $value): void
