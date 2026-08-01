@@ -12,8 +12,9 @@ use Illuminate\Validation\ValidationException;
 use Throwable;
 
 /**
- * Personal KYC: Fayda or CRM (BSS GetCustomer). Once verified, skip re-fetch on later logins.
- * CRM matches are applied automatically (same trust path as Fayda); owned companies auto-approve when complete.
+ * Personal KYC: Fayda or CRM (BSS GetCustomer).
+ * Journey for new partners: OTP → company TIN (ERCA) confirm → CRM identity confirm.
+ * CRM is staged for explicit consent after a TIN-validated company exists.
  */
 class ContactIdentityService
 {
@@ -34,11 +35,12 @@ class ContactIdentityService
     }
 
     /**
-     * After OTP/Fayda auth: if unverified, try CRM and auto-apply identity (no consent prompt).
+     * After OTP/Fayda auth (or after ERCA company create).
      *
      * @return array{
      *   needs_consent: bool,
      *   needs_manual_name: bool,
+     *   needs_company: bool,
      *   crm_available: bool,
      *   proposal: ?array<string, mixed>,
      *   verified_via: ?string
@@ -46,6 +48,9 @@ class ContactIdentityService
      */
     public function resolveAfterAuth(Contact $contact): array
     {
+        $membership = app(CompanyMembershipService::class);
+        $hasTinCompany = $membership->contactHasTinValidatedCompany($contact);
+
         if ($this->isVerified($contact)) {
             $via = $contact->identity_verified_via
                 ?? ($contact->fayda_verified ? IdentityVerifiedVia::Fayda->value : null);
@@ -54,9 +59,22 @@ class ContactIdentityService
             return [
                 'needs_consent' => false,
                 'needs_manual_name' => false,
+                'needs_company' => ! $hasTinCompany,
                 'crm_available' => $this->crm->enabled(),
                 'proposal' => null,
                 'verified_via' => $via,
+            ];
+        }
+
+        // Company TIN first — do not fetch CRM until the partner has a validated company.
+        if (! $hasTinCompany) {
+            return [
+                'needs_consent' => false,
+                'needs_manual_name' => false,
+                'needs_company' => true,
+                'crm_available' => $this->crm->enabled(),
+                'proposal' => null,
+                'verified_via' => null,
             ];
         }
 
@@ -66,6 +84,7 @@ class ContactIdentityService
             return [
                 'needs_consent' => false,
                 'needs_manual_name' => $this->needsManualName($contact),
+                'needs_company' => false,
                 'crm_available' => false,
                 'proposal' => null,
                 'verified_via' => null,
@@ -76,6 +95,7 @@ class ContactIdentityService
             return [
                 'needs_consent' => false,
                 'needs_manual_name' => $this->needsManualName($contact),
+                'needs_company' => false,
                 'crm_available' => true,
                 'proposal' => null,
                 'verified_via' => null,
@@ -95,21 +115,20 @@ class ContactIdentityService
             'snapshot' => $lookup['raw'],
         ];
 
-        // Auto-activate CRM identity (no partner consent prompt).
-        $contact = $this->applyCrmProposal($contact, $proposal);
-        $this->autoApproveOwnedCompanies($contact);
+        Cache::put($this->cacheKey($contact), $proposal, now()->addMinutes(30));
 
         return [
-            'needs_consent' => false,
+            'needs_consent' => true,
             'needs_manual_name' => false,
+            'needs_company' => false,
             'crm_available' => true,
-            'proposal' => null,
-            'verified_via' => IdentityVerifiedVia::Crm->value,
+            'proposal' => $proposal,
+            'verified_via' => null,
         ];
     }
 
     /**
-     * Partner accepts CRM identity (kept for API compatibility; normally applied automatically).
+     * Partner accepts CRM identity after confirming company TIN.
      */
     public function acceptCrmConsent(Contact $contact): Contact
     {
@@ -121,10 +140,6 @@ class ContactIdentityService
 
         $proposal = Cache::get($this->cacheKey($contact));
         if (! is_array($proposal) || blank($proposal['name'] ?? null)) {
-            $resolved = $this->resolveAfterAuth($contact);
-            if (($resolved['verified_via'] ?? null) === IdentityVerifiedVia::Crm->value) {
-                return $contact->fresh() ?? $contact;
-            }
             throw ValidationException::withMessages([
                 'identity' => 'Identity details are no longer available. Enter your name manually or try again.',
             ]);
@@ -177,8 +192,9 @@ class ContactIdentityService
 
     public function pendingProposal(Contact $contact): ?array
     {
-        // Consent is applied automatically — no pending proposal UI.
-        return null;
+        $cached = Cache::get($this->cacheKey($contact));
+
+        return is_array($cached) && filled($cached['name'] ?? null) ? $cached : null;
     }
 
     /**

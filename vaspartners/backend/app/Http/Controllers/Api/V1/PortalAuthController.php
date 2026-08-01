@@ -39,9 +39,16 @@ class PortalAuthController extends Controller
         try {
             $result = $otp->request($data['phone']);
         } catch (RuntimeException $e) {
-            $status = str_contains(strtolower($e->getMessage()), 'too many') ? 429 : 422;
+            $message = $e->getMessage();
+            $retryLater = str_contains(strtolower($message), 'wait before requesting')
+                || str_contains(strtolower($message), 'too many');
+            $status = $retryLater ? 429 : 422;
 
-            return response()->json(['message' => $e->getMessage()], $status);
+            return response()->json([
+                'message' => $retryLater
+                    ? 'Please wait before requesting another code.'
+                    : 'Unable to send verification code. Please try again.',
+            ], $status);
         } catch (Throwable $e) {
             report($e);
 

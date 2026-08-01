@@ -24,7 +24,6 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
-use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -281,7 +280,6 @@ class ContactResource extends Resource
                         true: fn (Builder $query) => $query->whereHas('tickets'),
                         false: fn (Builder $query) => $query->whereDoesntHave('tickets'),
                     ),
-                TrashedFilter::make(),
             ])
             ->recordActions([
                 ViewAction::make(),

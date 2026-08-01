@@ -9,6 +9,7 @@ import {
   FaqItem,
   FeedbackInbox,
   GalleryItem,
+  IdentityAuthState,
   PartnerFeedback,
   PartnerRevenueRow,
   Service,
@@ -372,17 +373,18 @@ export function useCreateCompanyFromErca() {
       preview_token: string;
       company_address: string;
     }) => {
-      const res = await api<{ message?: string; data: Contact }>(
-        "/profile/company/erca/create",
-        {
-          method: "POST",
-          body: JSON.stringify(payload),
-        },
-      );
-      return res.data;
+      const res = await api<{
+        message?: string;
+        data: Contact;
+        identity?: IdentityAuthState;
+      }>("/profile/company/erca/create", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      return res;
     },
-    onSuccess: (contact) => {
-      queryClient.setQueryData(queryKeys.contact.me, contact);
+    onSuccess: (res) => {
+      queryClient.setQueryData(queryKeys.contact.me, res.data);
       void queryClient.invalidateQueries({ queryKey: queryKeys.contact.me });
       void queryClient.invalidateQueries({ queryKey: queryKeys.notifications });
       void queryClient.invalidateQueries({ queryKey: ["company-requests-inbox"] });

@@ -83,7 +83,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $schedule->command('vas:cleanup-orphan-contacts')
             ->dailyAt('02:30')
-            ->description('Soft-delete contacts with no memberships, tickets, or subscriptions (7+ days old)');
+            ->description('Permanently delete soft-deleted contacts and live orphans (7+ days, no memberships/tickets/subs)');
 
         $schedule->command('sanctum:prune-expired --hours=24')
             ->dailyAt('03:15')

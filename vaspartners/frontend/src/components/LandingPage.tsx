@@ -36,7 +36,7 @@ function LandingInner() {
             {authError && (
               <p className="alert" style={{ marginBottom: "1rem", maxWidth: "28rem" }}>
                 {authError === "company_inactive"
-                  ? "Your company has been deactivated. Portal sign-in is disabled. Contact Ethio telecom."
+                  ? "This company is deactivated for service requests. Sign in to switch company or create a new one with a valid TIN number."
                   : authError === "inactive" || authError === "banned"
                     ? "This account is not allowed to sign in."
                     : `Sign-in failed (${authError}). Please try again.`}

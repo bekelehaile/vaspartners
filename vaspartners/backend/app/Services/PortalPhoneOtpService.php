@@ -13,7 +13,6 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Validation\ValidationException;
 use RuntimeException;
 use stdClass;
 use Throwable;
@@ -61,22 +60,15 @@ class PortalPhoneOtpService
 
         $phone = PhoneNumber::normalize($rawPhone);
         if (! PhoneNumber::isValidEthioTelecomMobile($phone)) {
-            throw new RuntimeException('Enter a valid mobile number.');
+            throw new RuntimeException('Unable to send verification code. Please try again.');
         }
 
-        $existing = Contact::query()->where('phone_number', $phone)->first();
-        if ($existing) {
-            $membership = app(CompanyMembershipService::class);
-            if (! $membership->contactMayUsePortal($existing)) {
-                throw new RuntimeException(
-                    'Your company has been deactivated. Portal sign-in is disabled. Contact Ethio telecom.',
-                );
-            }
-        }
+        // New customers may sign in with OTP, then complete TIN (ERCA) → CRM confirm.
+        // Do not reveal whether the phone is already registered.
 
         $cooldownKey = 'portal-otp:cooldown:'.$phone;
         if (Cache::has($cooldownKey)) {
-            throw new RuntimeException('An OTP was already sent. Please wait a minute before requesting another.');
+            throw new RuntimeException('Please wait before requesting another code.');
         }
 
         $this->applyOtpRateLimit($phone);
@@ -94,7 +86,7 @@ class PortalPhoneOtpService
         } catch (RuntimeException $e) {
             $this->deleteRecord($phone);
 
-            throw $e;
+            throw new RuntimeException('Unable to send verification code. Please try again.');
         }
 
         Cache::put($cooldownKey, true, self::SEND_COOLDOWN_SECONDS);
@@ -106,7 +98,6 @@ class PortalPhoneOtpService
         return [
             'phone' => $phone,
             'expires_in' => self::EXPIRY_MINUTES * 60,
-            'needs_name' => ! Contact::query()->where('phone_number', $phone)->exists(),
         ];
     }
 
@@ -151,7 +142,8 @@ class PortalPhoneOtpService
         $result = $this->findOrCreateContact($phone, $profile ?? []);
         $contact = $result['contact'];
 
-        // Portal access is gated by is_active only (no separate ban flag).
+        // Portal access is gated by contact is_active only (no separate ban flag).
+        // Deactivated companies do not block sign-in — partners may switch or create another company.
         if (! $contact->is_active) {
             throw new RuntimeException('This account is not allowed to sign in.');
         }
@@ -170,17 +162,7 @@ class PortalPhoneOtpService
 
         $contact = $contact->fresh(['company', 'memberships.company']);
 
-        try {
-            $membership->assertPortalSignInAllowed($contact);
-        } catch (ValidationException $e) {
-            $message = collect($e->errors())->flatten()->first();
-            throw new RuntimeException(
-                is_string($message) && $message !== ''
-                    ? $message
-                    : 'Your company has been deactivated. Portal sign-in is disabled. Contact Ethio telecom.',
-            );
-        }
-
+        // CRM confirm only after a TIN-validated company exists; new partners go to ERCA first.
         $identity = app(ContactIdentityService::class)->resolveAfterAuth($contact);
         $token = PortalAccessToken::issue($contact, PortalAccessToken::NAME_OTP);
 
@@ -194,6 +176,9 @@ class PortalPhoneOtpService
     }
 
     /**
+     * Create or load contact after OTP. New phones get a provisional contact;
+     * company TIN (ERCA) then CRM confirm complete the journey.
+     *
      * @param  array{name?: ?string, email?: ?string, gender?: ?string, nationality?: ?string}  $profile
      * @return array{contact: Contact, is_new: bool}
      */
@@ -205,7 +190,7 @@ class PortalPhoneOtpService
             return ['contact' => $contact, 'is_new' => false];
         }
 
-        // Prefer CRM consent after verify. Optional name from the form is a fallback only.
+        // Prefer CRM consent after company setup. Optional name from the form is a fallback only.
         $displayName = trim((string) ($profile['name'] ?? ''));
         if ($displayName !== '' && (mb_strlen($displayName) < 2 || mb_strlen($displayName) > 120)) {
             throw new RuntimeException('Name must be between 2 and 120 characters.');
@@ -249,6 +234,12 @@ class PortalPhoneOtpService
         return ['contact' => $contact->fresh(), 'is_new' => true];
     }
 
+    /** @deprecated Eligibility is open for OTP; company + CRM gates happen after verify. */
+    protected function isEligiblePortalPhone(string $phone): bool
+    {
+        return PhoneNumber::isValidEthioTelecomMobile($phone);
+    }
+
     protected function findValidRecord(string $phone, string $otp): ?stdClass
     {
         $record = DB::table('otps')
@@ -283,7 +274,7 @@ class PortalPhoneOtpService
         $key = 'portal-otp:phone:'.$phone;
 
         if (RateLimiter::tooManyAttempts($key, self::OTP_RATE_LIMIT)) {
-            throw new RuntimeException('Too many verification codes requested. Please try again in a few minutes.');
+            throw new RuntimeException('Please wait before requesting another code.');
         }
 
         RateLimiter::hit($key, self::OTP_RATE_DECAY_SECONDS);

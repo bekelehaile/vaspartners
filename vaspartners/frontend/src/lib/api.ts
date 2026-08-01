@@ -30,6 +30,7 @@ export type Contact = {
     approval_status?: string | null;
     approval_note?: string | null;
     is_approved?: boolean;
+    is_active?: boolean;
     tin_validated?: boolean;
     tin_format_valid?: boolean;
     erca_tin_verified?: boolean;
@@ -48,6 +49,7 @@ export type Contact = {
     is_active?: boolean;
     is_current?: boolean;
     is_approved?: boolean;
+    company_is_active?: boolean;
     approval_status?: string | null;
     tin_validated?: boolean;
   }>;
@@ -113,6 +115,7 @@ export type IdentityConsentProposal = {
 export type IdentityAuthState = {
   needs_consent: boolean;
   needs_manual_name: boolean;
+  needs_company?: boolean;
   crm_available: boolean;
   proposal: IdentityConsentProposal | null;
   verified_via?: string | null;
@@ -388,7 +391,7 @@ export async function fetchAuthConfig(): Promise<AuthConfig> {
 export async function requestPortalOtp(phone: string) {
   return api<{
     message: string;
-    data: { phone: string; expires_in: number; needs_name: boolean };
+    data: { phone: string; expires_in: number };
   }>("/auth/otp/request", {
     method: "POST",
     body: JSON.stringify({ phone }),

@@ -865,6 +865,7 @@ class ContactPortalController extends Controller
         Request $request,
         CompanyMembershipService $membership,
         \App\Services\Etrade\ErcaCompanyOnboardingService $ercaOnboarding,
+        \App\Services\ContactIdentityService $identity,
     ) {
         /** @var \App\Models\Contact $contact */
         $contact = $request->user();
@@ -885,9 +886,17 @@ class ContactPortalController extends Controller
             $data['company_address'],
         );
 
+        $identityState = $identity->resolveAfterAuth($fresh->fresh(['company', 'memberships.company']) ?? $fresh);
+        $fresh = $fresh->fresh(['company', 'memberships.company']) ?? $fresh;
+        $payload = $membership->serializeContact($fresh);
+        $payload['needs_identity_consent'] = (bool) ($identityState['needs_consent'] ?? false);
+        $payload['needs_manual_name'] = (bool) ($identityState['needs_manual_name'] ?? false);
+        $payload['identity_proposal'] = $identityState['proposal'] ?? null;
+
         return response()->json([
             'message' => 'Company created from ERCA verification.',
-            'data' => $membership->serializeContact($fresh),
+            'data' => $payload,
+            'identity' => $identityState,
         ]);
     }
 

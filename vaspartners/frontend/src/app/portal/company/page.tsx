@@ -215,6 +215,15 @@ export default function CompanyProfilePage() {
           </div>
         )}
 
+        {!membershipDisabled &&
+          me?.company?.is_approved &&
+          me?.company?.is_active === false && (
+          <div className="alert" role="status">
+            This company is deactivated, so service requests are disabled. Switch to another
+            company or create a new company with a valid TIN number.
+          </div>
+        )}
+
         {!membershipDisabled && pending && (
           <div className="alert alert-info" role="status">
             Your {pending.type.replaceAll("_", " ")} request

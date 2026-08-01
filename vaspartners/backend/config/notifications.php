@@ -34,11 +34,14 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | SMS rate limits (all gateway traffic)
+    | SMS rate limits (transactional / queued partner SMS)
     |--------------------------------------------------------------------------
     |
+    | Used by SendSmsJob and general sendNow(). NOT applied as a campaign-size
+    | cap on bulk/revenue sends — those use bulk_sms pacing instead.
+    |
     | per_phone — max SMS to one Ethiopian number in the decay window
-    | global    — max SMS across the whole app in the decay window
+    | global    — max transactional SMS across the app in the decay window
     |
     */
     'sms_rate' => [
@@ -49,6 +52,53 @@ return [
         'global' => [
             'max' => (int) env('SMS_RATE_GLOBAL_MAX', 120),
             'decay_seconds' => (int) env('SMS_RATE_GLOBAL_DECAY', 60),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Bulk / revenue campaign SMS
+    |--------------------------------------------------------------------------
+    |
+    | No hard cap on recipient count (1k+ supported). Sends are paced so the
+    | gateway stays healthy. OTP rate limits never apply here.
+    |
+    | messages_per_second — queue stagger when dispatching a campaign
+    | (5/sec ≈ 1,000 recipients in ~3–4 minutes)
+    |
+    */
+    'bulk_sms' => [
+        'messages_per_second' => max(1, (int) env('SMS_BULK_MESSAGES_PER_SECOND', 5)),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | OTP-only rate limits (portal login + admin password OTP)
+    |--------------------------------------------------------------------------
+    |
+    | Tighter than bulk SMS so an IP cannot spray verification codes across
+    | many numbers. Shared NAT offices still fit the burst + hourly caps.
+    |
+    | ip_request / ip_verify — HTTP throttle middleware (by client IP)
+    | sms_*                 — gateway caps applied only on sync OTP sends
+    |
+    */
+    'otp_rate' => [
+        'ip_request' => [
+            'max_per_5_minutes' => (int) env('OTP_IP_REQUEST_MAX_5M', 10),
+            'max_per_hour' => (int) env('OTP_IP_REQUEST_MAX_HOUR', 20),
+        ],
+        'ip_verify' => [
+            'max_per_5_minutes' => (int) env('OTP_IP_VERIFY_MAX_5M', 40),
+            'max_per_hour' => (int) env('OTP_IP_VERIFY_MAX_HOUR', 100),
+        ],
+        'sms_per_phone' => [
+            'max' => (int) env('OTP_SMS_PER_PHONE_MAX', 8),
+            'decay_seconds' => (int) env('OTP_SMS_PER_PHONE_DECAY', 300),
+        ],
+        'sms_global' => [
+            'max' => (int) env('OTP_SMS_GLOBAL_MAX', 30),
+            'decay_seconds' => (int) env('OTP_SMS_GLOBAL_DECAY', 60),
         ],
     ],
 

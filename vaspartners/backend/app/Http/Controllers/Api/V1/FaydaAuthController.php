@@ -63,11 +63,7 @@ class FaydaAuthController extends Controller
             return redirect()->away($frontend.'?error=inactive');
         }
 
-        $membership = app(CompanyMembershipService::class);
-        if (! $membership->contactMayUsePortal($contact->fresh(['memberships.company']))) {
-            return redirect()->away($frontend.'?error=company_inactive');
-        }
-
+        // Deactivated companies do not block Fayda sign-in — VAS ops are gated per current company.
         $accessToken = PortalAccessToken::issue($contact, PortalAccessToken::NAME_FAYDA);
         $target = $pkce['frontend_redirect'] ?? $frontend;
         $sep = str_contains($target, '?') ? '&' : '?';
@@ -82,13 +78,6 @@ class FaydaAuthController extends Controller
     public function me(Request $request, CompanyMembershipService $membership, \App\Services\ContactIdentityService $identity)
     {
         $contact = $request->user();
-        if (! $membership->contactMayUsePortal($contact)) {
-            $contact->tokens()->delete();
-
-            return response()->json([
-                'message' => 'Your company has been deactivated. Portal sign-in is disabled. Contact Ethio telecom.',
-            ], 403);
-        }
 
         // Unverified partners: (re)stage CRM consent when possible.
         $identityState = null;

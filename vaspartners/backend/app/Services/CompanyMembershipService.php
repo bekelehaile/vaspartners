@@ -17,6 +17,7 @@ use App\Models\User;
 use App\Services\Etrade\ErcaPortalSearchGuard;
 use App\Services\Etrade\ErcaTinVerificationService;
 use App\Support\TinNumber;
+use App\Support\PhoneNumber;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -1829,6 +1830,78 @@ class CompanyMembershipService
      * Prefer legacy_mvas_id match (migrated dump), else unique phone last-9 match.
      * Orphan / ambiguous companies stay ownerless for admin Assign owner.
      */
+    /**
+     * Portal OTP allowlist: phone already linked to a TIN-validated company, or
+     * uniquely matches an ownerless TIN-validated company phone (first-time claim).
+     */
+    public function phoneIsEligibleForPortalOtp(string $phone): bool
+    {
+        $normalized = PhoneNumber::normalize($phone);
+        if ($normalized === '' || ! PhoneNumber::isValidEthioTelecomMobile($normalized)) {
+            return false;
+        }
+
+        $contact = Contact::query()->where('phone_number', $normalized)->first();
+        if ($contact && $this->contactHasTinValidatedCompany($contact)) {
+            return true;
+        }
+
+        return $this->findClaimableTinValidatedCompanyByPhone($normalized) !== null;
+    }
+
+    /**
+     * Contact has at least one membership on a company with ERCA-verified valid TIN.
+     */
+    public function contactHasTinValidatedCompany(Contact $contact): bool
+    {
+        $contact->loadMissing(['memberships.company']);
+
+        foreach ($contact->memberships as $membership) {
+            $company = $membership->company;
+            if ($company && $company->isTinValidated()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Exactly one active, TIN-validated, ownerless company whose phone matches.
+     */
+    public function findClaimableTinValidatedCompanyByPhone(string $phone): ?Company
+    {
+        $last9 = PhoneNumber::normalize($phone);
+        if ($last9 === '' || ! PhoneNumber::isValidEthioTelecomMobile($last9)) {
+            return null;
+        }
+
+        $candidates = Company::query()
+            ->where('is_active', true)
+            ->tinApproved()
+            ->whereNotNull('phone')
+            ->where('phone', '!=', '')
+            ->whereRaw(
+                "RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9) = ?",
+                [$last9],
+            )
+            ->whereDoesntHave('memberships', function ($query) {
+                $query->where('role', CompanyRole::Owner->value);
+            })
+            ->limit(3)
+            ->get()
+            ->filter(fn (Company $company) => $company->isTinValidated())
+            ->values();
+
+        if ($candidates->count() !== 1) {
+            return null;
+        }
+
+        $company = $candidates->first();
+
+        return $company && ! $company->hasOwner() ? $company : null;
+    }
+
     public function tryAutoClaimMigratedCompanyByPhone(Contact $contact): ?Company
     {
         // Already in an active company context, or already has an active membership.
@@ -1986,8 +2059,6 @@ class CompanyMembershipService
 
     public function assertCanAccessCompany(Contact $contact): void
     {
-        $this->assertPortalSignInAllowed($contact);
-
         if (! $contact->current_company_id) {
             throw ValidationException::withMessages([
                 'company' => 'Create a company with a unique TIN number (or join an approved company) before using VAS services.',
@@ -2040,28 +2111,27 @@ class CompanyMembershipService
             ]);
         }
 
+        // Block VAS ops for this company only — partner may still sign in, switch, or create another.
         if ($contact->company->isApproved() && ! $contact->company->is_active) {
             throw ValidationException::withMessages([
-                'company' => 'This company is deactivated. Contact Ethio telecom.',
+                'company' => 'This company is deactivated, so service requests are disabled. Switch to another company or create a new company with a valid TIN number.',
             ]);
         }
     }
 
     /**
-     * Portal sign-in / session: blocked when every linked company is admin-deactivated
-     * (approved + is_active=false). Pending/rejected companies still allow sign-in.
+     * @deprecated Sign-in is no longer blocked by deactivated companies.
+     * Partners may log in and switch/create another company; VAS ops use {@see assertCanAccessCompany}.
      */
     public function assertPortalSignInAllowed(Contact $contact): void
     {
-        if ($this->contactMayUsePortal($contact)) {
-            return;
-        }
-
-        throw ValidationException::withMessages([
-            'company' => 'Your company has been deactivated. Portal sign-in is disabled. Contact Ethio telecom.',
-        ]);
+        // Kept for backward compatibility with any remaining callers — no-op.
     }
 
+    /**
+     * Whether the contact has at least one usable company context (active or still onboarding).
+     * Not used to block portal sign-in.
+     */
     public function contactMayUsePortal(Contact $contact): bool
     {
         $contact->loadMissing(['memberships.company']);
@@ -2083,7 +2153,7 @@ class CompanyMembershipService
                 ? $company->approval_status
                 : CompanyApprovalStatus::tryFrom((string) $company->approval_status);
 
-            // Still onboarding / needs fixes — allow portal access.
+            // Still onboarding / needs fixes — usable portal context.
             if ($status !== CompanyApprovalStatus::Approved) {
                 return true;
             }
@@ -2094,27 +2164,13 @@ class CompanyMembershipService
     }
 
     /**
-     * When a company is turned off, revoke portal tokens for contacts who no longer
-     * have any active/onboarding company.
+     * Company deactivated: do not revoke portal sessions.
+     * Partners keep access to switch company or register another TIN.
+     * VAS requests for the deactivated company remain blocked via {@see assertCanAccessCompany}.
      */
     public function revokePortalAccessForInactiveCompany(Company $company): int
     {
-        if ($company->is_active) {
-            return 0;
-        }
-
-        $revoked = 0;
-        foreach ($this->companyContactIds((int) $company->id) as $contactId) {
-            $contact = Contact::query()->find($contactId);
-            if (! $contact || $this->contactMayUsePortal($contact)) {
-                continue;
-            }
-
-            $contact->tokens()->delete();
-            $revoked++;
-        }
-
-        return $revoked;
+        return 0;
     }
 
     /**
@@ -2712,6 +2768,7 @@ class CompanyMembershipService
             'approval_status' => $approvalStatus?->value,
             'approval_note' => $company->approval_note,
             'is_approved' => $companyApproved,
+            'is_active' => (bool) $company->is_active,
             'tin_validated' => $company->isTinValidated(),
             'tin_format_valid' => TinNumber::isValid($company->tin),
             'erca_tin_verified' => (bool) $company->erca_tin_verified,
@@ -2764,6 +2821,7 @@ class CompanyMembershipService
                     'is_active' => (bool) $m->is_active,
                     'is_current' => (int) $m->company_id === (int) $contact->current_company_id,
                     'is_approved' => $c?->isApproved() === true,
+                    'company_is_active' => $c ? (bool) $c->is_active : false,
                     'approval_status' => $c?->approval_status instanceof CompanyApprovalStatus
                         ? $c->approval_status->value
                         : ($c ? (string) $c->approval_status : null),

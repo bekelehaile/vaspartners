@@ -54,6 +54,9 @@ class SmsService
      * Do not queue: the API must not report “sent” until the gateway accepts the SMS.
      * (Carrier handset delivery still cannot be guaranteed.)
      *
+     * Uses OTP-specific SMS caps (tighter than bulk) so login codes cannot ride
+     * the general 120/min gateway budget.
+     *
      * @throws \RuntimeException when SMS is disabled, invalid, rate-limited, or the gateway rejects
      */
     public function sendOtp(string|int $phone, string $message): void
@@ -62,9 +65,45 @@ class SmsService
             throw new \RuntimeException('Unable to send verification code right now. Please try again.');
         }
 
-        if (! $this->sendNow($phone, $message)) {
+        $normalized = $this->normalizePhone($phone);
+        if ($normalized === '' || ! $this->ensurePhoneIsLocal($normalized)) {
             throw new \RuntimeException('Unable to send verification code. Please try again.');
         }
+
+        if (! $this->consumeOtpSmsRateLimits($normalized)) {
+            throw new \RuntimeException('Too many verification codes requested. Please try again in a few minutes.');
+        }
+
+        if (! $this->sendNowBypassingRateLimit($normalized, $message)) {
+            throw new \RuntimeException('Unable to send verification code. Please try again.');
+        }
+    }
+
+    /**
+     * OTP-only gateway throttles (separate from bulk sms_rate).
+     */
+    public function consumeOtpSmsRateLimits(string $normalizedPhone): bool
+    {
+        $phoneMax = max(1, (int) config('notifications.otp_rate.sms_per_phone.max', 8));
+        $phoneDecay = max(1, (int) config('notifications.otp_rate.sms_per_phone.decay_seconds', 300));
+        $globalMax = max(1, (int) config('notifications.otp_rate.sms_global.max', 30));
+        $globalDecay = max(1, (int) config('notifications.otp_rate.sms_global.decay_seconds', 60));
+
+        $phoneKey = 'sms:otp:phone:'.$normalizedPhone;
+        $globalKey = 'sms:otp:global';
+
+        if (RateLimiter::tooManyAttempts($phoneKey, $phoneMax)) {
+            return false;
+        }
+
+        if (RateLimiter::tooManyAttempts($globalKey, $globalMax)) {
+            return false;
+        }
+
+        RateLimiter::hit($phoneKey, $phoneDecay);
+        RateLimiter::hit($globalKey, $globalDecay);
+
+        return true;
     }
 
     /**
@@ -197,7 +236,8 @@ class SmsService
     }
 
     /**
-     * Per-phone and global SMS throttles. Returns false when blocked.
+     * Per-phone and global SMS throttles (transactional SendSmsJob / sendNow).
+     * Returns false when blocked.
      */
     public function consumeRateLimits(string $normalizedPhone): bool
     {
@@ -219,6 +259,26 @@ class SmsService
 
         RateLimiter::hit($phoneKey, $phoneDecay);
         RateLimiter::hit($globalKey, $globalDecay);
+
+        return true;
+    }
+
+    /**
+     * Bulk / revenue campaigns: no global size cap (1k+ OK).
+     * Only per-phone soft-limit to avoid accidental repeat SMS to one number.
+     * Throughput is controlled by queue pacing ({@see notifications.bulk_sms}).
+     */
+    public function consumeBulkSmsRateLimits(string $normalizedPhone): bool
+    {
+        $phoneMax = max(1, (int) config('notifications.sms_rate.per_phone.max', 20));
+        $phoneDecay = max(1, (int) config('notifications.sms_rate.per_phone.decay_seconds', 3600));
+        $phoneKey = 'sms:phone:'.$normalizedPhone;
+
+        if (RateLimiter::tooManyAttempts($phoneKey, $phoneMax)) {
+            return false;
+        }
+
+        RateLimiter::hit($phoneKey, $phoneDecay);
 
         return true;
     }

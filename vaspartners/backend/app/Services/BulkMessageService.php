@@ -449,9 +449,10 @@ class BulkMessageService
             ->orderBy('id')
             ->pluck('id');
 
-        // Stay under SMS gateway capacity: ~2 messages/second on the sms queue.
+        // Pace only — no hard cap on campaign size (1k+ supported). OTP limits never apply.
+        $perSecond = max(1, (int) config('notifications.bulk_sms.messages_per_second', 5));
         foreach ($ids->values() as $index => $id) {
-            $delaySeconds = intdiv((int) $index, 2);
+            $delaySeconds = intdiv((int) $index, $perSecond);
             $job = new SendBulkMessageRecipientJob((int) $id);
             if ($delaySeconds > 0) {
                 \Illuminate\Support\Facades\Queue::laterOn(
@@ -488,8 +489,8 @@ class BulkMessageService
             return;
         }
 
-        // Soft-throttle: keep pending and retry later instead of burning as Failed.
-        if (! $this->sms->consumeRateLimits($phone)) {
+        // Soft per-phone only (no global campaign cap). OTP rate limits never apply here.
+        if (! $this->sms->consumeBulkSmsRateLimits($phone)) {
             $recipient->forceFill([
                 'status' => BulkMessageRecipientStatus::Pending,
                 'error' => 'Rate limited — waiting to retry',

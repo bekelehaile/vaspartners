@@ -5222,6 +5222,17 @@ button.bg-primary:hover {
   padding-block: 2.5rem 4rem;
 }
 
+.login-page--secure {
+  min-height: min(72vh, 44rem);
+  align-items: flex-start;
+  background:
+    radial-gradient(ellipse 70% 45% at 50% -8%, color-mix(in oklab, var(--primary) 14%, transparent), transparent 68%),
+    linear-gradient(180deg, color-mix(in oklab, var(--et-foam) 75%, white) 0%, white 50%);
+  margin-inline: calc(50% - 50vw);
+  width: 100vw;
+  padding-inline: 1.25rem;
+}
+
 .login-page--fayda {
   min-height: min(70vh, 40rem);
   align-items: center;
@@ -5241,6 +5252,17 @@ button.bg-primary:hover {
   border-radius: 1rem;
   background: color-mix(in oklab, white 92%, var(--primary) 8%);
   box-shadow: 0 12px 40px color-mix(in oklab, var(--et-ink) 8%, transparent);
+}
+
+.login-card--secure {
+  width: min(32rem, 100%);
+  padding: 1.85rem 1.6rem 1.75rem;
+  border: 1px solid color-mix(in oklab, var(--et-line) 75%, var(--et-blue));
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow:
+    0 1px 0 color-mix(in oklab, white 80%, transparent),
+    0 16px 44px color-mix(in oklab, var(--et-ink) 9%, transparent);
+  animation: login-rise 0.45s ease-out both;
 }
 
 .login-card--fayda {
@@ -5272,13 +5294,22 @@ button.bg-primary:hover {
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: color-mix(in oklab, var(--primary) 55%, #14532d);
+  color: color-mix(in oklab, var(--et-blue) 70%, #14532d);
 }
 
 .login-card h1 {
   margin: 0 0 0.35rem;
   font-size: 1.55rem;
   line-height: 1.25;
+}
+
+.login-card--secure h1,
+.consent-title {
+  font-size: clamp(1.45rem, 3.2vw, 1.75rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--et-ink);
+  margin: 0 0 0.4rem;
 }
 
 .login-card--fayda h1 {
@@ -5289,11 +5320,220 @@ button.bg-primary:hover {
 }
 
 .login-lead {
-  margin: 0 auto 1.5rem;
-  max-width: 22rem;
-  font-size: 0.98rem;
+  margin: 0 0 1.15rem;
+  max-width: 28rem;
+  font-size: 0.95rem;
   line-height: 1.55;
   color: var(--et-muted);
+}
+
+.login-card--fayda .login-lead {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.consent-lead {
+  margin-bottom: 1rem;
+}
+
+.field-help {
+  margin: -0.15rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--et-muted);
+}
+
+.login-dest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 0.65rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.65rem;
+  background: color-mix(in oklab, var(--et-foam) 80%, white);
+  border: 1px solid var(--et-line);
+  font-size: 0.88rem;
+}
+
+.login-dest-label {
+  color: var(--et-muted);
+}
+
+.login-dest-value {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: var(--et-ink);
+}
+
+.login-otp-input {
+  font-size: 1.35rem !important;
+  letter-spacing: 0.35em !important;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.consent-panel {
+  border: 1px solid var(--et-line);
+  border-radius: 0.75rem;
+  padding: 0.85rem 0.9rem;
+  background: color-mix(in oklab, var(--et-foam) 55%, white);
+}
+
+.consent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.consent-actions .btn-hero,
+.consent-actions .btn-secondary {
+  flex: 1 1 11rem;
+  justify-content: center;
+}
+
+/* Onboarding progress rail */
+.onboard-progress {
+  margin: 0 0 1.25rem;
+}
+
+.onboard-progress-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+}
+
+.onboard-progress-item {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  text-align: center;
+  min-width: 0;
+}
+
+.onboard-progress-marker {
+  z-index: 1;
+  width: 1.65rem;
+  height: 1.65rem;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border: 1.5px solid var(--et-line);
+  background: white;
+  color: var(--et-muted);
+}
+
+.onboard-progress-item.is-done .onboard-progress-marker {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
+
+.onboard-progress-item.is-current .onboard-progress-marker {
+  border-color: var(--et-blue);
+  color: var(--et-blue);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--et-blue) 16%, transparent);
+}
+
+.onboard-progress-num {
+  line-height: 1;
+}
+
+.onboard-progress-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--et-muted);
+  line-height: 1.25;
+}
+
+.onboard-progress-item.is-current .onboard-progress-label {
+  color: var(--et-ink);
+}
+
+.onboard-progress-item.is-done .onboard-progress-label {
+  color: color-mix(in oklab, var(--primary) 45%, var(--et-ink));
+}
+
+.onboard-progress-label-short {
+  display: none;
+}
+
+.onboard-progress-connector {
+  position: absolute;
+  top: 0.8rem;
+  left: calc(50% + 0.95rem);
+  right: calc(-50% + 0.95rem);
+  height: 2px;
+  background: var(--et-line);
+}
+
+.onboard-progress-item.is-done .onboard-progress-connector {
+  background: color-mix(in oklab, var(--primary) 70%, var(--et-line));
+}
+
+.secure-session-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin: 1.15rem 0 0;
+  padding: 0.7rem 0.8rem;
+  border-radius: 0.65rem;
+  border: 1px solid color-mix(in oklab, var(--et-blue) 22%, var(--et-line));
+  background: color-mix(in oklab, var(--et-blue) 5%, white);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: color-mix(in oklab, var(--et-blue) 35%, var(--et-muted));
+}
+
+.secure-session-icon {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+  color: var(--et-blue);
+}
+
+.onboard-session {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.65rem;
+  align-items: baseline;
+  margin: 0 0 1rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.55rem;
+  background: var(--et-foam);
+  border: 1px solid var(--et-line);
+  font-size: 0.85rem;
+  color: var(--et-muted);
+}
+
+.onboard-session strong {
+  color: var(--et-ink);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+}
+
+.company-form--onboard {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.company-form--onboard .onboard-progress {
+  margin-bottom: 1rem;
+}
+
+.erca-confirm-panel {
+  border: 1px solid color-mix(in oklab, var(--primary) 28%, var(--et-line));
+  border-radius: 0.75rem;
+  padding: 0.85rem 1rem 0.35rem;
+  background: color-mix(in oklab, var(--et-foam) 70%, white);
 }
 
 .login-fayda-panel {
@@ -5317,7 +5557,7 @@ button.bg-primary:hover {
 }
 
 .login-trust {
-  margin: 0.25rem 0 0;
+  margin: 0.85rem 0 0;
   padding: 0;
   list-style: none;
   display: grid;
@@ -5325,10 +5565,17 @@ button.bg-primary:hover {
   text-align: left;
 }
 
+.login-trust--compact {
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--et-line);
+  gap: 0.35rem;
+}
+
 .login-trust li {
   position: relative;
   padding-left: 1.35rem;
-  font-size: 0.84rem;
+  font-size: 0.8rem;
   line-height: 1.4;
   color: var(--et-muted);
 }
@@ -5348,7 +5595,7 @@ button.bg-primary:hover {
 .login-form {
   display: grid;
   gap: 0.65rem;
-  margin-top: 1rem;
+  margin-top: 0.35rem;
 }
 
 .login-form label {
@@ -5369,7 +5616,7 @@ button.bg-primary:hover {
 
 .login-form input:focus,
 .login-form select:focus {
-  outline: 2px solid color-mix(in oklab, var(--primary) 45%, transparent);
+  outline: 2px solid color-mix(in oklab, var(--et-blue) 40%, transparent);
   outline-offset: 1px;
 }
 
@@ -5425,8 +5672,23 @@ button.bg-primary:hover {
   margin-top: 1.25rem;
 }
 
+@media (max-width: 640px) {
+  .onboard-progress-label-full {
+    display: none;
+  }
+
+  .onboard-progress-label-short {
+    display: inline;
+  }
+
+  .login-card--secure {
+    padding: 1.35rem 1.1rem 1.4rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .login-card--fayda,
+  .login-card--secure,
   .login-fayda-cta {
     animation: none;
     transition: none;

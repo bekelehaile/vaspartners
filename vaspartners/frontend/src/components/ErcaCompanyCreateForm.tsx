@@ -2,7 +2,11 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FaydaIdentityPanel } from "@/components/FaydaIdentityPanel";
+import {
+  OnboardingProgress,
+  SecureSessionNote,
+  maskMobileDisplay,
+} from "@/components/OnboardingProgress";
 import { Contact } from "@/lib/api";
 import { useAuthConfig } from "@/hooks/use-auth-config";
 import {
@@ -14,7 +18,7 @@ import {
 import { isValidEthiopianTin, normalizeEthiopianTin } from "@/lib/tin";
 
 /**
- * New company: search ERCA by TIN number → limited registry info → consent to create, or logout.
+ * New company: search ERCA by TIN → confirm registry → create, then CRM identity.
  */
 export function ErcaCompanyCreateForm({
   me,
@@ -56,6 +60,7 @@ export function ErcaCompanyCreateForm({
     previewMut.mutate(normalized, {
       onSuccess: (data) => {
         setPreview(data);
+        setAddress((prev) => prev || (data.address ?? ""));
       },
       onError: (err) => {
         setPreview(null);
@@ -75,8 +80,18 @@ export function ErcaCompanyCreateForm({
     createMut.mutate(
       { preview_token: preview.preview_token, company_address: address.trim() },
       {
-        onSuccess: () => {
-          router.replace(redirectTo);
+        onSuccess: (res) => {
+          const identity = res.identity;
+          const contact = res.data;
+          if (identity?.needs_consent && identity.proposal) {
+            router.replace("/login");
+            return;
+          }
+          if (identity?.needs_manual_name) {
+            router.replace("/login");
+            return;
+          }
+          router.replace(contact.profile_completed ? redirectTo : "/portal/company");
         },
         onError: (err) => {
           setLocalError(
@@ -102,28 +117,25 @@ export function ErcaCompanyCreateForm({
   };
 
   return (
-    <div className="panel company-form">
+    <div className="panel company-form company-form--onboard">
+      <OnboardingProgress current="company" />
+
       <div className="company-form-head">
-        <h2>Create company</h2>
+        <p className="login-kicker">Step 2 · ERCA company verification</p>
+        <h2>{preview ? "Confirm company details" : "Verify company TIN"}</h2>
         <p className="muted">
-          Search your TIN number in ERCA. Confirm the registry details to create your company, or
-          sign out if this is not your organisation.
+          {preview
+            ? "Review the official ERCA registry record carefully. Confirm only if this is your organisation."
+            : "Enter your 10-digit TIN. We look it up in ERCA before creating your company profile."}
         </p>
       </div>
 
-      {me && (
-        <FaydaIdentityPanel
-          id="fayda-identity"
-          title="Your identity"
-          description="Read-only."
-          person={me}
-          badge={
-            me.company_role === "owner" ? (
-              <span className="service-meta">Owner</span>
-            ) : null
-          }
-        />
-      )}
+      {me?.phone_number ? (
+        <div className="onboard-session" role="status">
+          <span>Signed in as</span>
+          <strong>{maskMobileDisplay(me.phone_number)}</strong>
+        </div>
+      ) : null}
 
       {ercaDown && (
         <div className="alert" role="status">
@@ -143,54 +155,58 @@ export function ErcaCompanyCreateForm({
       )}
 
       {!preview ? (
-        <form onSubmit={onSearch} className="portal-stack-sm" noValidate>
+        <form onSubmit={onSearch} className="portal-stack-sm" noValidate autoComplete="off">
           <section className="settings-block">
             <div className="settings-block-head">
-              <h3>ERCA TIN number search</h3>
+              <h3>TIN number</h3>
+              <p className="muted">Official Ethiopian Tax Identification Number (10 digits).</p>
             </div>
             <div className="field">
               <label htmlFor="erca-tin">
-                TIN number <span className="req">*</span>
+                Company TIN <span className="req">*</span>
               </label>
               <input
                 id="erca-tin"
                 name="company_tin"
                 inputMode="numeric"
                 autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
                 maxLength={14}
                 placeholder="10 digits"
                 value={tin}
                 onChange={(e) => setTin(e.target.value.replace(/[^\d\s-]/g, ""))}
                 required
                 disabled={busy || ercaDown}
+                aria-describedby="erca-tin-help"
               />
+              <p id="erca-tin-help" className="field-help">
+                Lookup uses a secure government registry connection. Results are shown only to you.
+              </p>
             </div>
           </section>
           <div className="form-actions">
             <button type="submit" className="btn-primary" disabled={busy || ercaDown}>
-              {previewMut.isPending ? "Searching…" : "Search ERCA"}
+              {previewMut.isPending ? "Verifying with ERCA…" : "Search and verify TIN"}
             </button>
-            <button
-              type="button"
-              className="btn-ghost"
-              disabled={busy}
-              onClick={onDecline}
-            >
+            <button type="button" className="btn-ghost" disabled={busy} onClick={onDecline}>
               Cancel and sign out
             </button>
           </div>
         </form>
       ) : (
         <form onSubmit={onConfirm} className="portal-stack-sm" noValidate>
-          <section className="settings-block">
+          <section className="settings-block erca-confirm-panel">
             <div className="settings-block-head">
-              <h3>ERCA registry (limited)</h3>
-              <p className="muted">Confirm this is your company before creating.</p>
+              <h3>ERCA registry record</h3>
+              <p className="muted">Official limited extract — confirm before creating.</p>
             </div>
             <dl className="fayda-dl company-profile-dl">
               <div>
                 <dt>TIN number</dt>
-                <dd>{preview.tin}</dd>
+                <dd>
+                  <strong>{preview.tin}</strong>
+                </dd>
               </div>
               <div>
                 <dt>Legal name</dt>
@@ -232,13 +248,13 @@ export function ErcaCompanyCreateForm({
               ) : null}
               {preview.phone ? (
                 <div>
-                  <dt>Phone</dt>
+                  <dt>Registry phone</dt>
                   <dd>{preview.phone}</dd>
                 </div>
               ) : null}
               {preview.email ? (
                 <div>
-                  <dt>Email</dt>
+                  <dt>Registry email</dt>
                   <dd>{preview.email}</dd>
                 </div>
               ) : null}
@@ -247,23 +263,27 @@ export function ErcaCompanyCreateForm({
 
           <div className="field field-span">
             <label htmlFor="erca-address">
-              Company address <span className="req">*</span>
+              Operating address <span className="req">*</span>
             </label>
             <textarea
               id="erca-address"
               name="company_address"
               rows={3}
-              placeholder="Operating / office address"
+              placeholder="Company operating / office address"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               required
               disabled={busy}
+              aria-describedby="erca-address-help"
             />
+            <p id="erca-address-help" className="field-help">
+              Used on your VAS Partners company profile. You can refine it later if needed.
+            </p>
           </div>
 
           <div className="form-actions" style={{ flexWrap: "wrap" }}>
             <button type="submit" className="btn-primary" disabled={busy}>
-              {createMut.isPending ? "Creating…" : "Confirm and create company"}
+              {createMut.isPending ? "Creating secure company profile…" : "Confirm — this is my company"}
             </button>
             <button
               type="button"
@@ -274,19 +294,18 @@ export function ErcaCompanyCreateForm({
                 setLocalError(null);
               }}
             >
-              Search again
+              Search another TIN
             </button>
-            <button
-              type="button"
-              className="btn-ghost"
-              disabled={busy}
-              onClick={onDecline}
-            >
+            <button type="button" className="btn-ghost" disabled={busy} onClick={onDecline}>
               Not my company — sign out
             </button>
           </div>
         </form>
       )}
+
+      <SecureSessionNote>
+        Company data is verified with ERCA. Confirm only your own organisation.
+      </SecureSessionNote>
     </div>
   );
 }

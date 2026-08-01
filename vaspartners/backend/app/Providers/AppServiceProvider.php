@@ -76,13 +76,27 @@ class AppServiceProvider extends ServiceProvider
     private function configurePortalOtpRateLimiters(): void
     {
         // IP caps on top of per-phone limits inside PortalPhoneOtpService.
-        // Kept generous so shared NAT / office IPs do not lock partners out.
+        // Burst + hourly so shared NAT still works but SMS spray is costly.
         RateLimiter::for('portal-otp-request', function ($request) {
-            return Limit::perMinutes(5, 40)->by('portal-otp-req:'.$request->ip());
+            $ip = (string) $request->ip();
+            $burst = max(1, (int) config('notifications.otp_rate.ip_request.max_per_5_minutes', 10));
+            $hourly = max(1, (int) config('notifications.otp_rate.ip_request.max_per_hour', 20));
+
+            return [
+                Limit::perMinutes(5, $burst)->by('portal-otp-req:'.$ip),
+                Limit::perHour($hourly)->by('portal-otp-req-hour:'.$ip),
+            ];
         });
 
         RateLimiter::for('portal-otp-verify', function ($request) {
-            return Limit::perMinutes(5, 80)->by('portal-otp-ver:'.$request->ip());
+            $ip = (string) $request->ip();
+            $burst = max(1, (int) config('notifications.otp_rate.ip_verify.max_per_5_minutes', 40));
+            $hourly = max(1, (int) config('notifications.otp_rate.ip_verify.max_per_hour', 100));
+
+            return [
+                Limit::perMinutes(5, $burst)->by('portal-otp-ver:'.$ip),
+                Limit::perHour($hourly)->by('portal-otp-ver-hour:'.$ip),
+            ];
         });
     }
 
