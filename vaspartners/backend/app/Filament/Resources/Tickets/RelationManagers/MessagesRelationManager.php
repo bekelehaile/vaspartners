@@ -105,7 +105,10 @@ class MessagesRelationManager extends RelationManager
                 TextColumn::make('body')
                     ->label('Message')
                     ->wrap()
-                    ->limit(120),
+                    ->limit(80)
+                    ->tooltip(fn (TicketComment $record): ?string => mb_strlen((string) $record->body) > 80
+                        ? 'Open View for the full message'
+                        : null),
                 IconColumn::make('has_pdf')
                     ->label('PDF')
                     ->boolean()
@@ -152,6 +155,28 @@ class MessagesRelationManager extends RelationManager
                     }),
             ])
             ->recordActions([
+                Action::make('view')
+                    ->label('View')
+                    ->icon('heroicon-o-eye')
+                    ->color('gray')
+                    ->modalHeading(fn (TicketComment $record): string => sprintf(
+                        'Message · %s',
+                        $record->created_at?->format('M j, Y H:i') ?? '—',
+                    ))
+                    ->modalWidth('3xl')
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel('Close')
+                    ->form([
+                        Textarea::make('body')
+                            ->label('Message')
+                            ->rows(16)
+                            ->disabled()
+                            ->dehydrated(false),
+                    ])
+                    ->fillForm(fn (TicketComment $record): array => [
+                        'body' => (string) $record->body,
+                    ])
+                    ->visible(fn (TicketComment $record): bool => filled($record->body)),
                 Action::make('download')
                     ->label('Download PDF')
                     ->icon('heroicon-o-arrow-down-tray')
