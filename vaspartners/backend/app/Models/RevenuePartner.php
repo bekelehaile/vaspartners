@@ -56,12 +56,12 @@ class RevenuePartner extends Model
                             "RIGHT(REGEXP_REPLACE(COALESCE(revenue_phone, ''), '[^0-9]', '', 'g'), 9) = ?",
                             [(string) $partner->phone],
                         )->orWhereRaw(
-                            "RIGHT(REGEXP_REPLACE(COALESCE(otp_phone, phone, ''), '[^0-9]', '', 'g'), 9) = ?",
+                            "RIGHT(REGEXP_REPLACE(COALESCE(claim_phone, phone, ''), '[^0-9]', '', 'g'), 9) = ?",
                             [(string) $partner->phone],
                         );
                     })
                     ->orderBy('id')
-                    ->get(['id', 'name', 'phone', 'otp_phone', 'revenue_phone']);
+                    ->get(['id', 'name', 'phone', 'claim_phone', 'revenue_phone']);
 
                 $match = $candidates->first(
                     fn (Company $company) => PartnerCompanyNameMatcher::matches(

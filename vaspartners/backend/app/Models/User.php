@@ -134,6 +134,42 @@ class User extends Authenticatable implements CanResetPasswordContract, Filament
     }
 
     /**
+     * Operational AM (not super_admin) — blocked from services when company TIN is unverified.
+     */
+    public function isOperationalAccountManager(): bool
+    {
+        return $this->hasRole(self::ROLE_ACCOUNT_MANAGER)
+            && ! $this->hasRole('super_admin');
+    }
+
+    /**
+     * Whether this staff user may process VAS services for the company.
+     * Account managers require a verified TIN; other roles are not restricted here.
+     */
+    public function canHandleCompanyServices(?Company $company): bool
+    {
+        if (! $this->isOperationalAccountManager()) {
+            return true;
+        }
+
+        return $company !== null && $company->isTinValidated();
+    }
+
+    /**
+     * @throws \Illuminate\Validation\ValidationException
+     */
+    public function assertCanHandleCompanyServices(?Company $company): void
+    {
+        if ($this->canHandleCompanyServices($company)) {
+            return;
+        }
+
+        throw \Illuminate\Validation\ValidationException::withMessages([
+            'company' => 'This company TIN number is not verified. Account managers cannot process services until the TIN is verified with ERCA.',
+        ]);
+    }
+
+    /**
      * Active Account Managers eligible to handle a ticket in the given group.
      *
      * @return \Illuminate\Database\Eloquent\Builder<static>

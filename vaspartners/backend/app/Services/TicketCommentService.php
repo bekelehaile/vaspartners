@@ -31,6 +31,10 @@ class TicketCommentService
         bool $isPublic = true,
         bool $allowWhenLocked = false,
     ): TicketComment {
+        if ($author instanceof User) {
+            $author->assertCanHandleCompanyServices($ticket->serviceCompany());
+        }
+
         if (
             ! $allowWhenLocked
             && $ticket->status instanceof TicketStatus

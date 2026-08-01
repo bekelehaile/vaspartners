@@ -52,7 +52,7 @@ class SyncErcaPhonesCommand extends Command
             $query->limit($limit);
         }
 
-        $companies = $query->get(['id', 'public_id', 'name', 'tin', 'phone', 'otp_phone', 'erca_phone', 'revenue_phone']);
+        $companies = $query->get(['id', 'public_id', 'name', 'tin', 'phone', 'claim_phone', 'erca_phone', 'revenue_phone']);
         $this->info(($dryRun ? '[dry-run] ' : '').'Syncing ERCA phones for '.$companies->count().' companies');
 
         $updated = 0;
@@ -60,8 +60,8 @@ class SyncErcaPhonesCommand extends Command
         $noMobile = 0;
         $notFound = 0;
         $errors = 0;
-        $sameAsOtp = 0;
-        $diffFromOtp = 0;
+        $sameAsClaim = 0;
+        $diffFromClaim = 0;
 
         foreach ($companies as $company) {
             /** @var Company $company */
@@ -109,32 +109,32 @@ class SyncErcaPhonesCommand extends Command
                 continue;
             }
 
-            $otp = $company->otpPhone();
+            $claim = $company->claimPhone();
             $before = $company->ercaPhone();
-            $same = $otp !== null && $otp === $ercaPhone;
+            $same = $claim !== null && $claim === $ercaPhone;
             if ($same) {
-                $sameAsOtp++;
+                $sameAsClaim++;
             } else {
-                $diffFromOtp++;
+                $diffFromClaim++;
             }
 
             if ($before === $ercaPhone) {
                 $unchanged++;
                 $this->line(sprintf(
-                    '  %s | erca=%s | otp=%s | already synced%s',
+                    '  %s | erca=%s | claim=%s | already synced%s',
                     $company->tin,
                     $ercaPhone,
-                    $otp ?: '—',
-                    $same ? ' (matches OTP)' : ' (differs from OTP)',
+                    $claim ?: '—',
+                    $same ? ' (matches claim)' : ' (differs from claim)',
                 ));
             } else {
                 $this->info(sprintf(
-                    '  %s | %s → %s | otp=%s%s',
+                    '  %s | %s → %s | claim=%s%s',
                     $company->tin,
                     $before ?: '(empty)',
                     $ercaPhone,
-                    $otp ?: '—',
-                    $same ? ' (matches OTP)' : ' (differs from OTP)',
+                    $claim ?: '—',
+                    $same ? ' (matches claim)' : ' (differs from claim)',
                 ));
                 if (! $dryRun) {
                     $company->forceFill(['erca_phone' => $ercaPhone])->save();
@@ -156,8 +156,8 @@ class SyncErcaPhonesCommand extends Command
                 ['ERCA no usable mobile', $noMobile],
                 ['ERCA not found', $notFound],
                 ['Errors', $errors],
-                ['Among usable: matches OTP', $sameAsOtp],
-                ['Among usable: differs from OTP', $diffFromOtp],
+                ['Among usable: matches claim', $sameAsClaim],
+                ['Among usable: differs from claim', $diffFromClaim],
             ],
         );
 

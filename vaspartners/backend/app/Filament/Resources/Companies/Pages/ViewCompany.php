@@ -25,7 +25,8 @@ class ViewCompany extends ViewRecord
                 ->icon('heroicon-o-chat-bubble-left-ellipsis')
                 ->color('primary')
                 ->visible(fn (): bool => (bool) auth()->user()?->canSendCompanySms()
-                    && filled($this->getRecord()->otpPhone()))
+                    && filled($this->getRecord()->claimPhone())
+                    && (auth()->user()?->canHandleCompanyServices($this->getRecord()) ?? false))
                 ->form([
                     Textarea::make('message')
                         ->label('SMS message')

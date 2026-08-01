@@ -403,7 +403,7 @@ class MvasDumpMigrationService
             'name' => $companyName,
             'tin' => 'MVAS-'.$partner['id'],
             'phone' => $phone !== '' ? $phone : null,
-            'otp_phone' => $phone !== '' ? $phone : null,
+            'claim_phone' => $phone !== '' ? $phone : null,
             'revenue_phone' => $phone !== '' ? $phone : null,
             'email' => $partner['email'] ?: null,
             'address' => $addressParts !== [] ? implode(', ', $addressParts) : null,

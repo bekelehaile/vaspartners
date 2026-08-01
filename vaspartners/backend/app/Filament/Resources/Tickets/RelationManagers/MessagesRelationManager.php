@@ -74,12 +74,17 @@ class MessagesRelationManager extends RelationManager
     {
         /** @var Ticket $ticket */
         $ticket = $this->getOwnerRecord();
-        $locked = $ticket->status->locksContactChat();
+        $user = auth()->user();
+        $tinBlocked = $user instanceof User
+            && ! $user->canHandleCompanyServices($ticket->serviceCompany());
+        $locked = $ticket->status->locksContactChat() || $tinBlocked;
 
         return $table
-            ->description($locked
-                ? 'Partner chat is closed for completed/closed requests. You can still log internal notes via Approve/Reject/Close.'
-                : 'Messages default to internal. Tick Notify partner to make them visible and send portal/SMS.')
+            ->description($tinBlocked
+                ? 'Account managers cannot message on this request — company TIN number is not verified.'
+                : ($locked
+                    ? 'Partner chat is closed for completed/closed requests. You can still log internal notes via Approve/Reject/Close.'
+                    : 'Messages default to internal. Tick Notify partner to make them visible and send portal/SMS.'))
             ->modifyQueryUsing(fn ($query) => $query->with('author'))
             ->columns([
                 TextColumn::make('visibility')

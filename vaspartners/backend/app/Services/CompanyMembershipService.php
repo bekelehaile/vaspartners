@@ -90,7 +90,7 @@ class CompanyMembershipService
                 'tin' => $tin,
                 'tin_validated' => false,
                 'phone' => $companyPhone,
-                'otp_phone' => $companyPhone,
+                'claim_phone' => $companyPhone,
                 'revenue_phone' => $companyPhone,
                 'email' => $companyEmail,
                 'address' => trim($data['company_address']),
@@ -175,7 +175,7 @@ class CompanyMembershipService
 
         $contact->loadMissing(['memberships.company', 'company']);
         $creatingAdditional = $contact->memberships->isNotEmpty();
-        [$otpPhone, $companyEmail] = $this->resolveSharedCompanyContacts($contact);
+        [$claimPhone, $companyEmail] = $this->resolveSharedCompanyContacts($contact);
 
         $ercaPhoneRaw = trim((string) ($data['company_phone'] ?? ''));
         $ercaPhone = '';
@@ -188,7 +188,7 @@ class CompanyMembershipService
             $companyEmail = strtolower($ercaEmail);
         }
 
-        if ($otpPhone === '' || ! \App\Support\PhoneNumber::isValidLocalMobile($otpPhone)) {
+        if ($claimPhone === '' || ! \App\Support\PhoneNumber::isValidLocalMobile($claimPhone)) {
             throw ValidationException::withMessages([
                 'company' => $creatingAdditional
                     ? 'Your existing company has no usable phone. Update that company or sign in again.'
@@ -212,7 +212,7 @@ class CompanyMembershipService
             $data,
             $tin,
             $legal,
-            $otpPhone,
+            $claimPhone,
             $ercaPhone,
             $companyEmail,
             $companyAddress,
@@ -229,10 +229,10 @@ class CompanyMembershipService
                 'erca_last_checked_at' => now(),
                 'erca_next_check_at' => now()->addHours(max(24, (int) config('services.etrade.recheck_hours', 168))),
                 'erca_last_error' => null,
-                'phone' => $otpPhone,
-                'otp_phone' => $otpPhone,
+                'phone' => $claimPhone,
+                'claim_phone' => $claimPhone,
                 'erca_phone' => $ercaPhone !== '' ? $ercaPhone : null,
-                'revenue_phone' => $otpPhone,
+                'revenue_phone' => $claimPhone,
                 'email' => $companyEmail,
                 'address' => $companyAddress,
                 'is_active' => true,
@@ -427,7 +427,7 @@ class CompanyMembershipService
             ]);
         }
 
-        $phone = \App\Support\PhoneNumber::normalize((string) ($company->otpPhone() ?: $contact->phone_number));
+        $phone = \App\Support\PhoneNumber::normalize((string) ($company->claimPhone() ?: $contact->phone_number));
         $email = trim((string) ($company->email ?: $contact->email));
         if ($phone === '' || ! \App\Support\PhoneNumber::isValidLocalMobile($phone)) {
             throw ValidationException::withMessages([
@@ -446,7 +446,7 @@ class CompanyMembershipService
             $company->fill([
                 'address' => trim($data['company_address']),
                 'phone' => $phone,
-                'otp_phone' => $phone,
+                'claim_phone' => $phone,
                 'email' => $email !== '' ? \App\Support\EmailAddress::normalize($email) : null,
             ])->save();
             $this->syncAllMembersDenormalizedFields($company);
@@ -469,7 +469,7 @@ class CompanyMembershipService
                 'tin' => $tin,
                 'tin_validated' => false,
                 'phone' => $phone,
-                'otp_phone' => $phone,
+                'claim_phone' => $phone,
                 'revenue_phone' => $company->revenue_phone ?: $phone,
                 'email' => $email !== '' ? \App\Support\EmailAddress::normalize($email) : null,
                 'address' => trim($data['company_address']),
@@ -549,7 +549,7 @@ class CompanyMembershipService
         $required = [
             'name' => $company->name,
             'tin' => $company->tin,
-            'phone' => $company->otpPhone(),
+            'phone' => $company->claimPhone(),
             'email' => $company->email,
             'address' => $company->address,
         ];
@@ -1926,7 +1926,7 @@ class CompanyMembershipService
             ->tinApproved()
             ->where(function ($q) use ($last9) {
                 $q->whereRaw(
-                    "RIGHT(REGEXP_REPLACE(COALESCE(otp_phone, phone, ''), '[^0-9]', '', 'g'), 9) = ?",
+                    "RIGHT(REGEXP_REPLACE(COALESCE(claim_phone, phone, ''), '[^0-9]', '', 'g'), 9) = ?",
                     [$last9],
                 );
             })
@@ -1981,7 +1981,7 @@ class CompanyMembershipService
                 ->where('is_active', true)
                 ->where('tin_validated', true)
                 ->whereRaw(
-                    "RIGHT(REGEXP_REPLACE(COALESCE(otp_phone, phone, ''), '[^0-9]', '', 'g'), 9) = ?",
+                    "RIGHT(REGEXP_REPLACE(COALESCE(claim_phone, phone, ''), '[^0-9]', '', 'g'), 9) = ?",
                     [$last9],
                 )
                 ->whereDoesntHave('memberships', function ($query) {
@@ -2727,7 +2727,7 @@ class CompanyMembershipService
         $contact->forceFill([
             'company_name' => $company->name,
             'company_tin' => $company->tin,
-            'company_phone' => $company->otpPhone(),
+            'company_phone' => $company->claimPhone(),
             'company_email' => $company->email,
             'company_address' => $company->address,
         ])->save();
@@ -2804,8 +2804,8 @@ class CompanyMembershipService
             'name' => $company->name,
             'legal_name' => $company->legal_name,
             'tin' => $company->tin,
-            'phone' => $company->otpPhone(),
-            'otp_phone' => $company->otpPhone(),
+            'phone' => $company->claimPhone(),
+            'claim_phone' => $company->claimPhone(),
             'erca_phone' => $company->ercaPhone(),
             'revenue_phone' => $company->revenuePhone(),
             'email' => $company->email,
@@ -3036,7 +3036,7 @@ class CompanyMembershipService
         $identityEmail = \App\Support\EmailAddress::normalize($contact->email);
 
         if ($source) {
-            $phone = \App\Support\PhoneNumber::normalize((string) ($source->otpPhone() ?: $identityPhone));
+            $phone = \App\Support\PhoneNumber::normalize((string) ($source->claimPhone() ?: $identityPhone));
             $email = \App\Support\EmailAddress::normalize($source->email) ?? $identityEmail;
 
             return [$phone, $email];

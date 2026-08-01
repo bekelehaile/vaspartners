@@ -265,6 +265,8 @@ class TicketResource extends Resource
                 'requisition',
                 'contact.company',
                 'service',
+                'assignee',
+                'currentApprover',
             ]))
             ->columns([
                 TextColumn::make('tt_number')->label('Request number')->sortable()->toggleable(),
@@ -357,7 +359,7 @@ class TicketResource extends Resource
             ])
             ->defaultSort('created_at', 'desc')
             ->searchable()
-            ->searchPlaceholder('Search request number or company name…')
+            ->searchPlaceholder('Search request number, company, or AM name…')
             ->splitSearchTerms(false)
             ->searchUsing(function (Builder $query, string $search): void {
                 $term = trim($search);
@@ -380,6 +382,11 @@ class TicketResource extends Resource
                         ->orWhereHas(
                             'contact',
                             fn (Builder $c) => $c->where('company_name', 'ilike', $like),
+                        )
+                        ->orWhereHas(
+                            'assignee',
+                            fn (Builder $u) => $u->where('name', 'ilike', $like)
+                                ->orWhere('username', 'ilike', $like),
                         );
                 });
             })
@@ -503,7 +510,8 @@ class TicketResource extends Resource
                     ->icon('heroicon-o-chat-bubble-left-ellipsis')
                     ->color('primary')
                     ->visible(fn (Ticket $record): bool => (bool) auth()->user()?->canSendTicketSms()
-                        && filled(static::ticketSmsPhone($record)))
+                        && filled(static::ticketSmsPhone($record))
+                        && static::accountManagerMayAct($record))
                     ->form([
                         Textarea::make('message')
                             ->label('SMS message')
@@ -526,7 +534,8 @@ class TicketResource extends Resource
                     ->color('primary')
                     ->visible(fn (Ticket $record) => $record->status === TicketStatus::Open
                         && blank($record->assigned_to_user_id)
-                        && auth()->user()?->isAssignableAccountManager())
+                        && auth()->user()?->isAssignableAccountManager()
+                        && static::accountManagerMayAct($record))
                     ->requiresConfirmation()
                     ->modalHeading('Take this ticket')
                     ->modalDescription('Assign this service request to yourself as account manager.')
@@ -542,7 +551,8 @@ class TicketResource extends Resource
                 Action::make('assign')
                     ->label('Assign AM')
                     ->visible(fn (Ticket $record) => $record->status === TicketStatus::Open
-                        && blank($record->assigned_to_user_id))
+                        && blank($record->assigned_to_user_id)
+                        && ($record->serviceCompany()?->isTinValidated() ?? false))
                     ->form([
                         Select::make('assigned_to_user_id')
                             ->label('Account manager')
@@ -576,7 +586,8 @@ class TicketResource extends Resource
                             TicketStatus::InProgress,
                             TicketStatus::Rejected,
                         ], true)
-                        && $record->document_review_status !== DocumentReviewStatus::Passed)
+                        && $record->document_review_status !== DocumentReviewStatus::Passed
+                        && static::accountManagerMayAct($record))
                     ->form([
                         Select::make('result')->options([
                             DocumentReviewStatus::Passed->value => 'All documents OK',
@@ -608,7 +619,8 @@ class TicketResource extends Resource
                     ->label('Approve')
                     ->icon('heroicon-o-check-circle')
                     ->color('success')
-                    ->visible(fn (Ticket $record) => $record->current_approver_user_id === auth()->id())
+                    ->visible(fn (Ticket $record) => $record->current_approver_user_id === auth()->id()
+                        && static::accountManagerMayAct($record))
                     ->modalHeading('Approve this request')
                     ->modalDescription(fn (): string => 'Logged as '.(auth()->user()?->name ?? 'you').' with a timestamp.')
                     ->form([
@@ -643,7 +655,8 @@ class TicketResource extends Resource
                     ->label('Reject')
                     ->icon('heroicon-o-x-circle')
                     ->color('danger')
-                    ->visible(fn (Ticket $record) => $record->current_approver_user_id === auth()->id())
+                    ->visible(fn (Ticket $record) => $record->current_approver_user_id === auth()->id()
+                        && static::accountManagerMayAct($record))
                     ->modalHeading('Reject this request')
                     ->modalDescription(fn (): string => 'Logged as '.(auth()->user()?->name ?? 'you').' with a timestamp. A reason is required.')
                     ->form([
@@ -665,7 +678,8 @@ class TicketResource extends Resource
                 Action::make('close')
                     ->label('Close')
                     ->visible(fn (Ticket $record) => $record->status === TicketStatus::Completed
-                        && ($record->assigned_to_user_id === auth()->id() || auth()->user()?->is_management))
+                        && ($record->assigned_to_user_id === auth()->id() || auth()->user()?->is_management)
+                        && static::accountManagerMayAct($record))
                     ->requiresConfirmation()
                     ->action(fn (Ticket $record, TicketWorkflowService $workflow) => $workflow->close($record, auth()->user())),
                 DeleteAction::make()
@@ -782,6 +796,19 @@ class TicketResource extends Resource
             ]);
     }
 
+    /**
+     * Account managers cannot act on requests when the company TIN is unverified.
+     */
+    public static function accountManagerMayAct(Ticket $record): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        return $user->canHandleCompanyServices($record->serviceCompany());
+    }
+
     public static function ticketSmsPhone(Ticket $ticket): ?string
     {
         $ticket->loadMissing('contact');
@@ -814,6 +841,12 @@ class TicketResource extends Resource
             }
 
             if (! auth()->user()?->canSendTicketSms() && ! auth()->user()?->canBulkSendTicketSms()) {
+                $skipped++;
+
+                continue;
+            }
+
+            if (! static::accountManagerMayAct($ticket)) {
                 $skipped++;
 
                 continue;

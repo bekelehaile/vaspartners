@@ -41,6 +41,10 @@ class TicketWorkflowService
 
     public function transition(Ticket $ticket, TicketStatus $to, mixed $actor = null, ?string $note = null, array $meta = []): void
     {
+        if ($actor instanceof User) {
+            $actor->assertCanHandleCompanyServices($ticket->serviceCompany());
+        }
+
         $from = $ticket->status;
         $isReassignment = ! empty($meta['reassignment']);
         if ($from === $to && ! $isReassignment) {
@@ -947,6 +951,11 @@ class TicketWorkflowService
                 ]);
             }
 
+            $company = $ticket->serviceCompany();
+            // AM cannot take / be given work for companies without a verified TIN.
+            $assigner->assertCanHandleCompanyServices($company);
+            $assignee->assertCanHandleCompanyServices($company);
+
             $this->assertRequiredDocumentsUploaded($ticket);
 
             $ticket->assigned_to_user_id = $assignee->id;
@@ -1012,6 +1021,8 @@ class TicketWorkflowService
         if (! in_array($result, [DocumentReviewStatus::Passed, DocumentReviewStatus::Failed], true)) {
             throw new InvalidArgumentException('Document review must be passed or failed.');
         }
+
+        $reviewer->assertCanHandleCompanyServices($ticket->serviceCompany());
 
         return DB::transaction(function () use ($ticket, $reviewer, $result, $note, $notifyPartner) {
             if ($ticket->assigned_to_user_id !== $reviewer->id) {
@@ -1122,6 +1133,8 @@ class TicketWorkflowService
             ]);
         }
 
+        $approver->assertCanHandleCompanyServices($ticket->serviceCompany());
+
         return DB::transaction(function () use ($ticket, $approver, $action, $note, $notifyPartner) {
             if ($ticket->current_approver_user_id !== $approver->id) {
                 throw ValidationException::withMessages(['ticket' => 'You are not the current approver for this ticket.']);
@@ -1226,6 +1239,8 @@ class TicketWorkflowService
     public function close(Ticket $ticket, User $actor, ?string $note = null, bool $notifyPartner = false): Ticket
     {
         return DB::transaction(function () use ($ticket, $actor, $note, $notifyPartner) {
+            $actor->assertCanHandleCompanyServices($ticket->serviceCompany());
+
             if ($ticket->assigned_to_user_id !== $actor->id && ! $actor->is_management) {
                 throw ValidationException::withMessages(['ticket' => 'Only the assignee or a supervisor can close.']);
             }

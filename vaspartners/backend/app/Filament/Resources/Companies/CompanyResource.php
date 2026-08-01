@@ -61,7 +61,7 @@ class CompanyResource extends Resource
      */
     public static function getGloballySearchableAttributes(): array
     {
-        return ['name', 'tin', 'otp_phone', 'erca_phone', 'revenue_phone', 'phone', 'email'];
+        return ['name', 'tin', 'claim_phone', 'erca_phone', 'revenue_phone', 'phone', 'email'];
     }
 
     public static function getGlobalSearchResultDetails(\Illuminate\Database\Eloquent\Model $record): array
@@ -69,7 +69,7 @@ class CompanyResource extends Resource
         /** @var Company $record */
         return array_filter([
             'TIN number' => $record->tin,
-            'OTP phone' => $record->otpPhone(),
+            'Claim phone' => $record->claimPhone(),
         ]);
     }
 
@@ -114,8 +114,8 @@ class CompanyResource extends Resource
                 ->helperText(fn (?Company $record): ?string => $record?->isErcaIdentityLocked() && ! $superAdmin()
                     ? 'Locked after ERCA match.'
                     : 'Exactly 10 digits. Unique — never duplicated.'),
-            TextInput::make('otp_phone')
-                ->label('OTP phone')
+            TextInput::make('claim_phone')
+                ->label('Claim phone')
                 ->tel()
                 ->maxLength(32)
                 ->helperText('Partner portal sign-in / auto-claim. Last 9 digits. Revenue phone stays the same unless updated separately.')
@@ -130,7 +130,7 @@ class CompanyResource extends Resource
                 ->label('Revenue phone')
                 ->tel()
                 ->maxLength(32)
-                ->helperText('Same as OTP phone by default. Super admin may set a different revenue SMS number.')
+                ->helperText('Same as claim phone by default. Super admin may set a different revenue SMS number.')
                 ->dehydrateStateUsing(fn (?string $state): ?string => \App\Support\PhoneNumber::normalizeNullable($state)),
             TextInput::make('email')
                 ->email()
@@ -171,9 +171,9 @@ class CompanyResource extends Resource
                 ])->columns(3),
             Section::make('Phones')
                 ->schema([
-                    TextEntry::make('otp_phone')
-                        ->label('OTP phone')
-                        ->state(fn (Company $record): ?string => $record->otpPhone())
+                    TextEntry::make('claim_phone')
+                        ->label('Claim phone')
+                        ->state(fn (Company $record): ?string => $record->claimPhone())
                         ->placeholder('—'),
                     TextEntry::make('erca_phone')
                         ->label('ERCA phone')
@@ -191,7 +191,7 @@ class CompanyResource extends Resource
                                 return 'erca_missing';
                             }
 
-                            return $record->otpPhone() === $record->ercaPhone() ? 'yes' : 'no';
+                            return $record->claimPhone() === $record->ercaPhone() ? 'yes' : 'no';
                         })
                         ->formatStateUsing(fn (string $state): string => match ($state) {
                             'yes' => 'Yes',
@@ -203,7 +203,7 @@ class CompanyResource extends Resource
                             'no' => 'danger',
                             default => 'warning',
                         })
-                        ->tooltip('OTP phone vs ERCA phone'),
+                        ->tooltip('Claim phone vs ERCA phone'),
                     TextEntry::make('email')->placeholder('—'),
                     TextEntry::make('address')->columnSpanFull()->placeholder('—'),
                 ])->columns(3),
@@ -304,16 +304,16 @@ class CompanyResource extends Resource
                     ->placeholder('—')
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->sortable(),
-                TextColumn::make('otp_phone')
-                    ->label('OTP phone')
-                    ->state(fn (Company $record): ?string => $record->otpPhone())
+                TextColumn::make('claim_phone')
+                    ->label('Claim phone')
+                    ->state(fn (Company $record): ?string => $record->claimPhone())
                     ->toggleable()
                     ->placeholder('—')
                     ->searchable(query: function (Builder $query, string $search): Builder {
                         $digits = preg_replace('/\D+/', '', $search) ?? '';
                         if ($digits === '') {
                             return $query->where(function (Builder $q) use ($search): void {
-                                $q->where('otp_phone', 'ilike', '%'.$search.'%')
+                                $q->where('claim_phone', 'ilike', '%'.$search.'%')
                                     ->orWhere('phone', 'ilike', '%'.$search.'%')
                                     ->orWhere('erca_phone', 'ilike', '%'.$search.'%')
                                     ->orWhere('revenue_phone', 'ilike', '%'.$search.'%');
@@ -324,7 +324,7 @@ class CompanyResource extends Resource
                         $tail = strlen($digits) >= 9 ? substr($digits, -9) : $digits;
 
                         return $query->where(function (Builder $q) use ($search, $digits, $normalized, $tail): void {
-                            foreach (['otp_phone', 'phone', 'erca_phone', 'revenue_phone'] as $col) {
+                            foreach (['claim_phone', 'phone', 'erca_phone', 'revenue_phone'] as $col) {
                                 $q->orWhere($col, 'ilike', '%'.$search.'%')
                                     ->orWhere($col, 'ilike', '%'.$digits.'%')
                                     ->orWhere($col, 'ilike', '%'.$normalized.'%')
@@ -440,7 +440,8 @@ class CompanyResource extends Resource
                     ->icon('heroicon-o-chat-bubble-left-ellipsis')
                     ->color('primary')
                     ->visible(fn (Company $record): bool => (bool) auth()->user()?->canSendCompanySms()
-                        && filled($record->otpPhone()))
+                        && filled($record->claimPhone())
+                        && (auth()->user()?->canHandleCompanyServices($record) ?? false))
                     ->form([
                         Textarea::make('message')
                             ->label('SMS message')
@@ -524,7 +525,14 @@ class CompanyResource extends Resource
                 continue;
             }
 
-            $dest = $company->otpPhone();
+            $user = auth()->user();
+            if ($user && ! $user->canHandleCompanyServices($company)) {
+                $skipped++;
+
+                continue;
+            }
+
+            $dest = $company->claimPhone();
             if (! filled($dest) || ! $sms->ensurePhoneIsLocal($dest)) {
                 $skipped++;
 
@@ -545,7 +553,7 @@ class CompanyResource extends Resource
         if ($result['queued'] < 1) {
             Notification::make()
                 ->title('Cannot send SMS')
-                ->body('Company has no usable OTP phone on file.')
+                ->body('Company has no usable claim phone on file.')
                 ->danger()
                 ->send();
 
@@ -554,7 +562,7 @@ class CompanyResource extends Resource
 
         Notification::make()
             ->title('SMS queued')
-            ->body('Message queued for '.$company->otpPhone())
+            ->body('Message queued for '.$company->claimPhone())
             ->success()
             ->send();
     }

@@ -145,6 +145,17 @@ class Ticket extends Model
     public function service(): BelongsTo { return $this->belongsTo(Service::class); }
     public function requisition(): BelongsTo { return $this->belongsTo(Requisition::class); }
     public function subscription(): BelongsTo { return $this->belongsTo(Subscription::class); }
+
+    /**
+     * Company this request serves (subscription company, else contact current company).
+     */
+    public function serviceCompany(): ?Company
+    {
+        $this->loadMissing(['subscription.company', 'contact.company']);
+
+        return $this->subscription?->company ?? $this->contact?->company;
+    }
+
     public function parentTicket(): BelongsTo { return $this->belongsTo(self::class, 'parent_ticket_id'); }
     public function category(): BelongsTo { return $this->belongsTo(Category::class); }
     public function priority(): BelongsTo { return $this->belongsTo(Priority::class); }

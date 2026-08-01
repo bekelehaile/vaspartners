@@ -82,9 +82,16 @@ class ViewTicket extends ViewRecord
             $record->contact?->name,
         ]);
 
-        return $bits !== []
+        $heading = $bits !== []
             ? implode(' · ', $bits)
             : 'Details, messages, attachments, approvals, and status history.';
+
+        $user = auth()->user();
+        if ($user && ! $user->canHandleCompanyServices($record->serviceCompany())) {
+            return $heading.' · TIN not verified — account manager actions blocked';
+        }
+
+        return $heading;
     }
 
     /**
@@ -106,7 +113,8 @@ class ViewTicket extends ViewRecord
                 ->icon('heroicon-o-chat-bubble-left-ellipsis')
                 ->color('primary')
                 ->visible(fn (Ticket $record): bool => (bool) auth()->user()?->canSendTicketSms()
-                    && filled(TicketResource::ticketSmsPhone($record)))
+                    && filled(TicketResource::ticketSmsPhone($record))
+                    && TicketResource::accountManagerMayAct($record))
                 ->form([
                     Textarea::make('message')
                         ->label('SMS message')
@@ -132,7 +140,8 @@ class ViewTicket extends ViewRecord
                         TicketStatus::InProgress,
                         TicketStatus::Rejected,
                     ], true)
-                    && $record->document_review_status !== DocumentReviewStatus::Passed)
+                    && $record->document_review_status !== DocumentReviewStatus::Passed
+                    && TicketResource::accountManagerMayAct($record))
                 ->form([
                     Select::make('result')->options([
                         DocumentReviewStatus::Passed->value => 'All documents OK',
@@ -168,7 +177,8 @@ class ViewTicket extends ViewRecord
                 ->label('Approve')
                 ->icon('heroicon-o-check-circle')
                 ->color('success')
-                ->visible(fn (Ticket $record) => $record->current_approver_user_id === auth()->id())
+                ->visible(fn (Ticket $record) => $record->current_approver_user_id === auth()->id()
+                    && TicketResource::accountManagerMayAct($record))
                 ->modalHeading('Approve this request')
                 ->modalDescription(fn (): string => 'Logged as '.(auth()->user()?->name ?? 'you').' with a timestamp.')
                 ->form(function (Ticket $record): array {
@@ -221,7 +231,8 @@ class ViewTicket extends ViewRecord
                 ->label('Reject')
                 ->icon('heroicon-o-x-circle')
                 ->color('danger')
-                ->visible(fn (Ticket $record) => $record->current_approver_user_id === auth()->id())
+                ->visible(fn (Ticket $record) => $record->current_approver_user_id === auth()->id()
+                    && TicketResource::accountManagerMayAct($record))
                 ->modalHeading('Reject this request')
                 ->modalDescription(fn (): string => 'Logged as '.(auth()->user()?->name ?? 'you').' with a timestamp. A reason is required.')
                 ->form([
@@ -245,7 +256,8 @@ class ViewTicket extends ViewRecord
             Action::make('close')
                 ->label('Close')
                 ->visible(fn (Ticket $record) => $record->status === TicketStatus::Completed
-                    && ($record->assigned_to_user_id === auth()->id() || auth()->user()?->is_management))
+                    && ($record->assigned_to_user_id === auth()->id() || auth()->user()?->is_management)
+                    && TicketResource::accountManagerMayAct($record))
                 ->form([
                     Textarea::make('note')->label('Note (optional)'),
                     $this->notifyPartnerToggle(),

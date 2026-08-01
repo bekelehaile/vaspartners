@@ -34,7 +34,7 @@ class Company extends Model
         'erca_next_check_at',
         'erca_last_error',
         'phone',
-        'otp_phone',
+        'claim_phone',
         'erca_phone',
         'revenue_phone',
         'email',
@@ -66,7 +66,7 @@ class Company extends Model
     protected static function booted(): void
     {
         static::saving(function (Company $company): void {
-            foreach (['phone', 'otp_phone', 'erca_phone', 'revenue_phone'] as $phoneCol) {
+            foreach (['phone', 'claim_phone', 'erca_phone', 'revenue_phone'] as $phoneCol) {
                 if (array_key_exists($phoneCol, $company->getAttributes()) || $company->isDirty($phoneCol)) {
                     $company->attributes[$phoneCol] = PhoneNumber::normalizeNullable(
                         $company->attributes[$phoneCol] ?? null,
@@ -74,31 +74,31 @@ class Company extends Model
                 }
             }
 
-            // Legacy phone column mirrors OTP phone (portal claim / partner contact).
-            if ($company->isDirty('otp_phone') && ! $company->isDirty('phone')) {
-                $company->attributes['phone'] = $company->attributes['otp_phone'] ?? null;
-            } elseif ($company->isDirty('phone') && ! $company->isDirty('otp_phone')) {
-                $company->attributes['otp_phone'] = $company->attributes['phone'] ?? null;
+            // Legacy phone column mirrors claim phone (portal claim / partner contact).
+            if ($company->isDirty('claim_phone') && ! $company->isDirty('phone')) {
+                $company->attributes['phone'] = $company->attributes['claim_phone'] ?? null;
+            } elseif ($company->isDirty('phone') && ! $company->isDirty('claim_phone')) {
+                $company->attributes['claim_phone'] = $company->attributes['phone'] ?? null;
             }
 
-            $otp = $company->attributes['otp_phone']
+            $claim = $company->attributes['claim_phone']
                 ?? $company->attributes['phone']
                 ?? null;
-            $oldOtp = PhoneNumber::normalizeNullable(
-                $company->getOriginal('otp_phone') ?: $company->getOriginal('phone'),
+            $oldClaim = PhoneNumber::normalizeNullable(
+                $company->getOriginal('claim_phone') ?: $company->getOriginal('phone'),
             );
             $revenueWas = PhoneNumber::normalizeNullable($company->getOriginal('revenue_phone'));
             $revenueDirty = $company->isDirty('revenue_phone');
 
-            // Revenue phone stays equal to OTP unless explicitly updated (e.g. approved request).
+            // Revenue phone stays equal to claim phone unless explicitly updated (e.g. approved request).
             if (! $revenueDirty) {
                 if (
                     ! $company->exists
                     || $revenueWas === null
                     || $revenueWas === ''
-                    || $revenueWas === $oldOtp
+                    || $revenueWas === $oldClaim
                 ) {
-                    $company->attributes['revenue_phone'] = $otp;
+                    $company->attributes['revenue_phone'] = $claim;
                 }
             }
 
@@ -197,9 +197,9 @@ class Company extends Model
         $this->attributes['phone'] = PhoneNumber::normalizeNullable($value);
     }
 
-    public function setOtpPhoneAttribute(mixed $value): void
+    public function setClaimPhoneAttribute(mixed $value): void
     {
-        $this->attributes['otp_phone'] = PhoneNumber::normalizeNullable($value);
+        $this->attributes['claim_phone'] = PhoneNumber::normalizeNullable($value);
     }
 
     public function setErcaPhoneAttribute(mixed $value): void
@@ -213,13 +213,13 @@ class Company extends Model
     }
 
     /**
-     * Partner OTP / portal auto-claim phone (customer-facing). Falls back to legacy phone.
+     * Partner claim / portal phone (customer-facing). Falls back to legacy phone.
      */
-    public function otpPhone(): ?string
+    public function claimPhone(): ?string
     {
-        $otp = PhoneNumber::normalizeNullable($this->otp_phone);
+        $claim = PhoneNumber::normalizeNullable($this->claim_phone);
 
-        return $otp ?: PhoneNumber::normalizeNullable($this->phone);
+        return $claim ?: PhoneNumber::normalizeNullable($this->phone);
     }
 
     /**
@@ -231,40 +231,40 @@ class Company extends Model
     }
 
     /**
-     * Whether OTP phone matches ERCA registry phone (both present and equal).
+     * Whether claim phone matches ERCA registry phone (both present and equal).
      */
     public function phonesMatch(): ?bool
     {
-        $otp = $this->otpPhone();
+        $claim = $this->claimPhone();
         $erca = $this->ercaPhone();
-        if ($otp === null || $otp === '' || $erca === null || $erca === '') {
+        if ($claim === null || $claim === '' || $erca === null || $erca === '') {
             return null;
         }
 
-        return $otp === $erca;
+        return $claim === $erca;
     }
 
     /**
      * Revenue collection & bulk SMS destination.
-     * Same as OTP phone unless revenue_phone was explicitly updated (e.g. by request).
+     * Same as claim phone unless revenue_phone was explicitly updated (e.g. by request).
      */
     public function revenuePhone(): ?string
     {
         $revenue = PhoneNumber::normalizeNullable($this->revenue_phone);
 
-        return $revenue ?: $this->otpPhone();
+        return $revenue ?: $this->claimPhone();
     }
 
     /**
-     * Apply an approved revenue-phone change request. Empty resets to OTP phone.
+     * Apply an approved revenue-phone change request. Empty resets to claim phone.
      */
     public function applyRevenuePhoneFromRequest(?string $phone): void
     {
         $normalized = PhoneNumber::normalizeNullable($phone);
-        $otp = $this->otpPhone();
+        $claim = $this->claimPhone();
 
         $this->forceFill([
-            'revenue_phone' => ($normalized !== null && $normalized !== '') ? $normalized : $otp,
+            'revenue_phone' => ($normalized !== null && $normalized !== '') ? $normalized : $claim,
         ])->save();
     }
 

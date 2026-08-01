@@ -200,7 +200,7 @@ class BulkMessageService
                 $q->where(function ($inner): void {
                     $inner->whereNotNull('revenue_phone')->where('revenue_phone', '!=', '');
                 })->orWhere(function ($inner): void {
-                    $inner->whereNotNull('otp_phone')->where('otp_phone', '!=', '');
+                    $inner->whereNotNull('claim_phone')->where('claim_phone', '!=', '');
                 })->orWhere(function ($inner): void {
                     $inner->whereNotNull('phone')->where('phone', '!=', '');
                 });
@@ -711,7 +711,7 @@ class BulkMessageService
 
     /**
      * Match company by revenue / OTP / legacy phone (last 9).
-     * SMS is always sent to revenue_phone (falls back to OTP phone) — never the spreadsheet number,
+     * SMS is always sent to revenue_phone (falls back to Claim phone) — never the spreadsheet number,
      * and never contact/owner phones.
      *
      * @param  array{phone:?string, period:?string, service_type:?string, service_id:?string, amount:?string, company_name:?string}  $row
@@ -785,7 +785,7 @@ class BulkMessageService
                 'variables' => $variables,
                 'row_number' => $rowNumber,
                 'status' => BulkMessageRecipientStatus::Skipped,
-                'error' => 'No company matched for this phone (revenue / OTP phone).',
+                'error' => 'No company matched for this phone (revenue / Claim phone).',
             ];
         }
 
@@ -851,7 +851,7 @@ class BulkMessageService
                     "RIGHT(REGEXP_REPLACE(COALESCE(revenue_phone, ''), '[^0-9]', '', 'g'), 9) = ?",
                     [$lastNine],
                 )->orWhereRaw(
-                    "RIGHT(REGEXP_REPLACE(COALESCE(otp_phone, phone, ''), '[^0-9]', '', 'g'), 9) = ?",
+                    "RIGHT(REGEXP_REPLACE(COALESCE(claim_phone, phone, ''), '[^0-9]', '', 'g'), 9) = ?",
                     [$lastNine],
                 );
             })
