@@ -70,7 +70,7 @@ class Ticket extends Model
 
     public function contactDocumentsAreLocked(): bool
     {
-        return $this->status->locksContactDocuments();
+        return $this->status?->locksContactDocuments() ?? false;
     }
 
     public function getDocumentsLockedAttribute(): bool
