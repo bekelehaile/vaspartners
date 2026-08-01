@@ -1850,13 +1850,18 @@ class CompanyMembershipService
     }
 
     /**
-     * Contact has at least one membership on a company with ERCA-verified valid TIN.
+     * Contact has at least one active membership on a company with ERCA-verified valid TIN.
+     * Owners and members both qualify — members must not be forced through company create.
      */
     public function contactHasTinValidatedCompany(Contact $contact): bool
     {
         $contact->loadMissing(['memberships.company']);
 
         foreach ($contact->memberships as $membership) {
+            if (! $membership->is_active) {
+                continue;
+            }
+
             $company = $membership->company;
             if ($company && $company->isTinValidated()) {
                 return true;
@@ -1864,6 +1869,29 @@ class CompanyMembershipService
         }
 
         return false;
+    }
+
+    /**
+     * True when the partner has no active company membership (must create or join).
+     * Members of existing companies return false even if they are not owners.
+     */
+    public function contactNeedsCompanyOnboarding(Contact $contact): bool
+    {
+        $contact->loadMissing('memberships');
+
+        return ! $contact->memberships->contains(
+            fn (CompanyMembership $m) => (bool) $m->is_active,
+        );
+    }
+
+    /**
+     * After OTP/Fayda: put members (and owners) onto an active company context when missing.
+     */
+    public function ensureActiveCompanyContext(Contact $contact): Contact
+    {
+        $this->trySyncMembershipsOnFaydaLogin($contact->fresh(['memberships.company']) ?? $contact);
+
+        return $contact->fresh(['company', 'memberships.company']) ?? $contact;
     }
 
     /**

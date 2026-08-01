@@ -796,6 +796,7 @@ class PartnerNotificationService
             'company_erca_name_mismatch' => 'TIN number / ERCA name mismatch',
             'company_profile_rejected' => 'Company needs updates',
             'company_member_left' => 'Member left company',
+            'company_member_added' => 'Added to company',
             'company_transfer_approved' => 'Ownership transfer approved',
             'company_transfer_rejected' => 'Ownership transfer rejected',
             default => 'Portal update',

@@ -342,7 +342,20 @@ class Contact extends Authenticatable
         }
 
         $this->loadMissing('company');
-        if (! $this->company?->isApproved()) {
+        if (! $this->company) {
+            return false;
+        }
+
+        // Owners and members of a TIN-validated company are ready for the portal
+        // (services still enforce is_active / approval separately).
+        if ($this->company->isTinValidated()
+            && $this->profile_completed_at !== null
+            && filled($this->company_name)
+            && filled($this->company_tin)) {
+            return true;
+        }
+
+        if (! $this->company->isApproved()) {
             return false;
         }
 

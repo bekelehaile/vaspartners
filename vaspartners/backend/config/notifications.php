@@ -184,6 +184,10 @@ SMS,
 Dear {contact_name}, {applicant_name} left {company_name}. — Ethio telecom
 SMS,
 
+        'company_member_added' => <<<'SMS'
+Dear {contact_name}, you were added as an active member of {company_name}. Sign in to the VAS Partners portal with this mobile number to continue. {portal_url} — Ethio telecom
+SMS,
+
         'company_transfer_approved' => <<<'SMS'
 Dear {contact_name}, ownership transfer for {company_name} was approved. New owner: {applicant_name}. — Ethio telecom
 SMS,
@@ -245,6 +249,8 @@ SMS,
         'company_profile_rejected' => 'Your company profile needs updates before approval.',
 
         'company_member_left' => '{applicant_name} left {company_name}.',
+
+        'company_member_added' => 'You were added as an active member of {company_name}. Sign in with this mobile number to open the portal.',
 
         'company_transfer_approved' => 'Ownership of {company_name} was transferred. New owner: {applicant_name}.',
 

@@ -79,6 +79,9 @@ class FaydaAuthController extends Controller
     {
         $contact = $request->user();
 
+        // Restore company context for members/owners with active memberships.
+        $contact = $membership->ensureActiveCompanyContext($contact);
+
         // Unverified partners: (re)stage CRM consent when possible.
         $identityState = null;
         if (! $contact->isIdentityVerified()) {

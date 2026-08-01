@@ -31,10 +31,10 @@ function nextAfterIdentity(
   contact: { profile_completed?: boolean },
   identity?: IdentityAuthState | null,
 ) {
-  if (identity?.needs_company || !contact.profile_completed) {
+  if (identity?.needs_company) {
     return "/portal/company";
   }
-  return "/portal";
+  return contact.profile_completed ? "/portal" : "/portal/company";
 }
 
 function progressForStep(step: Step): OnboardingStepId {
@@ -90,7 +90,9 @@ export function LoginPageView() {
     identity: IdentityAuthState,
     contact: { profile_completed?: boolean },
   ) {
-    if (identity.needs_company || !contact.profile_completed) {
+    // Only partners with no active company membership must create/join a company.
+    // Members of existing companies continue to identity confirm or portal.
+    if (identity.needs_company) {
       router.replace("/portal/company");
       return;
     }

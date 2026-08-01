@@ -202,6 +202,12 @@ class EsignetService
             report($e);
         }
 
+        try {
+            $contact = $membership->ensureActiveCompanyContext($contact);
+        } catch (Throwable $e) {
+            report($e);
+        }
+
         // 2) Owner sync — claim one ownerless migrated company only when still unlinked.
         try {
             $membership->tryAutoClaimMigratedCompanyByPhone($contact->fresh(['memberships.company']));

@@ -160,9 +160,10 @@ class PortalPhoneOtpService
             report($e);
         }
 
-        $contact = $contact->fresh(['company', 'memberships.company']);
+        // Members (and owners) with active memberships always get a company context.
+        $contact = $membership->ensureActiveCompanyContext($contact);
 
-        // CRM confirm only after a TIN-validated company exists; new partners go to ERCA first.
+        // CRM confirm after TIN-validated company membership; members skip company create.
         $identity = app(ContactIdentityService::class)->resolveAfterAuth($contact);
         $token = PortalAccessToken::issue($contact, PortalAccessToken::NAME_OTP);
 

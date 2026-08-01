@@ -50,6 +50,7 @@ class ContactIdentityService
     {
         $membership = app(CompanyMembershipService::class);
         $hasTinCompany = $membership->contactHasTinValidatedCompany($contact);
+        $needsCompany = $membership->contactNeedsCompanyOnboarding($contact);
 
         if ($this->isVerified($contact)) {
             $via = $contact->identity_verified_via
@@ -59,19 +60,32 @@ class ContactIdentityService
             return [
                 'needs_consent' => false,
                 'needs_manual_name' => false,
-                'needs_company' => ! $hasTinCompany,
+                'needs_company' => $needsCompany,
                 'crm_available' => $this->crm->enabled(),
                 'proposal' => null,
                 'verified_via' => $via,
             ];
         }
 
-        // Company TIN first — do not fetch CRM until the partner has a validated company.
-        if (! $hasTinCompany) {
+        // No active membership yet — create/join company before CRM.
+        // Active members (non-owners) skip company create and continue to CRM when TIN is ready.
+        if ($needsCompany) {
             return [
                 'needs_consent' => false,
                 'needs_manual_name' => false,
                 'needs_company' => true,
+                'crm_available' => $this->crm->enabled(),
+                'proposal' => null,
+                'verified_via' => null,
+            ];
+        }
+
+        // Member/owner of a company without validated TIN — allow session; no CRM yet.
+        if (! $hasTinCompany) {
+            return [
+                'needs_consent' => false,
+                'needs_manual_name' => $this->needsManualName($contact),
+                'needs_company' => false,
                 'crm_available' => $this->crm->enabled(),
                 'proposal' => null,
                 'verified_via' => null,
