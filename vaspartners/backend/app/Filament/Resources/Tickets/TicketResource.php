@@ -261,12 +261,13 @@ class TicketResource extends Resource
         return $table
             ->modifyQueryUsing(fn (Builder $query) => $query->with([
                 'subscription.company',
-                'subscription',
                 'requisition',
                 'contact.company',
                 'service',
+                'category',
                 'assignee',
                 'currentApprover',
+                'documents:id,ticket_id,document_type_id',
             ]))
             ->columns([
                 TextColumn::make('tt_number')->label('Request number')->sortable()->toggleable(),
@@ -367,27 +368,48 @@ class TicketResource extends Resource
                     return;
                 }
 
+                // Request numbers are unique — use a prefix match and skip company/AM joins.
+                if (preg_match('/^\d{8,}$/', $term) === 1) {
+                    $query->where('tt_number', 'ilike', addcslashes($term, '%_\\').'%');
+
+                    return;
+                }
+
                 $like = '%'.addcslashes($term, '%_\\').'%';
 
                 $query->where(function (Builder $q) use ($like): void {
                     $q->where('tt_number', 'ilike', $like)
-                        ->orWhereHas('subscription.company', function (Builder $c) use ($like): void {
-                            $c->where('name', 'ilike', $like)
-                                ->orWhere('legal_name', 'ilike', $like);
+                        ->orWhereExists(function ($sub) use ($like): void {
+                            $sub->selectRaw('1')
+                                ->from('subscriptions')
+                                ->join('companies', 'companies.id', '=', 'subscriptions.company_id')
+                                ->whereColumn('subscriptions.id', 'tickets.subscription_id')
+                                ->where(function ($c) use ($like): void {
+                                    $c->where('companies.name', 'ilike', $like)
+                                        ->orWhere('companies.legal_name', 'ilike', $like);
+                                })
+                                ->whereNull('subscriptions.deleted_at');
                         })
-                        ->orWhereHas('contact.company', function (Builder $c) use ($like): void {
-                            $c->where('name', 'ilike', $like)
-                                ->orWhere('legal_name', 'ilike', $like);
+                        ->orWhereExists(function ($sub) use ($like): void {
+                            $sub->selectRaw('1')
+                                ->from('customers')
+                                ->leftJoin('companies', 'companies.id', '=', 'customers.current_company_id')
+                                ->whereColumn('customers.id', 'tickets.contact_id')
+                                ->where(function ($c) use ($like): void {
+                                    $c->where('customers.company_name', 'ilike', $like)
+                                        ->orWhere('companies.name', 'ilike', $like)
+                                        ->orWhere('companies.legal_name', 'ilike', $like);
+                                });
                         })
-                        ->orWhereHas(
-                            'contact',
-                            fn (Builder $c) => $c->where('company_name', 'ilike', $like),
-                        )
-                        ->orWhereHas(
-                            'assignee',
-                            fn (Builder $u) => $u->where('name', 'ilike', $like)
-                                ->orWhere('username', 'ilike', $like),
-                        );
+                        ->orWhereExists(function ($sub) use ($like): void {
+                            $sub->selectRaw('1')
+                                ->from('users')
+                                ->whereColumn('users.id', 'tickets.assigned_to_user_id')
+                                ->where(function ($u) use ($like): void {
+                                    $u->where('users.name', 'ilike', $like)
+                                        ->orWhere('users.username', 'ilike', $like);
+                                });
+                        });
                 });
             })
             ->filters([

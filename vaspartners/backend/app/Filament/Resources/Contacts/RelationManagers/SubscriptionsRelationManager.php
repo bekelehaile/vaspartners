@@ -25,6 +25,7 @@ class SubscriptionsRelationManager extends RelationManager
     {
         return $table
             ->defaultSort('created_at', 'desc')
+            ->modifyQueryUsing(fn ($query) => $query->with('service:id,name'))
             ->columns([
                 TextColumn::make('service.name')->label('Service')->searchable()->wrap(),
                 TextColumn::make('status')->badge(),

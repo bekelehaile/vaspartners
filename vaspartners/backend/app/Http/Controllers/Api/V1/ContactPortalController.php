@@ -138,16 +138,21 @@ class ContactPortalController extends Controller
         }
 
         if (! empty($filters['search'])) {
-            $search = $filters['search'];
-            $query->where(function ($q) use ($search) {
-                $q->where('tt_number', 'ilike', "%{$search}%")
-                    ->orWhere('description', 'ilike', "%{$search}%")
-                    ->orWhere('building', 'ilike', "%{$search}%")
-                    ->orWhereHas('service', fn ($sq) => $sq->where('name', 'ilike', "%{$search}%"))
-                    ->orWhereHas('requisition', fn ($rq) => $rq->where('name', 'ilike', "%{$search}%"))
-                    ->orWhereHas('contact', fn ($cq) => $cq->where('name', 'ilike', "%{$search}%"))
-                    ->orWhereHas('assignee', fn ($aq) => $aq->where('name', 'ilike', "%{$search}%"));
-            });
+            $search = trim((string) $filters['search']);
+            if (preg_match('/^\d{8,}$/', $search) === 1) {
+                $query->where('tt_number', 'ilike', addcslashes($search, '%_\\').'%');
+            } else {
+                $like = '%'.addcslashes($search, '%_\\').'%';
+                $query->where(function ($q) use ($like) {
+                    $q->where('tt_number', 'ilike', $like)
+                        ->orWhere('description', 'ilike', $like)
+                        ->orWhere('building', 'ilike', $like)
+                        ->orWhereHas('service', fn ($sq) => $sq->where('name', 'ilike', $like))
+                        ->orWhereHas('requisition', fn ($rq) => $rq->where('name', 'ilike', $like))
+                        ->orWhereHas('contact', fn ($cq) => $cq->where('name', 'ilike', $like))
+                        ->orWhereHas('assignee', fn ($aq) => $aq->where('name', 'ilike', $like));
+                });
+            }
         }
 
         $tickets = $query

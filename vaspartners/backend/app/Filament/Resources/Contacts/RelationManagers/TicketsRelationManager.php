@@ -24,6 +24,11 @@ class TicketsRelationManager extends RelationManager
     {
         return $table
             ->defaultSort('created_at', 'desc')
+            ->modifyQueryUsing(fn ($query) => $query->with([
+                'service:id,name',
+                'requisition:id,name',
+                'documents:id,ticket_id,document_type_id',
+            ]))
             ->columns([
                 TextColumn::make('tt_number')->label('Request number')->searchable()->sortable(),
                 TextColumn::make('service.name')->label('Service')->searchable(),

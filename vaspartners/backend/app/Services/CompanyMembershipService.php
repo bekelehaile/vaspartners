@@ -2611,12 +2611,22 @@ class CompanyMembershipService
      */
     public function companyContactIds(int $companyId): \Illuminate\Support\Collection
     {
-        return CompanyMembership::query()
-            ->where('company_id', $companyId)
-            ->pluck('contact_id')
-            ->map(fn ($id) => (int) $id)
-            ->unique()
-            ->values();
+        /** @var list<int> $ids */
+        $ids = cache()->remember(
+            "company:{$companyId}:contact_ids",
+            now()->addSeconds(30),
+            function () use ($companyId): array {
+                return CompanyMembership::query()
+                    ->where('company_id', $companyId)
+                    ->pluck('contact_id')
+                    ->map(fn ($id) => (int) $id)
+                    ->unique()
+                    ->values()
+                    ->all();
+            },
+        );
+
+        return collect($ids);
     }
 
     /**

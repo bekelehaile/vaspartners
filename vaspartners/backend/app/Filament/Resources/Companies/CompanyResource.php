@@ -75,7 +75,11 @@ class CompanyResource extends Resource
 
     public static function getNavigationBadge(): ?string
     {
-        $count = Company::query()->awaitingTinApproval()->count();
+        $count = (int) cache()->remember(
+            'nav:companies:awaiting_tin',
+            now()->addSeconds(60),
+            fn (): int => Company::query()->awaitingTinApproval()->count(),
+        );
 
         return $count > 0 ? (string) $count : null;
     }

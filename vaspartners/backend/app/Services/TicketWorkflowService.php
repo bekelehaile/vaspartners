@@ -33,6 +33,13 @@ use InvalidArgumentException;
  */
 class TicketWorkflowService
 {
+    /**
+     * Request-local cache of service+requisition document matrices (list pages hit this per row).
+     *
+     * @var array<string, \Illuminate\Support\Collection<int, ServiceRequisitionDocument>>
+     */
+    protected static array $documentMatrixCache = [];
+
     public function __construct(
         protected SubscriptionLifecycleService $subscriptions,
         protected PartnerNotificationService $notifications,
@@ -305,20 +312,24 @@ class TicketWorkflowService
      */
     public function attachmentStatus(Ticket $ticket): array
     {
-        $matrix = ServiceRequisitionDocument::query()
-            ->with('documentType')
-            ->where('service_id', $ticket->service_id)
-            ->where('requisition_id', $ticket->requisition_id)
-            ->whereHas('documentType', fn ($q) => $q->where('is_active', true))
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->get();
+        $matrix = $this->documentMatrixFor(
+            (int) $ticket->service_id,
+            (int) $ticket->requisition_id,
+        );
 
-        $uploadedIds = $ticket->documents()
-            ->pluck('document_type_id')
-            ->unique()
-            ->map(fn ($id) => (int) $id)
-            ->all();
+        if ($ticket->relationLoaded('documents')) {
+            $uploadedIds = $ticket->documents
+                ->pluck('document_type_id')
+                ->unique()
+                ->map(fn ($id) => (int) $id)
+                ->all();
+        } else {
+            $uploadedIds = $ticket->documents()
+                ->pluck('document_type_id')
+                ->unique()
+                ->map(fn ($id) => (int) $id)
+                ->all();
+        }
         $uploadedSet = array_fill_keys($uploadedIds, true);
 
         $checklist = [];
@@ -377,6 +388,26 @@ class TicketWorkflowService
             'received_names' => $receivedNames,
             'checklist' => $checklist,
         ];
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, ServiceRequisitionDocument>
+     */
+    protected function documentMatrixFor(int $serviceId, int $requisitionId)
+    {
+        $key = $serviceId.':'.$requisitionId;
+        if (isset(static::$documentMatrixCache[$key])) {
+            return static::$documentMatrixCache[$key];
+        }
+
+        return static::$documentMatrixCache[$key] = ServiceRequisitionDocument::query()
+            ->with('documentType')
+            ->where('service_id', $serviceId)
+            ->where('requisition_id', $requisitionId)
+            ->whereHas('documentType', fn ($q) => $q->where('is_active', true))
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
     }
 
     public function assertRequiredDocumentsUploaded(Ticket $ticket): void
@@ -660,15 +691,11 @@ class TicketWorkflowService
     /** @return \Illuminate\Support\Collection<int, ServiceRequisitionDocument> */
     protected function hardRequiredDocumentRows(int $serviceId, int $requisitionId)
     {
-        return ServiceRequisitionDocument::query()
-            ->with('documentType')
-            ->where('service_id', $serviceId)
-            ->where('requisition_id', $requisitionId)
-            ->where('is_required', true)
-            ->whereHas('documentType', fn ($q) => $q->where('is_active', true))
-            ->get()
+        return $this->documentMatrixFor($serviceId, $requisitionId)
             ->filter(function (ServiceRequisitionDocument $row) {
-                return $row->documentType && ! $this->isSoftOptionalDocumentType($row->documentType);
+                return $row->is_required
+                    && $row->documentType
+                    && ! $this->isSoftOptionalDocumentType($row->documentType);
             })
             ->values();
     }

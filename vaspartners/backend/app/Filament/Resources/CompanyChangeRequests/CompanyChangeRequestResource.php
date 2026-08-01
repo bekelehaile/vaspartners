@@ -43,10 +43,14 @@ class CompanyChangeRequestResource extends Resource
 
     public static function getNavigationBadge(): ?string
     {
-        $count = CompanyChangeRequest::query()
-            ->where('status', CompanyChangeStatus::Pending)
-            ->where('type', CompanyChangeType::TransferOwnership)
-            ->count();
+        $count = (int) cache()->remember(
+            'nav:company_change_requests:pending_ownership',
+            now()->addSeconds(60),
+            fn (): int => CompanyChangeRequest::query()
+                ->where('status', CompanyChangeStatus::Pending)
+                ->where('type', CompanyChangeType::TransferOwnership)
+                ->count(),
+        );
 
         return $count > 0 ? (string) $count : null;
     }
