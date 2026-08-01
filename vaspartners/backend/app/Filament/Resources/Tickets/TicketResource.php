@@ -806,6 +806,63 @@ class TicketResource extends Resource
                             }
                         })
                         ->deselectRecordsAfterCompletion(),
+                    BulkAction::make('reject')
+                        ->label('Reject')
+                        ->icon('heroicon-o-x-circle')
+                        ->color('danger')
+                        ->visible(fn (): bool => (bool) auth()->user()?->canRejectTicket())
+                        ->form([
+                            Textarea::make('note')
+                                ->label('Reason')
+                                ->required()
+                                ->minLength(3)
+                                ->helperText('Visible to partners in the portal and SMS.'),
+                        ])
+                        ->requiresConfirmation()
+                        ->modalHeading('Reject selected requests')
+                        ->modalDescription('Only open or in-progress requests will be rejected. Partners will see the reason.')
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (Collection $records, array $data, TicketWorkflowService $workflow): void {
+                            $actor = auth()->user();
+                            $reason = (string) ($data['note'] ?? '');
+                            $rejected = 0;
+                            $skipped = 0;
+
+                            foreach ($records as $ticket) {
+                                if (! $ticket instanceof Ticket) {
+                                    $skipped++;
+
+                                    continue;
+                                }
+
+                                if (! in_array($ticket->status, [TicketStatus::Open, TicketStatus::InProgress], true)) {
+                                    $skipped++;
+
+                                    continue;
+                                }
+
+                                try {
+                                    $workflow->rejectByDispatcher($ticket, $actor, $reason);
+                                    $rejected++;
+                                } catch (Throwable) {
+                                    $skipped++;
+                                }
+                            }
+
+                            if ($rejected > 0) {
+                                Notification::make()
+                                    ->title("Rejected {$rejected} request(s)")
+                                    ->body($skipped > 0 ? "{$skipped} skipped." : null)
+                                    ->success()
+                                    ->send();
+                            } else {
+                                Notification::make()
+                                    ->title('No requests rejected')
+                                    ->body('Only open or in-progress requests can be rejected.')
+                                    ->warning()
+                                    ->send();
+                            }
+                        }),
                     DeleteBulkAction::make()
                         ->label('Delete pending')
                         ->authorizeIndividualRecords('delete')
