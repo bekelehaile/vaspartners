@@ -231,6 +231,20 @@ class Company extends Model
     }
 
     /**
+     * Whether OTP phone matches ERCA registry phone (both present and equal).
+     */
+    public function phonesMatch(): ?bool
+    {
+        $otp = $this->otpPhone();
+        $erca = $this->ercaPhone();
+        if ($otp === null || $otp === '' || $erca === null || $erca === '') {
+            return null;
+        }
+
+        return $otp === $erca;
+    }
+
+    /**
      * Revenue collection & bulk SMS destination.
      * Same as OTP phone unless revenue_phone was explicitly updated (e.g. by request).
      */

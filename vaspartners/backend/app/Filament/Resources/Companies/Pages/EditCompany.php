@@ -22,6 +22,13 @@ class EditCompany extends EditRecord
         ];
     }
 
+    public static function canAccess(array $parameters = []): bool
+    {
+        $record = $parameters['record'] ?? null;
+
+        return CompanyResource::canEdit($record);
+    }
+
     protected function beforeSave(): void
     {
         /** @var \App\Models\Company $company */

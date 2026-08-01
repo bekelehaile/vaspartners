@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Services\CompanyPurgeService;
 use App\Services\SmsService;
 use Filament\Actions\Action;
+use Filament\Actions\EditAction;
 use Filament\Forms\Components\Textarea;
 use Filament\Resources\Pages\ViewRecord;
 
@@ -17,12 +18,14 @@ class ViewCompany extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            EditAction::make()
+                ->visible(fn (): bool => CompanyResource::canEdit($this->getRecord())),
             Action::make('send_sms')
                 ->label('Send SMS')
                 ->icon('heroicon-o-chat-bubble-left-ellipsis')
                 ->color('primary')
                 ->visible(fn (): bool => (bool) auth()->user()?->canSendCompanySms()
-                    && filled($this->getRecord()->phone))
+                    && filled($this->getRecord()->otpPhone()))
                 ->form([
                     Textarea::make('message')
                         ->label('SMS message')

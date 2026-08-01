@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Companies;
 
 use App\Enums\CompanyRole;
+use App\Filament\Resources\Companies\Pages\EditCompany;
 use App\Filament\Resources\Companies\Pages\ListCompanies;
 use App\Filament\Resources\Companies\Pages\ViewCompany;
 use App\Filament\Resources\Companies\RelationManagers\ChangeRequestsRelationManager;
@@ -19,6 +20,7 @@ use App\Support\TinNumber;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -80,40 +82,43 @@ class CompanyResource extends Resource
 
     public static function form(Schema $schema): Schema
     {
+        $superAdmin = fn (): bool => (bool) (auth()->user() && method_exists(auth()->user(), 'hasRole')
+            && auth()->user()->hasRole('super_admin'));
+
         return $schema->components([
             TextInput::make('name')
                 ->required()
                 ->maxLength(255)
-                ->disabled(fn (?Company $record): bool => (bool) $record?->isErcaIdentityLocked())
-                ->dehydrated(fn (?Company $record): bool => ! (bool) $record?->isErcaIdentityLocked())
-                ->helperText(fn (?Company $record): ?string => $record?->isErcaIdentityLocked()
+                ->disabled(fn (?Company $record): bool => (bool) $record?->isErcaIdentityLocked() && ! $superAdmin())
+                ->dehydrated(fn (?Company $record): bool => ! ((bool) $record?->isErcaIdentityLocked() && ! $superAdmin()))
+                ->helperText(fn (?Company $record): ?string => $record?->isErcaIdentityLocked() && ! $superAdmin()
                     ? 'Locked after ERCA match.'
                     : null),
             TextInput::make('legal_name')
                 ->label('ERCA legal name')
-                ->disabled()
-                ->dehydrated(false),
+                ->disabled(fn (): bool => ! $superAdmin())
+                ->dehydrated(fn (): bool => $superAdmin()),
             TextInput::make('tin')
                 ->label('TIN number')
                 ->required()
                 ->unique(ignoreRecord: true)
                 ->maxLength(32)
-                ->disabled(fn (?Company $record): bool => (bool) $record?->isErcaIdentityLocked())
-                ->dehydrated(fn (?Company $record): bool => ! (bool) $record?->isErcaIdentityLocked())
+                ->disabled(fn (?Company $record): bool => (bool) $record?->isErcaIdentityLocked() && ! $superAdmin())
+                ->dehydrated(fn (?Company $record): bool => ! ((bool) $record?->isErcaIdentityLocked() && ! $superAdmin()))
                 ->dehydrateStateUsing(fn (?string $state): string => TinNumber::normalize((string) $state))
                 ->rule(fn () => function (string $attribute, mixed $value, \Closure $fail): void {
                     if (! TinNumber::isValid($value)) {
                         $fail(TinNumber::message());
                     }
                 })
-                ->helperText(fn (?Company $record): ?string => $record?->isErcaIdentityLocked()
+                ->helperText(fn (?Company $record): ?string => $record?->isErcaIdentityLocked() && ! $superAdmin()
                     ? 'Locked after ERCA match.'
                     : 'Exactly 10 digits. Unique — never duplicated.'),
             TextInput::make('otp_phone')
                 ->label('OTP phone')
                 ->tel()
                 ->maxLength(32)
-                ->helperText('Partner portal sign-in / auto-claim. Last 9 digits. Revenue phone stays the same unless updated by request.')
+                ->helperText('Partner portal sign-in / auto-claim. Last 9 digits. Revenue phone stays the same unless updated separately.')
                 ->dehydrateStateUsing(fn (?string $state): ?string => \App\Support\PhoneNumber::normalizeNullable($state)),
             TextInput::make('erca_phone')
                 ->label('ERCA phone')
@@ -125,7 +130,7 @@ class CompanyResource extends Resource
                 ->label('Revenue phone')
                 ->tel()
                 ->maxLength(32)
-                ->helperText('Same as OTP phone for now. Change only via an approved request.')
+                ->helperText('Same as OTP phone by default. Super admin may set a different revenue SMS number.')
                 ->dehydrateStateUsing(fn (?string $state): ?string => \App\Support\PhoneNumber::normalizeNullable($state)),
             TextInput::make('email')
                 ->email()
@@ -178,6 +183,21 @@ class CompanyResource extends Resource
                         ->label('Revenue phone')
                         ->state(fn (Company $record): ?string => $record->revenuePhone())
                         ->placeholder('—'),
+                    TextEntry::make('phone_match')
+                        ->label('Phone match')
+                        ->badge()
+                        ->state(fn (Company $record): ?bool => $record->phonesMatch())
+                        ->formatStateUsing(fn (?bool $state): string => match ($state) {
+                            true => 'Yes',
+                            false => 'No',
+                            null => '—',
+                        })
+                        ->color(fn (?bool $state): string => match ($state) {
+                            true => 'success',
+                            false => 'danger',
+                            null => 'gray',
+                        })
+                        ->tooltip('OTP phone vs ERCA phone'),
                     TextEntry::make('email')->placeholder('—'),
                     TextEntry::make('address')->columnSpanFull()->placeholder('—'),
                 ])->columns(3),
@@ -407,6 +427,8 @@ class CompanyResource extends Resource
             ])
             ->recordActions([
                 ViewAction::make(),
+                EditAction::make()
+                    ->visible(fn (Company $record): bool => static::canEdit($record)),
                 Action::make('send_sms')
                     ->label('Send SMS')
                     ->icon('heroicon-o-chat-bubble-left-ellipsis')
@@ -547,6 +569,7 @@ class CompanyResource extends Resource
         return [
             'index' => ListCompanies::route('/'),
             'view' => ViewCompany::route('/{record}'),
+            'edit' => EditCompany::route('/{record}/edit'),
         ];
     }
 
@@ -558,7 +581,9 @@ class CompanyResource extends Resource
 
     public static function canEdit($record): bool
     {
-        return false;
+        $user = auth()->user();
+
+        return (bool) ($user && method_exists($user, 'hasRole') && $user->hasRole('super_admin'));
     }
 
     public static function canDelete($record): bool

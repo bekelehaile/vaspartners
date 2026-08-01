@@ -17,14 +17,15 @@ class CompanyPolicy
         return $user->can('View:Company');
     }
 
-    public function create(User $user): bool
-    {
-        return $user->can('Create:Company');
-    }
-
     public function update(User $user, Company $company): bool
     {
-        return $user->can('Update:Company');
+        return method_exists($user, 'hasRole') && $user->hasRole('super_admin');
+    }
+
+    public function create(User $user): bool
+    {
+        // Partners create companies in the portal; Filament create is disabled.
+        return false;
     }
 
     public function delete(User $user, Company $company): bool
