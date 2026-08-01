@@ -1166,10 +1166,10 @@ class ContactPortalController extends Controller
         $linkedExisting = $result['linked_existing'] ?? false;
 
         $message = match (true) {
-            $linkedExisting && $awaiting => 'Existing partner linked to this company. They still need to sign in (access applies only if enabled).',
-            $linkedExisting => 'Existing partner linked to this company as an additional membership. They can switch companies in the portal.',
-            $awaiting => 'Member added. They will sync when they sign in with this phone number (only if access stays enabled).',
-            default => 'Member added to this company.',
+            $linkedExisting && $awaiting => 'Existing partner linked and activated. An SMS was sent. They can sign in with this mobile number.',
+            $linkedExisting => 'Existing partner linked as an active member. An SMS was sent. They can switch companies in the portal.',
+            $awaiting => 'Member added and activated. An SMS was sent. They can sign in with this mobile number.',
+            default => 'Member added and activated. An SMS notification was sent.',
         };
 
         return response()->json([

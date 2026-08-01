@@ -166,13 +166,12 @@ function AddMemberForm({
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [isActive, setIsActive] = useState(true);
 
   if (!open) {
     return (
       <div className="data-table-toolbar">
         <p className="muted" style={{ margin: 0 }}>
-          Add partners by phone. One person can belong to many companies.
+          Add partners by phone. They are activated immediately and notified by SMS.
         </p>
         <button
           type="button"
@@ -191,10 +190,9 @@ function AddMemberForm({
       <div className="company-add-member">
         <h3 style={{ marginTop: 0 }}>Add member</h3>
         <p className="muted">
-          Create a member with their phone number. Phone and email identify one partner
-          globally; the same person can belong to multiple companies. If this phone already
-          exists, they are linked here as another membership. When they sign in with Fayda,
-          identity syncs; disabled access keeps them out of this company until you enable them.
+          Add a member with their mobile number. Access is enabled automatically and they
+          receive an SMS. They sign in with that number — no invite code. The same person can
+          belong to multiple companies. You can disable access later if needed.
         </p>
         <div className="field">
           <label htmlFor="add-member-name">
@@ -210,13 +208,13 @@ function AddMemberForm({
         </div>
         <div className="field">
           <label htmlFor="add-member-phone">
-            Phone (Fayda) <span aria-hidden="true">*</span>
+            Mobile number <span aria-hidden="true">*</span>
           </label>
           <input
             id="add-member-phone"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            placeholder="09xxxxxxxx"
+            placeholder="Enter mobile number"
             required
             disabled={create.isPending}
           />
@@ -231,15 +229,6 @@ function AddMemberForm({
             disabled={create.isPending}
           />
         </div>
-        <label className="company-add-member-active">
-          <input
-            type="checkbox"
-            checked={isActive}
-            disabled={create.isPending}
-            onChange={(e) => setIsActive(e.target.checked)}
-          />
-          <span>Enable access now (required for Fayda sync into this company)</span>
-        </label>
         {create.isError && (
           <div className="alert">
             {create.error instanceof Error
@@ -258,19 +247,18 @@ function AddMemberForm({
                   name: name.trim(),
                   phone_number: phone.trim(),
                   email: email.trim() || undefined,
-                  is_active: isActive,
+                  is_active: true,
                 })
                 .then(() => {
                   setName("");
                   setPhone("");
                   setEmail("");
-                  setIsActive(true);
                   setOpen(false);
                   onCreated();
                 });
             }}
           >
-            {create.isPending ? "Adding…" : "Save member"}
+            {create.isPending ? "Adding…" : "Add and notify member"}
           </button>
           <button
             type="button"

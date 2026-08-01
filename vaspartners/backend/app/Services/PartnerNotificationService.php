@@ -646,6 +646,36 @@ class PartnerNotificationService
         ));
     }
 
+    /**
+     * Owner added a member — always active. Notify the member by SMS + portal inbox.
+     * No invite OTP; they sign in with their mobile number.
+     */
+    public function memberAddedToCompany(Company $company, Contact $member, Contact $owner): void
+    {
+        $portalUrl = rtrim((string) config('vas.frontend_url', ''), '/');
+        $placeholders = [
+            'contact_name' => $member->name ?: 'Partner',
+            'company_name' => $company->name ?: 'your organisation',
+            'company_tin' => $company->tin ?: '',
+            'owner_name' => $owner->name ?: 'your company owner',
+            'portal_url' => $portalUrl !== '' ? $portalUrl.'/login' : 'the VAS Partners portal',
+        ];
+
+        $smsBody = $this->render('templates', 'company_member_added', $placeholders);
+        $portalBody = $this->render('portal', 'company_member_added', $placeholders);
+
+        if (filled($member->phone_number)) {
+            $this->sms->send($member->phone_number, $smsBody);
+        }
+
+        $member->notify(new PartnerPortalNotification(
+            title: $this->titleFor('company_member_added'),
+            body: Str::limit($portalBody, 280),
+            template: 'company_member_added',
+            url: '/portal',
+        ));
+    }
+
     public function profileCompleted(Contact $contact): void
     {
         $placeholders = [

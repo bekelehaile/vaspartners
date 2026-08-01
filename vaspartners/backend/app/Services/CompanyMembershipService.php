@@ -1631,7 +1631,8 @@ class CompanyMembershipService
 
         $email = isset($data['email']) ? trim((string) $data['email']) : '';
         $email = \App\Support\EmailAddress::normalize($email !== '' ? $email : null);
-        $isActive = array_key_exists('is_active', $data) ? (bool) $data['is_active'] : true;
+        // New members are always active — owner can disable later. No invite OTP.
+        $isActive = true;
 
         if ($email) {
             $emailTaken = Contact::query()
@@ -1723,6 +1724,12 @@ class CompanyMembershipService
 
         $contact = $result['contact'];
         $linkedExisting = $result['linked_existing'];
+
+        try {
+            $this->notifications->memberAddedToCompany($company->fresh() ?? $company, $contact, $actor);
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         $row = $this->listCurrentCompanyMembers($actor)
             ->first(fn (array $m) => ($m['public_id'] ?? null) === $contact->public_id);
