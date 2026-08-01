@@ -267,7 +267,7 @@ class TicketResource extends Resource
                 'service',
             ]))
             ->columns([
-                TextColumn::make('tt_number')->label('Request number')->sortable(),
+                TextColumn::make('tt_number')->label('Request number')->sortable()->toggleable(),
                 TextColumn::make('company_name')
                     ->label('Company')
                     ->placeholder('—')
@@ -277,7 +277,7 @@ class TicketResource extends Resource
                         ?? $record->contact?->company_name),
                 TextColumn::make('contact.name')->label('Contact')->toggleable(),
                 TextColumn::make('contact.phone_number')->label('Phone')->toggleable(),
-                TextColumn::make('service.name')->sortable(),
+                TextColumn::make('service.name')->sortable()->toggleable(),
                 TextColumn::make('subscription.status')
                     ->label('Subscription')
                     ->badge()
@@ -319,6 +319,7 @@ class TicketResource extends Resource
                 TextColumn::make('category.name')->label('Group')->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('requisition.name')->label('Request type')->toggleable(),
                 TextColumn::make('status')->badge()
+                    ->toggleable()
                     ->formatStateUsing(fn ($state) => $state instanceof TicketStatus
                         ? $state->label()
                         : (TicketStatus::tryFrom((string) $state)?->label() ?? (string) $state))
@@ -329,6 +330,7 @@ class TicketResource extends Resource
                 TextColumn::make('attachments')
                     ->label('Attachments')
                     ->badge()
+                    ->toggleable()
                     ->state(fn (Ticket $record): string => $record->attachmentStatus()['label'])
                     ->color(fn (Ticket $record): string => match ($record->attachmentStatus()['state']) {
                         'complete' => 'success',
@@ -349,9 +351,9 @@ class TicketResource extends Resource
                     ->toggleable()
                     ->formatStateUsing(fn (Ticket $record): string => $record->documentReviewLabel())
                     ->color(fn (Ticket $record): string => $record->documentReviewColor()),
-                TextColumn::make('assignee.name')->label('AM'),
-                TextColumn::make('currentApprover.name')->label('Approver'),
-                TextColumn::make('created_at')->dateTime()->sortable(),
+                TextColumn::make('assignee.name')->label('AM')->toggleable(),
+                TextColumn::make('currentApprover.name')->label('Approver')->toggleable(),
+                TextColumn::make('created_at')->dateTime()->sortable()->toggleable(),
             ])
             ->defaultSort('created_at', 'desc')
             ->searchable()
