@@ -75,9 +75,9 @@ class MessagesRelationManager extends RelationManager
             ])
             ->defaultSort('created_at', 'desc')
             ->recordActions([
-                Action::make('download')
-                    ->label('Download PDF')
-                    ->icon('heroicon-o-arrow-down-tray')
+                Action::make('open')
+                    ->label('Open')
+                    ->icon('heroicon-o-arrow-top-right-on-square')
                     ->url(
                         fn (TicketComment $record): string => route('filament.admin.ticket-comments.attachment', $record),
                         shouldOpenInNewTab: true,

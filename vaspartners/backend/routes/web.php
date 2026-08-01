@@ -15,6 +15,6 @@ Route::middleware(['web', 'auth'])
             ->name('filament.admin.ticket-documents.open');
         Route::get('ticket-documents/{document}/download', [TicketDocumentController::class, 'download'])
             ->name('filament.admin.ticket-documents.download');
-        Route::get('ticket-comments/{comment}/attachment', [TicketCommentAttachmentController::class, 'download'])
+        Route::get('ticket-comments/{comment}/attachment', [TicketCommentAttachmentController::class, 'open'])
             ->name('filament.admin.ticket-comments.attachment');
     });

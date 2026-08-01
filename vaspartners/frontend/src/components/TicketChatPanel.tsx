@@ -22,6 +22,29 @@ function formatBytes(bytes?: number | null): string {
   return `${(bytes / 1024).toFixed(1)} KB`;
 }
 
+const LONG_MESSAGE_CHARS = 280;
+
+function ChatMessageBody({ body }: { body: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const long = body.length > LONG_MESSAGE_CHARS;
+  const shown = !long || expanded ? body : `${body.slice(0, LONG_MESSAGE_CHARS).trimEnd()}…`;
+
+  return (
+    <div className="chat-body">
+      <p>{shown}</p>
+      {long && (
+        <button
+          type="button"
+          className="chat-expand"
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? "Show less" : "View full message"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 async function downloadAttachment(message: TicketMessage) {
   if (!message.attachment_url) return;
   const token = getToken();
@@ -178,7 +201,7 @@ export function TicketChatPanel({
                   <strong>{m.author_label}</strong>
                   {m.created_at && <span>{new Date(m.created_at).toLocaleString()}</span>}
                 </div>
-                {m.body && <p>{m.body}</p>}
+                {m.body && <ChatMessageBody body={m.body} />}
                 {m.has_attachment && (
                   <button
                     type="button"

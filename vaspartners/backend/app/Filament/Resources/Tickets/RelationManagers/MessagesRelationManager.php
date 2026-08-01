@@ -110,7 +110,7 @@ class MessagesRelationManager extends RelationManager
                         ? 'Open View for the full message'
                         : null),
                 IconColumn::make('has_pdf')
-                    ->label('PDF')
+                    ->label('Attachment')
                     ->boolean()
                     ->getStateUsing(fn (TicketComment $record): bool => $record->hasAttachment()),
                 TextColumn::make('created_at')
@@ -177,9 +177,9 @@ class MessagesRelationManager extends RelationManager
                         'body' => (string) $record->body,
                     ])
                     ->visible(fn (TicketComment $record): bool => filled($record->body)),
-                Action::make('download')
-                    ->label('Download PDF')
-                    ->icon('heroicon-o-arrow-down-tray')
+                Action::make('open')
+                    ->label('Open')
+                    ->icon('heroicon-o-arrow-top-right-on-square')
                     ->url(
                         fn (TicketComment $record): string => route('filament.admin.ticket-comments.attachment', $record),
                         shouldOpenInNewTab: true,

@@ -5047,7 +5047,35 @@ button.bg-primary:hover {
 .chat-bubble p {
   margin: 0.35rem 0 0;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   color: var(--et-ink);
+}
+
+.chat-body {
+  margin-top: 0.35rem;
+}
+
+.chat-body p {
+  margin: 0;
+}
+
+.chat-expand {
+  margin-top: 0.4rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--et-teal, #0b6e4f);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.chat-expand:hover {
+  opacity: 0.85;
 }
 
 .chat-bubble-mine {
