@@ -46,7 +46,7 @@ export function LoginPageView() {
 
   const title = useMemo(() => {
     if (otpOn && faydaOn) return "Sign in to VAS Partners";
-    if (otpOn) return "Sign in with phone";
+    if (otpOn) return "Sign in";
     return "VAS Partners";
   }, [otpOn, faydaOn]);
 
@@ -55,7 +55,7 @@ export function LoginPageView() {
       return "Access the Ethio telecom partner portal for Value Added Services.";
     }
     if (otpOn) {
-      return "Enter your mobile number to receive a one-time verification code.";
+      return "Enter your registered mobile number to continue.";
     }
     return "Secure partner access for Value Added Services. Sign in with your Fayda National ID.";
   }, [otpOn, faydaOn]);
@@ -150,6 +150,17 @@ export function LoginPageView() {
     e.preventDefault();
     setError(null);
     setInfo(null);
+    const digits = phone.replace(/\D/g, "");
+    const national =
+      digits.startsWith("251") && digits.length >= 12
+        ? digits.slice(-9)
+        : digits.startsWith("0") && digits.length === 10
+          ? digits.slice(1)
+          : digits;
+    if (!/^9\d{8}$/.test(national)) {
+      setError("Enter a valid mobile number.");
+      return;
+    }
     setBusy(true);
     try {
       const res = await requestPortalOtp(phone);

@@ -60,8 +60,8 @@ class PortalPhoneOtpService
         $this->assertEnabled();
 
         $phone = PhoneNumber::normalize($rawPhone);
-        if (! PhoneNumber::isValidLocalMobile($phone)) {
-            throw new RuntimeException('Enter a valid Ethio telecom mobile number.');
+        if (! PhoneNumber::isValidEthioTelecomMobile($phone)) {
+            throw new RuntimeException('Enter a valid mobile number.');
         }
 
         $existing = Contact::query()->where('phone_number', $phone)->first();
@@ -119,8 +119,8 @@ class PortalPhoneOtpService
         $this->assertEnabled();
 
         $phone = PhoneNumber::normalize($rawPhone);
-        if (! PhoneNumber::isValidLocalMobile($phone)) {
-            throw new RuntimeException('Enter a valid Ethio telecom mobile number.');
+        if (! PhoneNumber::isValidEthioTelecomMobile($phone)) {
+            throw new RuntimeException('Enter a valid mobile number.');
         }
 
         $code = trim($code);

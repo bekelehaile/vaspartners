@@ -30,6 +30,16 @@ class PhoneNumberTest extends TestCase
         ];
     }
 
+    public function test_portal_otp_accepts_09_only(): void
+    {
+        $this->assertTrue(PhoneNumber::isValidEthioTelecomMobile('0912345678'));
+        $this->assertTrue(PhoneNumber::isValidEthioTelecomMobile('+251912345678'));
+        $this->assertFalse(PhoneNumber::isValidEthioTelecomMobile('0712345678'));
+        $this->assertFalse(PhoneNumber::isValidEthioTelecomMobile('+251712345678'));
+        // SMS still allows 07 locally; OTP/CRM does not.
+        $this->assertTrue(PhoneNumber::isValidLocalMobile('0712345678'));
+    }
+
     #[DataProvider('invalidNumbers')]
     public function test_rejects_non_ethiopian_or_invalid(string $input): void
     {

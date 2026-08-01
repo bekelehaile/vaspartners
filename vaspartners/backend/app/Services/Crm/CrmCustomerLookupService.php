@@ -43,7 +43,7 @@ class CrmCustomerLookupService
         }
 
         $normalized = PhoneNumber::normalize($phone);
-        if ($normalized === '' || ! PhoneNumber::isValidLocalMobile($normalized)) {
+        if ($normalized === '' || ! PhoneNumber::isValidEthioTelecomMobile($normalized)) {
             return $this->emptyResult();
         }
 

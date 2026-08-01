@@ -51,7 +51,23 @@ final class PhoneNumber
     }
 
     /**
-     * True only for Ethio telecom mobiles that can be sent as +251 / 251…
+     * Ethio telecom mobile (09…) — portal OTP / CRM lookup.
+     * Does not accept 07… (other operators).
+     */
+    public static function isValidEthioTelecomMobile(mixed $phone): bool
+    {
+        if (! self::hasEthiopiaCountryOrNationalForm($phone)) {
+            return false;
+        }
+
+        $normalized = self::normalize($phone);
+
+        return (bool) preg_match('/^9\d{8}$/', $normalized);
+    }
+
+    /**
+     * True for Ethio SMS-capable local mobiles (09… or 07…).
+     * Prefer {@see isValidEthioTelecomMobile()} for portal OTP / CRM.
      */
     public static function isValidLocalMobile(mixed $phone): bool
     {
