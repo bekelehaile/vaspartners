@@ -186,16 +186,22 @@ class CompanyResource extends Resource
                     TextEntry::make('phone_match')
                         ->label('Phone match')
                         ->badge()
-                        ->state(fn (Company $record): ?bool => $record->phonesMatch())
-                        ->formatStateUsing(fn (?bool $state): string => match ($state) {
-                            true => 'Yes',
-                            false => 'No',
-                            null => '—',
+                        ->state(function (Company $record): string {
+                            if (! filled($record->ercaPhone())) {
+                                return 'erca_missing';
+                            }
+
+                            return $record->otpPhone() === $record->ercaPhone() ? 'yes' : 'no';
                         })
-                        ->color(fn (?bool $state): string => match ($state) {
-                            true => 'success',
-                            false => 'danger',
-                            null => 'gray',
+                        ->formatStateUsing(fn (string $state): string => match ($state) {
+                            'yes' => 'Yes',
+                            'no' => 'No',
+                            default => 'ERCA missing',
+                        })
+                        ->color(fn (string $state): string => match ($state) {
+                            'yes' => 'success',
+                            'no' => 'danger',
+                            default => 'warning',
                         })
                         ->tooltip('OTP phone vs ERCA phone'),
                     TextEntry::make('email')->placeholder('—'),

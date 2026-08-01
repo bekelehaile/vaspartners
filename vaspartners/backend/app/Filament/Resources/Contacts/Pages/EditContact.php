@@ -18,6 +18,11 @@ class EditContact extends EditRecord
         ];
     }
 
+    public static function canAccess(array $parameters = []): bool
+    {
+        return ContactResource::canEditContacts();
+    }
+
     /**
      * @param  array<string, mixed>  $data
      */

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Contacts;
 
 use App\Filament\Resources\Companies\CompanyResource;
+use App\Filament\Resources\Contacts\Pages\EditContact;
 use App\Filament\Resources\Contacts\Pages\ListContacts;
 use App\Filament\Resources\Contacts\Pages\ViewContact;
 use App\Filament\Resources\Contacts\RelationManagers\MembershipsRelationManager;
@@ -10,6 +11,7 @@ use App\Filament\Resources\Contacts\RelationManagers\ServicesRelationManager;
 use App\Filament\Resources\Contacts\RelationManagers\SubscriptionsRelationManager;
 use App\Filament\Resources\Contacts\RelationManagers\TicketsRelationManager;
 use App\Models\Contact;
+use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Textarea;
@@ -182,7 +184,14 @@ class ContactResource extends Resource
                 ToggleColumn::make('is_active')
                     ->label('Active')
                     ->onColor('success')
-                    ->offColor('gray'),
+                    ->offColor('gray')
+                    ->disabled(fn (): bool => ! static::canEditContacts())
+                    ->updateStateUsing(function (Contact $record, mixed $state): void {
+                        if (! static::canEditContacts()) {
+                            return;
+                        }
+                        $record->updateFromAdmin(['is_active' => (bool) $state]);
+                    }),
                 TextColumn::make('legacy_mvas_id')
                     ->label('Legacy ID')
                     ->placeholder('—')
@@ -283,6 +292,8 @@ class ContactResource extends Resource
             ])
             ->recordActions([
                 ViewAction::make(),
+                EditAction::make()
+                    ->visible(fn (Contact $record): bool => static::canEdit($record)),
             ])
             ->toolbarActions([]);
     }
@@ -302,6 +313,7 @@ class ContactResource extends Resource
         return [
             'index' => ListContacts::route('/'),
             'view' => ViewContact::route('/{record}'),
+            'edit' => EditContact::route('/{record}/edit'),
         ];
     }
 
@@ -315,9 +327,16 @@ class ContactResource extends Resource
         return false;
     }
 
+    public static function canEditContacts(): bool
+    {
+        $user = auth()->user();
+
+        return (bool) ($user && method_exists($user, 'hasRole') && $user->hasRole('super_admin'));
+    }
+
     public static function canEdit(Model $record): bool
     {
-        return false;
+        return static::canEditContacts();
     }
 
     public static function canDelete(Model $record): bool
