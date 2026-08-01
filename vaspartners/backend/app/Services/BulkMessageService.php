@@ -7,6 +7,7 @@ use App\Enums\BulkMessageRecipientStatus;
 use App\Jobs\ImportBulkMessageJob;
 use App\Jobs\ProcessBulkMessageJob;
 use App\Jobs\SendBulkMessageRecipientJob;
+use App\Models\AppSetting;
 use App\Models\Company;
 use App\Models\BulkMessage;
 use App\Models\BulkMessageRecipient;
@@ -482,6 +483,17 @@ class BulkMessageService
     {
         $campaign = $recipient->bulkMessage ?? $recipient->campaign;
         if (! $campaign) {
+            return;
+        }
+
+        if (! AppSetting::partnerSmsEnabled()) {
+            $recipient->forceFill([
+                'status' => BulkMessageRecipientStatus::Skipped,
+                'error' => 'Partner SMS disabled in App settings.',
+                'attempts' => $recipient->attempts + 1,
+            ])->save();
+            $this->afterRecipientUpdate($campaign);
+
             return;
         }
 

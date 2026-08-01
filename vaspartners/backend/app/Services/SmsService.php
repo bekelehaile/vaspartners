@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Jobs\SendSmsJob;
+use App\Models\AppSetting;
 use App\Support\PhoneNumber;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -13,6 +14,7 @@ use Throwable;
  * Ethio telecom SMS gateway (smsgw) — partner communications over SMS only.
  *
  * All sends require a valid Ethiopian mobile (+251 / 251…) and respect rate limits.
+ * Queued partner SMS also respects App settings → Partner SMS. OTP uses sendOtp() and is separate.
  */
 class SmsService
 {
@@ -20,6 +22,14 @@ class SmsService
     {
         if (! config('notifications.enabled', true)) {
             Log::info('SMS skipped (SMS_ENABLED=false)', [
+                'phone' => $this->normalizePhone($phone),
+            ]);
+
+            return;
+        }
+
+        if (! AppSetting::partnerSmsEnabled()) {
+            Log::info('SMS skipped (partner SMS disabled in App settings)', [
                 'phone' => $this->normalizePhone($phone),
             ]);
 

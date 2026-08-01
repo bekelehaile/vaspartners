@@ -718,7 +718,8 @@ class PartnerNotificationService
         $smsBody = $this->render('templates', $template, $placeholders);
         $portalBody = $this->render('portal', $template, $placeholders);
 
-        if (filled($note) && in_array($template, ['documents_need_attention', 'ticket_rejected'], true)) {
+        // documents_need_attention portal copy has no {note}; append when present.
+        if (filled($note) && $template === 'documents_need_attention') {
             $portalBody = rtrim($portalBody, '.').'. '.trim((string) $note);
         }
 

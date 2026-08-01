@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Models\AppSetting;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
@@ -27,6 +28,10 @@ class PartnerPortalNotification extends Notification implements ShouldQueue
     /** @return array<int, string> */
     public function via(object $notifiable): array
     {
+        if (! AppSetting::partnerInAppEnabled()) {
+            return [];
+        }
+
         return ['database'];
     }
 

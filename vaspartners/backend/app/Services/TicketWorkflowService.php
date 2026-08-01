@@ -1236,6 +1236,52 @@ class TicketWorkflowService
         });
     }
 
+    /**
+     * Dispatcher reject: management / super admin can send a request back with a mandatory
+     * reason that is always visible to the partner (portal notification + SMS + public note).
+     */
+    public function rejectByDispatcher(Ticket $ticket, User $actor, string $reason): Ticket
+    {
+        $reason = trim($reason);
+        if (mb_strlen($reason) < 3) {
+            throw ValidationException::withMessages([
+                'note' => 'A reason is required when rejecting a request.',
+            ]);
+        }
+
+        if (! $actor->canRejectAsDispatcher()) {
+            throw ValidationException::withMessages([
+                'ticket' => 'Only dispatchers can reject requests with this action.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($ticket, $actor, $reason) {
+            if (! in_array($ticket->status, [TicketStatus::Open, TicketStatus::InProgress], true)) {
+                throw ValidationException::withMessages([
+                    'ticket' => 'Only open or in-progress requests can be rejected by a dispatcher.',
+                ]);
+            }
+
+            $ticket->document_review_status = DocumentReviewStatus::Failed;
+            $ticket->current_approver_user_id = null;
+            $ticket->needs_reverification = true;
+            $ticket->save();
+
+            app(TicketCommentService::class)
+                ->postStaffDecisionNote($ticket, $actor, $reason, notifyPartner: true);
+
+            $this->transition($ticket, TicketStatus::Rejected, $actor, $reason, [
+                'event' => 'rejected',
+                'dispatcher_reject' => true,
+                'actor_user_id' => $actor->id,
+                'actor_name' => $actor->name,
+                'notify_partner' => true,
+            ]);
+
+            return $ticket->fresh(['contact', 'service', 'requisition']);
+        });
+    }
+
     public function close(Ticket $ticket, User $actor, ?string $note = null, bool $notifyPartner = false): Ticket
     {
         return DB::transaction(function () use ($ticket, $actor, $note, $notifyPartner) {

@@ -10,6 +10,7 @@ use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Actions;
@@ -61,7 +62,7 @@ class ManageAppSettings extends Page
 
     public function getSubheading(): ?string
     {
-        return 'Partner portal login and external registry outages (ERCA TIN). Admin Filament login is unchanged.';
+        return 'Partner portal login, notification channels, and external registry outages (ERCA TIN). Admin Filament login is unchanged.';
     }
 
     public function form(Schema $schema): Schema
@@ -86,6 +87,21 @@ class ManageAppSettings extends Page
                             ->rows(2)
                             ->maxLength(500)
                             ->helperText('Shown on the partner login screen (e.g. temporary Fayda outage message).'),
+                    ]),
+                Section::make('Partner notifications')
+                    ->description('Channels used for ticket, company, and membership events. Login OTP SMS is separate and always follows SMS_ENABLED.')
+                    ->schema([
+                        Toggle::make('notify_partner_sms')
+                            ->label('SMS')
+                            ->helperText('Queued partner SMS (requests, documents, company/TIN alerts, ad-hoc and bulk). Does not turn off portal login OTP.'),
+                        Toggle::make('notify_partner_in_app')
+                            ->label('In-app (portal)')
+                            ->helperText('Database notifications shown in the partner portal inbox.'),
+                        Toggle::make('notify_partner_email')
+                            ->label('Email')
+                            ->helperText('Not wired yet — toggle is saved for later; no email is sent today.')
+                            ->disabled()
+                            ->dehydrated(true),
                     ]),
                 Section::make('External endpoints')
                     ->description('When a national registry is down, put it in maintenance. TIN writes stay fail-closed (no bypass). Partners see your outage message.')
@@ -183,16 +199,38 @@ class ManageAppSettings extends Page
                 : null
         );
 
+        AppSetting::setBoolValue(
+            AppSetting::KEY_NOTIFY_PARTNER_SMS,
+            (bool) ($data['notify_partner_sms'] ?? true),
+        );
+        AppSetting::setBoolValue(
+            AppSetting::KEY_NOTIFY_PARTNER_IN_APP,
+            (bool) ($data['notify_partner_in_app'] ?? true),
+        );
+        // Email channel is not delivered yet; keep stored preference when enabled later.
+        AppSetting::setBoolValue(
+            AppSetting::KEY_NOTIFY_PARTNER_EMAIL,
+            (bool) ($data['notify_partner_email'] ?? false),
+        );
+
         $this->form->fill([
             ...$this->formStateFromStore(),
             'test_erca_tin' => $this->data['test_erca_tin'] ?? null,
         ]);
+
+        $channels = AppSetting::partnerNotificationChannels();
+        $channelSummary = collect([
+            $channels['sms'] ? 'SMS on' : 'SMS off',
+            $channels['in_app'] ? 'In-app on' : 'In-app off',
+            $channels['email'] ? 'Email on' : 'Email off',
+        ])->implode(', ');
 
         Notification::make()
             ->title('App settings saved')
             ->body(
                 'Sign-in: '.$this->authModeLabel($mode)
                 .' · ERCA TIN: '.$this->ercaTinModeLabel($ercaMode)
+                .' · Notifications: '.$channelSummary
             )
             ->success()
             ->send();
@@ -281,6 +319,9 @@ class ManageAppSettings extends Page
         return [
             'auth_mode' => AppSetting::authMode(),
             'auth_mode_note' => AppSetting::getValue('auth_mode_note'),
+            'notify_partner_sms' => AppSetting::partnerSmsEnabled(),
+            'notify_partner_in_app' => AppSetting::partnerInAppEnabled(),
+            'notify_partner_email' => AppSetting::partnerEmailEnabled(),
             'erca_tin_mode' => AppSetting::ercaTinMode(),
             'erca_tin_outage_message' => AppSetting::getValue(AppSetting::KEY_ERCA_TIN_OUTAGE_MESSAGE),
         ];

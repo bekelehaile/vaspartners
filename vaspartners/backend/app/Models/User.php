@@ -243,6 +243,19 @@ class User extends Authenticatable implements CanResetPasswordContract, Filament
         return true;
     }
 
+    /**
+     * Dispatchers (management / super admin) may reject any open or in-progress ticket
+     * outside the approval chain, with a reason always shown to the partner.
+     */
+    public function canRejectAsDispatcher(): bool
+    {
+        if (! $this->is_active) {
+            return false;
+        }
+
+        return $this->hasRole('super_admin') || (bool) $this->is_management;
+    }
+
     /** Individual company SMS (events / ad-hoc). Super admin always allowed. */
     public function canSendCompanySms(): bool
     {

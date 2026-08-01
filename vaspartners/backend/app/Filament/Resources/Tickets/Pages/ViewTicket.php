@@ -253,6 +253,28 @@ class ViewTicket extends ViewRecord
                         (bool) ($data['notify_partner'] ?? false),
                     );
                 }),
+            Action::make('dispatcher_reject')
+                ->label('Reject')
+                ->icon('heroicon-o-x-circle')
+                ->color('danger')
+                ->visible(fn (Ticket $record): bool => TicketResource::dispatcherMayReject($record))
+                ->modalHeading('Reject this request')
+                ->modalDescription('A reason is required. The partner will see it in the portal and by SMS.')
+                ->form([
+                    Textarea::make('note')
+                        ->label('Reason')
+                        ->required()
+                        ->minLength(3)
+                        ->helperText('Visible to the partner in the portal and included in the SMS.'),
+                ])
+                ->requiresConfirmation()
+                ->action(function (Ticket $record, array $data, TicketWorkflowService $workflow) {
+                    $workflow->rejectByDispatcher(
+                        $record,
+                        auth()->user(),
+                        (string) ($data['note'] ?? ''),
+                    );
+                }),
             Action::make('close')
                 ->label('Close')
                 ->visible(fn (Ticket $record) => $record->status === TicketStatus::Completed

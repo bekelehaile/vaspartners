@@ -675,6 +675,28 @@ class TicketResource extends Resource
                             $data['note'] ?? null,
                         );
                     }),
+                Action::make('dispatcher_reject')
+                    ->label('Reject')
+                    ->icon('heroicon-o-x-circle')
+                    ->color('danger')
+                    ->visible(fn (Ticket $record): bool => static::dispatcherMayReject($record))
+                    ->modalHeading('Reject this request')
+                    ->modalDescription('A reason is required. The partner will see it in the portal and by SMS.')
+                    ->form([
+                        Textarea::make('note')
+                            ->label('Reason')
+                            ->required()
+                            ->minLength(3)
+                            ->helperText('Visible to the partner in the portal and included in the SMS.'),
+                    ])
+                    ->requiresConfirmation()
+                    ->action(function (Ticket $record, array $data, TicketWorkflowService $workflow) {
+                        $workflow->rejectByDispatcher(
+                            $record,
+                            auth()->user(),
+                            (string) ($data['note'] ?? ''),
+                        );
+                    }),
                 Action::make('close')
                     ->label('Close')
                     ->visible(fn (Ticket $record) => $record->status === TicketStatus::Completed
@@ -807,6 +829,29 @@ class TicketResource extends Resource
         }
 
         return $user->canHandleCompanyServices($record->serviceCompany());
+    }
+
+    /**
+     * Dispatcher Reject on open/in-progress tickets when the user is not already
+     * the current approver (that path uses the approval-chain Reject action).
+     */
+    public static function dispatcherMayReject(Ticket $record): bool
+    {
+        $user = auth()->user();
+        if (! $user?->canRejectAsDispatcher()) {
+            return false;
+        }
+
+        if (! in_array($record->status, [TicketStatus::Open, TicketStatus::InProgress], true)) {
+            return false;
+        }
+
+        // Avoid two Reject buttons when this user is the current approver.
+        if ($record->current_approver_user_id === $user->id) {
+            return false;
+        }
+
+        return true;
     }
 
     public static function ticketSmsPhone(Ticket $ticket): ?string

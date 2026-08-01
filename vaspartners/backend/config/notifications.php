@@ -218,7 +218,7 @@ SMS,
 
         'ticket_completed' => 'Request number {tt_number} for {service} has been approved and completed.',
 
-        'ticket_rejected' => 'Request number {tt_number} for {service} was not approved. Please review the request in the portal.',
+        'ticket_rejected' => 'Request number {tt_number} for {service} was not approved. {note} Please review the request in the portal.',
 
         'documents_incomplete_auto' => 'Automated document check: required files are missing on request number {tt_number} ({service}). Upload all required documents and resubmit.',
 

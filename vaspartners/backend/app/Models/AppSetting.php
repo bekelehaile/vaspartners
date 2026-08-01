@@ -27,6 +27,15 @@ class AppSetting extends Model
 
     public const DEFAULT_ERCA_TIN_OUTAGE_MESSAGE = 'TIN number verification is temporarily unavailable. Please try again shortly.';
 
+    /** Partner / event SMS (tickets, company, bulk). Does not control login OTP. */
+    public const KEY_NOTIFY_PARTNER_SMS = 'notify_partner_sms';
+
+    /** Partner portal database (in-app) notifications. */
+    public const KEY_NOTIFY_PARTNER_IN_APP = 'notify_partner_in_app';
+
+    /** Partner email — reserved; delivery not wired yet. */
+    public const KEY_NOTIFY_PARTNER_EMAIL = 'notify_partner_email';
+
     protected $fillable = [
         'key',
         'value',
@@ -125,6 +134,53 @@ class AppSetting extends Model
             'mode' => static::ercaTinMode(),
             'available' => ! $maintenance,
             'message' => $maintenance ? static::ercaTinOutageMessage() : null,
+        ];
+    }
+
+    /**
+     * Stored as "1" / "0". Missing key = enabled (safe default for production).
+     */
+    public static function boolValue(string $key, bool $default = true): bool
+    {
+        $raw = static::getValue($key);
+        if ($raw === null || $raw === '') {
+            return $default;
+        }
+
+        return in_array(strtolower(trim((string) $raw)), ['1', 'true', 'yes', 'on'], true);
+    }
+
+    public static function setBoolValue(string $key, bool $value): void
+    {
+        static::setValue($key, $value ? '1' : '0');
+    }
+
+    /** Queued / ad-hoc partner SMS (not portal login OTP). */
+    public static function partnerSmsEnabled(): bool
+    {
+        return static::boolValue(self::KEY_NOTIFY_PARTNER_SMS, true);
+    }
+
+    public static function partnerInAppEnabled(): bool
+    {
+        return static::boolValue(self::KEY_NOTIFY_PARTNER_IN_APP, true);
+    }
+
+    /** Reserved for future mail delivery. */
+    public static function partnerEmailEnabled(): bool
+    {
+        return static::boolValue(self::KEY_NOTIFY_PARTNER_EMAIL, false);
+    }
+
+    /**
+     * @return array{sms: bool, in_app: bool, email: bool}
+     */
+    public static function partnerNotificationChannels(): array
+    {
+        return [
+            'sms' => static::partnerSmsEnabled(),
+            'in_app' => static::partnerInAppEnabled(),
+            'email' => static::partnerEmailEnabled(),
         ];
     }
 }

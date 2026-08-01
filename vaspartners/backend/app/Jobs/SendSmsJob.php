@@ -2,10 +2,12 @@
 
 namespace App\Jobs;
 
+use App\Models\AppSetting;
 use App\Services\SmsService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\Middleware\RateLimited;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 class SendSmsJob implements ShouldQueue
@@ -36,6 +38,14 @@ class SendSmsJob implements ShouldQueue
 
     public function handle(SmsService $sms): void
     {
+        if (! AppSetting::partnerSmsEnabled()) {
+            Log::info('SendSmsJob skipped (partner SMS disabled in App settings)', [
+                'phone' => $this->phone,
+            ]);
+
+            return;
+        }
+
         if (! $sms->ensurePhoneIsLocal($this->phone)) {
             // Do not retry non-Ethiopian / invalid numbers.
             return;
