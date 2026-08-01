@@ -49,14 +49,22 @@ class SmsService
             ->onQueue($queueName);
     }
 
-    /** Portal / admin OTP — dedicated sms-otp queue so bulk campaigns cannot delay codes. */
+    /**
+     * Portal / admin OTP — send immediately and wait for gateway acceptance.
+     * Do not queue: the API must not report “sent” until the gateway accepts the SMS.
+     * (Carrier handset delivery still cannot be guaranteed.)
+     *
+     * @throws \RuntimeException when SMS is disabled, invalid, rate-limited, or the gateway rejects
+     */
     public function sendOtp(string|int $phone, string $message): void
     {
-        $this->send(
-            $phone,
-            $message,
-            (string) config('notifications.sms_queues.otp', 'sms-otp'),
-        );
+        if (! config('notifications.enabled', true)) {
+            throw new \RuntimeException('Unable to send verification code right now. Please try again.');
+        }
+
+        if (! $this->sendNow($phone, $message)) {
+            throw new \RuntimeException('Unable to send verification code. Please try again.');
+        }
     }
 
     /**

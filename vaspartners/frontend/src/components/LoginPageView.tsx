@@ -45,19 +45,18 @@ export function LoginPageView() {
   const [info, setInfo] = useState<string | null>(null);
 
   const title = useMemo(() => {
-    if (otpOn && faydaOn) return "Sign in to VAS Partners";
-    if (otpOn) return "Sign in";
+    if (otpOn || faydaOn) return "Sign in";
     return "VAS Partners";
   }, [otpOn, faydaOn]);
 
   const subtitle = useMemo(() => {
     if (otpOn && faydaOn) {
-      return "Access the Ethio telecom partner portal for Value Added Services.";
+      return "Enter your registered mobile number, or continue with Fayda.";
     }
     if (otpOn) {
       return "Enter your registered mobile number to continue.";
     }
-    return "Secure partner access for Value Added Services. Sign in with your Fayda National ID.";
+    return "Continue with your Fayda National ID.";
   }, [otpOn, faydaOn]);
 
   const faydaOnly = faydaOn && !otpOn;
@@ -271,7 +270,7 @@ export function LoginPageView() {
                   type="tel"
                   inputMode="tel"
                   autoComplete="tel"
-                  placeholder="09xxxxxxxx"
+                  placeholder="Enter mobile number"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   required
@@ -371,7 +370,7 @@ export function LoginPageView() {
                 className={faydaOnly ? "btn-hero login-fayda-cta" : "btn-secondary login-fayda"}
                 href={faydaLoginUrl()}
               >
-                {faydaOnly ? "Continue with Fayda" : "Sign in with Fayda"}
+                Continue with Fayda
               </a>
               {faydaOnly ? (
                 <ul className="login-trust">

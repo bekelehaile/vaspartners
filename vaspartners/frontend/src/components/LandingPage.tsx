@@ -20,11 +20,7 @@ function LandingInner() {
   const { data: authConfig } = useAuthConfig();
   const loginHref = portalLoginHref(authConfig);
   const loginExternal = loginHref.startsWith("http");
-  const signInLabel = authConfig?.phone_otp_enabled
-    ? authConfig.fayda_enabled
-      ? "Sign in with phone or Fayda"
-      : "Sign in with phone"
-    : "Sign in with Fayda";
+  const signInLabel = "Sign in";
 
   return (
     <SiteShell me={me} onLogout={() => void logout()} landing>
@@ -43,7 +39,7 @@ function LandingInner() {
                   ? "Your company has been deactivated. Portal sign-in is disabled. Contact Ethio telecom."
                   : authError === "inactive" || authError === "banned"
                     ? "This account is not allowed to sign in."
-                    : `Sign-in failed (${authError}). Please try again${authConfig?.phone_otp_enabled ? " or use phone OTP" : ""}.`}
+                    : `Sign-in failed (${authError}). Please try again.`}
               </p>
             )}
             <div className="hero-actions">
@@ -97,10 +93,10 @@ function LandingInner() {
               <span className="process-step-num" aria-hidden>
                 01
               </span>
-              <h3>{signInLabel.replace(/^Sign in with /, "Sign in — ")}</h3>
+              <h3>{signInLabel}</h3>
               <p>
                 {authConfig?.phone_otp_enabled
-                  ? "Verify with SMS code (or Fayda when available) and open your partner account."
+                  ? "Verify your identity and open your partner account."
                   : "Verify your identity with National ID and open your partner account."}
               </p>
             </li>
