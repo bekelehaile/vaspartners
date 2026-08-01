@@ -85,7 +85,6 @@ echo "VAS Partners up (${VERSION})."
 echo "  Portal:  https://vaspartnersportal.ethiotelecom.et"
 echo "  Admin:   https://vaspartnersportal.ethiotelecom.et/admin"
 echo "  API:     https://vaspartnersportal.ethiotelecom.et/api/v1"
-echo "  Legacy:  https://vaspartnersportal.ethiotelecom.et:8443 (optional)"
 echo
 echo "  Host nginx :443 → 127.0.0.1:30011 → vaspartners-nginx"
 echo "  Logs:    docker compose -f compose.staging.yml logs -f"

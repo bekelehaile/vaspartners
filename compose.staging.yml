@@ -1,7 +1,6 @@
 # VAS Partners stack under parent /data-disk/applications/vaspartners
 #
 #   Public: host nginx :443 → 127.0.0.1:30011 → vaspartners-nginx :80
-#   Direct: host :8443 → vaspartners-nginx :443 (optional / legacy bookmarks)
 #
 # Ship:  ./deploy-staging.sh
 # Access:
@@ -259,10 +258,8 @@ services:
     container_name: vaspartners-nginx
     restart: unless-stopped
     ports:
-      # Host nginx (:443) proxies here — same upstream the old portal used
+      # Host nginx (:443) proxies here — public access only via :443
       - "127.0.0.1:30011:80"
-      # Optional direct TLS (legacy :8443 bookmarks)
-      - "8443:443"
     volumes:
       - ./vaspartners/docker/nginx/default.staging.conf:/etc/nginx/conf.d/default.conf:ro
       - /etc/nginx/ssl/fullchain-wildcard.crt:/etc/nginx/certs/fullchain.crt:ro
