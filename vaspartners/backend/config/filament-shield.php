@@ -181,10 +181,11 @@ return [
                 'sendSms',
                 'sendSmsAny',
             ],
-            // Ticket contact SMS (individual + bulk/filtered)
+            // Ticket contact SMS + reject (dispatcher send-back)
             \App\Filament\Resources\Tickets\TicketResource::class => [
                 'sendSms',
                 'sendSmsAny',
+                'reject',
             ],
         ],
         'exclude' => [

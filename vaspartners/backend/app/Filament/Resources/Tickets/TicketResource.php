@@ -838,7 +838,7 @@ class TicketResource extends Resource
     public static function dispatcherMayReject(Ticket $record): bool
     {
         $user = auth()->user();
-        if (! $user?->canRejectAsDispatcher()) {
+        if (! $user?->can('reject', $record)) {
             return false;
         }
 

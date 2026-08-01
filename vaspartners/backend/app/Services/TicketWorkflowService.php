@@ -1249,9 +1249,9 @@ class TicketWorkflowService
             ]);
         }
 
-        if (! $actor->canRejectAsDispatcher()) {
+        if (! $actor->canRejectTicket()) {
             throw ValidationException::withMessages([
-                'ticket' => 'Only dispatchers can reject requests with this action.',
+                'ticket' => 'You do not have permission to reject this request.',
             ]);
         }
 

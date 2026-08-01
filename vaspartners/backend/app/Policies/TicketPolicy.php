@@ -103,6 +103,11 @@ class TicketPolicy
         return $user->canBulkSendTicketSms();
     }
 
+    public function reject(User $user, Ticket $ticket): bool
+    {
+        return $user->canRejectTicket();
+    }
+
     protected function isAssignedOrApprover(User $user, Ticket $ticket): bool
     {
         return (int) $ticket->assigned_to_user_id === (int) $user->id
