@@ -5327,6 +5327,12 @@ button.bg-primary:hover {
   color: var(--et-muted);
 }
 
+.login-lead-emphasis {
+  font-weight: 700;
+  color: var(--et-ink);
+  letter-spacing: -0.01em;
+}
+
 .login-card--fayda .login-lead {
   margin-left: auto;
   margin-right: auto;

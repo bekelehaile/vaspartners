@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, type ReactNode, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { FaydaIdentityPanel } from "@/components/FaydaIdentityPanel";
@@ -68,7 +68,7 @@ export function LoginPageView() {
     return "Secure partner sign-in";
   }, [step]);
 
-  const subtitle = useMemo(() => {
+  const subtitle = useMemo((): ReactNode => {
     if (step === "code") {
       return "Enter the one-time code sent to your mobile. Codes expire in five minutes.";
     }
@@ -79,7 +79,12 @@ export function LoginPageView() {
       return "We could not match a CRM profile. Enter your legal full name to continue.";
     }
     if (otpOn) {
-      return "Verify your mobile, confirm your company TIN, then confirm your identity.";
+      return (
+        <>
+          Verify your mobile, confirm your company TIN, then confirm your identity{" "}
+          <strong className="login-lead-emphasis">if this is your first time</strong>.
+        </>
+      );
     }
     return "Continue with your Fayda National ID.";
   }, [otpOn, step]);
