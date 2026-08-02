@@ -205,7 +205,7 @@
       "legacy_category_id": 18,
       "name": "Public Ip",
       "slug": "public-ip",
-      "description": "Public Iprn is an IP address that is used to access the Internet. Public IP addresses can be routed on the Internet, unlike private addresses. rn Legal requirement to get Public Ip rn1) Request letter",
+      "description": "Public IP\nis an IP address that is used to access the Internet. Public IP addresses can be routed on the Internet, unlike private addresses.\nLegal requirement to get Public Ip\n1) Request letter",
       "is_active": true,
       "type": "Digital and VAS Service",
       "sort_order": 19
@@ -215,7 +215,7 @@
       "legacy_category_id": 18,
       "name": "White List",
       "slug": "white-list",
-      "description": "White Listrnis the list of partners MSISDN that have successfully registered on ethio telecom network for the given servicernLegal Requirementrn1) Request letter",
+      "description": "White List\nis the list of partners MSISDN that have successfully registered on ethio telecom network for the given service\nLegal Requirement\n1) Request letter",
       "is_active": true,
       "type": "Digital and VAS Service",
       "sort_order": 20
