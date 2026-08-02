@@ -2445,6 +2445,51 @@ textarea {
   line-height: 1.6;
 }
 
+.service-detail-layout--stack {
+  display: block;
+  max-width: 48rem;
+}
+
+.service-detail-visual--after {
+  margin: 0 0 1.75rem;
+  border-radius: 1rem;
+  overflow: hidden;
+  background: #f3f4f6;
+}
+
+.service-detail-visual--after img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 22rem;
+  object-fit: cover;
+}
+
+.service-rich-text {
+  color: #374151;
+  line-height: 1.65;
+}
+
+.service-rich-text p {
+  margin: 0 0 0.75rem;
+}
+
+.service-rich-text ul,
+.service-rich-text ol {
+  margin: 0 0 0.85rem;
+  padding-left: 1.25rem;
+}
+
+.service-rich-text a {
+  color: var(--et-green, #00843d);
+  text-decoration: underline;
+}
+
+.service-rich-text strong {
+  font-weight: 650;
+  color: #111827;
+}
+
 .service-detail-actions {
   display: flex;
   flex-wrap: wrap;

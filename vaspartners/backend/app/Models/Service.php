@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
 
 class Service extends Model
 {
@@ -20,6 +21,7 @@ class Service extends Model
         'name',
         'slug',
         'description',
+        'image',
         'type',
         'is_active',
         'is_subscription_based',
@@ -27,6 +29,10 @@ class Service extends Model
         'renewal_lead_days',
         'renewal_requisition_id',
         'sort_order',
+    ];
+
+    protected $appends = [
+        'image_url',
     ];
 
     protected $attributes = [
@@ -44,6 +50,15 @@ class Service extends Model
             'is_subscription_based' => 'boolean',
             'renewal_interval' => RenewalInterval::class,
         ];
+    }
+
+    public function getImageUrlAttribute(): ?string
+    {
+        if (! filled($this->image)) {
+            return null;
+        }
+
+        return Storage::disk('public')->url($this->image);
     }
 
     public function category(): BelongsTo

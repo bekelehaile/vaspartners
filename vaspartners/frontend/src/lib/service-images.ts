@@ -1,4 +1,4 @@
-/** Map catalog slugs → assets from the legacy mvasportal `/public/img` set. */
+/** Catalog service media + description helpers for the public website. */
 
 const BY_SLUG: Record<string, string> = {
   "sms-premium": "/img/sms_premium.svg",
@@ -26,7 +26,7 @@ const BY_SLUG: Record<string, string> = {
   startup: "/img/services.svg",
 };
 
-/** Homepage feature order (matches legacy portal emphasis). */
+/** Homepage feature order fallback when sort_order ties. */
 export const LANDING_SERVICE_ORDER: string[] = [
   "sms-premium",
   "sms-non-premium",
@@ -49,18 +49,38 @@ export const LANDING_SERVICE_ORDER: string[] = [
 
 const HIDDEN_ON_LANDING = new Set(["startup", "merchant-acoount"]);
 
-export function serviceImageUrl(slug: string | null | undefined): string {
+type ServiceMedia = {
+  slug?: string | null;
+  image_url?: string | null;
+};
+
+/** Prefer admin-uploaded image; fall back to legacy slug artwork. */
+export function serviceImageUrl(service: ServiceMedia | string | null | undefined): string {
+  if (service && typeof service === "object") {
+    if (service.image_url?.trim()) {
+      return service.image_url.trim();
+    }
+    return legacySlugImage(service.slug);
+  }
+
+  return legacySlugImage(typeof service === "string" ? service : null);
+}
+
+function legacySlugImage(slug: string | null | undefined): string {
   if (!slug) return "/img/services.svg";
   return BY_SLUG[slug] ?? "/img/services.svg";
 }
 
-export function sortServicesForLanding<T extends { slug: string; name: string }>(
-  services: T[],
-): T[] {
+export function sortServicesForLanding<
+  T extends { slug: string; name: string; sort_order?: number | null },
+>(services: T[]): T[] {
   const rank = new Map(LANDING_SERVICE_ORDER.map((slug, i) => [slug, i]));
   return [...services]
     .filter((s) => !HIDDEN_ON_LANDING.has(s.slug))
     .sort((a, b) => {
+      const sa = a.sort_order ?? 1000;
+      const sb = b.sort_order ?? 1000;
+      if (sa !== sb) return sa - sb;
       const ra = rank.has(a.slug) ? rank.get(a.slug)! : 1000;
       const rb = rank.has(b.slug) ? rank.get(b.slug)! : 1000;
       if (ra !== rb) return ra - rb;
@@ -79,4 +99,41 @@ export function formatServiceDescription(raw: string | null | undefined): string
     .replace(/\s*rn\s*/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+export function descriptionLooksLikeHtml(raw: string | null | undefined): boolean {
+  return !!raw && /<\/?[a-z][\s\S]*>/i.test(raw);
+}
+
+/** Light HTML sanitize for admin-authored service descriptions (client-side). */
+export function sanitizeServiceHtml(html: string): string {
+  const cleaned = html
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
+    .replace(/<iframe[\s\S]*?>[\s\S]*?<\/iframe>/gi, "")
+    .replace(/<object[\s\S]*?>[\s\S]*?<\/object>/gi, "")
+    .replace(/<embed[\s\S]*?>/gi, "")
+    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/\shref\s*=\s*(['"])\s*javascript:[^'"]*\1/gi, ' href="#"');
+
+  if (typeof window === "undefined") {
+    return cleaned;
+  }
+
+  try {
+    const doc = new DOMParser().parseFromString(cleaned, "text/html");
+    doc.querySelectorAll("script,iframe,object,embed").forEach((el) => el.remove());
+    doc.querySelectorAll("*").forEach((el) => {
+      [...el.attributes].forEach((attr) => {
+        if (
+          attr.name.startsWith("on") ||
+          (attr.name === "href" && /^\s*javascript:/i.test(attr.value))
+        ) {
+          el.removeAttribute(attr.name);
+        }
+      });
+    });
+    return doc.body.innerHTML;
+  } catch {
+    return cleaned;
+  }
 }

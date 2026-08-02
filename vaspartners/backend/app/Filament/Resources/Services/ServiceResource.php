@@ -11,8 +11,9 @@ use App\Filament\Resources\Services\RelationManagers\FinalApproversRelationManag
 use App\Models\Service;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
@@ -21,6 +22,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
@@ -66,7 +68,23 @@ class ServiceResource extends Resource
                     ->dehydrated()
                     ->required()
                     ->unique(ignoreRecord: true),
-                Textarea::make('description')->columnSpanFull(),
+                RichEditor::make('description')
+                    ->label('Description')
+                    ->columnSpanFull()
+                    ->toolbarButtons([
+                        ['bold', 'italic', 'underline', 'strike', 'link'],
+                        ['bulletList', 'orderedList'],
+                        ['undo', 'redo'],
+                    ]),
+                FileUpload::make('image')
+                    ->label('Image')
+                    ->image()
+                    ->disk('public')
+                    ->directory('services')
+                    ->visibility('public')
+                    ->imageEditor()
+                    ->helperText('Shown on the website home page and service detail page.')
+                    ->columnSpanFull(),
                 TextInput::make('sort_order')->numeric()->default(0),
                 Toggle::make('is_active')->default(true),
                 Select::make('requisitions')
@@ -127,6 +145,7 @@ class ServiceResource extends Resource
             ->defaultSort('sort_order')
             ->columns([
                 TextColumn::make('sort_order')->label('#')->sortable(),
+                ImageColumn::make('image')->disk('public')->square(),
                 TextColumn::make('name')->searchable()->sortable(),
                 TextColumn::make('categories.name')
                     ->label('Groups')

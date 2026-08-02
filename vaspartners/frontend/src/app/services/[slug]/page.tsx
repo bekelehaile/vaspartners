@@ -8,7 +8,9 @@ import { ServiceRequirements } from "@/components/ServiceRequirements";
 import { useContact, useLogout, useServices } from "@/hooks/use-contact";
 import { portalLoginHref, useAuthConfig } from "@/hooks/use-auth-config";
 import {
+  descriptionLooksLikeHtml,
   formatServiceDescription,
+  sanitizeServiceHtml,
   serviceImageUrl,
 } from "@/lib/service-images";
 
@@ -37,8 +39,15 @@ export default function ServiceDetailPage() {
       : "/portal/company"
     : "/";
 
-  const description = formatServiceDescription(service?.description);
-  const descriptionBlocks = description.split(/\n+/).filter(Boolean);
+  const rawDescription = service?.description ?? "";
+  const isHtml = descriptionLooksLikeHtml(rawDescription);
+  const plainBlocks = isHtml
+    ? []
+    : formatServiceDescription(rawDescription).split(/\n+/).filter(Boolean);
+  const htmlDescription = isHtml
+    ? sanitizeServiceHtml(rawDescription)
+    : "";
+  const imageSrc = service ? serviceImageUrl(service) : "/img/services.svg";
 
   return (
     <SiteShell me={me} onLogout={() => void logout()} landing>
@@ -68,25 +77,30 @@ export default function ServiceDetailPage() {
         )}
 
         {service && (
-          <div className="service-detail-layout">
-            <div className="service-detail-visual">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={serviceImageUrl(service.slug)}
-                alt=""
-                width={480}
-                height={280}
-              />
-            </div>
-
+          <div className="service-detail-layout service-detail-layout--stack">
             <div className="service-detail-copy">
               <h1>{service.name}</h1>
 
               <div className="service-detail-body">
                 <h2>Description</h2>
-                {descriptionBlocks.map((block, i) => (
-                  <p key={i}>{block}</p>
-                ))}
+                {isHtml ? (
+                  <div
+                    className="service-rich-text"
+                    dangerouslySetInnerHTML={{ __html: htmlDescription }}
+                  />
+                ) : (
+                  plainBlocks.map((block, i) => <p key={i}>{block}</p>)
+                )}
+              </div>
+
+              <div className="service-detail-visual service-detail-visual--after">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={imageSrc}
+                  alt=""
+                  width={720}
+                  height={360}
+                />
               </div>
 
               <div className="service-detail-body">

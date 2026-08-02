@@ -136,9 +136,12 @@ export type Service = {
   name: string;
   slug: string;
   description?: string | null;
+  image?: string | null;
+  image_url?: string | null;
   type?: string | null;
   is_subscription_based?: boolean;
   renewal_interval?: string | null;
+  sort_order?: number | null;
   category_id?: number;
   category?: ServiceGroup;
   categories?: ServiceGroup[];

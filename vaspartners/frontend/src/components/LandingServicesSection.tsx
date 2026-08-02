@@ -6,7 +6,7 @@ import { useServices } from "@/hooks/use-contact";
 import { serviceImageUrl, sortServicesForLanding } from "@/lib/service-images";
 
 /**
- * Homepage services — navigable image grid (legacy portal pattern).
+ * Homepage services — navigable image grid from the live catalogue.
  */
 export function LandingServicesSection() {
   const { data: services = [], isLoading, isError, error } = useServices();
@@ -54,7 +54,7 @@ export function LandingServicesSection() {
                   <span className="service-card-glow" aria-hidden />
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={serviceImageUrl(service.slug)}
+                    src={serviceImageUrl(service)}
                     alt=""
                     width={320}
                     height={160}
