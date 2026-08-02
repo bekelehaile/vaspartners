@@ -74,6 +74,7 @@ class ServiceResource extends Resource
                     ->multiple()
                     ->preload()
                     ->searchable()
+                    ->columnSpanFull()
                     ->helperText('Which request types partners can open for this service'),
             ])->columns(2),
             Section::make('Subscription & renewal')
