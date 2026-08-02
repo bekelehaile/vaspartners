@@ -208,11 +208,13 @@ class BulkMessageService
             });
         }
 
-        if ($serviceIds !== []) {
+        if ($serviceIds !== [] || $aliveOnly) {
             $query->whereHas(
                 'subscriptions',
                 function ($subscriptions) use ($serviceIds, $aliveOnly): void {
-                    $subscriptions->whereIn('service_id', $serviceIds);
+                    if ($serviceIds !== []) {
+                        $subscriptions->whereIn('service_id', $serviceIds);
+                    }
                     if ($aliveOnly) {
                         $subscriptions->whereIn('status', [
                             \App\Enums\SubscriptionStatus::Active->value,

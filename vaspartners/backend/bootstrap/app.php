@@ -65,12 +65,11 @@ return Application::configure(basePath: dirname(__DIR__))
             ->withoutOverlapping(120)
             ->description('Daily: clear false TIN approvals and SMS owners with invalid TIN');
 
-        // Small ERCA batches only — never bulk-flood eTrade (limit/sleep in command + global cap).
-        // Prefer unverified Has-owner companies first.
-        $schedule->command('vas:scan-erca-tin --unverified-only')
-            ->everyFiveMinutes()
-            ->withoutOverlapping(4)
-            ->description('Throttled ERCA TIN check for unverified Has-owner companies');
+        // ERCA TIN scan paused for now — re-enable when eTrade load is acceptable.
+        // $schedule->command('vas:scan-erca-tin --unverified-only')
+        //     ->everyFiveMinutes()
+        //     ->withoutOverlapping(4)
+        //     ->description('Throttled ERCA TIN check for unverified Has-owner companies');
 
         $schedule->command('vas:notify-erca-mismatch')
             ->dailyAt('09:00')
