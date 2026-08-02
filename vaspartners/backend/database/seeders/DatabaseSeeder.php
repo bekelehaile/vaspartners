@@ -64,6 +64,7 @@ class DatabaseSeeder extends Seeder
         $this->call(FeedbackPermissionsSeeder::class);
         $this->call(CatalogSeeder::class);
         $this->call(OptionalDocumentIfAnySeeder::class);
+        $this->call(AttachLegacyServiceImagesSeeder::class);
         $this->call(MvasStaffUsersSeeder::class);
     }
 }
