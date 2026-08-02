@@ -68,25 +68,7 @@ class ServiceResource extends Resource
                     ->dehydrated()
                     ->required()
                     ->unique(ignoreRecord: true),
-                RichEditor::make('description')
-                    ->label('Description')
-                    ->columnSpanFull()
-                    ->toolbarButtons([
-                        ['bold', 'italic', 'underline', 'strike', 'link'],
-                        ['bulletList', 'orderedList'],
-                        ['undo', 'redo'],
-                    ]),
-                FileUpload::make('image')
-                    ->label('Image')
-                    ->image()
-                    ->disk('public')
-                    ->directory('services')
-                    ->visibility('public')
-                    ->imageEditor()
-                    ->helperText('Shown on the website home page and service detail page.')
-                    ->columnSpanFull(),
                 TextInput::make('sort_order')->numeric()->default(0),
-                Toggle::make('is_active')->default(true),
                 Select::make('requisitions')
                     ->relationship('requisitions', 'name')
                     ->multiple()
@@ -135,6 +117,27 @@ class ServiceResource extends Resource
                         ->preload()
                         ->visible(fn (Get $get): bool => (bool) $get('is_subscription_based'))
                         ->helperText('Usually the Renewal request type.'),
+                ])->columns(2),
+            Section::make('Details')
+                ->schema([
+                    RichEditor::make('description')
+                        ->label('Description')
+                        ->columnSpanFull()
+                        ->toolbarButtons([
+                            ['bold', 'italic', 'underline', 'strike', 'link'],
+                            ['bulletList', 'orderedList'],
+                            ['undo', 'redo'],
+                        ]),
+                    FileUpload::make('image')
+                        ->label('Image')
+                        ->image()
+                        ->disk('public')
+                        ->directory('services')
+                        ->visibility('public')
+                        ->imageEditor()
+                        ->helperText('Shown on the website home page and service detail page.')
+                        ->columnSpanFull(),
+                    Toggle::make('is_active')->default(true),
                 ])->columns(2),
         ]);
     }

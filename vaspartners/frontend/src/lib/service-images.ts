@@ -138,10 +138,13 @@ export function formatServiceDescription(raw: string | null | undefined): string
     .replace(/\r\n/g, "\n")
     .replace(/rn(?=rn)/g, "\n")
     .replace(/\s*rn(?=\d+[).])/g, "\n")
+    .replace(/(?<=[a-z])rn(?=\d)/g, "\n")
     .replace(/\s+rn\s+/g, "\n")
     .replace(/\s*rn(?=[A-Z0-9(])/g, "\n")
     .replace(/(?<=[A-Z][A-Z])rn/g, "\n")
     .replace(/(?<=[a-z)])rn(?=[A-Z(])/g, "\n")
+    .replace(/(?<=[a-z)])rn(?=\s*Legal\b)/gi, "\n")
+    .replace(/\s*rn(?=(?:refers|means)\b)/gi, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/[ \t]+\n/g, "\n")
     .trim();

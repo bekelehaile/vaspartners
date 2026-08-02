@@ -131,10 +131,14 @@ class PolishServiceDescriptions extends Command
     {
         $text = preg_replace('/rn(?=rn)/', "\n", $text) ?? $text;
         $text = preg_replace('/\s*rn(?=\d+[).])/', "\n", $text) ?? $text;
+        $text = preg_replace('/(?<=[a-z])rn(?=\d)/', "\n", $text) ?? $text; // VAT certificatern6)
         $text = preg_replace('/\s+rn\s+/', "\n", $text) ?? $text;
         $text = preg_replace('/\s*rn(?=[A-Z0-9(])/', "\n", $text) ?? $text;
         $text = preg_replace('/(?<=[A-Z][A-Z])rn/', "\n", $text) ?? $text;
         $text = preg_replace('/(?<=[a-z)])rn(?=[A-Z(])/', "\n", $text) ?? $text;
+        $text = preg_replace('/(?<=[a-z)])rn(?=\s*Legal\b)/i', "\n", $text) ?? $text; // pickedrn Legal
+        // "Digital content rnrefers to ..."
+        $text = preg_replace('/\s*rn(?=(?:refers|means)\b)/i', "\n", $text) ?? $text;
 
         return $text;
     }
@@ -182,7 +186,7 @@ class PolishServiceDescriptions extends Command
 
                 continue;
             }
-            $html[] = '<p>'.e($line).'</p>';
+            $html[] = '<p>'.e(mb_strtoupper(mb_substr($line, 0, 1)).mb_substr($line, 1)).'</p>';
         }
         $flush();
 
