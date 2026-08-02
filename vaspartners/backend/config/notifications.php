@@ -60,15 +60,16 @@ return [
     | Bulk / revenue campaign SMS
     |--------------------------------------------------------------------------
     |
-    | No hard cap on recipient count (1k+ supported). Sends are paced so the
-    | gateway stays healthy. OTP rate limits never apply here.
+    | Internal admin campaigns are not rate-limited or queue-staggered.
+    | OTP rate limits never apply here. Workers drain the sms queue as fast
+    | as the gateway allows.
     |
-    | messages_per_second — queue stagger when dispatching a campaign
-    | (5/sec ≈ 1,000 recipients in ~3–4 minutes)
+    | messages_per_second — kept for backward-compatible env only (unused).
     |
     */
     'bulk_sms' => [
         'messages_per_second' => max(1, (int) env('SMS_BULK_MESSAGES_PER_SECOND', 5)),
+        'throttle' => false,
     ],
 
     /*

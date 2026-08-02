@@ -6,9 +6,13 @@ use App\Enums\BulkMessageRecipientStatus;
 use App\Filament\Resources\Companies\CompanyResource;
 use App\Models\BulkMessageRecipient;
 use App\Models\Company;
+use App\Services\BulkMessageService;
 use App\Services\SmsService;
 use Filament\Actions\Action;
+use Filament\Actions\BulkAction;
+use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -19,6 +23,8 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Validation\ValidationException;
 
 class RecipientsRelationManager extends RelationManager
 {
@@ -100,6 +106,34 @@ class RecipientsRelationManager extends RelationManager
                     fn (BulkMessageRecipientStatus $s) => [$s->value => $s->label()]
                 )),
             ])
+            ->headerActions([
+                Action::make('retryAllFailed')
+                    ->label('Retry all failed')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('warning')
+                    ->visible(fn (): bool => $this->getOwnerRecord()
+                        ->recipients()
+                        ->where('status', BulkMessageRecipientStatus::Failed->value)
+                        ->exists())
+                    ->requiresConfirmation()
+                    ->modalHeading('Retry every failed SMS in this campaign?')
+                    ->action(function (BulkMessageService $bulkMessages): void {
+                        try {
+                            $count = $bulkMessages->retryFailedRecipients($this->getOwnerRecord());
+                            $this->getOwnerRecord()->refresh();
+                            Notification::make()
+                                ->title("Re-queued {$count} failed recipient(s)")
+                                ->success()
+                                ->send();
+                        } catch (ValidationException $e) {
+                            Notification::make()
+                                ->title('Could not retry')
+                                ->body(collect($e->errors())->flatten()->first() ?? $e->getMessage())
+                                ->danger()
+                                ->send();
+                        }
+                    }),
+            ])
             ->recordActions([
                 Action::make('retry')
                     ->label('Retry')
@@ -113,20 +147,23 @@ class RecipientsRelationManager extends RelationManager
                         true,
                     ))
                     ->requiresConfirmation()
-                    ->action(function (BulkMessageRecipient $record): void {
-                        $record->forceFill([
-                            'status' => BulkMessageRecipientStatus::Pending,
-                            'error' => null,
-                        ])->save();
-
-                        \App\Jobs\SendBulkMessageRecipientJob::dispatch((int) $record->id);
-
-                        $this->getOwnerRecord()->refreshCounts();
-
-                        Notification::make()
-                            ->title('Recipient re-queued')
-                            ->success()
-                            ->send();
+                    ->modalHeading('Retry this SMS?')
+                    ->modalDescription('This recipient will be queued again on the SMS worker.')
+                    ->action(function (BulkMessageRecipient $record, BulkMessageService $bulkMessages): void {
+                        try {
+                            $bulkMessages->retryRecipient($record);
+                            $this->getOwnerRecord()->refresh();
+                            Notification::make()
+                                ->title('Recipient re-queued')
+                                ->success()
+                                ->send();
+                        } catch (ValidationException $e) {
+                            Notification::make()
+                                ->title('Could not retry')
+                                ->body(collect($e->errors())->flatten()->first() ?? $e->getMessage())
+                                ->danger()
+                                ->send();
+                        }
                     }),
                 EditAction::make()
                     ->mutateFormDataUsing(function (array $data): array {
@@ -188,6 +225,50 @@ class RecipientsRelationManager extends RelationManager
                     ->after(function (): void {
                         $this->getOwnerRecord()->refreshCounts();
                     }),
+            ])
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    BulkAction::make('retrySelected')
+                        ->label('Retry selected failed')
+                        ->icon('heroicon-o-arrow-path')
+                        ->color('warning')
+                        ->requiresConfirmation()
+                        ->modalHeading('Retry selected failed SMS?')
+                        ->modalDescription('Only Failed rows in the selection will be re-queued.')
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (Collection $records, BulkMessageService $bulkMessages): void {
+                            $ids = $records
+                                ->filter(function (BulkMessageRecipient $record): bool {
+                                    $status = $record->status instanceof BulkMessageRecipientStatus
+                                        ? $record->status
+                                        : BulkMessageRecipientStatus::tryFrom((string) $record->status);
+
+                                    return $status === BulkMessageRecipientStatus::Failed;
+                                })
+                                ->pluck('id')
+                                ->map(fn ($id) => (int) $id)
+                                ->all();
+
+                            try {
+                                $count = $bulkMessages->retryFailedRecipients(
+                                    $this->getOwnerRecord(),
+                                    $ids,
+                                );
+                                $this->getOwnerRecord()->refresh();
+                                Notification::make()
+                                    ->title("Re-queued {$count} failed recipient(s)")
+                                    ->success()
+                                    ->send();
+                            } catch (ValidationException $e) {
+                                Notification::make()
+                                    ->title('Could not retry')
+                                    ->body(collect($e->errors())->flatten()->first() ?? $e->getMessage())
+                                    ->danger()
+                                    ->send();
+                            }
+                        }),
+                    DeleteBulkAction::make(),
+                ]),
             ])
             ->paginated([25, 50, 100]);
     }

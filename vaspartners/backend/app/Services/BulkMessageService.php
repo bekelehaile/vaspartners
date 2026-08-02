@@ -450,6 +450,93 @@ class BulkMessageService
         ProcessBulkMessageJob::dispatch($campaign->id);
     }
 
+    /**
+     * Re-queue one failed (or stuck pending) recipient for another SMS attempt.
+     */
+    public function retryRecipient(BulkMessageRecipient $recipient): void
+    {
+        $status = $recipient->status instanceof BulkMessageRecipientStatus
+            ? $recipient->status
+            : BulkMessageRecipientStatus::tryFrom((string) $recipient->status);
+
+        if (! in_array($status, [
+            BulkMessageRecipientStatus::Failed,
+            BulkMessageRecipientStatus::Pending,
+        ], true)) {
+            throw ValidationException::withMessages([
+                'recipient' => 'Only failed or pending recipients can be retried.',
+            ]);
+        }
+
+        $recipient->forceFill([
+            'status' => BulkMessageRecipientStatus::Pending,
+            'error' => null,
+        ])->save();
+
+        $campaign = $recipient->bulkMessage ?? $recipient->campaign;
+        if ($campaign) {
+            $this->reopenCampaignForRetry($campaign);
+            $campaign->refreshCounts();
+        }
+
+        SendBulkMessageRecipientJob::dispatch((int) $recipient->id);
+    }
+
+    /**
+     * Re-queue many failed recipients (selected IDs, or all failed when empty).
+     *
+     * @param  list<int>  $recipientIds
+     */
+    public function retryFailedRecipients(BulkMessage $campaign, array $recipientIds = []): int
+    {
+        $query = $campaign->recipients()
+            ->where('status', BulkMessageRecipientStatus::Failed->value);
+
+        if ($recipientIds !== []) {
+            $query->whereIn('id', $recipientIds);
+        }
+
+        $ids = $query->pluck('id')->map(fn ($id) => (int) $id)->all();
+        if ($ids === []) {
+            throw ValidationException::withMessages([
+                'recipients' => 'No failed recipients selected to retry.',
+            ]);
+        }
+
+        $campaign->recipients()
+            ->whereIn('id', $ids)
+            ->update([
+                'status' => BulkMessageRecipientStatus::Pending->value,
+                'error' => null,
+            ]);
+
+        $this->reopenCampaignForRetry($campaign);
+        $campaign->refreshCounts();
+
+        foreach ($ids as $id) {
+            SendBulkMessageRecipientJob::dispatch($id);
+        }
+
+        return count($ids);
+    }
+
+    protected function reopenCampaignForRetry(BulkMessage $campaign): void
+    {
+        if (in_array($campaign->status, [
+            BulkMessageStatus::Importing,
+            BulkMessageStatus::Queued,
+            BulkMessageStatus::Processing,
+        ], true)) {
+            return;
+        }
+
+        $campaign->forceFill([
+            'status' => BulkMessageStatus::Processing,
+            'queued_at' => $campaign->queued_at ?? now(),
+            'completed_at' => null,
+        ])->save();
+    }
+
     public function dispatchPending(BulkMessage $campaign): void
     {
         $campaign->forceFill(['status' => BulkMessageStatus::Processing])->save();
@@ -460,20 +547,13 @@ class BulkMessageService
             ->orderBy('id')
             ->pluck('id');
 
-        // Pace only — no hard cap on campaign size (1k+ supported). OTP limits never apply.
-        $perSecond = max(1, (int) config('notifications.bulk_sms.messages_per_second', 5));
-        foreach ($ids->values() as $index => $id) {
-            $delaySeconds = intdiv((int) $index, $perSecond);
-            $job = new SendBulkMessageRecipientJob((int) $id);
-            if ($delaySeconds > 0) {
-                \Illuminate\Support\Facades\Queue::laterOn(
-                    'sms',
-                    now()->addSeconds($delaySeconds),
-                    $job,
-                );
-            } else {
-                \Illuminate\Support\Facades\Queue::pushOn('sms', $job);
-            }
+        // Internal bulk/revenue SMS is not throttled — push all jobs now.
+        // OTP rate limits never apply here.
+        foreach ($ids as $id) {
+            \Illuminate\Support\Facades\Queue::pushOn(
+                'sms',
+                new SendBulkMessageRecipientJob((int) $id),
+            );
         }
 
         if ($ids->isEmpty()) {
@@ -511,25 +591,12 @@ class BulkMessageService
             return;
         }
 
-        // Soft per-phone only (no global campaign cap). OTP rate limits never apply here.
-        if (! $this->sms->consumeBulkSmsRateLimits($phone)) {
-            $recipient->forceFill([
-                'status' => BulkMessageRecipientStatus::Pending,
-                'error' => 'Rate limited — waiting to retry',
-            ])->save();
-
-            SendBulkMessageRecipientJob::dispatch((int) $recipient->id)
-                ->delay(now()->addSeconds(30));
-
-            return;
-        }
-
         $recipient->forceFill(['attempts' => $recipient->attempts + 1])->save();
 
         $body = $this->renderMessage($campaign->message, $recipient);
 
         try {
-            // Rate limit already consumed above — send without double-hit.
+            // Internal bulk campaigns are never rate-limited (OTP limits stay separate).
             $ok = $this->sms->sendNowBypassingRateLimit($phone, $body);
             if (! $ok) {
                 $recipient->forceFill([

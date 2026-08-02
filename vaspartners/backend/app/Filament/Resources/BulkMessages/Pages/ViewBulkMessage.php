@@ -65,7 +65,7 @@ class ViewBulkMessage extends ViewRecord
                     }
                 }),
             Action::make('resend_failed')
-                ->label('Re-send failed')
+                ->label('Retry failed')
                 ->icon('heroicon-o-arrow-path')
                 ->color('warning')
                 ->visible(fn (): bool => $record->fresh()->failed_count > 0
@@ -75,19 +75,22 @@ class ViewBulkMessage extends ViewRecord
                         BulkMessageStatus::Processing,
                     ], true))
                 ->requiresConfirmation()
-                ->modalHeading('Re-send failed messages')
+                ->modalHeading('Retry failed messages')
                 ->modalDescription('Only recipients marked Failed will be queued again.')
                 ->action(function (BulkMessageService $bulkMessages) use ($record): void {
                     try {
-                        $bulkMessages->resendFailed($record->fresh());
-                        Notification::make()->title('Failed recipients re-queued')->success()->send();
+                        $count = $bulkMessages->retryFailedRecipients($record->fresh());
+                        Notification::make()
+                            ->title("Re-queued {$count} failed recipient(s)")
+                            ->success()
+                            ->send();
                         $this->refreshFormData([
                             'status', 'queued_at', 'completed_at',
                             'sent_count', 'failed_count', 'skipped_count', 'total_count', 'matched_count',
                         ]);
                     } catch (ValidationException $e) {
                         Notification::make()
-                            ->title('Could not re-send')
+                            ->title('Could not retry')
                             ->body(collect($e->errors())->flatten()->first())
                             ->danger()
                             ->send();

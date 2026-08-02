@@ -161,7 +161,7 @@ class BulkMessageResource extends Resource
                         }
                     }),
                 Action::make('resend_failed')
-                    ->label('Re-send failed')
+                    ->label('Retry failed')
                     ->icon('heroicon-o-arrow-path')
                     ->color('warning')
                     ->visible(fn (BulkMessage $record): bool => $record->failed_count > 0
@@ -173,11 +173,14 @@ class BulkMessageResource extends Resource
                     ->requiresConfirmation()
                     ->action(function (BulkMessage $record, BulkMessageService $bulkMessages): void {
                         try {
-                            $bulkMessages->resendFailed($record);
-                            Notification::make()->title('Failed recipients re-queued')->success()->send();
+                            $count = $bulkMessages->retryFailedRecipients($record);
+                            Notification::make()
+                                ->title("Re-queued {$count} failed recipient(s)")
+                                ->success()
+                                ->send();
                         } catch (ValidationException $e) {
                             Notification::make()
-                                ->title('Could not re-send')
+                                ->title('Could not retry')
                                 ->body(collect($e->errors())->flatten()->first() ?? $e->getMessage())
                                 ->danger()
                                 ->send();

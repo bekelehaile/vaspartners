@@ -274,22 +274,11 @@ class SmsService
     }
 
     /**
-     * Bulk / revenue campaigns: no global size cap (1k+ OK).
-     * Only per-phone soft-limit to avoid accidental repeat SMS to one number.
-     * Throughput is controlled by queue pacing ({@see notifications.bulk_sms}).
+     * Bulk / revenue campaigns: never throttled (internal admin traffic).
+     * OTP and transactional sendNow() keep their own limits.
      */
     public function consumeBulkSmsRateLimits(string $normalizedPhone): bool
     {
-        $phoneMax = max(1, (int) config('notifications.sms_rate.per_phone.max', 20));
-        $phoneDecay = max(1, (int) config('notifications.sms_rate.per_phone.decay_seconds', 3600));
-        $phoneKey = 'sms:phone:'.$normalizedPhone;
-
-        if (RateLimiter::tooManyAttempts($phoneKey, $phoneMax)) {
-            return false;
-        }
-
-        RateLimiter::hit($phoneKey, $phoneDecay);
-
         return true;
     }
 
