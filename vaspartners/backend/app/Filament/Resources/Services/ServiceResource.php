@@ -75,7 +75,7 @@ class ServiceResource extends Resource
                     ->preload()
                     ->searchable()
                     ->columnSpanFull()
-                    ->helperText('Which request types partners can open for this service'),
+                    ->helperText('Which request types partners can open for this service. New subscription types need a Final approver (Final approvers tab). After-sales types only need required docs + AM close.'),
             ])->columns(2),
             Section::make('Subscription & renewal')
                 ->description('Turn on for services that create a renewable subscription. Turn off for one-off services (e.g. CRBT) — no subscription is created and no automatic renewal runs.')

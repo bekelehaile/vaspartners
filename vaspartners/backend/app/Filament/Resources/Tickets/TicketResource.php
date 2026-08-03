@@ -733,9 +733,7 @@ class TicketResource extends Resource
                     }),
                 Action::make('close')
                     ->label('Close')
-                    ->visible(fn (Ticket $record) => $record->status === TicketStatus::Completed
-                        && ($record->assigned_to_user_id === auth()->id() || auth()->user()?->is_management)
-                        && static::accountManagerMayAct($record))
+                    ->visible(fn (Ticket $record): bool => static::mayCloseTicket($record))
                     ->requiresConfirmation()
                     ->action(fn (Ticket $record, TicketWorkflowService $workflow) => $workflow->close($record, auth()->user())),
                 DeleteAction::make()
@@ -753,6 +751,51 @@ class TicketResource extends Resource
                         ->columnMapping(true)
                         ->modalHeading('Export selected tickets')
                         ->fileDisk('local'),
+                    BulkAction::make('close')
+                        ->label('Close selected')
+                        ->icon('heroicon-o-lock-closed')
+                        ->color('gray')
+                        ->requiresConfirmation()
+                        ->modalHeading('Close selected tickets')
+                        ->modalDescription('New subscriptions close only after final approval. After-sales close when required docs are verified (or none required).')
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (Collection $records, TicketWorkflowService $workflow): void {
+                            $closed = 0;
+                            $skipped = 0;
+                            $actor = auth()->user();
+
+                            foreach ($records as $ticket) {
+                                /** @var Ticket $ticket */
+                                $ticket->loadMissing('requisition', 'contact.company', 'subscription.company');
+
+                                if (! $workflow->actorMayClose($ticket, $actor)) {
+                                    $skipped++;
+
+                                    continue;
+                                }
+
+                                try {
+                                    $workflow->close($ticket, $actor);
+                                    $closed++;
+                                } catch (Throwable) {
+                                    $skipped++;
+                                }
+                            }
+
+                            if ($closed > 0) {
+                                Notification::make()
+                                    ->title("Closed {$closed} ticket(s)")
+                                    ->body($skipped > 0 ? "{$skipped} skipped (not ready to close)." : null)
+                                    ->success()
+                                    ->send();
+                            } else {
+                                Notification::make()
+                                    ->title('No tickets closed')
+                                    ->body('Selected tickets are not ready to close (docs/approval incomplete, or not assigned to you).')
+                                    ->warning()
+                                    ->send();
+                            }
+                        }),
                     BulkAction::make('send_sms')
                         ->label('Send SMS to selected')
                         ->icon('heroicon-o-chat-bubble-left-ellipsis')
@@ -926,6 +969,14 @@ class TicketResource extends Resource
         }
 
         return $user->canHandleCompanyServices($record->serviceCompany());
+    }
+
+    /**
+     * Close is allowed for completed new-subscription tickets, or after-sales when docs are satisfied.
+     */
+    public static function mayCloseTicket(Ticket $record): bool
+    {
+        return app(TicketWorkflowService::class)->actorMayClose($record, auth()->user());
     }
 
     /**

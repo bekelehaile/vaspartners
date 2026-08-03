@@ -277,21 +277,32 @@ class ViewTicket extends ViewRecord
                 }),
             Action::make('close')
                 ->label('Close')
-                ->visible(fn (Ticket $record) => $record->status === TicketStatus::Completed
-                    && ($record->assigned_to_user_id === auth()->id() || auth()->user()?->is_management)
-                    && TicketResource::accountManagerMayAct($record))
+                ->visible(fn (Ticket $record): bool => TicketResource::mayCloseTicket($record))
                 ->form([
                     Textarea::make('note')->label('Note (optional)'),
                     $this->notifyPartnerToggle(),
                 ])
                 ->requiresConfirmation()
+                ->modalDescription('New subscriptions need final approval first. After-sales close when required documents are verified (or none are required).')
                 ->action(function (Ticket $record, array $data, TicketWorkflowService $workflow) {
-                    $workflow->close(
-                        $record,
-                        auth()->user(),
-                        $data['note'] ?? null,
-                        (bool) ($data['notify_partner'] ?? false),
-                    );
+                    try {
+                        $workflow->close(
+                            $record,
+                            auth()->user(),
+                            $data['note'] ?? null,
+                            (bool) ($data['notify_partner'] ?? false),
+                        );
+                    } catch (\Illuminate\Validation\ValidationException $e) {
+                        $message = collect($e->errors())->flatten()->first() ?: $e->getMessage();
+                        Notification::make()
+                            ->title('Cannot close request')
+                            ->body((string) $message)
+                            ->danger()
+                            ->persistent()
+                            ->send();
+
+                        throw $e;
+                    }
                 }),
             DeleteAction::make()
                 ->visible(fn (Ticket $record): bool => (bool) auth()->user()?->can('delete', $record)
