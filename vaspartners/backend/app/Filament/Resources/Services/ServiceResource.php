@@ -174,7 +174,7 @@ class ServiceResource extends Resource
                         }
 
                         return CompanyResource::getUrl('index').'?'.http_build_query([
-                            'tableFilters' => [
+                            'filters' => [
                                 'service_id' => [
                                     'values' => [(string) $record->getKey()],
                                 ],
