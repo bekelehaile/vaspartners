@@ -392,11 +392,12 @@ class TicketResource extends Resource
                         })
                         ->orWhereExists(function ($sub) use ($like): void {
                             $sub->selectRaw('1')
-                                ->from('customers')
-                                ->leftJoin('companies', 'companies.id', '=', 'customers.current_company_id')
-                                ->whereColumn('customers.id', 'tickets.contact_id')
+                                ->from('contacts')
+                                ->leftJoin('companies', 'companies.id', '=', 'contacts.current_company_id')
+                                ->whereColumn('contacts.id', 'tickets.contact_id')
+                                ->whereNull('contacts.deleted_at')
                                 ->where(function ($c) use ($like): void {
-                                    $c->where('customers.company_name', 'ilike', $like)
+                                    $c->where('contacts.company_name', 'ilike', $like)
                                         ->orWhere('companies.name', 'ilike', $like)
                                         ->orWhere('companies.legal_name', 'ilike', $like);
                                 });
