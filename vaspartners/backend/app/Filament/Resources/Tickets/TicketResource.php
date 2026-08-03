@@ -6,6 +6,7 @@ use App\Enums\ApprovalAction;
 use App\Enums\DocumentReviewStatus;
 use App\Enums\SubscriptionStatus;
 use App\Enums\TicketStatus;
+use App\Filament\Exports\TicketExporter;
 use App\Filament\Resources\Companies\CompanyResource;
 use App\Filament\Resources\Contacts\ContactResource;
 use App\Filament\Resources\Subscriptions\SubscriptionResource;
@@ -27,6 +28,8 @@ use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\ExportAction;
+use Filament\Actions\ExportBulkAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -359,6 +362,14 @@ class TicketResource extends Resource
                 TextColumn::make('created_at')->dateTime()->sortable()->toggleable(),
             ])
             ->defaultSort('created_at', 'desc')
+            ->headerActions([
+                ExportAction::make()
+                    ->label('Export')
+                    ->exporter(TicketExporter::class)
+                    ->columnMapping(true)
+                    ->modalHeading('Export tickets')
+                    ->fileDisk('local'),
+            ])
             ->searchable()
             ->searchPlaceholder('Search request number, company, or AM name…')
             ->splitSearchTerms(false)
@@ -736,6 +747,12 @@ class TicketResource extends Resource
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    ExportBulkAction::make()
+                        ->label('Export selected')
+                        ->exporter(TicketExporter::class)
+                        ->columnMapping(true)
+                        ->modalHeading('Export selected tickets')
+                        ->fileDisk('local'),
                     BulkAction::make('send_sms')
                         ->label('Send SMS to selected')
                         ->icon('heroicon-o-chat-bubble-left-ellipsis')
