@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Services;
 
 use App\Enums\RenewalInterval;
+use App\Filament\Resources\Companies\CompanyResource;
 use App\Filament\Resources\Services\Pages\CreateService;
 use App\Filament\Resources\Services\Pages\EditService;
 use App\Filament\Resources\Services\Pages\ListServices;
@@ -21,10 +22,12 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\FontWeight;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
@@ -75,7 +78,7 @@ class ServiceResource extends Resource
                     ->preload()
                     ->searchable()
                     ->columnSpanFull()
-                    ->helperText('Which request types partners can open for this service. New subscription types need a Final approver (Final approvers tab). After-sales types only need required docs + AM close.'),
+                    ->helperText('New subscription = needs Final approver. After-sales (maintain/renew/terminate/etc.) = docs + AM close only, no approval.'),
             ])->columns(2),
             Section::make('Subscription & renewal')
                 ->description('Turn on for services that create a renewable subscription. Turn off for one-off services (e.g. CRBT) — no subscription is created and no automatic renewal runs.')
@@ -147,6 +150,10 @@ class ServiceResource extends Resource
     {
         return $table
             ->defaultSort('sort_order')
+            ->modifyQueryUsing(fn (Builder $query) => $query->withCount([
+                'subscriptions as companies_count' => fn (Builder $q) => $q
+                    ->selectRaw('count(distinct company_id)'),
+            ]))
             ->columns([
                 TextColumn::make('sort_order')->label('#')->sortable(),
                 ImageColumn::make('image')->disk('public')->square(),
@@ -155,6 +162,28 @@ class ServiceResource extends Resource
                     ->label('Groups')
                     ->badge()
                     ->separator(','),
+                TextColumn::make('companies_count')
+                    ->label('Companies')
+                    ->sortable()
+                    ->alignEnd()
+                    ->weight(FontWeight::SemiBold)
+                    ->color(fn (Service $record): ?string => ((int) ($record->companies_count ?? 0)) > 0 ? 'primary' : 'gray')
+                    ->url(function (Service $record): ?string {
+                        if ((int) ($record->companies_count ?? 0) < 1) {
+                            return null;
+                        }
+
+                        return CompanyResource::getUrl('index').'?'.http_build_query([
+                            'tableFilters' => [
+                                'service_id' => [
+                                    'values' => [(string) $record->getKey()],
+                                ],
+                            ],
+                        ]);
+                    })
+                    ->tooltip(fn (Service $record): ?string => ((int) ($record->companies_count ?? 0)) > 0
+                        ? 'View companies with a subscription to '.$record->name
+                        : null),
                 TextColumn::make('renewal_interval')->badge(),
                 IconColumn::make('is_subscription_based')->boolean()->label('Subs'),
                 IconColumn::make('is_active')->boolean(),

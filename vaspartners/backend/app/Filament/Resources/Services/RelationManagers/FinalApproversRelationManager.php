@@ -11,13 +11,14 @@ use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 class FinalApproversRelationManager extends RelationManager
 {
     protected static string $relationship = 'finalApprovers';
 
-    protected static ?string $title = 'Final approvers by request type';
+    protected static ?string $title = 'Final approvers (new subscription only)';
 
     public function form(Schema $schema): Schema
     {
@@ -35,7 +36,7 @@ class FinalApproversRelationManager extends RelationManager
                 ->required()
                 ->searchable()
                 ->preload()
-                ->helperText('Only new-subscription request types need a final approver. After-sales types close with docs + AM.'),
+                ->helperText('Only new-subscription types. After-sales (maintain/renew/terminate/etc.) do not use final approval.'),
             Select::make('user_id')
                 ->label('Final approver')
                 ->options(fn (): array => User::query()
@@ -57,8 +58,12 @@ class FinalApproversRelationManager extends RelationManager
         $missing = $this->missingRequisitionNames($service);
 
         return $table
+            ->modifyQueryUsing(fn (Builder $query) => $query->whereHas(
+                'requisition',
+                fn (Builder $q) => $q->where('creates_subscription', true),
+            ))
             ->description($missing === []
-                ? 'Final approvers are required for new-subscription request types only. After-sales types need docs verified, then the AM can close (including bulk close).'
+                ? 'Final approval applies only to new-subscription request types. After-sales need docs + AM close only.'
                 : 'Missing final approver for new-subscription type(s): '.implode(', ', $missing).'.')
             ->columns([
                 TextColumn::make('requisition.name')->label('Request type')->sortable(),
@@ -86,8 +91,8 @@ class FinalApproversRelationManager extends RelationManager
                         $this->warnIfStillMissing();
                     }),
             ])
-            ->emptyStateHeading('No final approvers configured')
-            ->emptyStateDescription('Add a final approver for each new-subscription request type on this service. After-sales request types do not need one.');
+            ->emptyStateHeading('No final approvers for new subscription')
+            ->emptyStateDescription('Add a final approver for each new-subscription request type. After-sales types never need one.');
     }
 
     /**
