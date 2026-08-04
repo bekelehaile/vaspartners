@@ -1054,6 +1054,7 @@ class TicketWorkflowService
         DocumentReviewStatus $result,
         ?string $note = null,
         bool $notifyPartner = false,
+        bool $closeAfterPass = false,
     ): Ticket {
         if (! in_array($result, [DocumentReviewStatus::Passed, DocumentReviewStatus::Failed], true)) {
             throw new InvalidArgumentException('Document review must be passed or failed.');
@@ -1061,7 +1062,7 @@ class TicketWorkflowService
 
         $this->assertAccountManagerMayProcessTicket($ticket, $reviewer);
 
-        return DB::transaction(function () use ($ticket, $reviewer, $result, $note, $notifyPartner) {
+        return DB::transaction(function () use ($ticket, $reviewer, $result, $note, $notifyPartner, $closeAfterPass) {
             if ($ticket->assigned_to_user_id !== $reviewer->id) {
                 throw ValidationException::withMessages(['ticket' => 'Only the assigned account manager can verify documents.']);
             }
@@ -1133,6 +1134,31 @@ class TicketWorkflowService
             if (! $this->ticketRequiresApprovalChain($ticket)) {
                 $ticket->current_approver_user_id = null;
                 $ticket->save();
+
+                // Optional one-step close when AM ticks "Close request" on Pass.
+                if ($closeAfterPass) {
+                    $this->assertAfterSalesReadyToClose($ticket);
+                    $this->transition(
+                        $ticket,
+                        TicketStatus::Closed,
+                        $reviewer,
+                        $note ?? 'Documents verified — request closed',
+                        [
+                            'skip_partner_notification' => ! $notifyPartner,
+                            'event' => 'closed',
+                            'closed_after_doc_pass' => true,
+                        ],
+                    );
+
+                    if ($notifyPartner && $comment) {
+                        $fresh = $ticket->fresh(['contact', 'service', 'requisition']);
+                        DB::afterCommit(function () use ($fresh, $reviewer, $comment) {
+                            $this->notifications->ticketMessagePosted($fresh, $reviewer, $comment);
+                        });
+                    }
+
+                    return $ticket->fresh(['contact', 'service', 'requisition']);
+                }
 
                 $fresh = $ticket->fresh(['contact', 'service', 'requisition']);
                 $notifyNote = $note;

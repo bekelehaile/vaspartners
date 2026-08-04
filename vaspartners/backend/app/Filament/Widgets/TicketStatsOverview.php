@@ -56,11 +56,8 @@ class TicketStatsOverview extends StatsOverviewWidget
         $rejectedCount = $rejectedQuery->count();
 
         return [
-            Stat::make('Unassigned', $unassigned)
-                ->descriptionIcon(Heroicon::OutlinedInbox)
-                ->color($unassigned > 0 ? 'warning' : 'gray')
-                ->url(TicketResource::getUrl('index').'?tab=unassigned'),
             Stat::make('Pending', $open)
+                ->description($unassigned > 0 ? $unassigned.' unassigned' : null)
                 ->descriptionIcon(Heroicon::OutlinedClock)
                 ->color($open > 0 ? 'warning' : 'gray')
                 ->url(TicketResource::getUrl('index').'?tab=open'),
@@ -72,7 +69,7 @@ class TicketStatsOverview extends StatsOverviewWidget
             Stat::make('My approvals', $myApprovalCount)
                 ->descriptionIcon(Heroicon::OutlinedCheckBadge)
                 ->color($myApprovalCount > 0 ? 'primary' : 'gray')
-                ->url(\App\Filament\Pages\MyTickets::getUrl().'?tab=approval'),
+                ->url(\App\Filament\Pages\MyTickets::getUrl().'?tab=in_progress'),
             Stat::make('Rejected', $rejectedCount)
                 ->descriptionIcon(Heroicon::OutlinedExclamationTriangle)
                 ->color($rejectedCount > 0 ? 'danger' : 'gray')

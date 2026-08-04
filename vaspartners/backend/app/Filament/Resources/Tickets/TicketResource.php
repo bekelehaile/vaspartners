@@ -33,11 +33,13 @@ use Filament\Actions\ExportBulkAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\Toggle;
 use Filament\Support\Enums\FontWeight;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -60,6 +62,20 @@ class TicketResource extends Resource
     protected static ?int $navigationSort = 2;
 
     protected static ?string $recordTitleAttribute = 'tt_number';
+
+    public static function getNavigationBadge(): ?string
+    {
+        $count = static::getEloquentQuery()
+            ->where('status', TicketStatus::Open)
+            ->count();
+
+        return $count > 0 ? (string) $count : null;
+    }
+
+    public static function getNavigationBadgeTooltip(): ?string
+    {
+        return 'Pending tickets';
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -622,11 +638,20 @@ class TicketResource extends Resource
                         ], true)
                         && $record->document_review_status !== DocumentReviewStatus::Passed
                         && static::accountManagerMayAct($record))
-                    ->form([
-                        Select::make('result')->options([
-                            DocumentReviewStatus::Passed->value => 'All documents OK',
-                            DocumentReviewStatus::Failed->value => 'Documents missing/failed',
-                        ])->required(),
+                    ->form(fn (Ticket $record): array => [
+                        Select::make('result')
+                            ->options([
+                                DocumentReviewStatus::Passed->value => 'All documents OK',
+                                DocumentReviewStatus::Failed->value => 'Documents missing/failed',
+                            ])
+                            ->required()
+                            ->live(),
+                        Toggle::make('close_after_pass')
+                            ->label('Close request')
+                            ->helperText('After-sales only: closes this request when documents pass.')
+                            ->default(true)
+                            ->visible(fn (Get $get): bool => $get('result') === DocumentReviewStatus::Passed->value
+                                && ! app(TicketWorkflowService::class)->ticketRequiresApprovalChain($record)),
                         Textarea::make('note'),
                     ])
                     ->action(function (Ticket $record, array $data, TicketWorkflowService $workflow) {
@@ -636,6 +661,8 @@ class TicketResource extends Resource
                                 auth()->user(),
                                 DocumentReviewStatus::from($data['result']),
                                 $data['note'] ?? null,
+                                false,
+                                (bool) ($data['close_after_pass'] ?? false),
                             );
                         } catch (\Illuminate\Validation\ValidationException $e) {
                             $message = collect($e->errors())->flatten()->first() ?: $e->getMessage();

@@ -16,6 +16,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
+use Filament\Schemas\Components\Utilities\Get;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Model;
 
@@ -143,11 +144,20 @@ class ViewTicket extends ViewRecord
                     ], true)
                     && $record->document_review_status !== DocumentReviewStatus::Passed
                     && TicketResource::accountManagerMayAct($record))
-                ->form([
-                    Select::make('result')->options([
-                        DocumentReviewStatus::Passed->value => 'All documents OK',
-                        DocumentReviewStatus::Failed->value => 'Documents missing/failed',
-                    ])->required(),
+                ->form(fn (Ticket $record): array => [
+                    Select::make('result')
+                        ->options([
+                            DocumentReviewStatus::Passed->value => 'All documents OK',
+                            DocumentReviewStatus::Failed->value => 'Documents missing/failed',
+                        ])
+                        ->required()
+                        ->live(),
+                    Toggle::make('close_after_pass')
+                        ->label('Close request')
+                        ->helperText('After-sales only: closes this request when documents pass.')
+                        ->default(true)
+                        ->visible(fn (Get $get): bool => $get('result') === DocumentReviewStatus::Passed->value
+                            && ! app(TicketWorkflowService::class)->ticketRequiresApprovalChain($record)),
                     Textarea::make('note')
                         ->label('Note (optional)')
                         ->helperText('Internal unless you turn on Notify partner.'),
@@ -161,6 +171,7 @@ class ViewTicket extends ViewRecord
                             DocumentReviewStatus::from($data['result']),
                             $data['note'] ?? null,
                             (bool) ($data['notify_partner'] ?? false),
+                            (bool) ($data['close_after_pass'] ?? false),
                         );
                     } catch (\Illuminate\Validation\ValidationException $e) {
                         $message = collect($e->errors())->flatten()->first() ?: $e->getMessage();

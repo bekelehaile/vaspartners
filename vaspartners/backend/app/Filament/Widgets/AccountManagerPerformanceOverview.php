@@ -53,7 +53,7 @@ class AccountManagerPerformanceOverview extends StatsOverviewWidget
                 ->description($summary['unassigned_open'].' still unassigned (open)')
                 ->descriptionIcon(Heroicon::OutlinedInboxStack)
                 ->color($summary['backlog'] > 0 ? 'warning' : 'success')
-                ->url($this->ticketsUrl('backlog', $handlerId, $serviceIds)),
+                ->url($this->ticketsUrl('in_progress', $handlerId, $serviceIds)),
             Stat::make('Completed', $summary['completed'])
                 ->description('Completed in period')
                 ->descriptionIcon(Heroicon::OutlinedCheckCircle)
