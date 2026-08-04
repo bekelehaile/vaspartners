@@ -21,24 +21,7 @@ class EditService extends EditRecord
 
     public function getSubheading(): ?string
     {
-        $service = $this->getRecord();
-        $missing = $service
-            ->requisitions()
-            ->where('creates_subscription', true)
-            ->orderBy('name')
-            ->get()
-            ->filter(fn ($requisition): bool => ! app(\App\Services\TicketWorkflowService::class)->hasFinalApproverConfigured(
-                (int) $service->id,
-                (int) $requisition->id,
-            ))
-            ->pluck('name')
-            ->all();
-
-        if ($missing === []) {
-            return 'Final approvers are required only for new-subscription request types. After-sales types close with docs + AM.';
-        }
-
-        return 'Critical: missing final approver for new-subscription type(s): '.implode(', ', $missing).'.';
+        return 'Final approvers are optional per request type: if set, that person must approve; if not, the AM closes after documents.';
     }
 
     protected function getHeaderActions(): array

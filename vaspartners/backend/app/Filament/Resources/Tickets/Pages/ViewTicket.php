@@ -163,8 +163,15 @@ class ViewTicket extends ViewRecord
                         );
                     } catch (\Illuminate\Validation\ValidationException $e) {
                         $message = collect($e->errors())->flatten()->first() ?: $e->getMessage();
+                        $lower = strtolower((string) $message);
                         Notification::make()
-                            ->title('Next approver is not found')
+                            ->title(
+                                str_contains($lower, 'final approver')
+                                    ? 'Final approver not configured'
+                                    : (str_contains($lower, 'approver')
+                                        ? 'Next approver is not found'
+                                        : 'Document review failed')
+                            )
                             ->body((string) $message)
                             ->danger()
                             ->persistent()
@@ -213,11 +220,14 @@ class ViewTicket extends ViewRecord
                         );
                     } catch (\Illuminate\Validation\ValidationException $e) {
                         $message = collect($e->errors())->flatten()->first() ?: $e->getMessage();
+                        $lower = strtolower((string) $message);
                         Notification::make()
                             ->title(
-                                str_contains(strtolower((string) $message), 'approver')
-                                    ? 'Next approver is not found'
-                                    : 'Approval failed'
+                                str_contains($lower, 'final approver')
+                                    ? 'Final approver not configured'
+                                    : (str_contains($lower, 'approver')
+                                        ? 'Next approver is not found'
+                                        : 'Approval failed')
                             )
                             ->body((string) $message)
                             ->danger()

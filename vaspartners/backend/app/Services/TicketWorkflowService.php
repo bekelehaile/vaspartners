@@ -737,10 +737,8 @@ class TicketWorkflowService
 
                 $this->subscriptions->assertTicketAllowed($contact, $data, $requisition, $service);
 
-                // New subscriptions need a final approver. After-sales (maintain/renew/etc.) do not.
-                if ($requisition->creates_subscription) {
-                    $this->assertFinalApproverConfigured((int) $service->id, (int) $requisition->id);
-                }
+                // Final approver is optional: if configured for this service + type, the
+                // approval chain runs; if not, AM closes after docs (no hard block on create).
 
                 $subscriptionId = $data['subscription_id'] ?? null;
                 if (! $subscriptionId && ($requisition->requires_active_subscription || $requisition->renews_subscription || $requisition->terminates_subscription)) {
@@ -1414,14 +1412,26 @@ class TicketWorkflowService
     }
 
     /**
-     * New subscription requests use the final-approval chain.
-     * After-sales (maintain / renew / terminate / etc.) do not — docs + AM close only.
+     * Approval chain only when a final approver is configured for this service + request type.
+     * If not configured → AM closes after docs (scalable default).
+     * After-sales (creates_subscription=false) never use the chain.
      */
     public function ticketRequiresApprovalChain(Ticket $ticket): bool
     {
         $ticket->loadMissing('requisition');
 
-        return (bool) ($ticket->requisition?->creates_subscription);
+        if (! $ticket->requisition?->creates_subscription) {
+            return false;
+        }
+
+        if (! $ticket->service_id || ! $ticket->requisition_id) {
+            return false;
+        }
+
+        return $this->hasFinalApproverConfigured(
+            (int) $ticket->service_id,
+            (int) $ticket->requisition_id,
+        );
     }
 
     /**
@@ -1444,8 +1454,7 @@ class TicketWorkflowService
         $ticket->loadMissing('requisition');
 
         if ($this->ticketRequiresApprovalChain($ticket)) {
-            return $ticket->status === TicketStatus::Completed
-                && $this->hasFinalApproverConfigured((int) $ticket->service_id, (int) $ticket->requisition_id);
+            return $ticket->status === TicketStatus::Completed;
         }
 
         if (! in_array($ticket->status, [TicketStatus::InProgress, TicketStatus::Completed], true)) {
@@ -1520,7 +1529,7 @@ class TicketWorkflowService
     {
         if (! $this->hasFinalApproverConfigured($serviceId, $requisitionId)) {
             throw ValidationException::withMessages([
-                'approver' => 'Final approver is not configured for this new-subscription request type. Set it under Catalog → Services → Final approvers before continuing.',
+                'approver' => 'Final approver is not configured for this service and request type. Add one under Catalog → Services → Final approvers, or leave it unset so the account manager can close after documents.',
             ]);
         }
     }
