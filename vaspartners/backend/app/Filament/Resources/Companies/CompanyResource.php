@@ -22,6 +22,7 @@ use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -141,6 +142,10 @@ class CompanyResource extends Resource
                 ->maxLength(255)
                 ->dehydrateStateUsing(fn (?string $state): ?string => \App\Support\EmailAddress::normalize($state)),
             Textarea::make('address')->rows(3)->columnSpanFull(),
+            DatePicker::make('license_valid_until')
+                ->label('License valid until')
+                ->native(false)
+                ->helperText('VAS / trade license expiry date.'),
             Toggle::make('is_active')
                 ->label('Active'),
         ])->columns(2);
@@ -232,6 +237,16 @@ class CompanyResource extends Resource
                         ->label('Verified at')
                         ->dateTime()
                         ->placeholder('—'),
+                    TextEntry::make('license_valid_until')
+                        ->label('License valid until')
+                        ->date()
+                        ->placeholder('—')
+                        ->color(fn (Company $record): string => match (true) {
+                            ! filled($record->license_valid_until) => 'gray',
+                            $record->license_valid_until->isPast() => 'danger',
+                            $record->license_valid_until->lte(now()->addDays(30)) => 'warning',
+                            default => 'success',
+                        }),
                 ])->columns(2),
             Section::make('Record')
                 ->collapsed()
@@ -356,6 +371,18 @@ class CompanyResource extends Resource
                     ->counts('memberships')
                     ->label('Members')
                     ->sortable(),
+                TextColumn::make('license_valid_until')
+                    ->label('License valid until')
+                    ->date()
+                    ->placeholder('—')
+                    ->sortable()
+                    ->toggleable()
+                    ->color(fn (Company $record): string => match (true) {
+                        ! filled($record->license_valid_until) => 'gray',
+                        $record->license_valid_until->isPast() => 'danger',
+                        $record->license_valid_until->lte(now()->addDays(30)) => 'warning',
+                        default => 'success',
+                    }),
                 IconColumn::make('is_active')->boolean()->label('Active'),
                 TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
