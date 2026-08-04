@@ -230,6 +230,13 @@ class RevenuePartnerResource extends Resource
                     ->label('Account manager')
                     ->toggleable()
                     ->sortable()
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->whereHas('creator', function (Builder $q) use ($search): void {
+                            $q->where('name', 'ilike', '%'.$search.'%')
+                                ->orWhere('email', 'ilike', '%'.$search.'%')
+                                ->orWhere('username', 'ilike', '%'.$search.'%');
+                        });
+                    })
                     ->visible(fn (): bool => static::viewerCanAccessAllRevenue()),
                 IconColumn::make('is_active')->boolean()->label('Active'),
                 TextColumn::make('updated_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
@@ -241,9 +248,20 @@ class RevenuePartnerResource extends Resource
                     ->options(fn (): array => RevenueCatalogServices::options()),
                 SelectFilter::make('created_by_user_id')
                     ->label('Account manager')
-                    ->options(fn (): array => static::accountManagerOptions())
+                    ->options(fn (): array => static::accountManagerFilterOptions())
                     ->searchable()
                     ->preload()
+                    ->query(function (Builder $query, array $data): Builder {
+                        $value = $data['value'] ?? null;
+                        if ($value === null || $value === '') {
+                            return $query;
+                        }
+                        if ($value === '__unassigned__') {
+                            return $query->whereNull('created_by_user_id');
+                        }
+
+                        return $query->where('created_by_user_id', (int) $value);
+                    })
                     ->visible(fn (): bool => static::viewerCanAccessAllRevenue()),
                 TernaryFilter::make('phone')
                     ->label('Phone')
@@ -294,6 +312,37 @@ class RevenuePartnerResource extends Resource
             ->orderBy('name')
             ->pluck('name', 'id')
             ->all();
+    }
+
+    /**
+     * Filter options: AMs who currently own partners, plus Unassigned.
+     *
+     * @return array<int|string, string>
+     */
+    public static function accountManagerFilterOptions(): array
+    {
+        $owners = User::query()
+            ->whereIn(
+                'id',
+                RevenuePartner::query()
+                    ->whereNotNull('created_by_user_id')
+                    ->distinct()
+                    ->pluck('created_by_user_id')
+            )
+            ->orderBy('name')
+            ->pluck('name', 'id')
+            ->all();
+
+        $options = [];
+        if (RevenuePartner::query()->whereNull('created_by_user_id')->exists()) {
+            $options['__unassigned__'] = '— Unassigned —';
+        }
+
+        foreach ($owners as $id => $name) {
+            $options[$id] = $name;
+        }
+
+        return $options;
     }
 
     public static function getEloquentQuery(): Builder
