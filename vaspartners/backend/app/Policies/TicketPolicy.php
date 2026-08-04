@@ -37,10 +37,6 @@ class TicketPolicy
             return false;
         }
 
-        if (! $user->canHandleCompanyServices($ticket->serviceCompany())) {
-            return false;
-        }
-
         if ($user->can('ViewAny:Ticket')) {
             return true;
         }

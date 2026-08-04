@@ -143,30 +143,46 @@ class User extends Authenticatable implements CanResetPasswordContract, Filament
     }
 
     /**
-     * Whether this staff user may process VAS services for the company.
-     * Account managers require a verified TIN; other roles are not restricted here.
+     * Soft TIN signal for UI warnings. Account managers are not blocked when false.
      */
-    public function canHandleCompanyServices(?Company $company): bool
+    public function companyTinVerifiedForServices(?Company $company): bool
     {
-        if (! $this->isOperationalAccountManager()) {
-            return true;
-        }
-
         return $company !== null && $company->isTinValidated();
     }
 
     /**
-     * @throws \Illuminate\Validation\ValidationException
+     * @deprecated Use {@see companyTinVerifiedForServices()} for warnings only.
+     * AM actions are no longer blocked by unverified TIN.
+     */
+    public function canHandleCompanyServices(?Company $company): bool
+    {
+        return true;
+    }
+
+    /**
+     * Soft check kept for callers — does not block. Prefer UI notify via
+     * {@see companyTinWarning()}.
      */
     public function assertCanHandleCompanyServices(?Company $company): void
     {
-        if ($this->canHandleCompanyServices($company)) {
-            return;
+        // Intentionally not blocking. Unverified / missing company TIN is a warning only.
+    }
+
+    public function companyTinWarning(?Company $company): ?string
+    {
+        if (! $this->isOperationalAccountManager()) {
+            return null;
         }
 
-        throw \Illuminate\Validation\ValidationException::withMessages([
-            'company' => 'This company TIN number is not verified. Account managers cannot process services until the TIN is verified with ERCA.',
-        ]);
+        if ($company === null) {
+            return 'Company not linked / TIN not verified — you can still process this request.';
+        }
+
+        if (! $company->isTinValidated()) {
+            return 'Company TIN not verified — you can still process this request.';
+        }
+
+        return null;
     }
 
     /**

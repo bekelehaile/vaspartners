@@ -969,16 +969,17 @@ class TicketResource extends Resource
     }
 
     /**
-     * Account managers cannot act on requests when the company TIN is unverified.
+     * TIN status is a warning only — does not block AM ticket actions.
      */
     public static function accountManagerMayAct(Ticket $record): bool
     {
-        $user = auth()->user();
-        if (! $user) {
-            return false;
-        }
+        return auth()->user() !== null;
+    }
 
-        return $user->canHandleCompanyServices($record->serviceCompany());
+    public static function companyTinWarning(Ticket $record): ?string
+    {
+        return app(TicketWorkflowService::class)
+            ->companyTinWarningForTicket($record, auth()->user());
     }
 
     /**

@@ -49,7 +49,7 @@ class TicketWorkflowService
     public function transition(Ticket $ticket, TicketStatus $to, mixed $actor = null, ?string $note = null, array $meta = []): void
     {
         if ($actor instanceof User) {
-            $actor->assertCanHandleCompanyServices($ticket->serviceCompany());
+            $this->assertAccountManagerMayProcessTicket($ticket, $actor);
         }
 
         $from = $ticket->status;
@@ -177,6 +177,9 @@ class TicketWorkflowService
     {
         return DB::transaction(function () use ($ticket, $contact) {
             $ticket->refresh();
+            $ticket->loadMissing('service');
+
+            $this->assertServiceAcceptsRequests($ticket->service);
 
             if ($ticket->status !== TicketStatus::Rejected) {
                 return $ticket;
@@ -716,6 +719,8 @@ class TicketWorkflowService
                 $service = Service::query()->findOrFail($data['service_id']);
                 $requisition = Requisition::query()->findOrFail($data['requisition_id']);
 
+                $this->assertServiceAcceptsRequests($service);
+
                 // Hard gate: no VAS service requests until the company TIN number is admin-approved.
                 if (empty($data['skip_open_limit'])) {
                     $this->membership->assertCanAccessCompany($contact);
@@ -1054,7 +1059,7 @@ class TicketWorkflowService
             throw new InvalidArgumentException('Document review must be passed or failed.');
         }
 
-        $reviewer->assertCanHandleCompanyServices($ticket->serviceCompany());
+        $this->assertAccountManagerMayProcessTicket($ticket, $reviewer);
 
         return DB::transaction(function () use ($ticket, $reviewer, $result, $note, $notifyPartner) {
             if ($ticket->assigned_to_user_id !== $reviewer->id) {
@@ -1185,7 +1190,7 @@ class TicketWorkflowService
             ]);
         }
 
-        $approver->assertCanHandleCompanyServices($ticket->serviceCompany());
+        $this->assertAccountManagerMayProcessTicket($ticket, $approver);
 
         return DB::transaction(function () use ($ticket, $approver, $action, $note, $notifyPartner) {
             if ($ticket->current_approver_user_id !== $approver->id) {
@@ -1345,7 +1350,7 @@ class TicketWorkflowService
     public function close(Ticket $ticket, User $actor, ?string $note = null, bool $notifyPartner = false): Ticket
     {
         return DB::transaction(function () use ($ticket, $actor, $note, $notifyPartner) {
-            $actor->assertCanHandleCompanyServices($ticket->serviceCompany());
+            $this->assertAccountManagerMayProcessTicket($ticket, $actor);
 
             if ($ticket->assigned_to_user_id !== $actor->id && ! $actor->is_management) {
                 throw ValidationException::withMessages(['ticket' => 'Only the assignee or a supervisor can close.']);
@@ -1447,7 +1452,9 @@ class TicketWorkflowService
             return false;
         }
 
-        if (! $actor->canHandleCompanyServices($ticket->serviceCompany())) {
+        try {
+            $this->assertAccountManagerMayProcessTicket($ticket, $actor);
+        } catch (ValidationException) {
             return false;
         }
 
@@ -1501,6 +1508,28 @@ class TicketWorkflowService
         }
     }
 
+    /**
+     * Soft notify only — AM is not blocked when company/TIN is missing or unverified.
+     */
+    public function assertAccountManagerMayProcessTicket(Ticket $ticket, User $actor): void
+    {
+        // No hard gate. UI surfaces {@see User::companyTinWarning()}.
+    }
+
+    public function accountManagerMayProcessTicket(Ticket $ticket, ?User $actor): bool
+    {
+        return $actor !== null;
+    }
+
+    public function companyTinWarningForTicket(Ticket $ticket, ?User $actor): ?string
+    {
+        if (! $actor) {
+            return null;
+        }
+
+        return $actor->companyTinWarning($ticket->serviceCompany());
+    }
+
     public function isFinalApprover(Ticket $ticket, User $user): bool
     {
         return ServiceFinalApprover::query()
@@ -1508,6 +1537,42 @@ class TicketWorkflowService
             ->where('requisition_id', $ticket->requisition_id)
             ->where('user_id', $user->id)
             ->exists();
+    }
+
+    /**
+     * Partner may edit/resubmit only while status allows it and the catalog service is active.
+     */
+    public function contactMayEditTicket(Ticket $ticket): bool
+    {
+        $ticket->loadMissing('service');
+
+        if (! $ticket->status->allowsContactEdits()) {
+            return false;
+        }
+
+        return (bool) ($ticket->service?->is_active);
+    }
+
+    public function assertContactMayEditTicket(Ticket $ticket): void
+    {
+        $ticket->loadMissing('service');
+
+        if (! $ticket->status->allowsContactEdits()) {
+            throw ValidationException::withMessages([
+                'ticket' => 'This request cannot be edited while Ethio telecom is handling it. You can edit again if it is sent back for corrections.',
+            ]);
+        }
+
+        $this->assertServiceAcceptsRequests($ticket->service);
+    }
+
+    public function assertServiceAcceptsRequests(?Service $service): void
+    {
+        if (! $service || ! $service->is_active) {
+            throw ValidationException::withMessages([
+                'service_id' => 'This service is deactivated. New or updated requests for it are not accepted.',
+            ]);
+        }
     }
 
     /**

@@ -165,10 +165,7 @@ export function RequestsTable({
         cell: (info) => {
           const ticket = info.row.original;
           const canDelete = ticket.can_delete === true;
-          const canEdit =
-            ticket.contact_can_edit === true ||
-            ticket.status === "open" ||
-            ticket.status === "rejected";
+          const canEdit = ticket.contact_can_edit === true;
           return (
             <div className="flex flex-wrap items-center gap-2">
               <Button

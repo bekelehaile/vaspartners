@@ -87,8 +87,9 @@ class ViewTicket extends ViewRecord
             : 'Details, messages, attachments, approvals, and status history.';
 
         $user = auth()->user();
-        if ($user && ! $user->canHandleCompanyServices($record->serviceCompany())) {
-            return $heading.' · TIN not verified — account manager actions blocked';
+        $warning = $user?->companyTinWarning($record->serviceCompany());
+        if ($warning) {
+            return $heading.' · '.$warning;
         }
 
         return $heading;

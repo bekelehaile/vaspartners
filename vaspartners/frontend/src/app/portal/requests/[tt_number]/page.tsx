@@ -52,11 +52,7 @@ export default function RequestDetailPage() {
   const [editError, setEditError] = useState<string | null>(null);
   const [editSaved, setEditSaved] = useState(false);
 
-  const canEdit =
-    !!ticket &&
-    (ticket.contact_can_edit === true ||
-      ticket.status === "open" ||
-      ticket.status === "rejected");
+  const canEdit = !!ticket && ticket.contact_can_edit === true;
 
   const canDelete = !!ticket && ticket.can_delete === true;
 

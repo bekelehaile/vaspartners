@@ -112,7 +112,7 @@ class ContactPortalController extends Controller
 
         $query = Ticket::query()
             ->with([
-                'service:id,name',
+                'service:id,name,is_active',
                 'requisition:id,name',
                 'contact:id,public_id,name',
                 'assignee:id,name',
@@ -160,13 +160,14 @@ class ContactPortalController extends Controller
             ->paginate((int) ($filters['per_page'] ?? 15));
 
         $purge = app(\App\Services\TicketPurgeService::class);
+        $workflow = app(TicketWorkflowService::class);
         $actor = $request->user();
-        $tickets->getCollection()->transform(function (Ticket $ticket) use ($purge, $actor) {
+        $tickets->getCollection()->transform(function (Ticket $ticket) use ($purge, $actor, $workflow) {
             $handlerName = $ticket->assignee?->name;
             $ticket->unsetRelation('assignee');
             $ticket->setAttribute('assignee', $handlerName ? ['name' => $handlerName] : null);
             $ticket->setAttribute('can_delete', $purge->partnerMayDelete($ticket, $actor));
-            $ticket->setAttribute('contact_can_edit', $ticket->status->allowsContactEdits());
+            $ticket->setAttribute('contact_can_edit', $workflow->contactMayEditTicket($ticket));
             $ticket->makeHidden([
                 'assigned_to_user_id',
                 'current_approver_user_id',
@@ -205,8 +206,9 @@ class ContactPortalController extends Controller
         $payload['messages_meta'] = $thread['meta'];
         $payload['chat_locked'] = $ticket->status->locksContactChat();
         $payload['chat_attachment_max_kb'] = $comments->maxAttachmentKb();
-        $payload['documents_locked'] = $ticket->status->locksContactDocuments();
-        $payload['contact_can_edit'] = $ticket->status->allowsContactEdits();
+        $payload['documents_locked'] = $ticket->status->locksContactDocuments()
+            || ! ($ticket->service?->is_active ?? false);
+        $payload['contact_can_edit'] = $workflow->contactMayEditTicket($ticket);
         $payload['documents'] = collect($payload['documents'] ?? [])->map(function (array $doc) use ($ticket) {
             $doc['download_url'] = url("/api/v1/tickets/{$ticket->tt_number}/documents/{$doc['id']}/download");
 
@@ -254,11 +256,7 @@ class ContactPortalController extends Controller
     ) {
         $membership->assertCanAccessCompanyTicket($request->user(), $ticket);
 
-        if (! $ticket->status->allowsContactEdits()) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
-                'ticket' => 'This request cannot be edited while Ethio telecom is handling it. You can edit again if it is sent back for corrections.',
-            ]);
-        }
+        $workflow->assertContactMayEditTicket($ticket);
 
         $data = $request->validate([
             'description' => ['required', 'string', 'min:1', 'max:5000'],
@@ -296,8 +294,9 @@ class ContactPortalController extends Controller
         $payload['assignee'] = $ticket->assignee
             ? ['name' => $ticket->assignee->name]
             : null;
-        $payload['documents_locked'] = $ticket->status->locksContactDocuments();
-        $payload['contact_can_edit'] = $ticket->status->allowsContactEdits();
+        $payload['documents_locked'] = $ticket->status->locksContactDocuments()
+            || ! ($ticket->service?->is_active ?? false);
+        $payload['contact_can_edit'] = $workflow->contactMayEditTicket($ticket);
         $payload['can_delete'] = app(\App\Services\TicketPurgeService::class)->partnerMayDelete($ticket, $request->user());
         $attachment = $workflow->attachmentStatus($ticket);
         $payload['attachment_status'] = [
@@ -688,6 +687,7 @@ class ContactPortalController extends Controller
     public function uploadDocument(Request $request, Ticket $ticket, TicketDocumentService $documents, CompanyMembershipService $membership)
     {
         $membership->assertCanAccessCompanyTicket($request->user(), $ticket);
+        app(TicketWorkflowService::class)->assertContactMayEditTicket($ticket);
 
         $data = $request->validate([
             'document_type_id' => ['required', 'integer', 'exists:document_types,id'],
@@ -716,6 +716,7 @@ class ContactPortalController extends Controller
         CompanyMembershipService $membership,
     ) {
         $membership->assertCanAccessCompanyTicket($request->user(), $ticket);
+        app(TicketWorkflowService::class)->assertContactMayEditTicket($ticket);
 
         $documents->deleteForContact($ticket, $document, $request->user());
 

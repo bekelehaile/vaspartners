@@ -125,18 +125,24 @@ class CatalogSeeder extends Seeder
                 continue;
             }
 
+            $existing = Service::withTrashed()->where('slug', $row['slug'])->first();
+            $attrs = [
+                'category_id' => $categoryId,
+                'name' => $row['name'],
+                'description' => $row['description'] ?? null,
+                'type' => $row['type'] ?? null,
+                'is_subscription_based' => true,
+                'sort_order' => (int) ($row['sort_order'] ?? 0),
+                'deleted_at' => null,
+            ];
+            // Preserve admin deactivation — do not reactivate on every boot seed.
+            if (! $existing) {
+                $attrs['is_active'] = (bool) ($row['is_active'] ?? true);
+            }
+
             $service = Service::withTrashed()->updateOrCreate(
                 ['slug' => $row['slug']],
-                [
-                    'category_id' => $categoryId,
-                    'name' => $row['name'],
-                    'description' => $row['description'] ?? null,
-                    'type' => $row['type'] ?? null,
-                    'is_active' => (bool) ($row['is_active'] ?? true),
-                    'is_subscription_based' => true,
-                    'sort_order' => (int) ($row['sort_order'] ?? 0),
-                    'deleted_at' => null,
-                ]
+                $attrs,
             );
             if ($service->trashed()) {
                 $service->restore();
