@@ -10,6 +10,7 @@ use App\Enums\CompanyRole;
 use App\Models\Company;
 use App\Models\CompanyChangeRequest;
 use App\Models\CompanyMembership;
+use App\Models\CompanyMembershipAuditLog;
 use App\Models\CompanyStatusHistory;
 use App\Models\Contact;
 use App\Models\Ticket;
@@ -1118,7 +1119,24 @@ class CompanyMembershipService
             ->values()
             ->all();
 
+        $before = CompanyMemberPermission::normalizeStored($membership->permissions ?? []);
+        sort($before);
+        $after = $normalized;
+        sort($after);
+
         $membership->forceFill(['permissions' => $normalized])->save();
+
+        if ($before !== $after) {
+            $this->recordMembershipAudit(
+                $company,
+                $membership,
+                $member,
+                'permissions_updated',
+                actorContact: $actor,
+                before: ['permissions' => $before],
+                after: ['permissions' => $after],
+            );
+        }
 
         return $member->fresh(['company', 'memberships.company']);
     }
@@ -1494,7 +1512,7 @@ class CompanyMembershipService
         }
     }
 
-    protected function assertIsActiveOwner(Contact $contact): void
+    public function assertIsActiveOwner(Contact $contact): void
     {
         if ($this->roleOf($contact) !== CompanyRole::Owner || ! $contact->current_company_id) {
             throw ValidationException::withMessages([
@@ -2091,7 +2109,23 @@ class CompanyMembershipService
             }
         }
 
+        $wasActive = (bool) $membership->is_active;
         $membership->forceFill(['is_active' => $active])->save();
+
+        if ($wasActive !== $active) {
+            $actorUser = $actor instanceof User ? $actor : null;
+            $actorContact = $actor instanceof Contact ? $actor : null;
+            $this->recordMembershipAudit(
+                $company,
+                $membership,
+                $member,
+                $active ? 'access_enabled' : 'access_disabled',
+                actorUser: $actorUser,
+                actorContact: $actorContact,
+                before: ['is_active' => $wasActive],
+                after: ['is_active' => $active],
+            );
+        }
 
         if (! $active && (int) $member->current_company_id === (int) $company->id) {
             $this->switchToFallbackCompany($member, exceptCompanyId: $company->id);
@@ -2602,6 +2636,69 @@ class CompanyMembershipService
             'meta' => $meta,
             'created_at' => now(),
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $before
+     * @param  array<string, mixed>|null  $after
+     */
+    public function recordMembershipAudit(
+        Company $company,
+        CompanyMembership $membership,
+        Contact $member,
+        string $action,
+        ?User $actorUser = null,
+        ?Contact $actorContact = null,
+        ?array $before = null,
+        ?array $after = null,
+        ?string $note = null,
+    ): CompanyMembershipAuditLog {
+        return CompanyMembershipAuditLog::query()->create([
+            'company_id' => $company->id,
+            'membership_id' => $membership->id,
+            'member_contact_id' => $member->id,
+            'action' => $action,
+            'actor_user_id' => $actorUser?->id,
+            'actor_contact_id' => $actorContact?->id,
+            'before' => $before,
+            'after' => $after,
+            'note' => filled($note) ? trim($note) : null,
+            'created_at' => now(),
+        ]);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function membershipAuditForPortal(Company $company, Contact $member, int $limit = 30): array
+    {
+        return CompanyMembershipAuditLog::query()
+            ->with(['actorUser:id,name,email', 'actorContact:id,name,phone_number'])
+            ->where('company_id', $company->id)
+            ->where('member_contact_id', $member->id)
+            ->orderByDesc('id')
+            ->limit($limit)
+            ->get()
+            ->map(function (CompanyMembershipAuditLog $log): array {
+                $actor = null;
+                if ($log->actorUser) {
+                    $actor = $log->actorUser->name ?: ($log->actorUser->email ?? 'Staff');
+                } elseif ($log->actorContact) {
+                    $actor = ($log->actorContact->name ?? 'Partner').' (partner)';
+                }
+
+                return [
+                    'action' => $log->action,
+                    'label' => $log->actionLabel(),
+                    'actor' => $actor,
+                    'before' => $log->before,
+                    'after' => $log->after,
+                    'note' => $log->note,
+                    'created_at' => optional($log->created_at)?->toIso8601String(),
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     /**

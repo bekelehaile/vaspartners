@@ -161,6 +161,16 @@ class SubscriptionLifecycleService
             $ticket->subscription_id = $subscription->id;
             $ticket->save();
 
+            app(SubscriptionProvisioningLogService::class)->record(
+                $subscription,
+                'activated',
+                $ticket->contact,
+                $ticket,
+                null,
+                SubscriptionStatus::Active->value,
+                'Subscription activated from request '.$ticket->tt_number,
+            );
+
             return $subscription;
         });
     }
@@ -177,6 +187,7 @@ class SubscriptionLifecycleService
                 ]);
             }
 
+            $from = SubscriptionProvisioningLogService::statusValue($subscription->status);
             $interval = $subscription->renewal_interval;
             $periodStart = $subscription->current_period_end->greaterThan(now())
                 ? $subscription->current_period_end->copy()
@@ -190,6 +201,20 @@ class SubscriptionLifecycleService
                 'next_renewal_due_at' => $periodEnd->copy()->subDays((int) $ticket->service->renewal_lead_days),
             ])->save();
 
+            app(SubscriptionProvisioningLogService::class)->record(
+                $subscription,
+                'renewed',
+                $ticket->contact,
+                $ticket,
+                $from,
+                SubscriptionStatus::Active->value,
+                'Subscription renewed from request '.$ticket->tt_number,
+                [
+                    'period_start' => $periodStart->toIso8601String(),
+                    'period_end' => $periodEnd->toIso8601String(),
+                ],
+            );
+
             return $subscription->fresh();
         });
     }
@@ -199,6 +224,7 @@ class SubscriptionLifecycleService
         return DB::transaction(function () use ($ticket) {
             /** @var Subscription $subscription */
             $subscription = $ticket->subscription()->lockForUpdate()->firstOrFail();
+            $from = SubscriptionProvisioningLogService::statusValue($subscription->status);
 
             $subscription->fill([
                 'status' => SubscriptionStatus::Deactive,
@@ -206,6 +232,16 @@ class SubscriptionLifecycleService
                 'terminated_by_ticket_id' => $ticket->id,
                 'next_renewal_due_at' => null,
             ])->save();
+
+            app(SubscriptionProvisioningLogService::class)->record(
+                $subscription,
+                'terminated',
+                $ticket->contact,
+                $ticket,
+                $from,
+                SubscriptionStatus::Deactive->value,
+                'Subscription deactivated from request '.$ticket->tt_number,
+            );
 
             return $subscription->fresh();
         });
@@ -254,7 +290,7 @@ class SubscriptionLifecycleService
                         continue;
                     }
 
-                    $workflow->createTicket($actor, [
+                    $renewalTicket = $workflow->createTicket($actor, [
                         'service_id' => $subscription->service_id,
                         'requisition_id' => $requisition->id,
                         'category_id' => $subscription->service->category_id,
@@ -263,8 +299,19 @@ class SubscriptionLifecycleService
                         'skip_open_limit' => true,
                     ]);
 
+                    $from = SubscriptionProvisioningLogService::statusValue($subscription->status);
                     $subscription->status = SubscriptionStatus::PendingRenewal;
                     $subscription->save();
+
+                    app(SubscriptionProvisioningLogService::class)->record(
+                        $subscription,
+                        'pending_renewal',
+                        $actor,
+                        $renewalTicket,
+                        $from,
+                        SubscriptionStatus::PendingRenewal->value,
+                        'Automatic renewal window opened',
+                    );
                     $created++;
                 }
             });

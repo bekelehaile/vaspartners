@@ -379,6 +379,11 @@ class Company extends Model
         return $this->hasMany(CompanyStatusHistory::class)->orderByDesc('created_at')->orderByDesc('id');
     }
 
+    public function membershipAuditLogs(): HasMany
+    {
+        return $this->hasMany(CompanyMembershipAuditLog::class)->orderByDesc('created_at')->orderByDesc('id');
+    }
+
     public function memberships(): HasMany
     {
         return $this->hasMany(CompanyMembership::class);

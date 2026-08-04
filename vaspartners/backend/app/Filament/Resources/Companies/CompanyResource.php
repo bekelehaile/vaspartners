@@ -8,6 +8,7 @@ use App\Filament\Resources\Companies\Pages\ListCompanies;
 use App\Filament\Resources\Companies\Pages\ViewCompany;
 use App\Filament\Resources\Companies\RelationManagers\ChangeRequestsRelationManager;
 use App\Filament\Resources\Companies\RelationManagers\MembersRelationManager;
+use App\Filament\Resources\Companies\RelationManagers\MembershipAuditRelationManager;
 use App\Filament\Resources\Companies\RelationManagers\ServiceRequestsRelationManager;
 use App\Filament\Resources\Companies\RelationManagers\StatusHistoryRelationManager;
 use App\Filament\Resources\Companies\RelationManagers\SubscriptionsRelationManager;
@@ -602,6 +603,7 @@ class CompanyResource extends Resource
     {
         return [
             MembersRelationManager::class,
+            MembershipAuditRelationManager::class,
             StatusHistoryRelationManager::class,
             ServiceRequestsRelationManager::class,
             SubscriptionsRelationManager::class,

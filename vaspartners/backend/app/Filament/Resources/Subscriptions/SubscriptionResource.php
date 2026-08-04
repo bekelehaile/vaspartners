@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Subscriptions;
 
+use App\Enums\ServiceOperationalStatus;
 use App\Enums\SubscriptionStatus;
 use App\Filament\Resources\Companies\CompanyResource;
 use App\Filament\Resources\Contacts\ContactResource;
@@ -9,6 +10,7 @@ use App\Filament\Resources\Subscriptions\Pages\ListSubscriptions;
 use App\Filament\Resources\Subscriptions\Pages\ViewSubscription;
 use App\Filament\Resources\Subscriptions\RelationManagers\DocumentsRelationManager;
 use App\Filament\Resources\Subscriptions\RelationManagers\MessagesRelationManager;
+use App\Filament\Resources\Subscriptions\RelationManagers\ProvisioningLogsRelationManager;
 use App\Filament\Resources\Subscriptions\RelationManagers\StatusHistoryRelationManager;
 use App\Filament\Resources\Subscriptions\RelationManagers\TicketsRelationManager;
 use App\Filament\Resources\Tickets\TicketResource;
@@ -66,6 +68,16 @@ class SubscriptionResource extends Resource
                     ->badge()
                     ->formatStateUsing(fn ($state) => SubscriptionStatus::tryLabel($state))
                     ->color(fn ($state): string => SubscriptionStatus::tryColor($state)),
+                TextEntry::make('operational_status')
+                    ->label('Uptime status')
+                    ->badge()
+                    ->formatStateUsing(fn ($state) => ServiceOperationalStatus::tryLabel($state))
+                    ->color(fn ($state): string => ServiceOperationalStatus::tryColor($state))
+                    ->helperText('Staff-reported until an external probe is connected.'),
+                TextEntry::make('operational_status_updated_at')
+                    ->label('Uptime updated')
+                    ->dateTime()
+                    ->placeholder('—'),
                 TextEntry::make('service.name')->label('Service'),
                 TextEntry::make('renewal_interval')->badge()->placeholder('—'),
                 TextEntry::make('current_period_start')->dateTime()->placeholder('—'),
@@ -141,6 +153,12 @@ class SubscriptionResource extends Resource
                     ->badge()
                     ->formatStateUsing(fn ($state) => SubscriptionStatus::tryLabel($state))
                     ->color(fn ($state): string => SubscriptionStatus::tryColor($state)),
+                TextColumn::make('operational_status')
+                    ->label('Uptime')
+                    ->badge()
+                    ->formatStateUsing(fn ($state) => ServiceOperationalStatus::tryLabel($state))
+                    ->color(fn ($state): string => ServiceOperationalStatus::tryColor($state))
+                    ->toggleable(),
                 TextColumn::make('contact.name')->label('Activated by')->searchable()->toggleable(),
                 TextColumn::make('renewal_interval')->badge(),
                 TextColumn::make('current_period_end')->dateTime()->sortable()->toggleable(),
@@ -187,6 +205,7 @@ class SubscriptionResource extends Resource
             TicketsRelationManager::class,
             MessagesRelationManager::class,
             DocumentsRelationManager::class,
+            ProvisioningLogsRelationManager::class,
             StatusHistoryRelationManager::class,
         ];
     }

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\RenewalInterval;
+use App\Enums\ServiceOperationalStatus;
 use App\Enums\SubscriptionStatus;
 use App\Support\TimestampPublicId;
 use Illuminate\Database\Eloquent\Model;
@@ -21,6 +22,8 @@ class Subscription extends Model
         'company_id',
         'service_id',
         'status',
+        'operational_status',
+        'operational_status_updated_at',
         'renewal_interval',
         'started_at',
         'current_period_start',
@@ -37,12 +40,14 @@ class Subscription extends Model
     {
         return [
             'status' => SubscriptionStatus::class,
+            'operational_status' => ServiceOperationalStatus::class,
             'renewal_interval' => RenewalInterval::class,
             'started_at' => 'datetime',
             'current_period_start' => 'datetime',
             'current_period_end' => 'datetime',
             'next_renewal_due_at' => 'datetime',
             'terminated_at' => 'datetime',
+            'operational_status_updated_at' => 'datetime',
         ];
     }
 
@@ -112,5 +117,11 @@ class Subscription extends Model
     public function statusHistories(): HasManyThrough
     {
         return $this->hasManyThrough(TicketStatusHistory::class, Ticket::class);
+    }
+
+    /** Provisioning / lifecycle events (activate, renew, terminate, uptime). */
+    public function provisioningLogs(): HasMany
+    {
+        return $this->hasMany(SubscriptionProvisioningLog::class)->orderByDesc('id');
     }
 }
