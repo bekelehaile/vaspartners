@@ -149,7 +149,7 @@ class ServiceResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->defaultSort('sort_order')
+            ->defaultSort('created_at', 'desc')
             ->modifyQueryUsing(fn (Builder $query) => $query->withCount([
                 'subscriptions as companies_count' => fn (Builder $q) => $q
                     ->selectRaw('count(distinct company_id)'),

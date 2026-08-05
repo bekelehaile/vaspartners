@@ -27,7 +27,8 @@ class MembershipsRelationManager extends RelationManager
     {
         return $table
             ->description('A contact can belong to many companies. Phone and email stay unique on the contact; memberships link them to each company.')
-            ->modifyQueryUsing(fn ($query) => $query->with('company')->orderByRaw("CASE WHEN role = 'owner' THEN 0 ELSE 1 END")->orderBy('id'))
+            ->modifyQueryUsing(fn ($query) => $query->with('company')->orderByRaw("CASE WHEN role = 'owner' THEN 0 ELSE 1 END")->orderByDesc('created_at'))
+            ->defaultSort('created_at', 'desc')
             ->columns([
                 TextColumn::make('company.name')
                     ->label('Company')
@@ -51,7 +52,7 @@ class MembershipsRelationManager extends RelationManager
 
                         return (int) $contact->current_company_id === (int) $record->company_id;
                     }),
-                TextColumn::make('created_at')->label('Joined')->dateTime()->placeholder('—'),
+                TextColumn::make('created_at')->label('Joined')->dateTime()->placeholder('—')->sortable(),
             ])
             ->recordActions([
                 Action::make('open_company')

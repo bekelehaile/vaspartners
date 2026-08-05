@@ -38,7 +38,8 @@ class MembersRelationManager extends RelationManager
     {
         return $table
             ->description('Company owners can enable/disable members and grant permissions in the partner portal. Admins can also toggle access here. Ownership transfers are requested by the owner (with a letter PDF) and approved under Company change requests.')
-            ->modifyQueryUsing(fn ($query) => $query->with('contact')->orderByRaw("CASE WHEN role = 'owner' THEN 0 ELSE 1 END")->orderBy('id'))
+            ->modifyQueryUsing(fn ($query) => $query->with('contact')->orderByRaw("CASE WHEN role = 'owner' THEN 0 ELSE 1 END")->orderByDesc('created_at'))
+            ->defaultSort('created_at', 'desc')
             ->columns([
                 TextColumn::make('contact.name')->searchable()->sortable(),
                 TextColumn::make('contact.phone_number')->label('Phone')->searchable(),
@@ -59,7 +60,7 @@ class MembersRelationManager extends RelationManager
                     ->falseIcon('heroicon-o-x-circle')
                     ->trueColor('success')
                     ->falseColor('danger'),
-                TextColumn::make('created_at')->label('Joined')->dateTime()->placeholder('—'),
+                TextColumn::make('created_at')->label('Joined')->dateTime()->placeholder('—')->sortable(),
             ])
             ->recordActions([
                 ViewAction::make()

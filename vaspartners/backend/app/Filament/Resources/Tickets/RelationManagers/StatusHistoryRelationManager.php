@@ -126,7 +126,7 @@ class StatusHistoryRelationManager extends RelationManager
                     ->placeholder('—')
                     ->toggleable(),
             ])
-            ->defaultSort('created_at', 'asc')
+            ->defaultSort('created_at', 'desc')
             ->paginated([10, 25, 50, 100])
             ->recordActions([])
             ->toolbarActions([]);

@@ -50,7 +50,7 @@ services:
       dockerfile: docker/php/Dockerfile
     working_dir: /var/www/html
     env_file: ./vaspartners/backend/.env
-    environment:
+    environment: &dev-backend-env
       APP_URL: http://localhost:8000
       FRONTEND_URL: http://localhost:3000
       DB_CONNECTION: pgsql
@@ -67,6 +67,12 @@ services:
       CACHE_STORE: redis
       SESSION_DRIVER: redis
       QUEUE_CONNECTION: redis
+      REDIS_QUEUE_RETRY_AFTER: "960"
+      QUEUE_OTP: sms-otp
+      QUEUE_SMS: sms
+      QUEUE_IMPORT: import
+      QUEUE_EXPORT: export
+      QUEUE_UTILITY: default
       SANCTUM_STATEFUL_DOMAINS: localhost:3000,127.0.0.1:3000
       VAS_SEED_ON_START: "true"
     volumes:
@@ -82,74 +88,41 @@ services:
       redis:
         condition: service_healthy
 
-  # OTP — dedicated worker (sms-otp). Bulk/general — three workers (sms,default).
-  queue-otp:
+  # Independent queues — OTP / import / export / bulk SMS / utility never share workers.
+  queue-otp: &dev-queue-base
     build:
       context: ./vaspartners
       dockerfile: docker/php/Dockerfile
     working_dir: /var/www/html
     env_file: ./vaspartners/backend/.env
     environment:
-      APP_URL: http://localhost:8000
-      FRONTEND_URL: http://localhost:3000
-      DB_CONNECTION: pgsql
-      DB_HOST: pgbouncer
-      DB_PORT: "5432"
-      DB_DATABASE: vaspartners
-      DB_USERNAME: vas
-      DB_PASSWORD: secret
-      DB_EMULATE_PREPARES: "false"
-      REDIS_CLIENT: phpredis
-      REDIS_HOST: redis
-      REDIS_PORT: "6379"
-      REDIS_PASSWORD: ""
-      CACHE_STORE: redis
-      SESSION_DRIVER: redis
-      QUEUE_CONNECTION: redis
+      <<: *dev-backend-env
       VAS_SEED_ON_START: "false"
     volumes:
       - ./vaspartners/backend:/var/www/html
       - backend_vendor:/var/www/html/vendor
-    command: ["php", "artisan", "queue:work", "redis", "--queue=sms-otp", "--sleep=1", "--tries=5", "--timeout=90"]
+    command: ["php", "artisan", "queue:work", "redis", "--queue=sms-otp", "--sleep=1", "--tries=5", "--timeout=90", "--memory=256"]
     depends_on:
       backend:
         condition: service_started
       redis:
         condition: service_healthy
 
+  queue-import:
+    <<: *dev-queue-base
+    command: ["php", "artisan", "queue:work", "redis", "--queue=import", "--sleep=1", "--tries=3", "--timeout=900", "--memory=512"]
+
+  queue-export:
+    <<: *dev-queue-base
+    command: ["php", "artisan", "queue:work", "redis", "--queue=export", "--sleep=1", "--tries=3", "--timeout=900", "--memory=512"]
+
+  queue-default:
+    <<: *dev-queue-base
+    command: ["php", "artisan", "queue:work", "redis", "--queue=default", "--sleep=1", "--tries=3", "--timeout=120", "--memory=256"]
+
   queue-sms-1: &dev-queue-sms
-    build:
-      context: ./vaspartners
-      dockerfile: docker/php/Dockerfile
-    working_dir: /var/www/html
-    env_file: ./vaspartners/backend/.env
-    environment:
-      APP_URL: http://localhost:8000
-      FRONTEND_URL: http://localhost:3000
-      DB_CONNECTION: pgsql
-      DB_HOST: pgbouncer
-      DB_PORT: "5432"
-      DB_DATABASE: vaspartners
-      DB_USERNAME: vas
-      DB_PASSWORD: secret
-      DB_EMULATE_PREPARES: "false"
-      REDIS_CLIENT: phpredis
-      REDIS_HOST: redis
-      REDIS_PORT: "6379"
-      REDIS_PASSWORD: ""
-      CACHE_STORE: redis
-      SESSION_DRIVER: redis
-      QUEUE_CONNECTION: redis
-      VAS_SEED_ON_START: "false"
-    volumes:
-      - ./vaspartners/backend:/var/www/html
-      - backend_vendor:/var/www/html/vendor
-    command: ["php", "artisan", "queue:work", "redis", "--queue=sms,default", "--sleep=1", "--tries=3", "--timeout=300"]
-    depends_on:
-      backend:
-        condition: service_started
-      redis:
-        condition: service_healthy
+    <<: *dev-queue-base
+    command: ["php", "artisan", "queue:work", "redis", "--queue=sms", "--sleep=1", "--tries=3", "--timeout=300", "--memory=256"]
 
   queue-sms-2:
     <<: *dev-queue-sms

@@ -4,6 +4,7 @@ namespace App\Filament\Imports;
 
 use App\Enums\RevenueImportRowStatus;
 use App\Enums\RevenueImportStatus;
+use App\Filament\Concerns\QueuesOnImportQueue;
 use App\Models\RevenueImport;
 use App\Models\RevenueImportRow;
 use App\Models\RevenuePartner;
@@ -28,6 +29,8 @@ use Illuminate\Validation\ValidationException;
  */
 class MonthlyRevenueImporter extends Importer
 {
+    use QueuesOnImportQueue;
+
     protected static ?string $model = RevenueImportRow::class;
 
     public static function getColumns(): array

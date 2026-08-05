@@ -36,6 +36,7 @@ class ChangeRequestsRelationManager extends RelationManager
     {
         return $table
             ->modifyQueryUsing(fn ($query) => $query->with(['contact', 'reviewer']))
+            ->defaultSort('created_at', 'desc')
             ->columns([
                 TextColumn::make('public_id')->label('Request number')->searchable(),
                 TextColumn::make('type')

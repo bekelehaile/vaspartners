@@ -55,6 +55,7 @@ class FinalApproversRelationManager extends RelationManager
                 'requisition',
                 fn (Builder $q) => $q->where('creates_subscription', true),
             ))
+            ->defaultSort('created_at', 'desc')
             ->description('Optional per request type. Configured → approval chain. Not configured → AM closes after docs.')
             ->columns([
                 TextColumn::make('requisition.name')->label('Request type')->sortable(),
@@ -64,6 +65,7 @@ class FinalApproversRelationManager extends RelationManager
                     ->badge()
                     ->formatStateUsing(fn ($state): string => $state ? 'Yes' : 'No')
                     ->color(fn ($state): string => $state ? 'success' : 'danger'),
+                TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->headerActions([
                 \Filament\Actions\CreateAction::make()

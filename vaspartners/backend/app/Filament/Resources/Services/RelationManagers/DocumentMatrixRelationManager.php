@@ -38,11 +38,13 @@ class DocumentMatrixRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
+            ->defaultSort('created_at', 'desc')
             ->columns([
                 TextColumn::make('requisition.name')->label('Request type')->sortable(),
                 TextColumn::make('documentType.name')->label('Document'),
                 IconColumn::make('is_required')->boolean(),
-                TextColumn::make('sort_order')->label('#'),
+                TextColumn::make('sort_order')->label('#')->sortable(),
+                TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->headerActions([
                 \Filament\Actions\CreateAction::make(),

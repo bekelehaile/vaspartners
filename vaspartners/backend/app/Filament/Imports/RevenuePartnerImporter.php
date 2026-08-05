@@ -2,6 +2,7 @@
 
 namespace App\Filament\Imports;
 
+use App\Filament\Concerns\QueuesOnImportQueue;
 use App\Models\RevenuePartner;
 use App\Models\User;
 use App\Services\RevenuePartnerResolver;
@@ -20,6 +21,8 @@ use Illuminate\Validation\ValidationException;
  */
 class RevenuePartnerImporter extends Importer
 {
+    use QueuesOnImportQueue;
+
     protected static ?string $model = RevenuePartner::class;
 
     public static function getColumns(): array

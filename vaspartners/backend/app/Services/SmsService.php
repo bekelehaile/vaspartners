@@ -53,7 +53,7 @@ class SmsService
             return;
         }
 
-        $queueName = $queue ?: (string) config('notifications.sms_queues.default', 'sms');
+        $queueName = $queue ?: (string) config('queue.names.sms', config('notifications.sms_queues.default', 'sms'));
 
         SendSmsJob::dispatch($normalized, $this->normalizeSmsBody($message))
             ->onQueue($queueName);

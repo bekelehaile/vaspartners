@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Companies;
 
 use App\Enums\CompanyRole;
+use App\Filament\Exports\CompanyExporter;
 use App\Filament\Resources\Companies\Pages\EditCompany;
 use App\Filament\Resources\Companies\Pages\ListCompanies;
 use App\Filament\Resources\Companies\Pages\ViewCompany;
@@ -22,6 +23,8 @@ use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\EditAction;
+use Filament\Actions\ExportAction;
+use Filament\Actions\ExportBulkAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Textarea;
@@ -463,6 +466,14 @@ class CompanyResource extends Resource
                         );
                     }),
             ])
+            ->headerActions([
+                ExportAction::make()
+                    ->label('Export')
+                    ->exporter(CompanyExporter::class)
+                    ->columnMapping(true)
+                    ->modalHeading('Export companies')
+                    ->fileDisk('local'),
+            ])
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make()
@@ -491,6 +502,12 @@ class CompanyResource extends Resource
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    ExportBulkAction::make()
+                        ->label('Export selected')
+                        ->exporter(CompanyExporter::class)
+                        ->columnMapping(true)
+                        ->modalHeading('Export selected companies')
+                        ->fileDisk('local'),
                     BulkAction::make('send_sms')
                         ->label('Send SMS to selected')
                         ->icon('heroicon-o-chat-bubble-left-ellipsis')

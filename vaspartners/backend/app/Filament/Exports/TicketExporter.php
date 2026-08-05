@@ -4,6 +4,7 @@ namespace App\Filament\Exports;
 
 use App\Enums\SubscriptionStatus;
 use App\Enums\TicketStatus;
+use App\Filament\Concerns\QueuesOnExportQueue;
 use App\Models\Ticket;
 use Filament\Actions\Exports\ExportColumn;
 use Filament\Actions\Exports\Exporter;
@@ -13,6 +14,8 @@ use Illuminate\Support\Number;
 
 class TicketExporter extends Exporter
 {
+    use QueuesOnExportQueue;
+
     protected static ?string $model = Ticket::class;
 
     public static function modifyQuery(Builder $query): Builder

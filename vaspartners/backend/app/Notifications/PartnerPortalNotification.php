@@ -22,7 +22,7 @@ class PartnerPortalNotification extends Notification implements ShouldQueue
         public ?string $ttNumber = null,
         public ?string $url = null,
     ) {
-        $this->onQueue('default');
+        $this->onQueue((string) config('queue.names.default', 'default'));
     }
 
     /** @return array<int, string> */

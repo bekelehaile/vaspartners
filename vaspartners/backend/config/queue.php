@@ -68,7 +68,8 @@ return [
             'driver' => 'redis',
             'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
             'queue' => env('REDIS_QUEUE', 'default'),
-            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 90),
+            // Must exceed the longest worker --timeout (export/import use 900s).
+            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 960),
             'block_for' => null,
             'after_commit' => false,
         ],
@@ -124,6 +125,29 @@ return [
         'driver' => env('QUEUE_FAILED_DRIVER', 'database-uuids'),
         'database' => env('DB_CONNECTION', 'sqlite'),
         'table' => 'failed_jobs',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Named application queues
+    |--------------------------------------------------------------------------
+    |
+    | Independent Redis lists + dedicated workers so heavy work cannot starve
+    | OTP, revenue import, CSV export, bulk SMS, or utility jobs.
+    |
+    | otp     — login / password OTP SMS (fast worker)
+    | sms     — bulk campaigns + revenue SMS + transactional partner SMS
+    | import  — Filament CSV imports (revenue partners, monthly revenue, phones)
+    | export  — Filament CSV exports (companies, tickets, …)
+    | default — portal notifications and other light utility jobs
+    |
+    */
+    'names' => [
+        'otp' => env('QUEUE_OTP', env('SMS_QUEUE_OTP', 'sms-otp')),
+        'sms' => env('QUEUE_SMS', env('SMS_QUEUE_BULK', 'sms')),
+        'import' => env('QUEUE_IMPORT', 'import'),
+        'export' => env('QUEUE_EXPORT', 'export'),
+        'default' => env('QUEUE_UTILITY', 'default'),
     ],
 
 ];

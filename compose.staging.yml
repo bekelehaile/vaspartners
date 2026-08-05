@@ -26,6 +26,12 @@ x-backend-env: &backend-env
   CACHE_STORE: redis
   SESSION_DRIVER: redis
   QUEUE_CONNECTION: redis
+  REDIS_QUEUE_RETRY_AFTER: "960"
+  QUEUE_OTP: sms-otp
+  QUEUE_SMS: sms
+  QUEUE_IMPORT: import
+  QUEUE_EXPORT: export
+  QUEUE_UTILITY: default
   SANCTUM_STATEFUL_DOMAINS: vaspartnersportal.ethiotelecom.et
   FAYDA_REDIRECT_URI: https://vaspartnersportal.ethiotelecom.et/callback
   VAS_SEED_ON_START: "true"
@@ -126,8 +132,8 @@ services:
         max-size: "50m"
         max-file: "3"
 
-  # OTP codes — dedicated queue so bulk SMS never blocks login / password reset.
-  queue-otp:
+  # Independent queues so OTP / revenue import / CSV export / bulk SMS / utility never block each other.
+  queue-otp: &queue-worker-base
     image: vaspartners-php:latest
     container_name: vaspartners-queue-otp
     build:
@@ -143,7 +149,7 @@ services:
     volumes:
       - vaspartners-storage:/var/www/html/storage/app
       - vaspartners-logs:/var/www/html/storage/logs
-    command: ["php", "artisan", "queue:work", "redis", "--queue=sms-otp", "--sleep=1", "--tries=5", "--timeout=90"]
+    command: ["php", "artisan", "queue:work", "redis", "--queue=sms-otp", "--sleep=1", "--tries=5", "--timeout=90", "--memory=256"]
     depends_on:
       backend:
         condition: service_healthy
@@ -159,38 +165,37 @@ services:
         max-size: "50m"
         max-file: "3"
 
-  # Bulk + general partner SMS — three parallel workers.
+  # Revenue + Filament CSV imports (partners, monthly revenue, phone sync).
+  queue-import-1: &queue-import-worker
+    <<: *queue-worker-base
+    container_name: vaspartners-queue-import-1
+    command: ["php", "artisan", "queue:work", "redis", "--queue=import", "--sleep=1", "--tries=3", "--timeout=900", "--memory=512"]
+
+  queue-import-2:
+    <<: *queue-import-worker
+    container_name: vaspartners-queue-import-2
+
+  # Filament CSV exports (companies, tickets, …).
+  queue-export-1: &queue-export-worker
+    <<: *queue-worker-base
+    container_name: vaspartners-queue-export-1
+    command: ["php", "artisan", "queue:work", "redis", "--queue=export", "--sleep=1", "--tries=3", "--timeout=900", "--memory=512"]
+
+  queue-export-2:
+    <<: *queue-export-worker
+    container_name: vaspartners-queue-export-2
+
+  # Portal notifications and other light utility jobs.
+  queue-default:
+    <<: *queue-worker-base
+    container_name: vaspartners-queue-default
+    command: ["php", "artisan", "queue:work", "redis", "--queue=default", "--sleep=1", "--tries=3", "--timeout=120", "--memory=256"]
+
+  # Bulk + revenue SMS campaigns (and transactional partner SMS).
   queue-sms-1: &queue-sms-worker
-    image: vaspartners-php:latest
+    <<: *queue-worker-base
     container_name: vaspartners-queue-sms-1
-    build:
-      context: ./vaspartners
-      dockerfile: docker/php/Dockerfile.staging
-    restart: unless-stopped
-    env_file:
-      - .env.staging
-    environment:
-      <<: *backend-env
-      VAS_RUN_BOOTSTRAP: "false"
-      VAS_SEED_ON_START: "false"
-    volumes:
-      - vaspartners-storage:/var/www/html/storage/app
-      - vaspartners-logs:/var/www/html/storage/logs
-    command: ["php", "artisan", "queue:work", "redis", "--queue=sms,default", "--sleep=1", "--tries=3", "--timeout=300"]
-    depends_on:
-      backend:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - vaspartners-network
-    extra_hosts:
-      - "smsgw.ethiotelecom.et:197.156.68.29"
-    logging:
-      driver: json-file
-      options:
-        max-size: "50m"
-        max-file: "3"
+    command: ["php", "artisan", "queue:work", "redis", "--queue=sms", "--sleep=1", "--tries=3", "--timeout=300", "--memory=256"]
 
   queue-sms-2:
     <<: *queue-sms-worker

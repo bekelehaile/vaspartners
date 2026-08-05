@@ -73,7 +73,7 @@ class RowsRelationManager extends RelationManager
                     ->toggleable(),
                 TextColumn::make('error')->wrap()->toggleable()->limit(80),
             ])
-            ->defaultSort('id')
+            ->defaultSort('id', 'desc')
             ->filters([
                 TernaryFilter::make('needs_attention')
                     ->label('Needs attention')

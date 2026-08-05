@@ -87,18 +87,22 @@ class DocumentTypeResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table->columns([
-            TextColumn::make('name')->searchable()->sortable(),
-            TextColumn::make('accepted_mimes')
-                ->label('Mimes')
-                ->badge()
-                ->separator(',')
-                ->wrap(),
-            TextColumn::make('max_size_kb')->label('Max KB'),
-            IconColumn::make('is_active')->boolean(),
-        ])->recordActions([
-            \Filament\Actions\EditAction::make(),
-        ]);
+        return $table
+            ->defaultSort('created_at', 'desc')
+            ->columns([
+                TextColumn::make('name')->searchable()->sortable(),
+                TextColumn::make('accepted_mimes')
+                    ->label('Mimes')
+                    ->badge()
+                    ->separator(',')
+                    ->wrap(),
+                TextColumn::make('max_size_kb')->label('Max KB'),
+                IconColumn::make('is_active')->boolean(),
+                TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->recordActions([
+                \Filament\Actions\EditAction::make(),
+            ]);
     }
 
     public static function getPages(): array

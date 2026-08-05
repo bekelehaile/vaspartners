@@ -22,14 +22,15 @@ return [
     | SMS queue names
     |--------------------------------------------------------------------------
     |
-    | otp   — portal login + admin password OTP (dedicated worker, never blocked by bulk)
-    | bulk  — bulk campaigns + general partner SMS (multiple workers)
+    | otp     — portal login + admin password OTP (dedicated worker)
+    | bulk    — bulk / revenue SMS campaigns (dedicated sms workers)
+    | default — transactional partner SMS (shares sms workers)
     |
     */
     'sms_queues' => [
-        'otp' => env('SMS_QUEUE_OTP', 'sms-otp'),
-        'bulk' => env('SMS_QUEUE_BULK', 'sms'),
-        'default' => env('SMS_QUEUE_DEFAULT', 'sms'),
+        'otp' => env('SMS_QUEUE_OTP', env('QUEUE_OTP', 'sms-otp')),
+        'bulk' => env('SMS_QUEUE_BULK', env('QUEUE_SMS', 'sms')),
+        'default' => env('SMS_QUEUE_DEFAULT', env('QUEUE_SMS', 'sms')),
     ],
 
     /*

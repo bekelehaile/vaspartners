@@ -290,6 +290,7 @@ class ContactResource extends Resource
                         false: fn (Builder $query) => $query->whereDoesntHave('tickets'),
                     ),
             ])
+            ->defaultSort('created_at', 'desc')
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make()

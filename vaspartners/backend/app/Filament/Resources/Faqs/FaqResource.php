@@ -42,7 +42,7 @@ class FaqResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->defaultSort('sort_order')
+            ->defaultSort('created_at', 'desc')
             ->columns([
                 TextColumn::make('sort_order')->label('#')->sortable(),
                 TextColumn::make('question')->searchable()->limit(60),

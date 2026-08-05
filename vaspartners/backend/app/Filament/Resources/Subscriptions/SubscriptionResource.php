@@ -163,7 +163,10 @@ class SubscriptionResource extends Resource
                 TextColumn::make('renewal_interval')->badge(),
                 TextColumn::make('current_period_end')->dateTime()->sortable()->toggleable(),
                 TextColumn::make('next_renewal_due_at')->dateTime()->toggleable(),
-            ])->filters([
+                TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->defaultSort('created_at', 'desc')
+            ->filters([
                 SelectFilter::make('status')->options(SubscriptionStatus::options()),
                 SelectFilter::make('service_id')
                     ->label('Service')

@@ -25,6 +25,7 @@ class ServicesRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
+            ->defaultSort('created_at', 'desc')
             ->columns([
                 TextColumn::make('name')->searchable()->sortable(),
                 TextColumn::make('category.name')->label('Category'),

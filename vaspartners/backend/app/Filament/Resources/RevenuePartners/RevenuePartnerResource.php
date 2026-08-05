@@ -241,7 +241,7 @@ class RevenuePartnerResource extends Resource
                 IconColumn::make('is_active')->boolean()->label('Active'),
                 TextColumn::make('updated_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->defaultSort('partner_name')
+            ->defaultSort('created_at', 'desc')
             ->filters([
                 SelectFilter::make('vas_service_id')
                     ->label('Catalog service')
