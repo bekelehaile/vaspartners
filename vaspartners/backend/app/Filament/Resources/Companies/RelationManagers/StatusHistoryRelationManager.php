@@ -3,6 +3,9 @@
 namespace App\Filament\Resources\Companies\RelationManagers;
 
 use App\Models\CompanyStatusHistory;
+use Filament\Actions\Action;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -76,11 +79,80 @@ class StatusHistoryRelationManager extends RelationManager
                     ->wrap()
                     ->limit(80)
                     ->placeholder('—')
-                    ->toggleable(),
+                    ->toggleable()
+                    ->tooltip(fn (CompanyStatusHistory $record): ?string => mb_strlen((string) $record->note) > 80
+                        ? 'Open View for the full note'
+                        : null),
             ])
             ->defaultSort('created_at', 'desc')
             ->paginated([10, 25, 50])
-            ->recordActions([])
+            ->recordActions([
+                Action::make('view')
+                    ->label('View')
+                    ->icon('heroicon-o-eye')
+                    ->color('gray')
+                    ->modalHeading(fn (CompanyStatusHistory $record): string => sprintf(
+                        '%s · %s',
+                        $record->actionLabel(),
+                        $record->created_at?->format('M j, Y H:i') ?? '—',
+                    ))
+                    ->modalWidth('3xl')
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel('Close')
+                    ->form([
+                        TextInput::make('action')
+                            ->label('Action')
+                            ->disabled()
+                            ->dehydrated(false),
+                        TextInput::make('by')
+                            ->label('By')
+                            ->disabled()
+                            ->dehydrated(false),
+                        TextInput::make('is_active')
+                            ->label('Active')
+                            ->disabled()
+                            ->dehydrated(false),
+                        TextInput::make('tin_validated')
+                            ->label('TIN verified')
+                            ->disabled()
+                            ->dehydrated(false),
+                        Textarea::make('note')
+                            ->label('Note')
+                            ->rows(8)
+                            ->disabled()
+                            ->dehydrated(false)
+                            ->columnSpanFull(),
+                        Textarea::make('meta')
+                            ->label('Details')
+                            ->rows(8)
+                            ->disabled()
+                            ->dehydrated(false)
+                            ->columnSpanFull(),
+                    ])
+                    ->fillForm(function (CompanyStatusHistory $record): array {
+                        if ($record->actorUser) {
+                            $by = $record->actorUser->name
+                                ?: ($record->actorUser->email ?? 'Staff #'.$record->actor_user_id);
+                        } elseif ($record->actorContact) {
+                            $by = ($record->actorContact->name ?? 'Partner').' (partner)';
+                        } else {
+                            $by = 'System / ERCA';
+                        }
+
+                        $meta = $record->meta;
+
+                        return [
+                            'action' => $record->actionLabel(),
+                            'by' => $by,
+                            'is_active' => $record->is_active ? 'Yes' : 'No',
+                            'tin_validated' => $record->tin_validated ? 'Yes' : 'No',
+                            'note' => filled($record->note) ? (string) $record->note : '—',
+                            'meta' => is_array($meta) && $meta !== []
+                                ? json_encode($meta, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)
+                                : '—',
+                        ];
+                    }),
+            ])
             ->toolbarActions([]);
     }
 }

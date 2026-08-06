@@ -5,6 +5,9 @@ namespace App\Filament\Resources\Subscriptions\RelationManagers;
 use App\Enums\TicketStatus;
 use App\Filament\Resources\Tickets\TicketResource;
 use App\Models\TicketStatusHistory;
+use Filament\Actions\Action;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -76,10 +79,63 @@ class StatusHistoryRelationManager extends RelationManager
                     ->wrap()
                     ->limit(80)
                     ->placeholder('—')
-                    ->toggleable(),
+                    ->toggleable()
+                    ->tooltip(fn (TicketStatusHistory $record): ?string => mb_strlen((string) $record->note) > 80
+                        ? 'Open View for the full note'
+                        : null),
             ])
             ->defaultSort('created_at', 'desc')
-            ->recordActions([])
+            ->recordActions([
+                Action::make('view')
+                    ->label('View')
+                    ->icon('heroicon-o-eye')
+                    ->color('gray')
+                    ->modalHeading(fn (TicketStatusHistory $record): string => sprintf(
+                        'Log · %s',
+                        $record->created_at?->format('M j, Y H:i') ?? '—',
+                    ))
+                    ->modalWidth('3xl')
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel('Close')
+                    ->form([
+                        TextInput::make('request')
+                            ->label('Request number')
+                            ->disabled()
+                            ->dehydrated(false),
+                        TextInput::make('by')
+                            ->label('By')
+                            ->disabled()
+                            ->dehydrated(false),
+                        TextInput::make('from_status')
+                            ->label('From')
+                            ->disabled()
+                            ->dehydrated(false),
+                        TextInput::make('to_status')
+                            ->label('To')
+                            ->disabled()
+                            ->dehydrated(false),
+                        Textarea::make('note')
+                            ->label('Note')
+                            ->rows(10)
+                            ->disabled()
+                            ->dehydrated(false)
+                            ->columnSpanFull(),
+                    ])
+                    ->fillForm(function (TicketStatusHistory $record): array {
+                        $actor = $record->actor;
+
+                        return [
+                            'request' => $record->ticket?->tt_number ?: '—',
+                            'by' => $actor?->name
+                                ?? ($actor ? class_basename($actor::class).' #'.$actor->getKey() : 'System'),
+                            'from_status' => TicketStatus::tryFrom((string) $record->from_status)?->label()
+                                ?? ($record->from_status ?: '—'),
+                            'to_status' => TicketStatus::tryFrom((string) $record->to_status)?->label()
+                                ?? ($record->to_status ?: '—'),
+                            'note' => filled($record->note) ? (string) $record->note : '—',
+                        ];
+                    }),
+            ])
             ->headerActions([])
             ->toolbarActions([])
             ->emptyStateHeading('No status logs yet')

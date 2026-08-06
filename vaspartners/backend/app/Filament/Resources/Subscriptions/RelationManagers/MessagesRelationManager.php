@@ -6,6 +6,7 @@ use App\Filament\Resources\Tickets\TicketResource;
 use App\Models\TicketComment;
 use App\Models\User;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Textarea;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -63,7 +64,10 @@ class MessagesRelationManager extends RelationManager
                     ->label('Message')
                     ->wrap()
                     ->limit(120)
-                    ->placeholder('—'),
+                    ->placeholder('—')
+                    ->tooltip(fn (TicketComment $record): ?string => mb_strlen((string) $record->body) > 120
+                        ? 'Open View for the full message'
+                        : null),
                 IconColumn::make('has_pdf')
                     ->label('PDF')
                     ->boolean()
@@ -75,6 +79,28 @@ class MessagesRelationManager extends RelationManager
             ])
             ->defaultSort('created_at', 'desc')
             ->recordActions([
+                Action::make('view')
+                    ->label('View')
+                    ->icon('heroicon-o-eye')
+                    ->color('gray')
+                    ->modalHeading(fn (TicketComment $record): string => sprintf(
+                        'Message · %s',
+                        $record->created_at?->format('M j, Y H:i') ?? '—',
+                    ))
+                    ->modalWidth('3xl')
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel('Close')
+                    ->form([
+                        Textarea::make('body')
+                            ->label('Message')
+                            ->rows(16)
+                            ->disabled()
+                            ->dehydrated(false),
+                    ])
+                    ->fillForm(fn (TicketComment $record): array => [
+                        'body' => (string) $record->body,
+                    ])
+                    ->visible(fn (TicketComment $record): bool => filled($record->body)),
                 Action::make('open')
                     ->label('Open')
                     ->icon('heroicon-o-arrow-top-right-on-square')
