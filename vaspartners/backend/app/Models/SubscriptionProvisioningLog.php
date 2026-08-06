@@ -53,6 +53,8 @@ class SubscriptionProvisioningLog extends Model
             'renewed' => 'Service renewed',
             'pending_renewal' => 'Renewal window opened',
             'terminated' => 'Service deactivated',
+            'closed' => 'Subscription closed (contract follow-up)',
+            'contract_details_updated' => 'Contract details updated',
             'operational_status_changed' => 'Uptime status updated',
             default => str_replace('_', ' ', ucfirst((string) $this->event)),
         };

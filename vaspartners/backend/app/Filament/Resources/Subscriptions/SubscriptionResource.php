@@ -85,6 +85,38 @@ class SubscriptionResource extends Resource
                 TextEntry::make('next_renewal_due_at')->dateTime()->placeholder('—'),
                 TextEntry::make('started_at')->dateTime()->placeholder('—'),
                 TextEntry::make('terminated_at')->label('Deactivated at')->dateTime()->placeholder('—'),
+                TextEntry::make('closed_at')->label('Closed at')->dateTime()->placeholder('—'),
+            ])->columns(2),
+            Section::make('Contract follow-up')->schema([
+                TextEntry::make('contract_signed_at')
+                    ->label('Contract signing date')
+                    ->date()
+                    ->placeholder('—'),
+                TextEntry::make('renewal_year')
+                    ->label('Renewal year')
+                    ->placeholder('—'),
+                TextEntry::make('vas_license_expires_at')
+                    ->label('VAS license expiry')
+                    ->date()
+                    ->placeholder('—')
+                    ->visible(fn (Subscription $record): bool => $record->requiresVasLicenseExpiry()
+                        || $record->vas_license_expires_at !== null),
+                TextEntry::make('contract_ready')
+                    ->label('Ready to close')
+                    ->badge()
+                    ->state(fn (Subscription $record): string => $record->status === SubscriptionStatus::Closed
+                        ? 'Closed'
+                        : ($record->isReadyToClose() ? 'Yes' : 'Missing fields'))
+                    ->color(fn (Subscription $record): string => $record->status === SubscriptionStatus::Closed
+                        ? 'danger'
+                        : ($record->isReadyToClose() ? 'success' : 'warning'))
+                    ->helperText(fn (Subscription $record): ?string => $record->status === SubscriptionStatus::Closed
+                        ? null
+                        : (($missing = $record->missingContractCloseFields()) !== []
+                            ? 'Still need: '.implode(', ', $missing)
+                            : ($record->requiresVasLicenseExpiry()
+                                ? 'Premium: contract date, renewal year, and VAS license expiry are set.'
+                                : 'Contract date and renewal year are set.'))),
             ])->columns(2),
             Section::make('Company & partner')->schema([
                 TextEntry::make('company.name')
@@ -161,6 +193,13 @@ class SubscriptionResource extends Resource
                     ->toggleable(),
                 TextColumn::make('contact.name')->label('Activated by')->searchable()->toggleable(),
                 TextColumn::make('renewal_interval')->badge(),
+                TextColumn::make('contract_signed_at')
+                    ->label('Contract date')
+                    ->date()
+                    ->toggleable(),
+                TextColumn::make('renewal_year')
+                    ->label('Renewal year')
+                    ->toggleable(),
                 TextColumn::make('current_period_end')->dateTime()->sortable()->toggleable(),
                 TextColumn::make('next_renewal_due_at')->dateTime()->toggleable(),
                 TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
@@ -173,6 +212,48 @@ class SubscriptionResource extends Resource
                     ->relationship('service', 'name')
                     ->searchable()
                     ->preload(),
+                SelectFilter::make('contract_follow_up')
+                    ->label('Contract follow-up')
+                    ->options([
+                        'missing' => 'Missing contract fields',
+                        'ready' => 'Ready to close',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return match ($data['value'] ?? null) {
+                            'missing' => $query
+                                ->whereNull('closed_at')
+                                ->where(function (Builder $q): void {
+                                    $q->whereNull('contract_signed_at')
+                                        ->orWhereNull('renewal_year')
+                                        ->orWhere(function (Builder $premium): void {
+                                            $premium->whereHas('service', function (Builder $s): void {
+                                                $s->where(function (Builder $inner): void {
+                                                    $inner->where('slug', 'like', '%premium%')
+                                                        ->where('slug', 'not like', '%non-premium%')
+                                                        ->where('slug', 'not like', '%non_premium%');
+                                                })->orWhere(function (Builder $inner): void {
+                                                    $inner->where('name', 'ilike', '%premium%')
+                                                        ->where('name', 'not ilike', '%non-premium%')
+                                                        ->where('name', 'not ilike', '%non premium%');
+                                                });
+                                            })->whereNull('vas_license_expires_at');
+                                        });
+                                }),
+                            'ready' => $query
+                                ->whereNotNull('contract_signed_at')
+                                ->whereNotNull('renewal_year')
+                                ->where(function (Builder $q): void {
+                                    $q->whereDoesntHave('service', function (Builder $s): void {
+                                        $s->where(function (Builder $inner): void {
+                                            $inner->where('slug', 'like', '%premium%')
+                                                ->where('slug', 'not like', '%non-premium%')
+                                                ->where('slug', 'not like', '%non_premium%');
+                                        });
+                                    })->orWhereNotNull('vas_license_expires_at');
+                                }),
+                            default => $query,
+                        };
+                    }),
                 SelectFilter::make('tin_status')
                     ->label('TIN number status')
                     ->options([

@@ -10,6 +10,7 @@ use App\Models\Requisition;
 use App\Models\Service;
 use App\Models\Subscription;
 use App\Models\Ticket;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -21,6 +22,9 @@ use Illuminate\Validation\ValidationException;
  * - renews_subscription (renew) → extend period on completed/closed
  * - terminates_subscription (terminate) → Deactive on completed/closed (partner consent via request)
  * Renewal cadence (yearly / bi-yearly) is configured per service.
+ *
+ * Staff may also Close a subscription after contract expiration follow-up
+ * (contract signing date + renewal year; premium also needs VAS license expiry).
  *
  * Request status "closed" is never a subscription status.
  */
@@ -181,9 +185,9 @@ class SubscriptionLifecycleService
             /** @var Subscription $subscription */
             $subscription = $ticket->subscription()->lockForUpdate()->firstOrFail();
 
-            if ($subscription->status === SubscriptionStatus::Deactive) {
+            if (in_array($subscription->status, [SubscriptionStatus::Deactive, SubscriptionStatus::Closed], true)) {
                 throw ValidationException::withMessages([
-                    'subscription' => 'Cannot renew a deactive subscription.',
+                    'subscription' => 'Cannot renew a '.$subscription->status->label().' subscription.',
                 ]);
             }
 
@@ -245,6 +249,173 @@ class SubscriptionLifecycleService
 
             return $subscription->fresh();
         });
+    }
+
+    /**
+     * Record contract follow-up fields (signing date, renewal year, optional VAS license expiry).
+     *
+     * @param  array{
+     *   contract_signed_at?: mixed,
+     *   renewal_year?: mixed,
+     *   vas_license_expires_at?: mixed
+     * }  $data
+     */
+    public function updateContractDetails(Subscription $subscription, array $data, ?Model $actor = null): Subscription
+    {
+        $subscription->loadMissing('service', 'company');
+
+        $payload = $this->normalizeContractPayload($subscription, $data);
+
+        return DB::transaction(function () use ($subscription, $payload, $actor) {
+            /** @var Subscription $locked */
+            $locked = Subscription::query()->whereKey($subscription->id)->lockForUpdate()->firstOrFail();
+
+            $locked->fill($payload)->save();
+
+            if (
+                array_key_exists('vas_license_expires_at', $payload)
+                && $payload['vas_license_expires_at'] !== null
+                && $locked->company_id
+            ) {
+                $locked->company?->forceFill([
+                    'license_valid_until' => $payload['vas_license_expires_at'],
+                ])->save();
+            }
+
+            app(SubscriptionProvisioningLogService::class)->record(
+                $locked,
+                'contract_details_updated',
+                $actor,
+                null,
+                null,
+                null,
+                'Contract follow-up details recorded',
+                $payload,
+            );
+
+            return $locked->fresh(['service', 'company']);
+        });
+    }
+
+    /**
+     * Close an alive subscription after contract expiration follow-up.
+     * Requires contract signing date + renewal year; premium also requires VAS license expiry.
+     *
+     * @param  array{
+     *   contract_signed_at?: mixed,
+     *   renewal_year?: mixed,
+     *   vas_license_expires_at?: mixed,
+     *   note?: ?string
+     * }  $data
+     */
+    public function closeForContractFollowUp(Subscription $subscription, array $data = [], ?Model $actor = null): Subscription
+    {
+        $subscription->loadMissing('service', 'company');
+
+        if ($subscription->status === SubscriptionStatus::Closed) {
+            throw ValidationException::withMessages([
+                'status' => 'This subscription is already closed.',
+            ]);
+        }
+
+        if (! $subscription->status->isAlive() && $subscription->status !== SubscriptionStatus::Expired) {
+            throw ValidationException::withMessages([
+                'status' => 'Only active, pending renewal, grace, or expired subscriptions can be closed for contract follow-up.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($subscription, $data, $actor) {
+            /** @var Subscription $locked */
+            $locked = Subscription::query()->whereKey($subscription->id)->lockForUpdate()->firstOrFail();
+            $locked->loadMissing('service', 'company');
+
+            $payload = $this->normalizeContractPayload($locked, $data);
+            if ($payload !== []) {
+                $locked->fill($payload)->save();
+                $locked->refresh();
+            }
+
+            $missing = $locked->missingContractCloseFields();
+            if ($missing !== []) {
+                throw ValidationException::withMessages([
+                    'contract' => 'Record required contract fields before closing: '.implode(', ', $missing).'.',
+                ]);
+            }
+
+            if (
+                $locked->vas_license_expires_at !== null
+                && $locked->company_id
+            ) {
+                $locked->company?->forceFill([
+                    'license_valid_until' => $locked->vas_license_expires_at,
+                ])->save();
+            }
+
+            $from = SubscriptionProvisioningLogService::statusValue($locked->status);
+
+            $locked->fill([
+                'status' => SubscriptionStatus::Closed,
+                'closed_at' => now(),
+                'next_renewal_due_at' => null,
+            ])->save();
+
+            app(SubscriptionProvisioningLogService::class)->record(
+                $locked,
+                'closed',
+                $actor,
+                null,
+                $from,
+                SubscriptionStatus::Closed->value,
+                filled($data['note'] ?? null)
+                    ? trim((string) $data['note'])
+                    : 'Subscription closed after contract expiration follow-up',
+                [
+                    'contract_signed_at' => optional($locked->contract_signed_at)?->toDateString(),
+                    'renewal_year' => $locked->renewal_year,
+                    'vas_license_expires_at' => optional($locked->vas_license_expires_at)?->toDateString(),
+                ],
+            );
+
+            return $locked->fresh(['service', 'company']);
+        });
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    protected function normalizeContractPayload(Subscription $subscription, array $data): array
+    {
+        $payload = [];
+
+        if (array_key_exists('contract_signed_at', $data) && filled($data['contract_signed_at'])) {
+            $payload['contract_signed_at'] = $data['contract_signed_at'];
+        }
+
+        if (array_key_exists('renewal_year', $data) && filled($data['renewal_year'])) {
+            $year = (int) $data['renewal_year'];
+            if ($year < 1990 || $year > ((int) now()->year + 20)) {
+                throw ValidationException::withMessages([
+                    'renewal_year' => 'Renewal year must be a valid calendar year.',
+                ]);
+            }
+            $payload['renewal_year'] = $year;
+        }
+
+        if (array_key_exists('vas_license_expires_at', $data)) {
+            if ($subscription->requiresVasLicenseExpiry()) {
+                if (! filled($data['vas_license_expires_at'])) {
+                    throw ValidationException::withMessages([
+                        'vas_license_expires_at' => 'VAS license expiry date is required for premium services.',
+                    ]);
+                }
+                $payload['vas_license_expires_at'] = $data['vas_license_expires_at'];
+            } elseif (filled($data['vas_license_expires_at'])) {
+                $payload['vas_license_expires_at'] = $data['vas_license_expires_at'];
+            }
+        }
+
+        return $payload;
     }
 
     /**

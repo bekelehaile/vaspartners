@@ -42,8 +42,8 @@ class ProvisioningLogsRelationManager extends RelationManager
                     ->formatStateUsing(fn (SubscriptionProvisioningLog $record): string => $record->eventLabel())
                     ->color(fn (SubscriptionProvisioningLog $record): string => match ($record->event) {
                         'activated', 'renewed' => 'success',
-                        'pending_renewal', 'operational_status_changed' => 'warning',
-                        'terminated' => 'danger',
+                        'pending_renewal', 'operational_status_changed', 'contract_details_updated' => 'warning',
+                        'terminated', 'closed' => 'danger',
                         default => 'gray',
                     }),
                 TextColumn::make('from_status')

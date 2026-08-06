@@ -43,6 +43,10 @@ class ListSubscriptions extends ListRecords
                 ->badge(fn (): int => $counts()['expired'])
                 ->badgeColor('danger')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('status', SubscriptionStatus::Expired)),
+            'closed' => Tab::make('Closed')
+                ->badge(fn (): int => $counts()['closed'])
+                ->badgeColor('danger')
+                ->modifyQueryUsing(fn (Builder $query) => $query->where('status', SubscriptionStatus::Closed)),
             'deactive' => Tab::make('Deactive')
                 ->badge(fn (): int => $counts()['deactive'])
                 ->badgeColor('danger')
@@ -58,6 +62,7 @@ class ListSubscriptions extends ListRecords
      *   pending_renewal: int,
      *   grace: int,
      *   expired: int,
+     *   closed: int,
      *   deactive: int,
      *   all: int
      * }
@@ -72,6 +77,7 @@ class ListSubscriptions extends ListRecords
         $pending = SubscriptionStatus::PendingRenewal->value;
         $grace = SubscriptionStatus::Grace->value;
         $expired = SubscriptionStatus::Expired->value;
+        $closed = SubscriptionStatus::Closed->value;
         $deactive = SubscriptionStatus::Deactive->value;
 
         $row = SubscriptionResource::getEloquentQuery()
@@ -82,8 +88,9 @@ class ListSubscriptions extends ListRecords
                 count(*) filter (where status = ?)::int as c_pending,
                 count(*) filter (where status = ?)::int as c_grace,
                 count(*) filter (where status = ?)::int as c_expired,
+                count(*) filter (where status = ?)::int as c_closed,
                 count(*) filter (where status = ?)::int as c_deactive',
-                [$active, $pending, $grace, $expired, $deactive],
+                [$active, $pending, $grace, $expired, $closed, $deactive],
             )
             ->first();
 
@@ -93,6 +100,7 @@ class ListSubscriptions extends ListRecords
             'pending_renewal' => (int) ($row->c_pending ?? 0),
             'grace' => (int) ($row->c_grace ?? 0),
             'expired' => (int) ($row->c_expired ?? 0),
+            'closed' => (int) ($row->c_closed ?? 0),
             'deactive' => (int) ($row->c_deactive ?? 0),
         ];
     }

@@ -153,4 +153,26 @@ class Service extends Model
             TicketStatus::InProgress->value,
         ]));
     }
+
+    /**
+     * Premium VAS (SMS/Voice/USSD/MT Premium). Non-premium and other services return false.
+     */
+    public function isPremium(): bool
+    {
+        $haystack = strtolower(trim(($this->slug ?? '').' '.($this->name ?? '')));
+
+        if ($haystack === '') {
+            return false;
+        }
+
+        if (
+            str_contains($haystack, 'non-premium')
+            || str_contains($haystack, 'non_premium')
+            || str_contains($haystack, 'non premium')
+        ) {
+            return false;
+        }
+
+        return str_contains($haystack, 'premium');
+    }
 }

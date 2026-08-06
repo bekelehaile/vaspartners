@@ -26,12 +26,16 @@ class Subscription extends Model
         'operational_status_updated_at',
         'renewal_interval',
         'started_at',
+        'contract_signed_at',
+        'renewal_year',
+        'vas_license_expires_at',
         'current_period_start',
         'current_period_end',
         'next_renewal_due_at',
         'activated_by_ticket_id',
         'terminated_by_ticket_id',
         'terminated_at',
+        'closed_at',
         'legacy_mvas_id',
         'legacy_mvas_service_id',
     ];
@@ -43,12 +47,52 @@ class Subscription extends Model
             'operational_status' => ServiceOperationalStatus::class,
             'renewal_interval' => RenewalInterval::class,
             'started_at' => 'datetime',
+            'contract_signed_at' => 'date',
+            'renewal_year' => 'integer',
+            'vas_license_expires_at' => 'date',
             'current_period_start' => 'datetime',
             'current_period_end' => 'datetime',
             'next_renewal_due_at' => 'datetime',
             'terminated_at' => 'datetime',
+            'closed_at' => 'datetime',
             'operational_status_updated_at' => 'datetime',
         ];
+    }
+
+    public function requiresVasLicenseExpiry(): bool
+    {
+        $this->loadMissing('service');
+
+        return (bool) $this->service?->isPremium();
+    }
+
+    /**
+     * Contract follow-up fields required before status can move to Closed.
+     *
+     * @return list<string> Missing field labels
+     */
+    public function missingContractCloseFields(): array
+    {
+        $missing = [];
+
+        if ($this->contract_signed_at === null) {
+            $missing[] = 'Contract signing date';
+        }
+
+        if ($this->renewal_year === null || (int) $this->renewal_year < 1) {
+            $missing[] = 'Renewal year';
+        }
+
+        if ($this->requiresVasLicenseExpiry() && $this->vas_license_expires_at === null) {
+            $missing[] = 'VAS license expiry date';
+        }
+
+        return $missing;
+    }
+
+    public function isReadyToClose(): bool
+    {
+        return $this->missingContractCloseFields() === [];
     }
 
     protected static function booted(): void

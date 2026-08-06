@@ -10,6 +10,8 @@ enum SubscriptionStatus: string
     case Expired = 'expired';
     /** Partner consented to quit (termination request closed) — system marks deactive. */
     case Deactive = 'deactive';
+    /** Staff closed after contract expiration follow-up (dates recorded). */
+    case Closed = 'closed';
 
     public function label(): string
     {
@@ -19,6 +21,7 @@ enum SubscriptionStatus: string
             self::Grace => 'Grace period',
             self::Expired => 'Expired',
             self::Deactive => 'Deactive',
+            self::Closed => 'Closed',
         };
     }
 
@@ -27,7 +30,7 @@ enum SubscriptionStatus: string
         return match ($this) {
             self::Active => 'success',
             self::PendingRenewal, self::Grace => 'warning',
-            self::Expired, self::Deactive => 'danger',
+            self::Expired, self::Deactive, self::Closed => 'danger',
         };
     }
 
