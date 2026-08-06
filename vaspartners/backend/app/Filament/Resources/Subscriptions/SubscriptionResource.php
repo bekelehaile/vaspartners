@@ -92,8 +92,9 @@ class SubscriptionResource extends Resource
                     ->label('Contract signing date')
                     ->date()
                     ->placeholder('—'),
-                TextEntry::make('renewal_year')
-                    ->label('Renewal year')
+                TextEntry::make('renewal_date')
+                    ->label('Renewal date')
+                    ->date()
                     ->placeholder('—'),
                 TextEntry::make('vas_license_expires_at')
                     ->label('VAS license expiry')
@@ -197,8 +198,9 @@ class SubscriptionResource extends Resource
                     ->label('Contract date')
                     ->date()
                     ->toggleable(),
-                TextColumn::make('renewal_year')
-                    ->label('Renewal year')
+                TextColumn::make('renewal_date')
+                    ->label('Renewal date')
+                    ->date()
                     ->toggleable(),
                 TextColumn::make('current_period_end')->dateTime()->sortable()->toggleable(),
                 TextColumn::make('next_renewal_due_at')->dateTime()->toggleable(),
@@ -224,7 +226,7 @@ class SubscriptionResource extends Resource
                                 ->whereNull('closed_at')
                                 ->where(function (Builder $q): void {
                                     $q->whereNull('contract_signed_at')
-                                        ->orWhereNull('renewal_year')
+                                        ->orWhereNull('renewal_date')
                                         ->orWhere(function (Builder $premium): void {
                                             $premium->whereHas('service', function (Builder $s): void {
                                                 $s->where(function (Builder $inner): void {
@@ -241,7 +243,7 @@ class SubscriptionResource extends Resource
                                 }),
                             'ready' => $query
                                 ->whereNotNull('contract_signed_at')
-                                ->whereNotNull('renewal_year')
+                                ->whereNotNull('renewal_date')
                                 ->where(function (Builder $q): void {
                                     $q->whereDoesntHave('service', function (Builder $s): void {
                                         $s->where(function (Builder $inner): void {

@@ -252,11 +252,11 @@ class SubscriptionLifecycleService
     }
 
     /**
-     * Record contract follow-up fields (signing date, renewal year, optional VAS license expiry).
+     * Record contract follow-up fields (signing date, renewal date; premium also VAS license expiry).
      *
      * @param  array{
      *   contract_signed_at?: mixed,
-     *   renewal_year?: mixed,
+     *   renewal_date?: mixed,
      *   vas_license_expires_at?: mixed
      * }  $data
      */
@@ -264,7 +264,7 @@ class SubscriptionLifecycleService
     {
         $subscription->loadMissing('service', 'company');
 
-        $payload = $this->normalizeContractPayload($subscription, $data);
+        $payload = $this->validatedContractPayload($subscription, $data, requireComplete: true);
 
         return DB::transaction(function () use ($subscription, $payload, $actor) {
             /** @var Subscription $locked */
@@ -299,11 +299,11 @@ class SubscriptionLifecycleService
 
     /**
      * Close an alive subscription after contract expiration follow-up.
-     * Requires contract signing date + renewal year; premium also requires VAS license expiry.
+     * Requires contract signing date + renewal date; premium also requires VAS license expiry.
      *
      * @param  array{
      *   contract_signed_at?: mixed,
-     *   renewal_year?: mixed,
+     *   renewal_date?: mixed,
      *   vas_license_expires_at?: mixed,
      *   note?: ?string
      * }  $data
@@ -329,18 +329,15 @@ class SubscriptionLifecycleService
             $locked = Subscription::query()->whereKey($subscription->id)->lockForUpdate()->firstOrFail();
             $locked->loadMissing('service', 'company');
 
-            $payload = $this->normalizeContractPayload($locked, $data);
-            if ($payload !== []) {
-                $locked->fill($payload)->save();
-                $locked->refresh();
-            }
+            $merged = [
+                'contract_signed_at' => $data['contract_signed_at'] ?? $locked->contract_signed_at,
+                'renewal_date' => $data['renewal_date'] ?? $locked->renewal_date,
+                'vas_license_expires_at' => $data['vas_license_expires_at'] ?? $locked->vas_license_expires_at,
+            ];
 
-            $missing = $locked->missingContractCloseFields();
-            if ($missing !== []) {
-                throw ValidationException::withMessages([
-                    'contract' => 'Record required contract fields before closing: '.implode(', ', $missing).'.',
-                ]);
-            }
+            $payload = $this->validatedContractPayload($locked, $merged, requireComplete: true);
+            $locked->fill($payload)->save();
+            $locked->refresh();
 
             if (
                 $locked->vas_license_expires_at !== null
@@ -371,7 +368,7 @@ class SubscriptionLifecycleService
                     : 'Subscription closed after contract expiration follow-up',
                 [
                     'contract_signed_at' => optional($locked->contract_signed_at)?->toDateString(),
-                    'renewal_year' => $locked->renewal_year,
+                    'renewal_date' => optional($locked->renewal_date)?->toDateString(),
                     'vas_license_expires_at' => optional($locked->vas_license_expires_at)?->toDateString(),
                 ],
             );
@@ -381,38 +378,101 @@ class SubscriptionLifecycleService
     }
 
     /**
+     * Validate and normalize contract follow-up fields.
+     *
      * @param  array<string, mixed>  $data
-     * @return array<string, mixed>
+     * @return array{
+     *   contract_signed_at?: string,
+     *   renewal_date?: string,
+     *   vas_license_expires_at?: string|null
+     * }
      */
-    protected function normalizeContractPayload(Subscription $subscription, array $data): array
+    protected function validatedContractPayload(Subscription $subscription, array $data, bool $requireComplete = true): array
     {
+        $errors = [];
         $payload = [];
+        $premium = $subscription->requiresVasLicenseExpiry();
 
-        if (array_key_exists('contract_signed_at', $data) && filled($data['contract_signed_at'])) {
-            $payload['contract_signed_at'] = $data['contract_signed_at'];
-        }
-
-        if (array_key_exists('renewal_year', $data) && filled($data['renewal_year'])) {
-            $year = (int) $data['renewal_year'];
-            if ($year < 1990 || $year > ((int) now()->year + 20)) {
-                throw ValidationException::withMessages([
-                    'renewal_year' => 'Renewal year must be a valid calendar year.',
-                ]);
-            }
-            $payload['renewal_year'] = $year;
-        }
-
-        if (array_key_exists('vas_license_expires_at', $data)) {
-            if ($subscription->requiresVasLicenseExpiry()) {
-                if (! filled($data['vas_license_expires_at'])) {
-                    throw ValidationException::withMessages([
-                        'vas_license_expires_at' => 'VAS license expiry date is required for premium services.',
-                    ]);
+        $signedRaw = $data['contract_signed_at'] ?? null;
+        if ($requireComplete || array_key_exists('contract_signed_at', $data)) {
+            if (! filled($signedRaw)) {
+                if ($requireComplete) {
+                    $errors['contract_signed_at'] = 'Contract signing date is required.';
                 }
-                $payload['vas_license_expires_at'] = $data['vas_license_expires_at'];
-            } elseif (filled($data['vas_license_expires_at'])) {
-                $payload['vas_license_expires_at'] = $data['vas_license_expires_at'];
+            } else {
+                try {
+                    $signed = \Illuminate\Support\Carbon::parse($signedRaw)->startOfDay();
+                } catch (\Throwable) {
+                    $errors['contract_signed_at'] = 'Enter a valid contract signing date.';
+                    $signed = null;
+                }
+
+                if ($signed !== null) {
+                    if ($signed->greaterThan(now()->startOfDay())) {
+                        $errors['contract_signed_at'] = 'Contract signing date cannot be in the future.';
+                    } else {
+                        $payload['contract_signed_at'] = $signed->toDateString();
+                    }
+                }
             }
+        }
+
+        $renewalRaw = $data['renewal_date'] ?? null;
+        if (
+            ! filled($renewalRaw)
+            && filled($data['renewal_years'] ?? null)
+        ) {
+            $composed = Subscription::composeRenewalDate(
+                $data['contract_signed_at'] ?? $subscription->contract_signed_at,
+                $data['renewal_years'] ?? null,
+            );
+            $renewalRaw = $composed?->toDateString();
+        }
+
+        if ($requireComplete || array_key_exists('renewal_date', $data) || array_key_exists('renewal_years', $data)) {
+            if (! filled($renewalRaw)) {
+                if ($requireComplete) {
+                    $errors['renewal_date'] = 'Renewal date is required.';
+                    if (! filled($data['renewal_years'] ?? null)) {
+                        $errors['renewal_years'] = 'Renewal year is required.';
+                    }
+                }
+            } else {
+                try {
+                    $renewal = \Illuminate\Support\Carbon::parse($renewalRaw)->startOfDay();
+                    $payload['renewal_date'] = $renewal->toDateString();
+                } catch (\Throwable) {
+                    $errors['renewal_date'] = 'Enter a valid renewal date.';
+                }
+            }
+        }
+
+        $licenseRaw = $data['vas_license_expires_at'] ?? null;
+        if ($premium) {
+            if ($requireComplete || array_key_exists('vas_license_expires_at', $data)) {
+                if (! filled($licenseRaw)) {
+                    if ($requireComplete) {
+                        $errors['vas_license_expires_at'] = 'VAS license expiry date is required.';
+                    }
+                } else {
+                    try {
+                        $license = \Illuminate\Support\Carbon::parse($licenseRaw)->startOfDay();
+                        $payload['vas_license_expires_at'] = $license->toDateString();
+                    } catch (\Throwable) {
+                        $errors['vas_license_expires_at'] = 'Enter a valid VAS license expiry date.';
+                    }
+                }
+            }
+        } elseif (array_key_exists('vas_license_expires_at', $data) && filled($licenseRaw)) {
+            try {
+                $payload['vas_license_expires_at'] = \Illuminate\Support\Carbon::parse($licenseRaw)->toDateString();
+            } catch (\Throwable) {
+                $errors['vas_license_expires_at'] = 'Enter a valid VAS license expiry date.';
+            }
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
         }
 
         return $payload;

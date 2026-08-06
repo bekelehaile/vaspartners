@@ -27,7 +27,7 @@ class Subscription extends Model
         'renewal_interval',
         'started_at',
         'contract_signed_at',
-        'renewal_year',
+        'renewal_date',
         'vas_license_expires_at',
         'current_period_start',
         'current_period_end',
@@ -48,7 +48,7 @@ class Subscription extends Model
             'renewal_interval' => RenewalInterval::class,
             'started_at' => 'datetime',
             'contract_signed_at' => 'date',
-            'renewal_year' => 'integer',
+            'renewal_date' => 'date',
             'vas_license_expires_at' => 'date',
             'current_period_start' => 'datetime',
             'current_period_end' => 'datetime',
@@ -79,8 +79,8 @@ class Subscription extends Model
             $missing[] = 'Contract signing date';
         }
 
-        if ($this->renewal_year === null || (int) $this->renewal_year < 1) {
-            $missing[] = 'Renewal year';
+        if ($this->renewal_date === null) {
+            $missing[] = 'Renewal date';
         }
 
         if ($this->requiresVasLicenseExpiry() && $this->vas_license_expires_at === null) {
@@ -93,6 +93,59 @@ class Subscription extends Model
     public function isReadyToClose(): bool
     {
         return $this->missingContractCloseFields() === [];
+    }
+
+    /**
+     * Build renewal date by adding N years to the contract signing date.
+     * Uses no-overflow so 29 Feb + 1 year becomes 28 Feb in non-leap years.
+     */
+    public static function composeRenewalDate(
+        mixed $contractSignedAt,
+        mixed $years,
+    ): ?\Illuminate\Support\Carbon {
+        if (! filled($contractSignedAt) || ! filled($years)) {
+            return null;
+        }
+
+        $n = (int) $years;
+        if ($n < 1 || $n > 20) {
+            return null;
+        }
+
+        try {
+            return \Illuminate\Support\Carbon::parse($contractSignedAt)
+                ->startOfDay()
+                ->addYearsNoOverflow($n);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Years between signing date and stored renewal date (for form defaults).
+     */
+    public static function renewalYearsBetween(mixed $contractSignedAt, mixed $renewalDate): ?int
+    {
+        if (! filled($contractSignedAt) || ! filled($renewalDate)) {
+            return null;
+        }
+
+        try {
+            $from = \Illuminate\Support\Carbon::parse($contractSignedAt)->startOfDay();
+            $to = \Illuminate\Support\Carbon::parse($renewalDate)->startOfDay();
+            if ($to->lessThan($from)) {
+                return null;
+            }
+
+            $years = (int) $from->diffInYears($to);
+            if ($years < 1) {
+                return 1;
+            }
+
+            return min(20, $years);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     protected static function booted(): void
