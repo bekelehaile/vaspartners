@@ -141,6 +141,7 @@ class BulkMessageService
      *   is_active?: bool|null,
      *   approval_status?: string|null,
      *   tin_validated?: bool|null,
+     *   erca_name_status?: string|null,
      *   legacy_only?: bool,
      *   require_phone?: bool,
      *   service_ids?: list<int>|null,
@@ -190,6 +191,10 @@ class BulkMessageService
         if (array_key_exists('tin_validated', $filters) && $filters['tin_validated'] !== null) {
             // "TIN activated / verified" means ERCA confirmed the TIN number.
             $query->where('erca_tin_verified', (bool) $filters['tin_validated']);
+        }
+
+        if (filled($filters['erca_name_status'] ?? null)) {
+            $query->where('erca_name_status', (string) $filters['erca_name_status']);
         }
 
         if (! empty($filters['legacy_only'])) {
