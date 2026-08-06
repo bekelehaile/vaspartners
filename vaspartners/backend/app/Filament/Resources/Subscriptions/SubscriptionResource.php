@@ -92,10 +92,18 @@ class SubscriptionResource extends Resource
                     ->label('Contract signing date')
                     ->date()
                     ->placeholder('—'),
+                TextEntry::make('renewal_years')
+                    ->label('Renewal year')
+                    ->placeholder('—'),
                 TextEntry::make('renewal_date')
                     ->label('Renewal date')
                     ->date()
                     ->placeholder('—'),
+                TextEntry::make('automatic_renewal')
+                    ->label('Automatic renewal')
+                    ->badge()
+                    ->formatStateUsing(fn ($state): string => $state ? 'Yes' : 'No')
+                    ->color(fn ($state): string => $state ? 'success' : 'gray'),
                 TextEntry::make('vas_license_expires_at')
                     ->label('VAS license expiry')
                     ->date()

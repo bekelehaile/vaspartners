@@ -14,6 +14,7 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Schemas\Components\Section;
@@ -87,7 +88,9 @@ class ViewSubscription extends ViewRecord
 
                     $this->refreshFormData([
                         'contract_signed_at',
+                        'renewal_years',
                         'renewal_date',
+                        'automatic_renewal',
                         'vas_license_expires_at',
                     ]);
                 }),
@@ -141,7 +144,9 @@ class ViewSubscription extends ViewRecord
                         'status',
                         'closed_at',
                         'contract_signed_at',
+                        'renewal_years',
                         'renewal_date',
+                        'automatic_renewal',
                         'vas_license_expires_at',
                         'next_renewal_due_at',
                     ]);
@@ -280,22 +285,8 @@ HTML;
     {
         $premium = $record->requiresVasLicenseExpiry();
         $must = $required;
-        $yearCountOptions = collect(range(1, 10))
-            ->mapWithKeys(fn (int $n): array => [$n => (string) $n])
-            ->all();
 
-        $defaultYears = match ($record->renewal_interval?->value ?? null) {
-            'bi_yearly' => 2,
-            default => 1,
-        };
-
-        $syncRenewal = function (callable $set, callable $get) use ($defaultYears): void {
-            if ((bool) $get('automatic_renewal')) {
-                $set('renewal_years', $defaultYears);
-            } elseif (filled($get('contract_signed_at')) && blank($get('renewal_years'))) {
-                $set('renewal_years', $defaultYears);
-            }
-
+        $syncRenewal = function (callable $set, callable $get): void {
             $composed = Subscription::composeRenewalDate(
                 $get('contract_signed_at'),
                 $get('renewal_years'),
@@ -314,9 +305,7 @@ HTML;
                 ->schema([
                     Checkbox::make('automatic_renewal')
                         ->label('Automatic renewal')
-                        ->live()
-                        ->afterStateUpdated(fn ($state, callable $set, callable $get) => $syncRenewal($set, $get))
-                        ->dehydrated(false)
+                        ->dehydrated()
                         ->columnSpanFull(),
                     DatePicker::make('contract_signed_at')
                         ->label('Contract signing date')
@@ -339,23 +328,28 @@ HTML;
                             'before_or_equal' => 'Contract signing date cannot be in the future.',
                         ])
                         ->markAsRequired($must)
-                        ->columnSpanFull(),
-                    Select::make('renewal_years')
+                        ->columnSpan(1),
+                    TextInput::make('renewal_years')
                         ->label('Renewal year')
-                        ->options($yearCountOptions)
-                        ->native(false)
-                        ->required(fn (callable $get): bool => $must && ! (bool) $get('automatic_renewal'))
-                        ->visible(fn (callable $get): bool => ! (bool) $get('automatic_renewal'))
-                        ->live()
+                        ->numeric()
+                        ->minValue(1)
+                        ->maxValue(10)
+                        ->step(1)
+                        ->required($must)
+                        ->live(onBlur: true)
                         ->afterStateUpdated(fn ($state, callable $set, callable $get) => $syncRenewal($set, $get))
-                        ->dehydrated(false)
-                        ->rules(fn (callable $get): array => ($must && ! (bool) $get('automatic_renewal'))
-                            ? ['required', 'integer', 'min:1', 'max:10']
-                            : ['nullable', 'integer', 'min:1', 'max:10'])
+                        ->rules([
+                            $must ? 'required' : 'nullable',
+                            'integer',
+                            'min:1',
+                            'max:10',
+                        ])
                         ->validationMessages([
                             'required' => 'Renewal year is required.',
+                            'min' => 'Renewal year must be at least 1.',
+                            'max' => 'Renewal year must be 10 or less.',
                         ])
-                        ->markAsRequired(fn (callable $get): bool => $must && ! (bool) $get('automatic_renewal'))
+                        ->markAsRequired($must)
                         ->columnSpan(1),
                     DatePicker::make('renewal_date')
                         ->label('Renewal date')
@@ -421,22 +415,15 @@ HTML;
      */
     protected function contractFormDefaults(Subscription $record): array
     {
-        $defaultYears = match ($record->renewal_interval?->value ?? null) {
-            'bi_yearly' => 2,
-            default => 1,
-        };
-
-        $years = Subscription::renewalYearsBetween($record->contract_signed_at, $record->renewal_date)
-            ?? $defaultYears;
-
-        $automatic = $record->renewal_date === null || $years === $defaultYears;
+        $years = $record->renewal_years
+            ?? Subscription::renewalYearsBetween($record->contract_signed_at, $record->renewal_date);
 
         return [
+            'automatic_renewal' => (bool) $record->automatic_renewal,
             'contract_signed_at' => $record->contract_signed_at,
-            'automatic_renewal' => $automatic,
-            'renewal_years' => $automatic ? $defaultYears : $years,
+            'renewal_years' => $years,
             'renewal_date' => $record->renewal_date
-                ?? Subscription::composeRenewalDate($record->contract_signed_at, $automatic ? $defaultYears : $years),
+                ?? Subscription::composeRenewalDate($record->contract_signed_at, $years),
             'vas_license_expires_at' => $record->vas_license_expires_at
                 ?? $record->company?->license_valid_until,
         ];

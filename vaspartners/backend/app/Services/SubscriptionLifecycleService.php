@@ -256,7 +256,9 @@ class SubscriptionLifecycleService
      *
      * @param  array{
      *   contract_signed_at?: mixed,
+     *   renewal_years?: mixed,
      *   renewal_date?: mixed,
+     *   automatic_renewal?: mixed,
      *   vas_license_expires_at?: mixed
      * }  $data
      */
@@ -303,7 +305,9 @@ class SubscriptionLifecycleService
      *
      * @param  array{
      *   contract_signed_at?: mixed,
+     *   renewal_years?: mixed,
      *   renewal_date?: mixed,
+     *   automatic_renewal?: mixed,
      *   vas_license_expires_at?: mixed,
      *   note?: ?string
      * }  $data
@@ -331,7 +335,11 @@ class SubscriptionLifecycleService
 
             $merged = [
                 'contract_signed_at' => $data['contract_signed_at'] ?? $locked->contract_signed_at,
+                'renewal_years' => $data['renewal_years'] ?? $locked->renewal_years,
                 'renewal_date' => $data['renewal_date'] ?? $locked->renewal_date,
+                'automatic_renewal' => array_key_exists('automatic_renewal', $data)
+                    ? (bool) $data['automatic_renewal']
+                    : (bool) $locked->automatic_renewal,
                 'vas_license_expires_at' => $data['vas_license_expires_at'] ?? $locked->vas_license_expires_at,
             ];
 
@@ -368,7 +376,9 @@ class SubscriptionLifecycleService
                     : 'Subscription closed after contract expiration follow-up',
                 [
                     'contract_signed_at' => optional($locked->contract_signed_at)?->toDateString(),
+                    'renewal_years' => $locked->renewal_years,
                     'renewal_date' => optional($locked->renewal_date)?->toDateString(),
+                    'automatic_renewal' => (bool) $locked->automatic_renewal,
                     'vas_license_expires_at' => optional($locked->vas_license_expires_at)?->toDateString(),
                 ],
             );
@@ -383,7 +393,9 @@ class SubscriptionLifecycleService
      * @param  array<string, mixed>  $data
      * @return array{
      *   contract_signed_at?: string,
+     *   renewal_years?: int,
      *   renewal_date?: string,
+     *   automatic_renewal?: bool,
      *   vas_license_expires_at?: string|null
      * }
      */
@@ -417,14 +429,30 @@ class SubscriptionLifecycleService
             }
         }
 
+        $yearsRaw = $data['renewal_years'] ?? null;
+        if ($requireComplete || array_key_exists('renewal_years', $data)) {
+            if (! filled($yearsRaw) && $yearsRaw !== 0 && $yearsRaw !== '0') {
+                if ($requireComplete) {
+                    $errors['renewal_years'] = 'Renewal year is required.';
+                }
+            } else {
+                $years = (int) $yearsRaw;
+                if ($years < 1 || $years > 10) {
+                    $errors['renewal_years'] = 'Renewal year must be between 1 and 10.';
+                } else {
+                    $payload['renewal_years'] = $years;
+                }
+            }
+        }
+
         $renewalRaw = $data['renewal_date'] ?? null;
         if (
             ! filled($renewalRaw)
-            && filled($data['renewal_years'] ?? null)
+            && isset($payload['renewal_years'])
         ) {
             $composed = Subscription::composeRenewalDate(
-                $data['contract_signed_at'] ?? $subscription->contract_signed_at,
-                $data['renewal_years'] ?? null,
+                $payload['contract_signed_at'] ?? $data['contract_signed_at'] ?? $subscription->contract_signed_at,
+                $payload['renewal_years'],
             );
             $renewalRaw = $composed?->toDateString();
         }
@@ -433,9 +461,6 @@ class SubscriptionLifecycleService
             if (! filled($renewalRaw)) {
                 if ($requireComplete) {
                     $errors['renewal_date'] = 'Renewal date is required.';
-                    if (! filled($data['renewal_years'] ?? null)) {
-                        $errors['renewal_years'] = 'Renewal year is required.';
-                    }
                 }
             } else {
                 try {
@@ -445,6 +470,10 @@ class SubscriptionLifecycleService
                     $errors['renewal_date'] = 'Enter a valid renewal date.';
                 }
             }
+        }
+
+        if (array_key_exists('automatic_renewal', $data) || $requireComplete) {
+            $payload['automatic_renewal'] = (bool) ($data['automatic_renewal'] ?? false);
         }
 
         $licenseRaw = $data['vas_license_expires_at'] ?? null;
