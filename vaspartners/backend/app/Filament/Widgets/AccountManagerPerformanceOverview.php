@@ -50,7 +50,7 @@ class AccountManagerPerformanceOverview extends StatsOverviewWidget
                 ->color('primary')
                 ->url(UserResource::getUrl('index')),
             Stat::make('Backlog', $summary['backlog'])
-                ->description($summary['unassigned_open'].' still unassigned (open)')
+                ->description($summary['unassigned_open'].' still Pending')
                 ->descriptionIcon(Heroicon::OutlinedInboxStack)
                 ->color($summary['backlog'] > 0 ? 'warning' : 'success')
                 ->url($this->ticketsUrl('in_progress', $handlerId, $serviceIds)),

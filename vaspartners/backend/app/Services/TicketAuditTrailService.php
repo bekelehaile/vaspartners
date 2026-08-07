@@ -35,9 +35,9 @@ class TicketAuditTrailService
                     null,
                     TicketStatus::Open,
                     $ticket->contact,
-                    'Request submitted',
+                    'Pending',
                     [
-                        'event' => 'submitted',
+                        'event' => 'pending',
                         'status_stamp_column' => 'opened_at',
                         'status_stamped_at' => $ticket->opened_at->toIso8601String(),
                         'backfilled' => true,
@@ -270,7 +270,7 @@ class TicketAuditTrailService
         }
 
         return match ($record->to_status) {
-            TicketStatus::Open->value => ($record->from_status === null ? 'submitted' : 'pending'),
+            TicketStatus::Open->value => 'pending',
             TicketStatus::InProgress->value => 'in_progress',
             TicketStatus::Completed->value => 'approved',
             TicketStatus::Closed->value => 'closed',
@@ -282,8 +282,7 @@ class TicketAuditTrailService
     protected function eventLabel(string $event, ?TicketStatus $to): string
     {
         return match ($event) {
-            'submitted' => 'Submitted',
-            'pending' => 'Pending',
+            'submitted', 'pending' => 'Pending',
             'assigned' => 'Assigned',
             'reassigned' => 'Reassigned',
             'in_progress' => 'In progress',

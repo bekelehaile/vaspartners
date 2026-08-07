@@ -45,7 +45,7 @@ class StatusHistoryRelationManager extends RelationManager
         }
 
         return $table
-            ->description('Who changed each status and when — submitted, assigned, in progress, approved, completed, closed, rejected.')
+            ->description('Who changed each status and when — pending, assigned, in progress, approved, completed, closed, rejected.')
             ->modifyQueryUsing(fn ($query) => $query->with('actor'))
             ->columns([
                 TextColumn::make('created_at')
@@ -60,8 +60,7 @@ class StatusHistoryRelationManager extends RelationManager
                         $event = $meta['event'] ?? null;
                         if (is_string($event) && $event !== '') {
                             return match ($event) {
-                                'submitted' => 'Submitted',
-                                'pending' => 'Pending',
+                                'submitted', 'pending', 'resubmitted' => 'Pending',
                                 'assigned' => 'Assigned',
                                 'reassigned' => 'Reassigned',
                                 'in_progress' => 'In progress',
@@ -82,7 +81,7 @@ class StatusHistoryRelationManager extends RelationManager
                         'closed', TicketStatus::Closed->value => 'gray',
                         'rejected', TicketStatus::Rejected->value => 'danger',
                         'assigned', 'reassigned', 'in_progress', TicketStatus::InProgress->value => 'info',
-                        'submitted', 'pending', TicketStatus::Open->value => 'warning',
+                        'submitted', 'pending', 'resubmitted', TicketStatus::Open->value => 'warning',
                         default => 'gray',
                     }),
                 TextColumn::make('actor_name')
@@ -181,8 +180,7 @@ class StatusHistoryRelationManager extends RelationManager
                         $event = $meta['event'] ?? null;
                         if (is_string($event) && $event !== '') {
                             $eventLabel = match ($event) {
-                                'submitted' => 'Submitted',
-                                'pending' => 'Pending',
+                                'submitted', 'pending', 'resubmitted' => 'Pending',
                                 'assigned' => 'Assigned',
                                 'reassigned' => 'Reassigned',
                                 'in_progress' => 'In progress',

@@ -28,10 +28,6 @@ class TicketStatsOverview extends StatsOverviewWidget
         $live = $this->applyDashboardLiveTicketFilters(TicketResource::getEloquentQuery());
 
         $open = (clone $live)->where('status', TicketStatus::Open)->count();
-        $unassigned = (clone $live)
-            ->where('status', TicketStatus::Open)
-            ->whereNull('assigned_to_user_id')
-            ->count();
         $inProgress = (clone $live)->where('status', TicketStatus::InProgress)->count();
         $escalated = (clone $live)
             ->whereNotNull('escalated_at')
@@ -57,7 +53,6 @@ class TicketStatsOverview extends StatsOverviewWidget
 
         return [
             Stat::make('Pending', $open)
-                ->description($unassigned > 0 ? $unassigned.' unassigned' : null)
                 ->descriptionIcon(Heroicon::OutlinedClock)
                 ->color($open > 0 ? 'warning' : 'gray')
                 ->url(TicketResource::getUrl('index').'?tab=open'),

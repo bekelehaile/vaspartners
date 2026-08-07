@@ -920,7 +920,7 @@ class TicketResource extends Resource
                             } else {
                                 Notification::make()
                                     ->title('No tickets assigned')
-                                    ->body('Only open, unassigned tickets can be bulk-assigned.')
+                                    ->body('Only pending tickets without an account manager can be bulk-assigned.')
                                     ->warning()
                                     ->send();
                             }

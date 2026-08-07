@@ -49,7 +49,7 @@ class PartnerNotificationService
         $handler = $this->activeAccountManager($ticket->assignee);
         $statusLine = $handler
             ? sprintf('Returned to account manager %s (In progress).', $handler->name)
-            : 'Status is Pending (unassigned).';
+            : 'Status is Pending.';
         $body = sprintf(
             '%s updated and resubmitted request number %s for %s. %s',
             $ticket->contact?->name ?: 'A partner',

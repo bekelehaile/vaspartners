@@ -482,9 +482,9 @@ export const statusCopy: Record<
   Ticket["status"],
   { label: string; hint: string; tone: string }
 > = {
-  open: {
+    open: {
     label: "Pending",
-    hint: "Waiting for Ethio telecom to assign and review your request",
+    hint: "Waiting for Ethio telecom to review your request",
     tone: "tone-open",
   },
   in_progress: {

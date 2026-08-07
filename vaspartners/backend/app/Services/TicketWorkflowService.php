@@ -90,7 +90,7 @@ class TicketWorkflowService
         $historyMeta = $meta;
         if (empty($historyMeta['event'])) {
             $historyMeta['event'] = match ($to) {
-                TicketStatus::Open => $from === null ? 'submitted' : 'pending',
+                TicketStatus::Open => 'pending',
                 TicketStatus::InProgress => ! empty($meta['reassignment']) ? 'reassigned' : 'in_progress',
                 TicketStatus::Completed => 'approved',
                 TicketStatus::Closed => 'closed',
@@ -172,7 +172,7 @@ class TicketWorkflowService
     /**
      * Partner corrected a rejected request — return it to the account manager
      * who handled it (In progress). If no handler was ever assigned, leave it
-     * Pending (open) for the unassigned queue.
+     * Pending for claim.
      */
     public function resubmitByContact(Ticket $ticket, Contact $contact): Ticket
     {
@@ -782,9 +782,9 @@ class TicketWorkflowService
                     'to_status' => TicketStatus::Open->value,
                     'actor_type' => Contact::class,
                     'actor_id' => $contact->id,
-                    'note' => 'Request submitted',
+                    'note' => 'Pending',
                     'meta' => [
-                        'event' => 'submitted',
+                        'event' => 'pending',
                         'status_stamp_column' => TicketStatus::Open->eventTimestampColumn(),
                         'status_stamped_at' => $openedAt->toIso8601String(),
                     ],
