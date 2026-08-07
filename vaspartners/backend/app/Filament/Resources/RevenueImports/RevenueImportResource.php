@@ -76,15 +76,14 @@ class RevenueImportResource extends Resource
                     ->required()
                     ->searchable()
                     ->preload()
-                    ->native(false)
-                    ->helperText('Used for SMS {service_type} wording.'),
+                    ->native(false),
                 Textarea::make('message_template')
-                    ->label('SMS template')
+                    ->label('SMS message')
                     ->rows(4)
                     ->required()
                     ->maxLength(640)
                     ->default(RevenueImportService::DEFAULT_SMS_TEMPLATE)
-                    ->helperText('Revenue SMS placeholders: {company_name} {period} {service_type} {service_id} {amount}')
+                    ->helperText('{company_name}, {period}, {service_type}, {service_id}, {amount}')
                     ->columnSpanFull(),
             ])->columns(2),
         ]);
@@ -112,7 +111,7 @@ class RevenueImportResource extends Resource
                 TextEntry::make('sender.name')->label('Sent by')->placeholder('—'),
                 TextEntry::make('sent_at')->label('Sent at')->dateTime()->placeholder('—'),
                 TextEntry::make('source_filename')->label('CSV file')->placeholder('—'),
-                TextEntry::make('message_template')->label('SMS template')->columnSpanFull(),
+                TextEntry::make('message_template')->label('SMS message')->columnSpanFull(),
             ])->columns(2),
             Section::make('Row counts')->schema([
                 TextEntry::make('total_count')->label('Total'),
@@ -184,14 +183,14 @@ class RevenueImportResource extends Resource
                     ->visible(fn (RevenueImport $record): bool => static::canEdit($record)),
                 DeleteAction::make()
                     ->visible(fn (RevenueImport $record): bool => static::canDelete($record))
-                    ->modalHeading('Delete monthly revenue import')
-                    ->modalDescription('Deletes this import and its payload rows. Hidden after any SMS has been queued or sent.'),
+                    ->modalHeading('Delete import')
+                    ->modalDescription('Removes this import and its rows. Not available after SMS has been sent.'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
-                        ->modalHeading('Delete selected imports')
-                        ->modalDescription('Imports with any queued/sent SMS are skipped. Others must be yours.')
+                        ->modalHeading('Delete selected')
+                        ->modalDescription('Imports that already have SMS sent are skipped.')
                         ->action(function (Collection $records): void {
                             $deleted = 0;
                             $skipped = 0;
@@ -229,7 +228,7 @@ class RevenueImportResource extends Resource
                                 ])->mapWithKeys(fn (RevenueImportStatus $s) => [$s->value => $s->label()])->all())
                                 ->required()
                                 ->native(false)
-                                ->helperText('Ready only if all rows are fixed. Already-sent imports are skipped.'),
+                                ->helperText('Imports that already have SMS sent are skipped.'),
                         ])
                         ->deselectRecordsAfterCompletion()
                         ->action(function (Collection $records, array $data, RevenueImportService $revenueImports): void {
@@ -272,8 +271,8 @@ class RevenueImportResource extends Resource
                         ->icon('heroicon-o-arrow-path')
                         ->color('gray')
                         ->requiresConfirmation()
-                        ->modalHeading('Rematch selected imports')
-                        ->modalDescription('Re-check each selected import against the partner master list. Already-sent imports are skipped.')
+                        ->modalHeading('Rematch selected')
+                        ->modalDescription('Match selected imports against Revenue Partners again.')
                         ->deselectRecordsAfterCompletion()
                         ->action(function (Collection $records, RevenueImportService $revenueImports): void {
                             $done = 0;
@@ -303,7 +302,7 @@ class RevenueImportResource extends Resource
                         ->color('warning')
                         ->requiresConfirmation()
                         ->modalHeading('Register missing partners')
-                        ->modalDescription('Create master partners for unresolved rows on the selected imports. Already-sent imports are skipped.')
+                        ->modalDescription('Create Revenue Partners for unresolved rows on the selected imports.')
                         ->deselectRecordsAfterCompletion()
                         ->action(function (Collection $records, RevenueImportService $revenueImports): void {
                             $created = 0;
@@ -335,8 +334,8 @@ class RevenueImportResource extends Resource
                         ->icon('heroicon-o-paper-airplane')
                         ->color('success')
                         ->requiresConfirmation()
-                        ->modalHeading('Send SMS for selected imports')
-                        ->modalDescription('Queues SMS for Ready rows on each selected import (row status Ready + phone). Unresolved rows can be fixed later.')
+                        ->modalHeading('Send SMS')
+                        ->modalDescription('Send to Ready partners on each selected import.')
                         ->deselectRecordsAfterCompletion()
                         ->action(function (Collection $records, RevenueImportService $revenueImports): void {
                             /** @var User|null $user */

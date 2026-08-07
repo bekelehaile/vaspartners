@@ -60,7 +60,7 @@ class ViewRevenueImport extends ViewRecord
                 ->url(fn (): string => RevenueImportResource::getUrl('edit', ['record' => $record]))
                 ->visible(fn (): bool => RevenueImportResource::canEdit($record->fresh() ?? $record)),
             Action::make('correct_period')
-                ->label('Correct month')
+                ->label('Update month')
                 ->icon('heroicon-o-calendar-days')
                 ->color('warning')
                 ->visible(function () use ($record, $user): bool {
@@ -78,26 +78,24 @@ class ViewRevenueImport extends ViewRecord
                 ])
                 ->form([
                     Select::make('period')
-                        ->label('Correct month')
+                        ->label('Month')
                         ->options(fn (): array => MonthlyRevenueImporter::monthOptions())
                         ->required()
                         ->searchable()
-                        ->native(false)
-                        ->helperText('Fixes a wrong month selected at import. Title updates to match when it used the old month.'),
+                        ->native(false),
                     Textarea::make('message_template')
-                        ->label('SMS template')
+                        ->label('SMS message')
                         ->rows(4)
                         ->required()
                         ->maxLength(640)
-                        ->helperText('Edit before re-send. Placeholders: {company_name} {period} {service_type} {service_id} {amount}')
+                        ->helperText('{company_name}, {period}, {service_type}, {service_id}, {amount}')
                         ->columnSpanFull(),
                     Toggle::make('reset_sent_rows')
-                        ->label('Reset sent rows so SMS can be sent again')
-                        ->helperText('Turns Sent rows back to Ready. New SMS uses the corrected month and template above. Partners may receive another message.')
-                        ->default(false),
+                        ->label('Allow resend to previously sent partners')
+                        ->helperText('Partners may receive another SMS.'),
                 ])
-                ->modalHeading('Correct billing month')
-                ->modalDescription('Use this when the wrong month or SMS wording was used. Optionally re-open sent rows for another send.')
+                ->modalHeading('Update month')
+                ->modalDescription('Update the billing month and SMS message. Enable resend only if partners should be contacted again.')
                 ->action(function (array $data, RevenueImportService $revenueImports) use ($record): void {
                     /** @var User|null $actor */
                     $actor = auth()->user();
@@ -113,11 +111,11 @@ class ViewRevenueImport extends ViewRecord
                             (string) ($data['message_template'] ?? ''),
                         );
                         Notification::make()
-                            ->title('Month / template corrected')
+                            ->title('Updated')
                             ->body(trim(implode(' ', array_filter([
-                                "Period is now {$result['period']}.",
+                                "Month set to {$result['period']}.",
                                 $result['reset_rows'] > 0
-                                    ? "{$result['reset_rows']} row(s) reset to Ready for re-send."
+                                    ? "{$result['reset_rows']} partner(s) ready to resend."
                                     : null,
                             ]))))
                             ->success()
@@ -129,7 +127,7 @@ class ViewRevenueImport extends ViewRecord
                         ]);
                     } catch (ValidationException $e) {
                         Notification::make()
-                            ->title('Could not correct month')
+                            ->title('Could not update')
                             ->body(collect($e->errors())->flatten()->first() ?? $e->getMessage())
                             ->danger()
                             ->send();
@@ -137,8 +135,8 @@ class ViewRevenueImport extends ViewRecord
                 }),
             DeleteAction::make()
                 ->visible(fn (): bool => RevenueImportResource::canDelete($record->fresh() ?? $record))
-                ->modalHeading('Delete monthly revenue import')
-                ->modalDescription('Deletes this import and its payload rows. Only when no SMS has been queued or sent.')
+                ->modalHeading('Delete import')
+                ->modalDescription('This permanently removes the import and its rows. Not available after SMS has been sent.')
                 ->successRedirectUrl(RevenueImportResource::getUrl('index')),
             Action::make('set_status')
                 ->label('Set status')
@@ -152,7 +150,7 @@ class ViewRevenueImport extends ViewRecord
                 ])
                 ->form([
                     Select::make('status')
-                        ->label('Import status')
+                        ->label('Status')
                         ->options(collect([
                             RevenueImportStatus::Draft,
                             RevenueImportStatus::Reviewing,
@@ -160,22 +158,21 @@ class ViewRevenueImport extends ViewRecord
                             RevenueImportStatus::Failed,
                         ])->mapWithKeys(fn (RevenueImportStatus $s) => [$s->value => $s->label()])->all())
                         ->required()
-                        ->native(false)
-                        ->helperText('Ready only if all rows are fixed. Sending / Completed are set when SMS is queued.'),
+                        ->native(false),
                 ])
                 ->action(function (array $data, RevenueImportService $revenueImports) use ($record): void {
                     try {
                         $status = RevenueImportStatus::from((string) $data['status']);
                         $revenueImports->setImportStatus($record->fresh(), $status);
                         Notification::make()
-                            ->title('Import status updated')
+                            ->title('Status updated')
                             ->body($status->label())
                             ->success()
                             ->send();
                         $this->refreshFormData(['status']);
                     } catch (ValidationException $e) {
                         Notification::make()
-                            ->title('Could not set status')
+                            ->title('Could not update status')
                             ->body(collect($e->errors())->flatten()->first() ?? $e->getMessage())
                             ->danger()
                             ->send();
@@ -192,7 +189,7 @@ class ViewRevenueImport extends ViewRecord
                     $created = $revenueImports->registerMissingPartners($record->fresh());
                     Notification::make()
                         ->title('Partners registered')
-                        ->body("{$created} new master record(s). Set phones, then Rematch / Send.")
+                        ->body("{$created} partner(s) created. Add phone numbers, then continue.")
                         ->success()
                         ->send();
                     $this->refreshFormData([
@@ -200,7 +197,7 @@ class ViewRevenueImport extends ViewRecord
                     ]);
                 }),
             Action::make('open_partners')
-                ->label('Master list')
+                ->label('Revenue partners')
                 ->icon('heroicon-o-identification')
                 ->color('gray')
                 ->url(RevenuePartnerResource::getUrl('index')),
@@ -211,18 +208,18 @@ class ViewRevenueImport extends ViewRecord
                 ->visible(fn (): bool => $this->importIsEditable($record)
                     && $record->fresh()->missing_phone_count > 0)
                 ->requiresConfirmation()
-                ->modalHeading('Sync phones from Revenue Partners')
-                ->modalDescription('Re-check missing-phone rows by Service ID or Short code. Rows become ready when the master partner has a usable phone.')
+                ->modalHeading('Sync phones')
+                ->modalDescription('Update missing phone numbers from Revenue Partners.')
                 ->action(function (RevenueImportService $revenueImports) use ($record): void {
                     try {
                         $result = $revenueImports->syncPhonesFromPartners($record->fresh());
                         Notification::make()
                             ->title($result['synced'] > 0
-                                ? "Synced phone for {$result['synced']} row(s)"
-                                : 'No phones synced')
+                                ? "Updated {$result['synced']} phone(s)"
+                                : 'No phones updated')
                             ->body(collect([
-                                $result['still_missing'] > 0 ? "{$result['still_missing']} still missing phone on partner" : null,
-                                $result['unresolved'] > 0 ? "{$result['unresolved']} unresolved (no partner)" : null,
+                                $result['still_missing'] > 0 ? "{$result['still_missing']} still missing a phone" : null,
+                                $result['unresolved'] > 0 ? "{$result['unresolved']} without a matching partner" : null,
                             ])->filter()->implode('. ') ?: null)
                             ->color($result['synced'] > 0 ? 'success' : 'warning')
                             ->send();
@@ -244,7 +241,7 @@ class ViewRevenueImport extends ViewRecord
                 ->visible(fn (): bool => $this->importIsEditable($record))
                 ->action(function (RevenueImportService $revenueImports) use ($record): void {
                     $revenueImports->rematch($record->fresh());
-                    Notification::make()->title('Rematched against your partner list')->success()->send();
+                    Notification::make()->title('Partners rematched')->success()->send();
                     $this->refreshFormData([
                         'status', 'matched_count', 'missing_partner_count', 'missing_phone_count', 'invalid_count',
                     ]);
@@ -261,16 +258,16 @@ class ViewRevenueImport extends ViewRecord
                 ])
                 ->form([
                     Textarea::make('message_template')
-                        ->label('SMS template')
+                        ->label('SMS message')
                         ->rows(5)
                         ->required()
                         ->maxLength(640)
-                        ->helperText('Edit before queueing. Placeholders: {company_name} {period} {service_type} {service_id} {amount}. Max 640 characters.')
+                        ->helperText('{company_name}, {period}, {service_type}, {service_id}, {amount}')
                         ->columnSpanFull(),
                 ])
-                ->modalHeading('Send SMS for Ready rows')
+                ->modalHeading('Send SMS')
                 ->modalDescription(fn (): string => sprintf(
-                    'Queue %d Ready row(s) that still need SMS. Confirm or correct the template below.',
+                    '%d partner(s) ready. Review the message before sending.',
                     app(RevenueImportService::class)->unsentReadyCount($record->fresh()),
                 ))
                 ->action(function (array $data, RevenueImportService $revenueImports) use ($record): void {
@@ -284,7 +281,7 @@ class ViewRevenueImport extends ViewRecord
                         $count = $campaign->recipients()->count();
                         Notification::make()
                             ->title('SMS queued')
-                            ->body("{$count} message(s) queued from Monthly Revenue.")
+                            ->body("{$count} message(s) queued.")
                             ->success()
                             ->send();
                         $this->refreshFormData([

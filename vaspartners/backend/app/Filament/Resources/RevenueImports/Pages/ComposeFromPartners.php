@@ -56,7 +56,7 @@ class ComposeFromPartners extends Page
 
     public function getSubheading(): ?string
     {
-        return 'Pick partners from your Revenue Partners list, enter amounts, then review and Send SMS. CSV import remains available for finance files.';
+        return 'Select partners, enter amounts, then review and send SMS.';
     }
 
     public function form(Schema $schema): Schema
@@ -80,17 +80,16 @@ class ComposeFromPartners extends Page
                         ->live()
                         ->afterStateUpdated(function (Set $set): void {
                             $set('lines', []);
-                        })
-                        ->helperText('Filters your partner list and sets {service_type} in the SMS.'),
+                        }),
                     Textarea::make('message_template')
-                        ->label('SMS template')
+                        ->label('SMS message')
                         ->rows(4)
                         ->required()
                         ->maxLength(640)
-                        ->helperText('Placeholders: {company_name} {period} {service_type} {service_id} {amount}')
+                        ->helperText('{company_name}, {period}, {service_type}, {service_id}, {amount}')
                         ->columnSpanFull(),
                     Toggle::make('only_with_phone')
-                        ->label('Only partners with a usable phone')
+                        ->label('Only partners with a phone number')
                         ->default(true)
                         ->live()
                         ->afterStateUpdated(function (Set $set): void {
@@ -100,7 +99,7 @@ class ComposeFromPartners extends Page
                 Section::make('Partners & amounts')->schema([
                     Actions::make([
                         Action::make('load_all')
-                            ->label('Load all my partners for this service')
+                            ->label('Load all partners for this service')
                             ->icon('heroicon-o-user-group')
                             ->color('gray')
                             ->action(function (Get $get, Set $set): void {
@@ -138,8 +137,8 @@ class ComposeFromPartners extends Page
                                         ? 'No partners found'
                                         : 'Loaded '.$partners->count().' partner(s)')
                                     ->body($partners->isEmpty()
-                                        ? 'Check catalog service and phone filter, or add partners under Revenue partners.'
-                                        : 'Enter amounts for each row, then create the import.')
+                                        ? 'Try another service, or add partners under Revenue partners.'
+                                        : 'Enter an amount for each partner.')
                                     ->color($partners->isEmpty() ? 'warning' : 'success')
                                     ->send();
                             }),
@@ -185,8 +184,7 @@ class ComposeFromPartners extends Page
                         ->defaultItems(0)
                         ->addActionLabel('Add partner')
                         ->reorderable(false)
-                        ->columnSpanFull()
-                        ->helperText('Partners are limited to your Revenue Partners list for the selected catalog service.'),
+                        ->columnSpanFull(),
                 ]),
             ])
             ->statePath('data');

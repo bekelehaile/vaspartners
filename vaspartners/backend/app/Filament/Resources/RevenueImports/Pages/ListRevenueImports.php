@@ -14,7 +14,7 @@ class ListRevenueImports extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'Monthly revenue — build from your Revenue Partners list, or import a finance CSV (service ID + amount), then send collection SMS.';
+        return 'Create from your partners or import a CSV, then send collection SMS.';
     }
 
     protected function getHeaderActions(): array
@@ -32,7 +32,7 @@ class ListRevenueImports extends ListRecords
                 ->url(RevenueImportResource::getUrl('compose')),
             ImportAction::make()
                 ->importer(MonthlyRevenueImporter::class)
-                ->label('Import monthly CSV')
+                ->label('Import CSV')
                 ->color('gray')
                 ->maxRows(20000)
                 ->chunkSize(100),
