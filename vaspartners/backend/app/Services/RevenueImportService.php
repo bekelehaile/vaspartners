@@ -17,6 +17,7 @@ use App\Models\RevenuePartner;
 use App\Models\User;
 use App\Support\PhoneNumber;
 use App\Support\RevenueDuplicatePolicy;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -1407,8 +1408,157 @@ class RevenueImportService
         array $context,
         ?int $excludeRowId = null,
     ): bool {
+        $query = $this->priorSentMatchingPolicyQuery($policy, $context, $excludeRowId);
+
+        return $query !== null && $query->exists();
+    }
+
+    /**
+     * Rows that caused this payload line to be marked Duplicate (prior SMS and/or same import).
+     * Always resolves practical matches for the UI, even if App settings later changed.
+     *
+     * @return list<array{
+     *   source: string,
+     *   row_id: int,
+     *   import_id: int,
+     *   import_title: string,
+     *   period: string,
+     *   service_id: ?string,
+     *   partner_name: ?string,
+     *   amount: ?float,
+     *   status: string,
+     *   sent_at: ?string,
+     *   url: string
+     * }>
+     */
+    public function findDuplicateMatches(RevenueImportRow $row, RevenueImport $import): array
+    {
+        $row->loadMissing('partner');
+        $policy = $this->duplicatePolicy();
+        $context = $this->duplicateContextFromRow($row, $import);
+        $matches = [];
+        $seenIds = [(int) $row->id];
+
+        // Prefer configured prior-send policy; fall back to Service ID + period for view.
+        $priorQuery = $policy->checksPriorSends()
+            ? $this->priorSentMatchingPolicyQuery($policy, $context, (int) $row->id)
+            : null;
+
+        if ($priorQuery === null) {
+            $serviceId = RevenuePartnerResolver::normalize($row->service_id);
+            $period = trim((string) $import->period);
+            if ($serviceId !== null && $period !== '') {
+                $priorQuery = RevenueImportRow::query()
+                    ->where('id', '!=', $row->id)
+                    ->where('service_id', $serviceId)
+                    ->where(function ($q): void {
+                        $q->where('status', RevenueImportRowStatus::Sent->value)
+                            ->orWhereNotNull('sent_at')
+                            ->orWhereNotNull('bulk_message_id');
+                    })
+                    ->whereHas('import', fn ($q) => $q->where('period', $period));
+            }
+        }
+
+        if ($priorQuery !== null) {
+            $prior = $priorQuery
+                ->with(['import:id,title,period,public_id', 'partner:id,partner_name'])
+                ->orderByDesc('sent_at')
+                ->orderByDesc('id')
+                ->limit(20)
+                ->get();
+
+            foreach ($prior as $match) {
+                $seenIds[] = (int) $match->id;
+                $matches[] = $this->duplicateMatchPayload($match, 'Prior SMS');
+            }
+        }
+
+        // Same-import siblings with the same Service ID (or policy fingerprint when enabled).
+        $siblings = RevenueImportRow::query()
+            ->where('revenue_import_id', $import->id)
+            ->where('id', '!=', $row->id)
+            ->whereNotIn('id', $seenIds)
+            ->with(['import:id,title,period,public_id', 'partner:id,partner_name'])
+            ->orderBy('id')
+            ->limit(40)
+            ->get();
+
+        $fingerprint = $policy->checksWithinImport()
+            ? $this->duplicateFingerprint($policy, $context)
+            : '';
+        $serviceId = RevenuePartnerResolver::normalize($row->service_id);
+
+        foreach ($siblings as $sibling) {
+            $isMatch = false;
+            if ($fingerprint !== '') {
+                $isMatch = $this->duplicateFingerprint(
+                    $policy,
+                    $this->duplicateContextFromRow($sibling, $import),
+                ) === $fingerprint;
+            } elseif ($serviceId !== null) {
+                $isMatch = RevenuePartnerResolver::normalize($sibling->service_id) === $serviceId;
+            }
+
+            if (! $isMatch) {
+                continue;
+            }
+
+            $matches[] = $this->duplicateMatchPayload($sibling, 'Same import');
+        }
+
+        return $matches;
+    }
+
+    /**
+     * @return array{
+     *   source: string,
+     *   row_id: int,
+     *   import_id: int,
+     *   import_title: string,
+     *   period: string,
+     *   service_id: ?string,
+     *   partner_name: ?string,
+     *   amount: ?float,
+     *   status: string,
+     *   sent_at: ?string,
+     *   url: string
+     * }
+     */
+    protected function duplicateMatchPayload(RevenueImportRow $match, string $source): array
+    {
+        $import = $match->import;
+        $status = $match->status instanceof RevenueImportRowStatus
+            ? $match->status->label()
+            : (string) $match->status;
+
+        return [
+            'source' => $source,
+            'row_id' => (int) $match->id,
+            'import_id' => (int) ($import?->id ?? $match->revenue_import_id),
+            'import_title' => (string) ($import?->title ?: ('Import #'.($import?->id ?? $match->revenue_import_id))),
+            'period' => (string) ($import?->period ?? '—'),
+            'service_id' => $match->service_id,
+            'partner_name' => $match->partner_name ?: $match->partner?->partner_name,
+            'amount' => $match->amount !== null ? (float) $match->amount : null,
+            'status' => $status,
+            'sent_at' => $match->sent_at?->timezone(config('app.timezone'))->format('Y-m-d H:i') ?? null,
+            'url' => \App\Filament\Resources\RevenueImports\RevenueImportResource::getUrl('view', [
+                'record' => $import ?? $match->revenue_import_id,
+            ]),
+        ];
+    }
+
+    /**
+     * @param  array<string, string|null>  $context
+     */
+    protected function priorSentMatchingPolicyQuery(
+        RevenueDuplicatePolicy $policy,
+        array $context,
+        ?int $excludeRowId = null,
+    ): ?Builder {
         if ($policy->match === []) {
-            return false;
+            return null;
         }
 
         $hasIdentity = false;
@@ -1420,7 +1570,7 @@ class RevenueImportService
             }
         }
         if (! $hasIdentity) {
-            return false;
+            return null;
         }
 
         $query = RevenueImportRow::query()
@@ -1434,7 +1584,7 @@ class RevenueImportService
         foreach ($policy->match as $field) {
             $value = trim((string) ($context[$field] ?? ''));
             if ($value === '') {
-                return false;
+                return null;
             }
 
             match ($field) {
@@ -1459,7 +1609,7 @@ class RevenueImportService
             };
         }
 
-        return $query->exists();
+        return $query;
     }
 
     /**
