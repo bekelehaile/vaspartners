@@ -143,7 +143,7 @@ class RevenuePartnerResource extends Resource
                 ->schema([
                     Select::make('vas_service_id')
                         ->label('Catalog service')
-                        ->options(RevenueCatalogServices::options())
+                        ->options(fn (): array => RevenueCatalogServices::options())
                         ->required()
                         ->searchable()
                         ->preload()

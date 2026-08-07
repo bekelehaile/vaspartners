@@ -24,6 +24,7 @@ class Service extends Model
         'image',
         'type',
         'is_active',
+        'has_monthly_revenue',
         'is_subscription_based',
         'renewal_interval',
         'renewal_lead_days',
@@ -37,6 +38,7 @@ class Service extends Model
 
     protected $attributes = [
         'is_active' => true,
+        'has_monthly_revenue' => false,
         'is_subscription_based' => true,
         'renewal_interval' => 'yearly',
         'renewal_lead_days' => 30,
@@ -47,6 +49,7 @@ class Service extends Model
     {
         return [
             'is_active' => 'boolean',
+            'has_monthly_revenue' => 'boolean',
             'is_subscription_based' => 'boolean',
             'renewal_interval' => RenewalInterval::class,
         ];
@@ -174,5 +177,10 @@ class Service extends Model
         }
 
         return str_contains($haystack, 'premium');
+    }
+
+    public function scopeWithMonthlyRevenue(Builder $query): Builder
+    {
+        return $query->where('has_monthly_revenue', true);
     }
 }

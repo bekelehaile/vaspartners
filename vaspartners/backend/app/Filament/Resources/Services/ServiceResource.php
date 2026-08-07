@@ -26,6 +26,7 @@ use Filament\Support\Enums\FontWeight;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -64,7 +65,12 @@ class ServiceResource extends Resource
                         if ($record) {
                             return;
                         }
-                        $set('slug', Str::slug((string) $state));
+                        $slug = Str::slug((string) $state);
+                        $set('slug', $slug);
+                        $probe = new Service(['name' => (string) $state, 'slug' => $slug]);
+                        if ($probe->isPremium()) {
+                            $set('has_monthly_revenue', true);
+                        }
                     }),
                 TextInput::make('slug')
                     ->hidden()
@@ -142,6 +148,10 @@ class ServiceResource extends Resource
                         ->helperText('Shown on the website home page and service detail page.')
                         ->columnSpanFull(),
                     Toggle::make('is_active')->default(true),
+                    Toggle::make('has_monthly_revenue')
+                        ->label('Monthly revenue')
+                        ->helperText('Show in Monthly Revenue catalog. Premium services default on.')
+                        ->default(false),
                 ])->columns(2),
         ]);
     }
@@ -186,6 +196,7 @@ class ServiceResource extends Resource
                         : null),
                 TextColumn::make('renewal_interval')->badge(),
                 IconColumn::make('is_subscription_based')->boolean()->label('Subs'),
+                IconColumn::make('has_monthly_revenue')->boolean()->label('Revenue')->toggleable(),
                 IconColumn::make('is_active')->boolean(),
             ])->recordActions([
                 EditAction::make(),
@@ -194,6 +205,10 @@ class ServiceResource extends Resource
                     ->modalHeading(fn (Service $record): string => 'Delete service '.$record->name)
                     ->modalDescription('Only allowed when this service has no pending or in-progress requests. Closed and rejected history is kept.')
                     ->successNotificationTitle('Service deleted'),
+            ])
+            ->filters([
+                TernaryFilter::make('has_monthly_revenue')->label('Monthly revenue'),
+                TernaryFilter::make('is_active')->label('Active'),
             ]);
     }
 

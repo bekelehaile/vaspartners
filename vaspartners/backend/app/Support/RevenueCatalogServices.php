@@ -9,14 +9,15 @@ use Illuminate\Support\Collection;
 final class RevenueCatalogServices
 {
     /**
-     * Active catalog services available for revenue mapping.
+     * Services flagged for Monthly Revenue (`has_monthly_revenue`).
+     * Includes inactive services — inactive only blocks new subscriptions.
      *
      * @return Collection<int, Service>
      */
     public static function query(): Collection
     {
         return Service::query()
-            ->where('is_active', true)
+            ->withMonthlyRevenue()
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
@@ -28,7 +29,7 @@ final class RevenueCatalogServices
     public static function options(): array
     {
         return self::query()
-            ->mapWithKeys(fn (Service $service) => [$service->id => $service->name])
+            ->mapWithKeys(fn (Service $service) => [$service->id => (string) $service->name])
             ->all();
     }
 
@@ -36,12 +37,13 @@ final class RevenueCatalogServices
     {
         return Select::make('vas_service_id')
             ->label('Catalog service')
-            ->options(self::options())
+            ->options(fn (): array => self::options())
             ->required()
             ->searchable()
+            ->preload()
             ->native(false)
             ->helperText($helperText !== ''
                 ? $helperText
-                : 'Existing portal service this revenue belongs to.');
+                : 'Services with Monthly revenue enabled (active or inactive).');
     }
 }
