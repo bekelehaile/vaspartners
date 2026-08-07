@@ -13,6 +13,7 @@ use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
@@ -71,6 +72,8 @@ class ViewRevenueImport extends ViewRecord
                 })
                 ->fillForm(fn (): array => [
                     'period' => (string) ($record->fresh()->period ?? $record->period),
+                    'message_template' => (string) ($record->fresh()->message_template
+                        ?: RevenueImportService::DEFAULT_SMS_TEMPLATE),
                     'reset_sent_rows' => (int) ($record->fresh()->sent_count ?? 0) > 0,
                 ])
                 ->form([
@@ -81,13 +84,20 @@ class ViewRevenueImport extends ViewRecord
                         ->searchable()
                         ->native(false)
                         ->helperText('Fixes a wrong month selected at import. Title updates to match when it used the old month.'),
+                    Textarea::make('message_template')
+                        ->label('SMS template')
+                        ->rows(4)
+                        ->required()
+                        ->maxLength(640)
+                        ->helperText('Edit before re-send. Placeholders: {company_name} {period} {service_type} {service_id} {amount}')
+                        ->columnSpanFull(),
                     Toggle::make('reset_sent_rows')
                         ->label('Reset sent rows so SMS can be sent again')
-                        ->helperText('Turns Sent rows back to Ready with the new month in the SMS template. Partners may receive another message — use only to correct a mistaken month.')
+                        ->helperText('Turns Sent rows back to Ready. New SMS uses the corrected month and template above. Partners may receive another message.')
                         ->default(false),
                 ])
                 ->modalHeading('Correct billing month')
-                ->modalDescription('Use this when the wrong month was selected. Optionally re-open sent rows for another SMS with the corrected month.')
+                ->modalDescription('Use this when the wrong month or SMS wording was used. Optionally re-open sent rows for another send.')
                 ->action(function (array $data, RevenueImportService $revenueImports) use ($record): void {
                     /** @var User|null $actor */
                     $actor = auth()->user();
@@ -100,9 +110,10 @@ class ViewRevenueImport extends ViewRecord
                             (string) $data['period'],
                             $actor,
                             (bool) ($data['reset_sent_rows'] ?? false),
+                            (string) ($data['message_template'] ?? ''),
                         );
                         Notification::make()
-                            ->title('Month corrected')
+                            ->title('Month / template corrected')
                             ->body(trim(implode(' ', array_filter([
                                 "Period is now {$result['period']}.",
                                 $result['reset_rows'] > 0
@@ -112,7 +123,7 @@ class ViewRevenueImport extends ViewRecord
                             ->success()
                             ->send();
                         $this->refreshFormData([
-                            'title', 'period', 'status', 'matched_count', 'sent_count',
+                            'title', 'period', 'message_template', 'status', 'matched_count', 'sent_count',
                             'missing_partner_count', 'missing_phone_count', 'invalid_count',
                             'sent_at', 'bulk_message_id',
                         ]);
@@ -244,15 +255,32 @@ class ViewRevenueImport extends ViewRecord
                 ->color('success')
                 ->visible(fn (): bool => $canSend
                     && app(RevenueImportService::class)->importCanSendSms($record->fresh()))
-                ->requiresConfirmation()
+                ->fillForm(fn (): array => [
+                    'message_template' => (string) ($record->fresh()->message_template
+                        ?: RevenueImportService::DEFAULT_SMS_TEMPLATE),
+                ])
+                ->form([
+                    Textarea::make('message_template')
+                        ->label('SMS template')
+                        ->rows(5)
+                        ->required()
+                        ->maxLength(640)
+                        ->helperText('Edit before queueing. Placeholders: {company_name} {period} {service_type} {service_id} {amount}. Max 640 characters.')
+                        ->columnSpanFull(),
+                ])
                 ->modalHeading('Send SMS for Ready rows')
                 ->modalDescription(fn (): string => sprintf(
-                    'Queue %d Ready row(s) that still need SMS. Other unresolved rows can stay for later.',
+                    'Queue %d Ready row(s) that still need SMS. Confirm or correct the template below.',
                     app(RevenueImportService::class)->unsentReadyCount($record->fresh()),
                 ))
-                ->action(function (RevenueImportService $revenueImports) use ($record): void {
+                ->action(function (array $data, RevenueImportService $revenueImports) use ($record): void {
                     try {
-                        $campaign = $revenueImports->sendViaBulkMessage($record->fresh());
+                        $template = trim((string) ($data['message_template'] ?? ''));
+                        $fresh = $record->fresh();
+                        if ($template !== '' && $template !== (string) $fresh->message_template) {
+                            $fresh->forceFill(['message_template' => $template])->save();
+                        }
+                        $campaign = $revenueImports->sendViaBulkMessage($fresh->fresh(), $template);
                         $count = $campaign->recipients()->count();
                         Notification::make()
                             ->title('SMS queued')
@@ -260,7 +288,8 @@ class ViewRevenueImport extends ViewRecord
                             ->success()
                             ->send();
                         $this->refreshFormData([
-                            'status', 'matched_count', 'missing_partner_count', 'missing_phone_count', 'invalid_count', 'sent_at',
+                            'status', 'matched_count', 'missing_partner_count', 'missing_phone_count',
+                            'invalid_count', 'sent_at', 'message_template',
                         ]);
                     } catch (ValidationException $e) {
                         Notification::make()
