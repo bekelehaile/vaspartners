@@ -151,7 +151,7 @@ class ManageAppSettings extends Page
                                     ->helperText('Stops another SMS when that Service ID was already sent for the same month.'),
                                 Placeholder::make('revenue_duplicate_hint')
                                     ->hiddenLabel()
-                                    ->content('Leave both off while AMs are learning — they can fix amounts and resend freely. Turn on later when the process is stable.'),
+                                    ->content('Leave both off while AMs are learning. Resending is separate: on an import use Manage → Allow resend, then Send SMS.'),
                             ]),
                     ]),
             ])

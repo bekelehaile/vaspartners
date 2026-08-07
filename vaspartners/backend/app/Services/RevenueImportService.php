@@ -621,39 +621,7 @@ class RevenueImportService
             $import->forceFill($payload)->save();
 
             if ($resetSentRowsForResend) {
-                $rows = $import->rows()
-                    ->with('partner')
-                    ->where(function ($q): void {
-                        $q->where('status', RevenueImportRowStatus::Sent->value)
-                            ->orWhereNotNull('sent_at')
-                            ->orWhereNotNull('bulk_message_id')
-                            ->orWhereNotNull('bulk_message_recipient_id');
-                    })
-                    ->orderBy('id')
-                    ->get();
-
-                foreach ($rows as $row) {
-                    $partner = $row->partner;
-                    $ready = $partner && $partner->hasUsablePhone();
-                    $row->forceFill([
-                        'status' => $ready
-                            ? RevenueImportRowStatus::Matched
-                            : RevenueImportRowStatus::MissingPhone,
-                        'error' => $ready
-                            ? null
-                            : 'Partner phone missing after month correction — set phone then Rematch / Sync phones.',
-                        'sent_at' => null,
-                        'bulk_message_id' => null,
-                        'bulk_message_recipient_id' => null,
-                    ])->save();
-                    $resetRows++;
-                }
-
-                $import->forceFill([
-                    'bulk_message_id' => null,
-                    'sent_at' => null,
-                    'sent_by_user_id' => null,
-                ])->save();
+                $resetRows = $this->resetSentRowsForResend($import);
             }
 
             $import->resolveStatusFromRows();
@@ -664,6 +632,56 @@ class RevenueImportService
             'title' => (string) $import->fresh()->title,
             'reset_rows' => $resetRows,
         ];
+    }
+
+    /**
+     * Clear sent markers so partners can receive SMS again (amount fixes / resend).
+     *
+     * @return int Number of rows reset
+     */
+    public function resetSentRowsForResend(RevenueImport $import): int
+    {
+        $this->assertImportEditable($import);
+
+        $resetRows = 0;
+        $rows = $import->rows()
+            ->with('partner')
+            ->where(function ($q): void {
+                $q->where('status', RevenueImportRowStatus::Sent->value)
+                    ->orWhereNotNull('sent_at')
+                    ->orWhereNotNull('bulk_message_id')
+                    ->orWhereNotNull('bulk_message_recipient_id');
+            })
+            ->orderBy('id')
+            ->get();
+
+        foreach ($rows as $row) {
+            $partner = $row->partner;
+            $ready = $partner && $partner->hasUsablePhone();
+            $row->forceFill([
+                'status' => $ready
+                    ? RevenueImportRowStatus::Matched
+                    : RevenueImportRowStatus::MissingPhone,
+                'error' => $ready
+                    ? null
+                    : 'Partner phone missing — set phone then Sync phones / Rematch.',
+                'sent_at' => null,
+                'bulk_message_id' => null,
+                'bulk_message_recipient_id' => null,
+            ])->save();
+            $resetRows++;
+        }
+
+        if ($resetRows > 0) {
+            $import->forceFill([
+                'bulk_message_id' => null,
+                'sent_at' => null,
+                'sent_by_user_id' => null,
+            ])->save();
+            $import->resolveStatusFromRows();
+        }
+
+        return $resetRows;
     }
 
     public function sendViaBulkMessage(RevenueImport $import, ?string $messageTemplate = null): BulkMessage

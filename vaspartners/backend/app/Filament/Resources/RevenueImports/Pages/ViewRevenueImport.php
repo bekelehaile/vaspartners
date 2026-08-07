@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\RevenueImports\Pages;
 
+use App\Enums\RevenueImportRowStatus;
 use App\Enums\RevenueImportStatus;
 use App\Filament\Imports\MonthlyRevenueImporter;
 use App\Filament\Resources\RevenueImports\RevenueImportResource;
@@ -167,11 +168,11 @@ class ViewRevenueImport extends ViewRecord
                             ->helperText('{company_name}, {period}, {service_type}, {service_id}, {amount}')
                             ->columnSpanFull(),
                         Toggle::make('reset_sent_rows')
-                            ->label('Allow resend to previously sent partners')
-                            ->helperText('Partners may receive another SMS.'),
+                            ->label('Also allow resend to previously sent partners')
+                            ->helperText('Prefer Manage → Allow resend if you only need to send again.'),
                     ])
                     ->modalHeading('Update month')
-                    ->modalDescription('Update the billing month and SMS message. Enable resend only if partners should be contacted again.')
+                    ->modalDescription('Update the billing month and SMS message.')
                     ->action(function (array $data, RevenueImportService $revenueImports) use ($record): void {
                         /** @var User|null $actor */
                         $actor = auth()->user();
@@ -204,6 +205,53 @@ class ViewRevenueImport extends ViewRecord
                         } catch (ValidationException $e) {
                             Notification::make()
                                 ->title('Could not update')
+                                ->body(collect($e->errors())->flatten()->first() ?? $e->getMessage())
+                                ->danger()
+                                ->send();
+                        }
+                    }),
+                Action::make('allow_resend')
+                    ->label('Allow resend')
+                    ->icon('heroicon-o-arrow-uturn-left')
+                    ->color('warning')
+                    ->visible(function () use ($record, $user): bool {
+                        $fresh = $record->fresh() ?? $record;
+
+                        return $user
+                            && $this->importIsEditable($fresh)
+                            && app(RevenueImportService::class)->actorCanManage($user, $fresh)
+                            && (
+                                (int) $fresh->sent_count > 0
+                                || $fresh->rows()
+                                    ->where(function ($q): void {
+                                        $q->where('status', RevenueImportRowStatus::Sent->value)
+                                            ->orWhereNotNull('sent_at')
+                                            ->orWhereNotNull('bulk_message_id');
+                                    })
+                                    ->exists()
+                            );
+                    })
+                    ->requiresConfirmation()
+                    ->modalHeading('Allow resend')
+                    ->modalDescription('Previously sent partners become Ready again so you can fix amounts and Send SMS again.')
+                    ->action(function (RevenueImportService $revenueImports) use ($record): void {
+                        try {
+                            $reset = $revenueImports->resetSentRowsForResend($record->fresh());
+                            Notification::make()
+                                ->title($reset > 0 ? "Ready to resend ({$reset})" : 'Nothing to reset')
+                                ->body($reset > 0
+                                    ? 'Review amounts, then use Send SMS.'
+                                    : null)
+                                ->success()
+                                ->send();
+                            $this->refreshFormData([
+                                'status', 'matched_count', 'sent_count',
+                                'missing_partner_count', 'missing_phone_count', 'invalid_count',
+                                'sent_at', 'bulk_message_id',
+                            ]);
+                        } catch (ValidationException $e) {
+                            Notification::make()
+                                ->title('Could not allow resend')
                                 ->body(collect($e->errors())->flatten()->first() ?? $e->getMessage())
                                 ->danger()
                                 ->send();
