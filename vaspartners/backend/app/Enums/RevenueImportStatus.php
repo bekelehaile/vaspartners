@@ -23,16 +23,16 @@ enum RevenueImportStatus: string
         };
     }
 
-    /** Short explanation shown next to Status on the import view. */
+    /** Short explanation shown under Status on the import view. */
     public function description(): string
     {
         return match ($this) {
-            self::Draft => 'Import created; matching not finished yet.',
-            self::Reviewing => 'Some rows still need attention (unresolved partner, missing phone, or mixed ready/problem rows).',
-            self::Ready => 'All usable rows are matched with a phone. You can send SMS.',
-            self::Sending => 'Revenue SMS is queued or sending.',
-            self::Completed => 'SMS finished for this import; nothing left to send.',
-            self::Failed => 'Nothing ready to send — empty file, or every row is invalid/duplicate (no Ready / Unresolved / Missing phone rows). Check Invalid / duplicate, fix the CSV, then rematch.',
+            self::Draft => 'Import created; matching is not finished yet.',
+            self::Reviewing => 'Some partners still need attention before sending.',
+            self::Ready => 'All partners are ready. You can send SMS.',
+            self::Sending => 'SMS is currently sending.',
+            self::Completed => 'Sending is finished for this import.',
+            self::Failed => 'Nothing is ready to send. Check invalid or duplicate rows, then rematch.',
         };
     }
 }

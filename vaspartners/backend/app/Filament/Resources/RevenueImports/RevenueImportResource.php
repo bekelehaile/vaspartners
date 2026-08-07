@@ -91,47 +91,82 @@ class RevenueImportResource extends Resource
     public static function infolist(Schema $schema): Schema
     {
         return $schema->components([
-            Section::make('Import')->schema([
-                TextEntry::make('title'),
-                TextEntry::make('period')->label('Month'),
-                TextEntry::make('vasService.name')->label('Catalog service'),
-                TextEntry::make('status')
-                    ->badge()
-                    ->formatStateUsing(fn ($state) => $state instanceof RevenueImportStatus ? $state->label() : (string) $state)
-                    ->color(fn ($state) => match ($state instanceof RevenueImportStatus ? $state : RevenueImportStatus::tryFrom((string) $state)) {
-                        RevenueImportStatus::Ready, RevenueImportStatus::Completed => 'success',
-                        RevenueImportStatus::Reviewing => 'warning',
-                        RevenueImportStatus::Failed => 'danger',
-                        RevenueImportStatus::Sending => 'info',
-                        default => 'gray',
-                    }),
-                TextEntry::make('creator.name')->label('Imported by')->placeholder('—'),
-                TextEntry::make('imported_at')->label('Imported at')->dateTime()->placeholder('—'),
-                TextEntry::make('sender.name')->label('Sent by')->placeholder('—'),
-                TextEntry::make('sent_at')->label('Sent at')->dateTime()->placeholder('—'),
-                TextEntry::make('source_filename')->label('CSV file')->placeholder('—'),
-                TextEntry::make('message_template')->label('SMS message')->columnSpanFull(),
-            ])->columns(2),
-            Section::make('Row counts')->schema([
-                TextEntry::make('total_count')->label('Total'),
-                TextEntry::make('matched_count')->label('Ready'),
-                TextEntry::make('sent_count')->label('Sent'),
-                TextEntry::make('missing_partner_count')->label('Unresolved'),
-                TextEntry::make('missing_phone_count')->label('Missing phone'),
-                TextEntry::make('invalid_count')->label('Invalid / duplicate'),
-            ])->columns(6),
-            Section::make('Reason')->schema([
-                TextEntry::make('status')
-                    ->hiddenLabel()
-                    ->formatStateUsing(function ($state): string {
-                        $status = $state instanceof RevenueImportStatus
+            Section::make('Details')
+                ->schema([
+                    TextEntry::make('title')
+                        ->label('Title')
+                        ->columnSpanFull(),
+                    TextEntry::make('period')
+                        ->label('Month'),
+                    TextEntry::make('vasService.name')
+                        ->label('Catalog service')
+                        ->placeholder('—'),
+                    TextEntry::make('status')
+                        ->label('Status')
+                        ->badge()
+                        ->formatStateUsing(fn ($state) => $state instanceof RevenueImportStatus
+                            ? $state->label()
+                            : (string) $state)
+                        ->color(fn ($state) => match ($state instanceof RevenueImportStatus
                             ? $state
-                            : RevenueImportStatus::tryFrom((string) $state);
+                            : RevenueImportStatus::tryFrom((string) $state)) {
+                            RevenueImportStatus::Ready, RevenueImportStatus::Completed => 'success',
+                            RevenueImportStatus::Reviewing => 'warning',
+                            RevenueImportStatus::Failed => 'danger',
+                            RevenueImportStatus::Sending => 'info',
+                            default => 'gray',
+                        })
+                        ->helperText(function ($state): ?string {
+                            $status = $state instanceof RevenueImportStatus
+                                ? $state
+                                : RevenueImportStatus::tryFrom((string) $state);
 
-                        return $status?->description() ?? '—';
-                    })
-                    ->columnSpanFull(),
-            ]),
+                            return $status?->description();
+                        }),
+                    TextEntry::make('source_filename')
+                        ->label('CSV file')
+                        ->placeholder('—')
+                        ->columnSpanFull(),
+                    TextEntry::make('creator.name')
+                        ->label('Imported by')
+                        ->placeholder('—'),
+                    TextEntry::make('imported_at')
+                        ->label('Imported at')
+                        ->dateTime()
+                        ->placeholder('—'),
+                    TextEntry::make('sender.name')
+                        ->label('Sent by')
+                        ->placeholder('—'),
+                    TextEntry::make('sent_at')
+                        ->label('Sent at')
+                        ->dateTime()
+                        ->placeholder('—'),
+                ])
+                ->columns([
+                    'default' => 1,
+                    'md' => 2,
+                    'xl' => 3,
+                ]),
+            Section::make('Summary')
+                ->schema([
+                    TextEntry::make('total_count')->label('Total'),
+                    TextEntry::make('matched_count')->label('Ready'),
+                    TextEntry::make('sent_count')->label('Sent'),
+                    TextEntry::make('missing_partner_count')->label('Unresolved'),
+                    TextEntry::make('missing_phone_count')->label('Missing phone'),
+                    TextEntry::make('invalid_count')->label('Invalid / duplicate'),
+                ])
+                ->columns([
+                    'default' => 2,
+                    'md' => 3,
+                ]),
+            Section::make('SMS message')
+                ->schema([
+                    TextEntry::make('message_template')
+                        ->hiddenLabel()
+                        ->placeholder('—')
+                        ->columnSpanFull(),
+                ]),
         ]);
     }
 

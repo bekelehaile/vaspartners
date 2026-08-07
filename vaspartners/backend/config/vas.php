@@ -43,4 +43,18 @@ return [
         'lock_wait_seconds' => (int) env('TICKET_CREATE_LOCK_WAIT_SECONDS', 8),
         'idempotency_ttl_hours' => (int) env('TICKET_CREATE_IDEMPOTENCY_TTL_HOURS', 24),
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Monthly Revenue
+    |--------------------------------------------------------------------------
+    |
+    | block_duplicates=false (default): open mode for AMs — same partner/month
+    | can be re-imported and re-sent; duplicate Service IDs in one CSV are kept.
+    | Set REVENUE_BLOCK_DUPLICATES=true (or later an admin setting) to enforce.
+    |
+    */
+    'revenue' => [
+        'block_duplicates' => filter_var(env('REVENUE_BLOCK_DUPLICATES', false), FILTER_VALIDATE_BOOLEAN),
+    ],
 ];

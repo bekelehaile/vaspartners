@@ -759,7 +759,8 @@ class RevenueImportService
                     'import' => "Row {$row->service_id} has no usable partner phone.",
                 ]);
             }
-            if ($this->alreadySentForPeriod($row, (string) $import->period, (int) $row->id)) {
+            if ($this->shouldBlockDuplicates()
+                && $this->alreadySentForPeriod($row, (string) $import->period, (int) $row->id)) {
                 throw ValidationException::withMessages([
                     'import' => "SMS already sent for period {$import->period} and service ID {$row->service_id}.",
                 ]);
@@ -1022,6 +1023,15 @@ class RevenueImportService
     }
 
     /**
+     * When false (default), duplicate Service IDs and re-sends for the same
+     * partner/month are allowed. Flip via config('vas.revenue.block_duplicates').
+     */
+    public function shouldBlockDuplicates(): bool
+    {
+        return (bool) config('vas.revenue.block_duplicates', false);
+    }
+
+    /**
      * True when SMS was already queued/sent for this partner in the given month.
      */
     public function wouldDoubleSend(
@@ -1029,6 +1039,10 @@ class RevenueImportService
         string $period,
         ?int $excludeRowId = null,
     ): bool {
+        if (! $this->shouldBlockDuplicates()) {
+            return false;
+        }
+
         return $this->alreadySentForPartnerPeriod(
             (int) $partner->id,
             $partner->service_id,
@@ -1070,7 +1084,7 @@ class RevenueImportService
         }
 
         $dedupe = ($serviceId ?? '').'|'.($shortCode ?? '');
-        if (isset($seen[$dedupe])) {
+        if ($this->shouldBlockDuplicates() && isset($seen[$dedupe])) {
             return [
                 'revenue_partner_id' => null,
                 'status' => RevenueImportRowStatus::Duplicate,
@@ -1128,13 +1142,15 @@ class RevenueImportService
             ];
         }
 
-        if ($period && $this->alreadySentForPartnerPeriod(
-            (int) $partner->id,
-            $partner->service_id,
-            $period,
-            $excludeRowId,
-            RevenuePartnerResolver::normalize($partner->short_code) ?? $shortCode,
-        )) {
+        if ($this->shouldBlockDuplicates()
+            && $period
+            && $this->alreadySentForPartnerPeriod(
+                (int) $partner->id,
+                $partner->service_id,
+                $period,
+                $excludeRowId,
+                RevenuePartnerResolver::normalize($partner->short_code) ?? $shortCode,
+            )) {
             return [
                 'revenue_partner_id' => $partner->id,
                 'status' => RevenueImportRowStatus::Duplicate,
