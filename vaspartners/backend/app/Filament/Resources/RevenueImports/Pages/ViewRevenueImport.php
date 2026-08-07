@@ -59,7 +59,7 @@ class ViewRevenueImport extends ViewRecord
             DeleteAction::make()
                 ->visible(fn (): bool => RevenueImportResource::canDelete($record->fresh() ?? $record))
                 ->modalHeading('Delete monthly revenue import')
-                ->modalDescription('Deletes this import and its payload rows. Only the owner can delete, and only when no SMS has been queued or sent.')
+                ->modalDescription('Deletes this import and its payload rows. Account managers can delete their own imports unless SMS send is in progress or the import is completed.')
                 ->successRedirectUrl(RevenueImportResource::getUrl('index')),
             Action::make('set_status')
                 ->label('Set status')

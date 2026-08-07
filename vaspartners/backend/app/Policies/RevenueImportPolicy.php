@@ -64,7 +64,12 @@ class RevenueImportPolicy
             return false;
         }
 
-        // Only the import owner may delete (including drafts with no SMS sent).
+        // Super admin / management: any deletable import.
+        if ($user->canAccessAllRevenue()) {
+            return true;
+        }
+
+        // Account managers: only imports they created.
         return (int) $revenueImport->created_by_user_id === (int) $user->id;
     }
 

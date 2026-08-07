@@ -207,6 +207,47 @@ class RevenueImportService
     }
 
     /**
+     * Delete payload rows that have not been sent yet, then refresh import counts/status.
+     *
+     * @param  iterable<int>  $rowIds
+     * @return array{deleted: int, skipped: int, errors: list<string>}
+     */
+    public function deleteRows(RevenueImport $import, iterable $rowIds, User $actor): array
+    {
+        $this->assertCanManage($actor, $import);
+        $this->assertImportEditable($import);
+
+        $ids = collect($rowIds)->map(fn ($id) => (int) $id)->filter()->unique()->values()->all();
+        $deleted = 0;
+        $skipped = 0;
+        $errors = [];
+
+        DB::transaction(function () use ($import, $ids, &$deleted, &$skipped, &$errors): void {
+            $rows = $import->rows()->whereIn('id', $ids)->orderBy('id')->get();
+
+            foreach ($rows as $row) {
+                if ($row->wasSent() || $row->status === RevenueImportRowStatus::Sent) {
+                    $skipped++;
+                    $errors[] = ($row->service_id ?: $row->short_code ?: "#{$row->id}").': already sent';
+
+                    continue;
+                }
+
+                $row->delete();
+                $deleted++;
+            }
+
+            $import->resolveStatusFromRows();
+        });
+
+        return [
+            'deleted' => $deleted,
+            'skipped' => $skipped,
+            'errors' => $errors,
+        ];
+    }
+
+    /**
      * Manually set the monthly import status (not Sending / Completed).
      */
     public function setImportStatus(RevenueImport $import, RevenueImportStatus $status): void

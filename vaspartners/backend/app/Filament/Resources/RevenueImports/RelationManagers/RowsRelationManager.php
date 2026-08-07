@@ -12,6 +12,8 @@ use App\Services\RevenueImportService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -285,6 +287,25 @@ class RowsRelationManager extends RelationManager
                     ->url(fn (RevenueImportRow $record): ?string => $record->partner
                         ? RevenuePartnerResource::getUrl('view', ['record' => $record->partner])
                         : null),
+                DeleteAction::make()
+                    ->label('Delete')
+                    ->authorize(false)
+                    ->visible(fn (RevenueImportRow $record): bool => $this->canDeleteRow($record))
+                    ->modalHeading('Delete payload row')
+                    ->modalDescription('Remove this row from the import. Sent rows cannot be deleted.')
+                    ->successNotificationTitle('Row deleted')
+                    ->using(function (RevenueImportRow $record, RevenueImportService $revenueImports): void {
+                        /** @var User $user */
+                        $user = auth()->user();
+                        /** @var RevenueImport $import */
+                        $import = $this->getOwnerRecord();
+                        $result = $revenueImports->deleteRows($import->fresh(), [$record->id], $user);
+                        if ($result['deleted'] < 1) {
+                            throw ValidationException::withMessages([
+                                'row' => $result['errors'][0] ?? 'Row could not be deleted.',
+                            ]);
+                        }
+                    }),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -413,9 +434,50 @@ class RowsRelationManager extends RelationManager
                                     ->send();
                             }
                         }),
+                    DeleteBulkAction::make()
+                        ->label('Delete selected')
+                        ->authorize(false)
+                        ->modalHeading('Delete selected payload rows')
+                        ->modalDescription('Sent rows are skipped. Import counts refresh after delete.')
+                        ->deselectRecordsAfterCompletion()
+                        ->visible(fn (): bool => $this->importIsEditable())
+                        ->action(function (Collection $records, RevenueImportService $revenueImports): void {
+                            /** @var User $user */
+                            $user = auth()->user();
+                            /** @var RevenueImport $import */
+                            $import = $this->getOwnerRecord();
+                            try {
+                                $result = $revenueImports->deleteRows(
+                                    $import->fresh(),
+                                    $records->pluck('id')->all(),
+                                    $user,
+                                );
+                                Notification::make()
+                                    ->title($result['deleted'] > 0
+                                        ? "Deleted {$result['deleted']} row(s)"
+                                        : 'Nothing deleted')
+                                    ->body(trim(implode(' ', array_filter([
+                                        $result['skipped'] > 0 ? "{$result['skipped']} skipped (already sent)." : null,
+                                        $result['errors'] !== [] ? implode(' ', array_slice($result['errors'], 0, 3)) : null,
+                                    ]))) ?: null)
+                                    ->color($result['deleted'] > 0 ? 'success' : 'warning')
+                                    ->send();
+                            } catch (ValidationException $e) {
+                                Notification::make()
+                                    ->title('Could not delete rows')
+                                    ->body(collect($e->errors())->flatten()->first() ?? $e->getMessage())
+                                    ->danger()
+                                    ->send();
+                            }
+                        }),
                 ]),
             ])
             ->paginated([25, 50, 100]);
+    }
+
+    protected function canDeleteRow(RevenueImportRow $record): bool
+    {
+        return $this->canEditRow($record);
     }
 
     protected function canEditRow(RevenueImportRow $record): bool

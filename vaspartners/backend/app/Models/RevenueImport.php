@@ -147,7 +147,7 @@ class RevenueImport extends Model
         }
     }
 
-    /** True when any SMS was queued or delivered for this import. */
+    /** True when SMS send is in flight or the import was fully completed. */
     public function hasQueuedOrSentSms(): bool
     {
         if (in_array($this->status, [RevenueImportStatus::Sending, RevenueImportStatus::Completed], true)) {
@@ -168,8 +168,17 @@ class RevenueImport extends Model
             ->exists();
     }
 
+    /**
+     * Owners (AMs) may delete their import unless send is in progress or completed.
+     * Draft / reviewing / ready / failed imports can be removed even after a partial SMS attempt.
+     */
     public function canBeDeleted(): bool
     {
-        return ! $this->hasQueuedOrSentSms();
+        $status = $this->status instanceof RevenueImportStatus
+            ? $this->status
+            : RevenueImportStatus::tryFrom((string) $this->status);
+
+        return ! in_array($status, [RevenueImportStatus::Sending, RevenueImportStatus::Completed], true);
     }
 }
+
