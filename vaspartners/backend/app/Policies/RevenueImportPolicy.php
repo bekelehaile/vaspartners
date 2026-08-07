@@ -42,8 +42,7 @@ class RevenueImportPolicy
             ? $revenueImport->status
             : RevenueImportStatus::tryFrom((string) $revenueImport->status);
 
-        if (in_array($status, [RevenueImportStatus::Sending, RevenueImportStatus::Completed], true)
-            || filled($revenueImport->bulk_message_id)) {
+        if (in_array($status, [RevenueImportStatus::Sending, RevenueImportStatus::Completed], true)) {
             return false;
         }
 

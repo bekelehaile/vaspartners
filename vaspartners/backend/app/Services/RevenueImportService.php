@@ -566,6 +566,91 @@ class RevenueImportService
         return $created;
     }
 
+    /**
+     * Correct the billing month (and title). Optionally reset sent rows to Ready
+     * so SMS can be queued again with the new {period} in the template.
+     *
+     * @return array{period: string, title: string, reset_rows: int}
+     */
+    public function correctPeriod(
+        RevenueImport $import,
+        string $period,
+        User $actor,
+        bool $resetSentRowsForResend = false,
+    ): array {
+        $this->assertCanManage($actor, $import);
+        $this->assertImportEditable($import);
+
+        $period = trim($period);
+        if ($period === '') {
+            throw ValidationException::withMessages(['period' => 'Month is required.']);
+        }
+
+        $resetRows = 0;
+
+        DB::transaction(function () use ($import, $period, $resetSentRowsForResend, &$resetRows): void {
+            $import->loadMissing('vasService');
+            $oldPeriod = (string) $import->period;
+            $serviceName = $import->vasService?->name ?: 'Service';
+            $autoTitle = $serviceName.' — '.$oldPeriod;
+            $newTitle = $serviceName.' — '.$period;
+
+            $title = (string) $import->title;
+            if ($title === '' || $title === $autoTitle || str_ends_with($title, ' — '.$oldPeriod)) {
+                $title = $newTitle;
+            }
+
+            $import->forceFill([
+                'period' => $period,
+                'title' => $title,
+            ])->save();
+
+            if ($resetSentRowsForResend) {
+                $rows = $import->rows()
+                    ->with('partner')
+                    ->where(function ($q): void {
+                        $q->where('status', RevenueImportRowStatus::Sent->value)
+                            ->orWhereNotNull('sent_at')
+                            ->orWhereNotNull('bulk_message_id')
+                            ->orWhereNotNull('bulk_message_recipient_id');
+                    })
+                    ->orderBy('id')
+                    ->get();
+
+                foreach ($rows as $row) {
+                    $partner = $row->partner;
+                    $ready = $partner && $partner->hasUsablePhone();
+                    $row->forceFill([
+                        'status' => $ready
+                            ? RevenueImportRowStatus::Matched
+                            : RevenueImportRowStatus::MissingPhone,
+                        'error' => $ready
+                            ? null
+                            : 'Partner phone missing after month correction — set phone then Rematch / Sync phones.',
+                        'sent_at' => null,
+                        'bulk_message_id' => null,
+                        'bulk_message_recipient_id' => null,
+                    ])->save();
+                    $resetRows++;
+                }
+
+                $import->forceFill([
+                    'bulk_message_id' => null,
+                    'sent_at' => null,
+                    'sent_by_user_id' => null,
+                ])->save();
+            }
+
+            $import->resolveStatusFromRows();
+        });
+
+        return [
+            'period' => $period,
+            'title' => (string) $import->fresh()->title,
+            'reset_rows' => $resetRows,
+        ];
+    }
+
     public function sendViaBulkMessage(RevenueImport $import, ?string $messageTemplate = null): BulkMessage
     {
         return $this->sendRowsViaBulkMessage($import, null, $messageTemplate);

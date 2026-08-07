@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\RevenueImports\Pages;
 
 use App\Enums\RevenueImportStatus;
+use App\Filament\Imports\MonthlyRevenueImporter;
 use App\Filament\Resources\RevenueImports\RevenueImportResource;
 use App\Filament\Resources\RevenuePartners\RevenuePartnerResource;
 use App\Models\RevenueImport;
@@ -12,6 +13,7 @@ use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Illuminate\Validation\ValidationException;
@@ -56,10 +58,76 @@ class ViewRevenueImport extends ViewRecord
             EditAction::make()
                 ->url(fn (): string => RevenueImportResource::getUrl('edit', ['record' => $record]))
                 ->visible(fn (): bool => RevenueImportResource::canEdit($record->fresh() ?? $record)),
+            Action::make('correct_period')
+                ->label('Correct month')
+                ->icon('heroicon-o-calendar-days')
+                ->color('warning')
+                ->visible(function () use ($record, $user): bool {
+                    $fresh = $record->fresh() ?? $record;
+
+                    return $user
+                        && $this->importIsEditable($fresh)
+                        && app(RevenueImportService::class)->actorCanManage($user, $fresh);
+                })
+                ->fillForm(fn (): array => [
+                    'period' => (string) ($record->fresh()->period ?? $record->period),
+                    'reset_sent_rows' => (int) ($record->fresh()->sent_count ?? 0) > 0,
+                ])
+                ->form([
+                    Select::make('period')
+                        ->label('Correct month')
+                        ->options(fn (): array => MonthlyRevenueImporter::monthOptions())
+                        ->required()
+                        ->searchable()
+                        ->native(false)
+                        ->helperText('Fixes a wrong month selected at import. Title updates to match when it used the old month.'),
+                    Toggle::make('reset_sent_rows')
+                        ->label('Reset sent rows so SMS can be sent again')
+                        ->helperText('Turns Sent rows back to Ready with the new month in the SMS template. Partners may receive another message — use only to correct a mistaken month.')
+                        ->default(false),
+                ])
+                ->modalHeading('Correct billing month')
+                ->modalDescription('Use this when the wrong month was selected. Optionally re-open sent rows for another SMS with the corrected month.')
+                ->action(function (array $data, RevenueImportService $revenueImports) use ($record): void {
+                    /** @var User|null $actor */
+                    $actor = auth()->user();
+                    if (! $actor) {
+                        return;
+                    }
+                    try {
+                        $result = $revenueImports->correctPeriod(
+                            $record->fresh(),
+                            (string) $data['period'],
+                            $actor,
+                            (bool) ($data['reset_sent_rows'] ?? false),
+                        );
+                        Notification::make()
+                            ->title('Month corrected')
+                            ->body(trim(implode(' ', array_filter([
+                                "Period is now {$result['period']}.",
+                                $result['reset_rows'] > 0
+                                    ? "{$result['reset_rows']} row(s) reset to Ready for re-send."
+                                    : null,
+                            ]))))
+                            ->success()
+                            ->send();
+                        $this->refreshFormData([
+                            'title', 'period', 'status', 'matched_count', 'sent_count',
+                            'missing_partner_count', 'missing_phone_count', 'invalid_count',
+                            'sent_at', 'bulk_message_id',
+                        ]);
+                    } catch (ValidationException $e) {
+                        Notification::make()
+                            ->title('Could not correct month')
+                            ->body(collect($e->errors())->flatten()->first() ?? $e->getMessage())
+                            ->danger()
+                            ->send();
+                    }
+                }),
             DeleteAction::make()
                 ->visible(fn (): bool => RevenueImportResource::canDelete($record->fresh() ?? $record))
                 ->modalHeading('Delete monthly revenue import')
-                ->modalDescription('Deletes this import and its payload rows. Account managers can delete their own imports unless SMS send is in progress or the import is completed.')
+                ->modalDescription('Deletes this import and its payload rows. Only when no SMS has been queued or sent.')
                 ->successRedirectUrl(RevenueImportResource::getUrl('index')),
             Action::make('set_status')
                 ->label('Set status')

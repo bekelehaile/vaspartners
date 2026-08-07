@@ -184,13 +184,13 @@ class RevenueImportResource extends Resource
                 DeleteAction::make()
                     ->visible(fn (RevenueImport $record): bool => static::canDelete($record))
                     ->modalHeading('Delete monthly revenue import')
-                    ->modalDescription('Deletes this import and its payload rows. Account managers can delete their own imports unless SMS send is in progress or the import is completed.'),
+                    ->modalDescription('Deletes this import and its payload rows. Hidden after any SMS has been queued or sent.'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make()
                         ->modalHeading('Delete selected imports')
-                        ->modalDescription('Your own imports will be deleted unless SMS send is in progress or the import is completed. Others are skipped.')
+                        ->modalDescription('Imports with any queued/sent SMS are skipped. Others must be yours.')
                         ->action(function (Collection $records): void {
                             $deleted = 0;
                             $skipped = 0;

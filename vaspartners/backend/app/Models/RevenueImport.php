@@ -169,16 +169,11 @@ class RevenueImport extends Model
     }
 
     /**
-     * Owners (AMs) may delete their import unless send is in progress or completed.
-     * Draft / reviewing / ready / failed imports can be removed even after a partial SMS attempt.
+     * Delete only when no SMS has been queued or sent for this import.
      */
     public function canBeDeleted(): bool
     {
-        $status = $this->status instanceof RevenueImportStatus
-            ? $this->status
-            : RevenueImportStatus::tryFrom((string) $this->status);
-
-        return ! in_array($status, [RevenueImportStatus::Sending, RevenueImportStatus::Completed], true);
+        return ! $this->hasQueuedOrSentSms();
     }
 }
 
