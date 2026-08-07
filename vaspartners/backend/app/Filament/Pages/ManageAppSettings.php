@@ -7,11 +7,13 @@ use App\Services\Etrade\EtradeTinLookupService;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use App\Support\RevenueDuplicatePolicy;
+use App\Models\User;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Actions;
@@ -152,6 +154,39 @@ class ManageAppSettings extends Page
                                 Placeholder::make('revenue_duplicate_hint')
                                     ->hiddenLabel()
                                     ->content('Leave both off while AMs are learning. Resending is separate: on an import use Manage → Allow resend, then Send SMS.'),
+                                Repeater::make('revenue_am_delegations')
+                                    ->label('AM coverage (delegation)')
+                                    ->helperText('Let one AM open another AM’s imports and use that AM’s Revenue Partners while covering.')
+                                    ->schema([
+                                        Select::make('delegate_id')
+                                            ->label('Covering AM')
+                                            ->options(fn (): array => $this->accountManagerOptions())
+                                            ->searchable()
+                                            ->required()
+                                            ->native(false),
+                                        Select::make('owner_ids')
+                                            ->label('Works for')
+                                            ->options(fn (): array => $this->accountManagerOptions())
+                                            ->multiple()
+                                            ->searchable()
+                                            ->required()
+                                            ->native(false),
+                                    ])
+                                    ->default([])
+                                    ->collapsible()
+                                    ->itemLabel(function (array $state): ?string {
+                                        $delegate = $this->accountManagerOptions()[(int) ($state['delegate_id'] ?? 0)] ?? null;
+                                        $owners = collect($state['owner_ids'] ?? [])
+                                            ->map(fn ($id) => $this->accountManagerOptions()[(int) $id] ?? null)
+                                            ->filter()
+                                            ->implode(', ');
+
+                                        return $delegate
+                                            ? $delegate.($owners !== '' ? ' → '.$owners : '')
+                                            : null;
+                                    })
+                                    ->addActionLabel('Add coverage')
+                                    ->columnSpanFull(),
                             ]),
                     ]),
             ])
@@ -229,6 +264,9 @@ class ManageAppSettings extends Page
             blockSameImport: (bool) ($data['revenue_block_same_import'] ?? false),
             blockAlreadySent: (bool) ($data['revenue_block_already_sent'] ?? false),
         ));
+        AppSetting::setRevenueAmDelegations(
+            is_array($data['revenue_am_delegations'] ?? null) ? $data['revenue_am_delegations'] : [],
+        );
 
         $this->form->fill([
             ...$this->formStateFromStore(),
@@ -333,6 +371,20 @@ class ManageAppSettings extends Page
             'erca_tin_outage_message' => AppSetting::getValue(AppSetting::KEY_ERCA_TIN_OUTAGE_MESSAGE),
             'revenue_block_same_import' => $policy->checksWithinImport(),
             'revenue_block_already_sent' => $policy->checksPriorSends(),
+            'revenue_am_delegations' => AppSetting::revenueAmDelegations(),
         ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function accountManagerOptions(): array
+    {
+        return User::query()
+            ->role(User::ROLE_ACCOUNT_MANAGER)
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->mapWithKeys(fn (User $user): array => [$user->id => $user->name])
+            ->all();
     }
 }

@@ -8,6 +8,7 @@ use App\Filament\Resources\RevenuePartners\RevenuePartnerResource;
 use App\Models\RevenueImport;
 use App\Models\RevenueImportRow;
 use App\Models\RevenuePartner;
+use App\Models\AppSetting;
 use App\Models\User;
 use App\Services\RevenueImportService;
 use Filament\Actions\Action;
@@ -253,19 +254,18 @@ class RowsRelationManager extends RelationManager
                     ->form([
                         Select::make('revenue_partner_id')
                             ->label('Partner')
-                            ->options(function (): array {
-                                $record = $this->getMountedTableActionRecord();
-                                $includeId = $record instanceof RevenueImportRow && $record->revenue_partner_id
-                                    ? (int) $record->revenue_partner_id
-                                    : null;
-
-                                return $this->revenuePartnerOptions($includeId);
-                            })
                             ->searchable()
-                            ->preload()
                             ->nullable()
                             ->native(false)
                             ->live()
+                            ->getSearchResultsUsing(fn (string $search): array => $this->searchRevenuePartners($search))
+                            ->getOptionLabelUsing(function ($value): ?string {
+                                if (! filled($value)) {
+                                    return null;
+                                }
+
+                                return $this->revenuePartnerLabel((int) $value);
+                            })
                             ->afterStateUpdated(function ($state, callable $set): void {
                                 if (! filled($state)) {
                                     $set('partner_phone', null);
@@ -284,7 +284,7 @@ class RowsRelationManager extends RelationManager
                                 $set('service_id', $partner->service_id);
                                 $set('short_code', $partner->short_code);
                             })
-                            ->helperText('Choose from Revenue Partners. Service ID, short code, and phone fill automatically.'),
+                            ->helperText('Search by partner name or Service ID. List is from Revenue Partners for this import’s AM (admins see all).'),
                         TextInput::make('partner_phone')
                             ->label('Phone')
                             ->disabled()
@@ -541,57 +541,98 @@ class RowsRelationManager extends RelationManager
     }
 
     /**
-     * Active Revenue Partners for this import’s AM (full list for admins).
+     * Partners available for this import: AM’s list, or all for admins.
+     *
+     * @return array<int, string>
+     */
+    protected function searchRevenuePartners(string $search): array
+    {
+        $query = $this->revenuePartnersQuery();
+        $term = trim($search);
+
+        if ($term !== '') {
+            $like = '%'.$term.'%';
+            $query->where(function ($q) use ($like): void {
+                $q->where('partner_name', 'ilike', $like)
+                    ->orWhere('service_id', 'ilike', $like)
+                    ->orWhere('short_code', 'ilike', $like);
+            });
+        }
+
+        return $query
+            ->orderBy('partner_name')
+            ->orderBy('service_id')
+            ->limit(50)
+            ->get(['id', 'partner_name', 'service_id', 'phone', 'is_active'])
+            ->mapWithKeys(fn (RevenuePartner $partner): array => [
+                $partner->id => $this->formatRevenuePartnerOption($partner),
+            ])
+            ->all();
+    }
+
+    protected function revenuePartnerLabel(int $partnerId): ?string
+    {
+        $partner = RevenuePartner::query()->find($partnerId);
+
+        return $partner ? $this->formatRevenuePartnerOption($partner) : null;
+    }
+
+    protected function formatRevenuePartnerOption(RevenuePartner $partner): string
+    {
+        $label = trim((string) $partner->partner_name) ?: 'Unnamed partner';
+        $sid = filled($partner->service_id) ? (string) $partner->service_id : 'no Service ID';
+        $notes = [];
+        if (! $partner->is_active) {
+            $notes[] = 'inactive';
+        }
+        if (! $partner->hasUsablePhone()) {
+            $notes[] = 'no phone';
+        }
+        $suffix = $notes !== [] ? ' · '.implode(', ', $notes) : '';
+
+        return "{$label} · {$sid}{$suffix}";
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Builder<\App\Models\RevenuePartner>
+     */
+    protected function revenuePartnersQuery()
+    {
+        /** @var RevenueImport|null $import */
+        $import = $this->getOwnerRecord();
+        /** @var User|null $actor */
+        $actor = auth()->user();
+
+        $query = RevenuePartner::query()->where('is_active', true);
+
+        // Admins see all. Covering AMs / owners see the import owner’s partners.
+        if ($actor?->canAccessAllRevenue()) {
+            return $query;
+        }
+
+        $ownerUserId = $import?->created_by_user_id ? (int) $import->created_by_user_id : null;
+        if ($ownerUserId && $actor && AppSetting::canActForRevenueOwner($actor, $ownerUserId)) {
+            return $query->where(function ($q) use ($ownerUserId): void {
+                $q->where('created_by_user_id', $ownerUserId)
+                    ->orWhereNull('created_by_user_id');
+            });
+        }
+
+        if ($actor) {
+            return $query->where('created_by_user_id', (int) $actor->id);
+        }
+
+        return $query->whereRaw('1 = 0');
+    }
+
+    /**
+     * @deprecated Use searchRevenuePartners()
      *
      * @return array<int, string>
      */
     protected function revenuePartnerOptions(?int $includePartnerId = null): array
     {
-        /** @var RevenueImport|null $import */
-        $import = $this->getOwnerRecord();
-        if (! $import) {
-            return [];
-        }
-
-        $ownerUserId = null;
-        $creator = $import->created_by_user_id
-            ? User::query()->find((int) $import->created_by_user_id)
-            : null;
-        if ($creator && ! $creator->canAccessAllRevenue()) {
-            $ownerUserId = (int) $creator->id;
-        }
-
-        $query = RevenuePartner::query()
-            ->orderBy('partner_name')
-            ->orderBy('service_id');
-
-        if ($ownerUserId) {
-            $query->where('created_by_user_id', $ownerUserId);
-        }
-
-        $query->where(function ($q) use ($includePartnerId): void {
-            $q->where('is_active', true);
-            if ($includePartnerId) {
-                $q->orWhere('id', $includePartnerId);
-            }
-        });
-
-        return $query->get(['id', 'partner_name', 'service_id', 'phone', 'is_active'])
-            ->mapWithKeys(function (RevenuePartner $partner): array {
-                $label = trim((string) $partner->partner_name) ?: 'Unnamed partner';
-                $sid = filled($partner->service_id) ? (string) $partner->service_id : 'no Service ID';
-                $notes = [];
-                if (! $partner->is_active) {
-                    $notes[] = 'inactive';
-                }
-                if (! $partner->hasUsablePhone()) {
-                    $notes[] = 'no phone';
-                }
-                $suffix = $notes !== [] ? ' · '.implode(', ', $notes) : '';
-
-                return [$partner->id => "{$label} · {$sid}{$suffix}"];
-            })
-            ->all();
+        return $this->searchRevenuePartners('');
     }
 
     protected function canDeleteRow(RevenueImportRow $record): bool
@@ -613,6 +654,11 @@ class RowsRelationManager extends RelationManager
             return false;
         }
 
+        // Admin / super_admin can edit any AM’s payload rows.
+        if ($user->canAccessAllRevenue()) {
+            return true;
+        }
+
         return app(RevenueImportService::class)->actorCanManage($user, $import);
     }
 
@@ -626,7 +672,14 @@ class RowsRelationManager extends RelationManager
             return false;
         }
 
-        return RevenueImportResource::importIsEditable($import)
-            && app(RevenueImportService::class)->actorCanManage($user, $import);
+        if (! RevenueImportResource::importIsEditable($import)) {
+            return false;
+        }
+
+        if ($user->canAccessAllRevenue()) {
+            return true;
+        }
+
+        return app(RevenueImportService::class)->actorCanManage($user, $import);
     }
 }

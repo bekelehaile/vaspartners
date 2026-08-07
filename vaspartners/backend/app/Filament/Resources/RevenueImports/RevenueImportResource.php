@@ -9,6 +9,7 @@ use App\Filament\Resources\RevenueImports\Pages\ListRevenueImports;
 use App\Filament\Resources\RevenueImports\Pages\ViewRevenueImport;
 use App\Filament\Resources\RevenueImports\RelationManagers\RowsRelationManager;
 use App\Filament\Resources\RevenueImports\RelationManagers\SentSmsRelationManager;
+use App\Models\AppSetting;
 use App\Models\RevenueImport;
 use App\Models\User;
 use App\Services\RevenueImportService;
@@ -453,7 +454,12 @@ class RevenueImportResource extends Resource
             return $query;
         }
 
-        return $query->where('created_by_user_id', $user->id);
+        $ownerIds = AppSetting::revenueOwnerIdsFor($user);
+        if ($ownerIds === null) {
+            return $query;
+        }
+
+        return $query->whereIn('created_by_user_id', $ownerIds);
     }
 
     public static function canCreate(): bool
@@ -473,8 +479,16 @@ class RevenueImportResource extends Resource
 
         /** @var User|null $user */
         $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
 
-        return $user?->can('update', $record) ?? false;
+        // Admin / super_admin / management: any AM’s import.
+        if ($user->canAccessAllRevenue()) {
+            return true;
+        }
+
+        return $user->can('update', $record);
     }
 
     public static function canDelete(Model $record): bool

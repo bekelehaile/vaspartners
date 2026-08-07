@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Models\AppSetting;
 use App\Models\RevenuePartner;
 use App\Models\User;
 
@@ -14,6 +15,10 @@ class RevenuePartnerPolicy
 
     public function view(User $user, RevenuePartner $revenuePartner): bool
     {
+        if ($user->canAccessAllRevenue()) {
+            return true;
+        }
+
         if (! $user->can('View:RevenuePartner')) {
             return false;
         }
@@ -23,11 +28,15 @@ class RevenuePartnerPolicy
 
     public function create(User $user): bool
     {
-        return $user->can('Create:RevenuePartner');
+        return $user->can('Create:RevenuePartner') || $user->canAccessAllRevenue();
     }
 
     public function update(User $user, RevenuePartner $revenuePartner): bool
     {
+        if ($user->canAccessAllRevenue()) {
+            return true;
+        }
+
         if (! $user->can('Update:RevenuePartner')) {
             return false;
         }
@@ -77,10 +86,9 @@ class RevenuePartnerPolicy
 
     protected function ownsOrAdmin(User $user, RevenuePartner $revenuePartner): bool
     {
-        if ($user->canAccessAllRevenue()) {
-            return true;
-        }
-
-        return (int) $revenuePartner->created_by_user_id === (int) $user->id;
+        return AppSetting::canActForRevenueOwner(
+            $user,
+            $revenuePartner->created_by_user_id ? (int) $revenuePartner->created_by_user_id : null,
+        );
     }
 }

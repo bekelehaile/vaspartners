@@ -431,7 +431,10 @@ class RevenueImportService
             if (! $partner) {
                 throw ValidationException::withMessages(['revenue_partner_id' => 'Partner not found.']);
             }
-            if ($ownerUserId && (int) $partner->created_by_user_id !== $ownerUserId) {
+            if ($ownerUserId
+                && filled($partner->created_by_user_id)
+                && (int) $partner->created_by_user_id !== $ownerUserId
+                && ! $actor->canAccessAllRevenue()) {
                 throw ValidationException::withMessages(['revenue_partner_id' => 'That partner is not on this AM’s Revenue Partners list.']);
             }
 
@@ -511,11 +514,10 @@ class RevenueImportService
 
     public function actorCanManage(User $actor, RevenueImport $import): bool
     {
-        if ($actor->canAccessAllRevenue()) {
-            return true;
-        }
-
-        return (int) $import->created_by_user_id === (int) $actor->id;
+        return AppSetting::canActForRevenueOwner(
+            $actor,
+            $import->created_by_user_id ? (int) $import->created_by_user_id : null,
+        );
     }
 
     public function registerMissingPartners(RevenueImport $import): int

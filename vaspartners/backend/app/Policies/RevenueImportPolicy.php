@@ -3,6 +3,7 @@
 namespace App\Policies;
 
 use App\Enums\RevenueImportStatus;
+use App\Models\AppSetting;
 use App\Models\RevenueImport;
 use App\Models\User;
 
@@ -15,25 +16,35 @@ class RevenueImportPolicy
 
     public function view(User $user, RevenueImport $revenueImport): bool
     {
-        if (! $user->can('View:RevenueImport')) {
-            return false;
-        }
-
         if ($user->canAccessAllRevenue()) {
             return true;
         }
 
-        // AMs only open imports they created.
-        return (int) $revenueImport->created_by_user_id === (int) $user->id;
+        if (! $user->can('View:RevenueImport')) {
+            return false;
+        }
+
+        return AppSetting::canActForRevenueOwner(
+            $user,
+            $revenueImport->created_by_user_id ? (int) $revenueImport->created_by_user_id : null,
+        );
     }
 
     public function create(User $user): bool
     {
-        return $user->can('Create:RevenueImport');
+        return $user->can('Create:RevenueImport') || $user->canAccessAllRevenue();
     }
 
     public function update(User $user, RevenueImport $revenueImport): bool
     {
+        if ($user->canAccessAllRevenue()) {
+            $status = $revenueImport->status instanceof RevenueImportStatus
+                ? $revenueImport->status
+                : RevenueImportStatus::tryFrom((string) $revenueImport->status);
+
+            return ! in_array($status, [RevenueImportStatus::Sending, RevenueImportStatus::Completed], true);
+        }
+
         if (! $user->can('Update:RevenueImport')) {
             return false;
         }
@@ -46,30 +57,30 @@ class RevenueImportPolicy
             return false;
         }
 
-        if ($user->canAccessAllRevenue()) {
-            return true;
-        }
-
-        return (int) $revenueImport->created_by_user_id === (int) $user->id;
+        return AppSetting::canActForRevenueOwner(
+            $user,
+            $revenueImport->created_by_user_id ? (int) $revenueImport->created_by_user_id : null,
+        );
     }
 
     public function delete(User $user, RevenueImport $revenueImport): bool
     {
-        if (! $user->can('Delete:RevenueImport')) {
-            return false;
-        }
-
         if (! $revenueImport->canBeDeleted()) {
             return false;
         }
 
-        // Super admin / management: any deletable import.
         if ($user->canAccessAllRevenue()) {
             return true;
         }
 
-        // Account managers: only imports they created.
-        return (int) $revenueImport->created_by_user_id === (int) $user->id;
+        if (! $user->can('Delete:RevenueImport')) {
+            return false;
+        }
+
+        return AppSetting::canActForRevenueOwner(
+            $user,
+            $revenueImport->created_by_user_id ? (int) $revenueImport->created_by_user_id : null,
+        );
     }
 
     public function deleteAny(User $user): bool

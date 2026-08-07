@@ -47,6 +47,12 @@ class AppSetting extends Model
     /** @deprecated Use KEY_REVENUE_DUPLICATE_POLICY */
     public const KEY_REVENUE_BLOCK_DUPLICATES = 'revenue_block_duplicates';
 
+    /**
+     * AM coverage: who may work on another AM’s Monthly Revenue / partners.
+     * JSON list of {delegate_id, owner_ids: int[]}.
+     */
+    public const KEY_REVENUE_AM_DELEGATIONS = 'revenue_am_delegations';
+
     protected $fillable = [
         'key',
         'value',
@@ -223,6 +229,131 @@ class AppSetting extends Model
     public static function revenueBlockDuplicates(): bool
     {
         return static::revenueDuplicatePolicy()->enforces();
+    }
+
+    /**
+     * @return list<array{delegate_id: int, owner_ids: list<int>}>
+     */
+    public static function revenueAmDelegations(): array
+    {
+        $raw = static::getValue(self::KEY_REVENUE_AM_DELEGATIONS);
+        if (! filled($raw)) {
+            return [];
+        }
+
+        $decoded = json_decode((string) $raw, true);
+        if (! is_array($decoded)) {
+            return [];
+        }
+
+        $rows = [];
+        foreach ($decoded as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $delegateId = (int) ($row['delegate_id'] ?? 0);
+            if ($delegateId <= 0) {
+                continue;
+            }
+            $ownerIds = collect(is_array($row['owner_ids'] ?? null) ? $row['owner_ids'] : [])
+                ->map(fn ($id) => (int) $id)
+                ->filter(fn (int $id) => $id > 0 && $id !== $delegateId)
+                ->unique()
+                ->values()
+                ->all();
+            if ($ownerIds === []) {
+                continue;
+            }
+            $rows[] = [
+                'delegate_id' => $delegateId,
+                'owner_ids' => $ownerIds,
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param  list<array{delegate_id?: mixed, owner_ids?: mixed}>  $rows
+     */
+    public static function setRevenueAmDelegations(array $rows): void
+    {
+        static::setValue(
+            self::KEY_REVENUE_AM_DELEGATIONS,
+            json_encode(static::revenueAmDelegationsFromInput($rows), JSON_THROW_ON_ERROR),
+        );
+    }
+
+    /**
+     * @param  list<array{delegate_id?: mixed, owner_ids?: mixed}>  $rows
+     * @return list<array{delegate_id: int, owner_ids: list<int>}>
+     */
+    public static function revenueAmDelegationsFromInput(array $rows): array
+    {
+        return collect($rows)
+            ->map(function ($row): ?array {
+                if (! is_array($row)) {
+                    return null;
+                }
+                $delegateId = (int) ($row['delegate_id'] ?? 0);
+                if ($delegateId <= 0) {
+                    return null;
+                }
+                $ownerIds = collect(is_array($row['owner_ids'] ?? null) ? $row['owner_ids'] : [])
+                    ->map(fn ($id) => (int) $id)
+                    ->filter(fn (int $id) => $id > 0 && $id !== $delegateId)
+                    ->unique()
+                    ->values()
+                    ->all();
+
+                return $ownerIds === [] ? null : [
+                    'delegate_id' => $delegateId,
+                    'owner_ids' => $ownerIds,
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Owner user IDs this actor may work for (always includes self).
+     * null = unrestricted (admin / management).
+     *
+     * @return list<int>|null
+     */
+    public static function revenueOwnerIdsFor(User $actor): ?array
+    {
+        if ($actor->canAccessAllRevenue()) {
+            return null;
+        }
+
+        $ids = [(int) $actor->id];
+        foreach (static::revenueAmDelegations() as $row) {
+            if ((int) $row['delegate_id'] !== (int) $actor->id) {
+                continue;
+            }
+            foreach ($row['owner_ids'] as $ownerId) {
+                $ids[] = (int) $ownerId;
+            }
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    public static function canActForRevenueOwner(User $actor, ?int $ownerUserId): bool
+    {
+        if ($actor->canAccessAllRevenue()) {
+            return true;
+        }
+
+        if (! $ownerUserId) {
+            return false;
+        }
+
+        $ids = static::revenueOwnerIdsFor($actor);
+
+        return is_array($ids) && in_array((int) $ownerUserId, $ids, true);
     }
 
     /**

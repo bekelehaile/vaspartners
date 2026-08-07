@@ -8,6 +8,7 @@ use App\Filament\Resources\RevenuePartners\Pages\EditRevenuePartner;
 use App\Filament\Resources\RevenuePartners\Pages\ListRevenuePartners;
 use App\Filament\Resources\RevenuePartners\Pages\ViewRevenuePartner;
 use App\Filament\Resources\RevenuePartners\RelationManagers\MonthlyRevenueRelationManager;
+use App\Models\AppSetting;
 use App\Models\Company;
 use App\Models\RevenuePartner;
 use App\Models\User;
@@ -359,8 +360,13 @@ class RevenuePartnerResource extends Resource
             return $query;
         }
 
-        // Account managers: only partners assigned to them.
-        return $query->where('created_by_user_id', $user->id);
+        $ownerIds = AppSetting::revenueOwnerIdsFor($user);
+        if ($ownerIds === null) {
+            return $query;
+        }
+
+        // Account managers: own partners + AMs they are covering.
+        return $query->whereIn('created_by_user_id', $ownerIds);
     }
 
     public static function viewerCanAccessAllRevenue(): bool
