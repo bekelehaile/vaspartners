@@ -84,27 +84,29 @@ docker compose logs -f backend frontend
 
 Compose overrides DB/Redis hosts inside containers (`pgbouncer`, `redis`). Your `vaspartners/backend/.env` Fayda values are still loaded.
 
-## Staging (server — Tele SSL on :8443)
+## Production deploy (script: `./deploy-staging.sh`)
 
-| | Production (old) | Staging (new) |
+> **Note:** Filenames like `deploy-staging.sh`, `compose.staging.yml`, and `.env.staging` are historical. This stack **is production** for the live portal.
+
+| | Legacy portal | VAS Partners (this stack — **production**) |
 |--|------------------|---------------|
 | Parent dir | `/data-disk/applications/mvasportal` | `/data-disk/applications/vaspartners` |
 | App dir | `mvasportal/` | `vaspartners/` |
 | Containers | `mvasportal-app`, `mvasportal-nginx` | `vaspartners-app`, `vaspartners-nginx`, … |
-| Public | `https://vaspartnersportal.ethiotelecom.et` (:443) | `https://vaspartnersportal.ethiotelecom.et:8443` |
-| Proxy | host nginx → `:30011` | Docker `vaspartners-nginx` (Tele wildcard cert) |
+| Public | (legacy) | `https://vaspartnersportal.ethiotelecom.et` (:443) |
+| Proxy | host nginx → `:30011` | Docker `vaspartners-nginx` (Tele wildcard cert; also :8443) |
 | DB | external MySQL | **Postgres in Docker** (`vaspartners-postgres`) — no SQLite |
 
-Production `mvasportal` on :443 is left alone. Staging runs **everything** in containers (Postgres, PgBouncer, Redis, Laravel, queue, Next.js, nginx). Use this Postgres volume to rehearse migrating old portal data.
+This stack runs **everything** in containers (Postgres, PgBouncer, Redis, Laravel, queue, Next.js, nginx).
 
 ```bash
 # From /data-disk/applications/vaspartners
 cp .env.staging.example .env.staging   # pgsql + redis; no sqlite
 # set FAYDA_* in .env.staging
 
-./deploy-staging.sh
-./down-staging.sh          # keep volumes
-./down-staging.sh -v       # wipe staging Postgres volumes
+./deploy-staging.sh            # PRODUCTION ship
+./down-staging.sh              # keep volumes
+./down-staging.sh -v           # wipe Postgres volumes (destructive)
 
 # Host DB access for dump/restore / migration scripts
 #   postgres:  127.0.0.1:35432  (user vas / secret, db vaspartners)

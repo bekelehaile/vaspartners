@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 #
-# Build and roll out the VAS Partners stack (containers + Postgres).
+# PRODUCTION deploy for VAS Partners (script name is historical: deploy-staging.sh).
 # Public URL: https://vaspartnersportal.ethiotelecom.et (host nginx → :30011).
+#
+# This is NOT a separate staging environment — it ships the live portal.
 #
 # Usage:
 #   ./deploy-staging.sh
@@ -12,7 +14,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 
-VERSION="${1:-$(git rev-parse --short HEAD 2>/dev/null || echo staging)}"
+VERSION="${1:-$(git rev-parse --short HEAD 2>/dev/null || echo prod)}"
 COMPOSE=(docker compose -f compose.staging.yml)
 
 if [[ ! -f .env.staging ]]; then
@@ -28,7 +30,7 @@ if [[ ! -f .env.staging ]]; then
   fi
 fi
 
-# Ensure staging public URLs (do not rely on local localhost values)
+# Ensure production public URLs (do not rely on local localhost values)
 ensure_kv() {
   local key="$1" val="$2" file=".env.staging"
   if grep -q "^${key}=" "$file"; then
@@ -44,7 +46,7 @@ ensure_kv APP_URL "https://vaspartnersportal.ethiotelecom.et"
 ensure_kv FRONTEND_URL "https://vaspartnersportal.ethiotelecom.et"
 ensure_kv FAYDA_REDIRECT_URI "https://vaspartnersportal.ethiotelecom.et/callback"
 ensure_kv SANCTUM_STATEFUL_DOMAINS "vaspartnersportal.ethiotelecom.et"
-# Keep APP_ENV from .env.staging (production or staging) — do not force overwrite.
+# Keep APP_ENV from .env.staging (should be production) — do not force overwrite.
 ensure_kv TRUSTED_PROXIES "*"
 ensure_kv APP_DEBUG "false"
 
@@ -54,12 +56,12 @@ if [[ ! -r /etc/nginx/ssl/fullchain-wildcard.crt || ! -r /etc/nginx/ssl/ethiotel
   exit 1
 fi
 
-echo "==> Building staging images (${VERSION})..."
+echo "==> Building PRODUCTION images (${VERSION})..."
 DOCKER_BUILDKIT=1 "${COMPOSE[@]}" build \
   --build-arg NEXT_PUBLIC_API_URL=https://vaspartnersportal.ethiotelecom.et/api/v1 \
   --build-arg NEXT_PUBLIC_SITE_URL=https://vaspartnersportal.ethiotelecom.et
 
-echo "==> Starting staging stack (Postgres + PgBouncer + Redis + app + otp/import/export/sms/default workers + web + nginx)..."
+echo "==> Starting PRODUCTION stack (Postgres + PgBouncer + Redis + app + otp/import/export/sms/default workers + web + nginx)..."
 "${COMPOSE[@]}" up -d --remove-orphans
 
 # Nginx caches upstream IPs unless config uses Docker DNS variables; always
@@ -81,7 +83,7 @@ for i in $(seq 1 90); do
 done
 
 echo
-echo "VAS Partners up (${VERSION})."
+echo "VAS Partners PRODUCTION up (${VERSION})."
 echo "  Portal:  https://vaspartnersportal.ethiotelecom.et"
 echo "  Admin:   https://vaspartnersportal.ethiotelecom.et/admin"
 echo "  API:     https://vaspartnersportal.ethiotelecom.et/api/v1"

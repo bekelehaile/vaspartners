@@ -1,8 +1,8 @@
-# VAS Partners stack under parent /data-disk/applications/vaspartners
+# VAS Partners PRODUCTION stack (compose filename is historical: compose.staging.yml)
 #
 #   Public: host nginx :443 → 127.0.0.1:30011 → vaspartners-nginx :80
 #
-# Ship:  ./deploy-staging.sh
+# Ship:  ./deploy-staging.sh   ← production deploy (name is historical)
 # Access:
 #   https://vaspartnersportal.ethiotelecom.et
 #   https://vaspartnersportal.ethiotelecom.et/admin
