@@ -19,7 +19,7 @@ class CompanyPolicy
 
     public function update(User $user, Company $company): bool
     {
-        return method_exists($user, 'hasRole') && $user->hasRole('super_admin');
+        return $user->can('Update:Company');
     }
 
     public function create(User $user): bool

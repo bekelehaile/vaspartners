@@ -8,6 +8,7 @@ use App\Filament\Resources\Companies\Pages\EditCompany;
 use App\Filament\Resources\Companies\Pages\ListCompanies;
 use App\Filament\Resources\Companies\Pages\ViewCompany;
 use App\Filament\Resources\Companies\RelationManagers\ChangeRequestsRelationManager;
+use App\Filament\Resources\Companies\RelationManagers\ContactsRelationManager;
 use App\Filament\Resources\Companies\RelationManagers\MembersRelationManager;
 use App\Filament\Resources\Companies\RelationManagers\MembershipAuditRelationManager;
 use App\Filament\Resources\Companies\RelationManagers\ServiceRequestsRelationManager;
@@ -619,6 +620,7 @@ class CompanyResource extends Resource
     public static function getRelations(): array
     {
         return [
+            ContactsRelationManager::class,
             MembersRelationManager::class,
             MembershipAuditRelationManager::class,
             StatusHistoryRelationManager::class,
@@ -645,9 +647,7 @@ class CompanyResource extends Resource
 
     public static function canEdit($record): bool
     {
-        $user = auth()->user();
-
-        return (bool) ($user && method_exists($user, 'hasRole') && $user->hasRole('super_admin'));
+        return parent::canEdit($record);
     }
 
     public static function canDelete($record): bool
