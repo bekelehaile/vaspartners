@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\RevenueDuplicatePolicy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
 
@@ -35,6 +36,16 @@ class AppSetting extends Model
 
     /** Partner email — reserved; delivery not wired yet. */
     public const KEY_NOTIFY_PARTNER_EMAIL = 'notify_partner_email';
+
+    /**
+     * Monthly Revenue duplicate policy (JSON). Replaces the old on/off toggle.
+     *
+     * @see \App\Support\RevenueDuplicatePolicy
+     */
+    public const KEY_REVENUE_DUPLICATE_POLICY = 'revenue_duplicate_policy';
+
+    /** @deprecated Use KEY_REVENUE_DUPLICATE_POLICY */
+    public const KEY_REVENUE_BLOCK_DUPLICATES = 'revenue_block_duplicates';
 
     protected $fillable = [
         'key',
@@ -170,6 +181,48 @@ class AppSetting extends Model
     public static function partnerEmailEnabled(): bool
     {
         return static::boolValue(self::KEY_NOTIFY_PARTNER_EMAIL, false);
+    }
+
+    public static function revenueDuplicatePolicy(): RevenueDuplicatePolicy
+    {
+        $raw = static::getValue(self::KEY_REVENUE_DUPLICATE_POLICY);
+        if (filled($raw)) {
+            $decoded = json_decode((string) $raw, true);
+            if (is_array($decoded)) {
+                return RevenueDuplicatePolicy::fromArray($decoded);
+            }
+        }
+
+        // Legacy boolean: on → both + default match fields; off → scope off.
+        if (static::boolValue(self::KEY_REVENUE_BLOCK_DUPLICATES, false)) {
+            return RevenueDuplicatePolicy::fromArray([
+                'scope' => RevenueDuplicatePolicy::SCOPE_BOTH,
+                'match' => [
+                    RevenueDuplicatePolicy::MATCH_SERVICE_ID,
+                    RevenueDuplicatePolicy::MATCH_SHORT_CODE,
+                    RevenueDuplicatePolicy::MATCH_MONTH,
+                    RevenueDuplicatePolicy::MATCH_PARTNER,
+                ],
+                'action' => RevenueDuplicatePolicy::ACTION_BLOCK,
+            ]);
+        }
+
+        return RevenueDuplicatePolicy::default();
+    }
+
+    public static function setRevenueDuplicatePolicy(RevenueDuplicatePolicy $policy): void
+    {
+        static::setValue(self::KEY_REVENUE_DUPLICATE_POLICY, json_encode($policy->toArray(), JSON_THROW_ON_ERROR));
+        // Clear legacy flag so policy JSON is the source of truth.
+        static::setBoolValue(self::KEY_REVENUE_BLOCK_DUPLICATES, false);
+    }
+
+    /**
+     * @deprecated Use revenueDuplicatePolicy()->enforces()
+     */
+    public static function revenueBlockDuplicates(): bool
+    {
+        return static::revenueDuplicatePolicy()->enforces();
     }
 
     /**

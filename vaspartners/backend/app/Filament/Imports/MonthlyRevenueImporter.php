@@ -177,7 +177,16 @@ class MonthlyRevenueImporter extends Importer
             $this->applyPartnerSnapshot($partner);
             $this->data['status'] = RevenueImportRowStatus::MissingPhone->value;
             $this->data['error'] = 'Partner phone is missing or invalid.';
-        } elseif ($period !== '' && app(RevenueImportService::class)->wouldDoubleSend($partner, $period)) {
+        } elseif ($period !== '' && app(RevenueImportService::class)->wouldDoubleSend(
+            $partner,
+            $period,
+            null,
+            [
+                'amount' => $amount,
+                'am_user_id' => $this->import->user_id ? (int) $this->import->user_id : null,
+                'catalog_service_id' => $vasServiceId,
+            ],
+        )) {
             $this->applyPartnerSnapshot($partner);
             $this->data['status'] = RevenueImportRowStatus::Duplicate->value;
             $this->data['error'] = "SMS already sent for this partner in {$period}.";

@@ -10,11 +10,13 @@ use App\Jobs\SendBulkMessageRecipientJob;
 use App\Models\BulkMessage;
 use App\Models\BulkMessageRecipient;
 use App\Models\Company;
+use App\Models\AppSetting;
 use App\Models\RevenueImport;
 use App\Models\RevenueImportRow;
 use App\Models\RevenuePartner;
 use App\Models\User;
 use App\Support\PhoneNumber;
+use App\Support\RevenueDuplicatePolicy;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -39,12 +41,11 @@ class RevenueImportService
         $period = (string) $import->period;
 
         DB::transaction(function () use ($import, $vasServiceId, $ownerUserId, $period): void {
+            $amUserId = $import->created_by_user_id ? (int) $import->created_by_user_id : null;
             $seen = [];
-            foreach ($import->rows()->orderBy('id')->get() as $row) {
+            foreach ($import->rows()->with('partner')->orderBy('id')->get() as $row) {
                 if ($row->wasSent() || $row->status === RevenueImportRowStatus::Sent) {
-                    $key = (RevenuePartnerResolver::normalize($row->service_id) ?? '').'|'
-                        .(RevenuePartnerResolver::normalize($row->short_code) ?? '');
-                    $seen[$key] = true;
+                    $this->rememberSeenFingerprint($seen, $row, $import);
 
                     continue;
                 }
@@ -57,6 +58,8 @@ class RevenueImportService
                     ownerUserId: $ownerUserId,
                     period: $period,
                     excludeRowId: (int) $row->id,
+                    catalogServiceId: $vasServiceId,
+                    amUserId: $amUserId,
                 );
                 $row->forceFill([
                     'revenue_partner_id' => $payload['revenue_partner_id'],
@@ -111,11 +114,10 @@ class RevenueImportService
             $rows = $query->get();
             $targetIds = $rows->pluck('id')->all();
 
+            $amUserId = $import->created_by_user_id ? (int) $import->created_by_user_id : null;
             $seen = [];
-            foreach ($import->rows()->whereNotIn('id', $targetIds)->orderBy('id')->get() as $other) {
-                $key = (RevenuePartnerResolver::normalize($other->service_id) ?? '').'|'
-                    .(RevenuePartnerResolver::normalize($other->short_code) ?? '');
-                $seen[$key] = true;
+            foreach ($import->rows()->with('partner')->whereNotIn('id', $targetIds)->orderBy('id')->get() as $other) {
+                $this->rememberSeenFingerprint($seen, $other, $import);
             }
 
             foreach ($rows as $row) {
@@ -127,6 +129,8 @@ class RevenueImportService
                     ownerUserId: $ownerUserId,
                     period: $period,
                     excludeRowId: (int) $row->id,
+                    catalogServiceId: $vasServiceId,
+                    amUserId: $amUserId,
                 );
 
                 $row->forceFill([
@@ -424,11 +428,10 @@ class RevenueImportService
         $ownerUserId = $this->ownerUserIdForImport($import);
 
         DB::transaction(function () use ($import, $row, $serviceId, $shortCode, $amount, $vasServiceId, $ownerUserId): void {
+            $amUserId = $import->created_by_user_id ? (int) $import->created_by_user_id : null;
             $seen = [];
-            foreach ($import->rows()->where('id', '!=', $row->id)->orderBy('id')->get() as $other) {
-                $key = (RevenuePartnerResolver::normalize($other->service_id) ?? '').'|'
-                    .(RevenuePartnerResolver::normalize($other->short_code) ?? '');
-                $seen[$key] = true;
+            foreach ($import->rows()->with('partner')->where('id', '!=', $row->id)->orderBy('id')->get() as $other) {
+                $this->rememberSeenFingerprint($seen, $other, $import);
             }
 
             $payload = $this->classify(
@@ -439,6 +442,8 @@ class RevenueImportService
                 ownerUserId: $ownerUserId,
                 period: (string) $import->period,
                 excludeRowId: (int) $row->id,
+                catalogServiceId: $vasServiceId,
+                amUserId: $amUserId,
             );
 
             $row->forceFill([
@@ -759,8 +764,7 @@ class RevenueImportService
                     'import' => "Row {$row->service_id} has no usable partner phone.",
                 ]);
             }
-            if ($this->shouldBlockDuplicates()
-                && $this->alreadySentForPeriod($row, (string) $import->period, (int) $row->id)) {
+            if ($this->alreadySentForRow($row, $import, (int) $row->id)) {
                 throw ValidationException::withMessages([
                     'import' => "SMS already sent for period {$import->period} and service ID {$row->service_id}.",
                 ]);
@@ -1023,32 +1027,56 @@ class RevenueImportService
     }
 
     /**
-     * When false (default), duplicate Service IDs and re-sends for the same
-     * partner/month are allowed. Flip via config('vas.revenue.block_duplicates').
+     * Duplicate policy from App settings (scope + match fields + enforcement).
      */
-    public function shouldBlockDuplicates(): bool
+    public function duplicatePolicy(): RevenueDuplicatePolicy
     {
-        return (bool) config('vas.revenue.block_duplicates', false);
+        return AppSetting::revenueDuplicatePolicy();
     }
 
     /**
-     * True when SMS was already queued/sent for this partner in the given month.
+     * @deprecated Use duplicatePolicy()->enforces()
+     */
+    public function shouldBlockDuplicates(): bool
+    {
+        return $this->duplicatePolicy()->enforces();
+    }
+
+    /**
+     * True when prior SMS already matches the configured policy for this partner.
+     *
+     * @param  array{
+     *   amount?: ?float,
+     *   am_user_id?: ?int,
+     *   catalog_service_id?: ?int
+     * }  $extra
      */
     public function wouldDoubleSend(
         RevenuePartner $partner,
         string $period,
         ?int $excludeRowId = null,
+        array $extra = [],
     ): bool {
-        if (! $this->shouldBlockDuplicates()) {
+        $policy = $this->duplicatePolicy();
+        if (! $policy->checksPriorSends()) {
             return false;
         }
 
-        return $this->alreadySentForPartnerPeriod(
-            (int) $partner->id,
-            $partner->service_id,
-            $period,
+        return $this->alreadySentMatchingPolicy(
+            $policy,
+            [
+                'service_id' => RevenuePartnerResolver::normalize($partner->service_id),
+                'short_code' => RevenuePartnerResolver::normalize($partner->short_code),
+                'month' => trim($period),
+                'am' => (string) ($extra['am_user_id'] ?? ''),
+                'catalog_service' => (string) ($extra['catalog_service_id'] ?? ''),
+                'company' => (string) ($partner->company_id ?? ''),
+                'partner' => (string) $partner->id,
+                'amount' => isset($extra['amount']) && is_numeric($extra['amount'])
+                    ? number_format((float) $extra['amount'], 4, '.', '')
+                    : '',
+            ],
             $excludeRowId,
-            RevenuePartnerResolver::normalize($partner->short_code),
         );
     }
 
@@ -1072,9 +1100,12 @@ class RevenueImportService
         ?int $ownerUserId = null,
         ?string $period = null,
         ?int $excludeRowId = null,
+        ?int $catalogServiceId = null,
+        ?int $amUserId = null,
     ): array {
         $serviceId = RevenuePartnerResolver::normalize($serviceId);
         $shortCode = RevenuePartnerResolver::normalize($shortCode);
+        $policy = $this->duplicatePolicy();
 
         if ($serviceId === null && $shortCode === null) {
             return $this->invalid('Service ID and short code are both empty.', $amount);
@@ -1082,20 +1113,6 @@ class RevenueImportService
         if ($amount === null || $amount <= 0) {
             return $this->invalid('Revenue must be a positive number.', $amount, $serviceId, $shortCode);
         }
-
-        $dedupe = ($serviceId ?? '').'|'.($shortCode ?? '');
-        if ($this->shouldBlockDuplicates() && isset($seen[$dedupe])) {
-            return [
-                'revenue_partner_id' => null,
-                'status' => RevenueImportRowStatus::Duplicate,
-                'error' => 'Duplicate in this import (same service_id / short_code).',
-                'amount' => $amount,
-                'partner_name' => null,
-                'resolved_service_id' => $serviceId,
-                'resolved_short_code' => $shortCode,
-            ];
-        }
-        $seen[$dedupe] = true;
 
         $lookup = $this->partners->resolve($serviceId, $shortCode, $ownerUserId);
         if (! $lookup['ok']) {
@@ -1105,6 +1122,34 @@ class RevenueImportService
         $partner = $lookup['partner'];
         $serviceId = $lookup['service_id'];
         $shortCode = $lookup['short_code'];
+
+        $context = $this->duplicateContext(
+            serviceId: $serviceId,
+            shortCode: $shortCode,
+            amount: $amount,
+            period: $period,
+            partner: $partner,
+            amUserId: $amUserId ?? $ownerUserId,
+            catalogServiceId: $catalogServiceId,
+        );
+
+        if ($policy->checksWithinImport()) {
+            $fingerprint = $this->duplicateFingerprint($policy, $context);
+            if ($fingerprint !== '' && isset($seen[$fingerprint])) {
+                return [
+                    'revenue_partner_id' => $partner?->id,
+                    'status' => RevenueImportRowStatus::Duplicate,
+                    'error' => 'Duplicate in this import ('.$policy->matchRuleLabel().').',
+                    'amount' => $amount,
+                    'partner_name' => $partner?->partner_name,
+                    'resolved_service_id' => $serviceId,
+                    'resolved_short_code' => $shortCode,
+                ];
+            }
+            if ($fingerprint !== '') {
+                $seen[$fingerprint] = true;
+            }
+        }
 
         if (! $partner) {
             return [
@@ -1142,19 +1187,22 @@ class RevenueImportService
             ];
         }
 
-        if ($this->shouldBlockDuplicates()
-            && $period
-            && $this->alreadySentForPartnerPeriod(
-                (int) $partner->id,
-                $partner->service_id,
-                $period,
-                $excludeRowId,
-                RevenuePartnerResolver::normalize($partner->short_code) ?? $shortCode,
-            )) {
+        $context = $this->duplicateContext(
+            serviceId: $partner->service_id,
+            shortCode: RevenuePartnerResolver::normalize($partner->short_code) ?? $shortCode,
+            amount: $amount,
+            period: $period,
+            partner: $partner,
+            amUserId: $amUserId ?? $ownerUserId,
+            catalogServiceId: $catalogServiceId,
+        );
+
+        if ($policy->checksPriorSends()
+            && $this->alreadySentMatchingPolicy($policy, $context, $excludeRowId)) {
             return [
                 'revenue_partner_id' => $partner->id,
                 'status' => RevenueImportRowStatus::Duplicate,
-                'error' => "SMS already sent for this partner in period {$period}.",
+                'error' => 'SMS already sent matching '.$policy->matchRuleLabel().'.',
                 'amount' => $amount,
                 'partner_name' => $partner->partner_name,
                 'resolved_service_id' => $partner->service_id,
@@ -1173,55 +1221,178 @@ class RevenueImportService
         ];
     }
 
-    protected function alreadySentForPeriod(RevenueImportRow $row, string $period, ?int $excludeRowId = null): bool
-    {
-        return $this->alreadySentForPartnerPeriod(
-            $row->revenue_partner_id ? (int) $row->revenue_partner_id : null,
-            $row->service_id,
-            $period,
+    protected function alreadySentForRow(
+        RevenueImportRow $row,
+        RevenueImport $import,
+        ?int $excludeRowId = null,
+    ): bool {
+        $policy = $this->duplicatePolicy();
+        if (! $policy->checksPriorSends()) {
+            return false;
+        }
+
+        $row->loadMissing('partner');
+
+        return $this->alreadySentMatchingPolicy(
+            $policy,
+            $this->duplicateContextFromRow($row, $import),
             $excludeRowId,
-            RevenuePartnerResolver::normalize($row->short_code),
         );
     }
 
     /**
-     * True when any Monthly Revenue row for this period was already queued/sent
-     * for the same partner, service ID, or short code.
+     * @return array{
+     *   service_id: ?string,
+     *   short_code: ?string,
+     *   month: string,
+     *   am: string,
+     *   catalog_service: string,
+     *   company: string,
+     *   partner: string,
+     *   amount: string
+     * }
      */
-    protected function alreadySentForPartnerPeriod(
-        ?int $partnerId,
+    protected function duplicateContextFromRow(RevenueImportRow $row, RevenueImport $import): array
+    {
+        return $this->duplicateContext(
+            serviceId: $row->service_id,
+            shortCode: $row->short_code,
+            amount: $row->amount !== null ? (float) $row->amount : null,
+            period: (string) $import->period,
+            partner: $row->partner,
+            amUserId: $import->created_by_user_id ? (int) $import->created_by_user_id : null,
+            catalogServiceId: (int) ($row->vas_service_id ?: $import->vas_service_id),
+        );
+    }
+
+    /**
+     * @return array{
+     *   service_id: ?string,
+     *   short_code: ?string,
+     *   month: string,
+     *   am: string,
+     *   catalog_service: string,
+     *   company: string,
+     *   partner: string,
+     *   amount: string
+     * }
+     */
+    protected function duplicateContext(
         ?string $serviceId,
-        string $period,
+        ?string $shortCode,
+        ?float $amount,
+        ?string $period,
+        ?RevenuePartner $partner,
+        ?int $amUserId,
+        ?int $catalogServiceId,
+    ): array {
+        return [
+            'service_id' => RevenuePartnerResolver::normalize($serviceId),
+            'short_code' => RevenuePartnerResolver::normalize($shortCode),
+            'month' => trim((string) $period),
+            'am' => $amUserId ? (string) $amUserId : '',
+            'catalog_service' => $catalogServiceId ? (string) $catalogServiceId : '',
+            'company' => $partner?->company_id ? (string) $partner->company_id : '',
+            'partner' => $partner?->id ? (string) $partner->id : '',
+            'amount' => $amount !== null ? number_format($amount, 4, '.', '') : '',
+        ];
+    }
+
+    /**
+     * @param  array<string, true>  $seen
+     */
+    protected function rememberSeenFingerprint(array &$seen, RevenueImportRow $row, RevenueImport $import): void
+    {
+        $policy = $this->duplicatePolicy();
+        if (! $policy->checksWithinImport()) {
+            return;
+        }
+
+        $fingerprint = $this->duplicateFingerprint($policy, $this->duplicateContextFromRow($row, $import));
+        if ($fingerprint !== '') {
+            $seen[$fingerprint] = true;
+        }
+    }
+
+    /**
+     * AND-concatenation of selected match fields, e.g. "service_id=… AND month=…".
+     *
+     * @param  array<string, string|null>  $context
+     */
+    protected function duplicateFingerprint(RevenueDuplicatePolicy $policy, array $context): string
+    {
+        if ($policy->match === []) {
+            return '';
+        }
+
+        return collect($policy->match)
+            ->map(fn (string $field): string => $field.'='.($context[$field] ?? ''))
+            ->implode(' AND ');
+    }
+
+    /**
+     * Prior SMS rows that match every selected policy field (AND).
+     *
+     * @param  array<string, string|null>  $context
+     */
+    protected function alreadySentMatchingPolicy(
+        RevenueDuplicatePolicy $policy,
+        array $context,
         ?int $excludeRowId = null,
-        ?string $shortCode = null,
     ): bool {
-        $period = trim($period);
-        $serviceId = RevenuePartnerResolver::normalize($serviceId);
-        $shortCode = RevenuePartnerResolver::normalize($shortCode);
-        if ($period === '' || (! $partnerId && $serviceId === null && $shortCode === null)) {
+        if ($policy->match === []) {
             return false;
         }
 
-        return RevenueImportRow::query()
+        $hasIdentity = false;
+        foreach ($policy->match as $field) {
+            $value = trim((string) ($context[$field] ?? ''));
+            if ($value !== '') {
+                $hasIdentity = true;
+                break;
+            }
+        }
+        if (! $hasIdentity) {
+            return false;
+        }
+
+        $query = RevenueImportRow::query()
             ->where(function ($q): void {
                 $q->where('status', RevenueImportRowStatus::Sent->value)
                     ->orWhereNotNull('sent_at')
                     ->orWhereNotNull('bulk_message_id');
             })
-            ->when($excludeRowId, fn ($q) => $q->where('id', '!=', $excludeRowId))
-            ->whereHas('import', fn ($q) => $q->where('period', $period))
-            ->where(function ($q) use ($partnerId, $serviceId, $shortCode): void {
-                if ($partnerId) {
-                    $q->orWhere('revenue_partner_id', $partnerId);
-                }
-                if ($serviceId !== null) {
-                    $q->orWhere('service_id', $serviceId);
-                }
-                if ($shortCode !== null) {
-                    $q->orWhere('short_code', $shortCode);
-                }
-            })
-            ->exists();
+            ->when($excludeRowId, fn ($q) => $q->where('id', '!=', $excludeRowId));
+
+        foreach ($policy->match as $field) {
+            $value = trim((string) ($context[$field] ?? ''));
+            if ($value === '') {
+                return false;
+            }
+
+            match ($field) {
+                RevenueDuplicatePolicy::MATCH_SERVICE_ID => $query->where('service_id', $value),
+                RevenueDuplicatePolicy::MATCH_SHORT_CODE => $query->where('short_code', $value),
+                RevenueDuplicatePolicy::MATCH_MONTH => $query->whereHas(
+                    'import',
+                    fn ($q) => $q->where('period', $value)
+                ),
+                RevenueDuplicatePolicy::MATCH_AM => $query->whereHas(
+                    'import',
+                    fn ($q) => $q->where('created_by_user_id', (int) $value)
+                ),
+                RevenueDuplicatePolicy::MATCH_CATALOG => $query->where('vas_service_id', (int) $value),
+                RevenueDuplicatePolicy::MATCH_COMPANY => $query->whereHas(
+                    'partner',
+                    fn ($q) => $q->where('company_id', (int) $value)
+                ),
+                RevenueDuplicatePolicy::MATCH_PARTNER => $query->where('revenue_partner_id', (int) $value),
+                RevenueDuplicatePolicy::MATCH_AMOUNT => $query->where('amount', $value),
+                default => null,
+            };
+        }
+
+        return $query->exists();
     }
 
     /**

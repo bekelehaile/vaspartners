@@ -49,12 +49,11 @@ return [
     | Monthly Revenue
     |--------------------------------------------------------------------------
     |
-    | block_duplicates=false (default): open mode for AMs — same partner/month
-    | can be re-imported and re-sent; duplicate Service IDs in one CSV are kept.
-    | Set REVENUE_BLOCK_DUPLICATES=true (or later an admin setting) to enforce.
+    | Duplicate control lives in Filament → App settings → Monthly Revenue
+    | (scope, match fields, enforcement). Default scope is Off.
     |
     */
     'revenue' => [
-        'block_duplicates' => filter_var(env('REVENUE_BLOCK_DUPLICATES', false), FILTER_VALIDATE_BOOLEAN),
+        'duplicate_policy' => null,
     ],
 ];
