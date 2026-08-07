@@ -14,7 +14,6 @@ use App\Services\RevenueImportService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
-use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -26,7 +25,6 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Support\HtmlString;
 use Illuminate\Validation\ValidationException;
 
 class RowsRelationManager extends RelationManager
@@ -332,22 +330,20 @@ class RowsRelationManager extends RelationManager
                     ->icon('heroicon-o-eye')
                     ->color('danger')
                     ->visible(fn (RevenueImportRow $record): bool => $record->status === RevenueImportRowStatus::Duplicate)
-                    ->modalHeading('Duplicate match')
+                    ->modalHeading('Duplicate details')
+                    ->modalDescription('Who already sent this partner, when, and for how much.')
+                    ->modalWidth('3xl')
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Close')
-                    ->form(function (RevenueImportRow $record): array {
+                    ->modalContent(function (RevenueImportRow $record) {
                         /** @var RevenueImport $import */
                         $import = $this->getOwnerRecord();
-                        $matches = app(RevenueImportService::class)->findDuplicateMatches($record, $import);
+                        $service = app(RevenueImportService::class);
 
-                        return [
-                            Placeholder::make('reason')
-                                ->label('Why blocked')
-                                ->content((string) ($record->error ?: 'Marked duplicate by policy.')),
-                            Placeholder::make('matches')
-                                ->label('Matching rows')
-                                ->content(new HtmlString($this->duplicateMatchesHtml($matches))),
-                        ];
+                        return view('filament.revenue.duplicate-match', [
+                            'summary' => $service->duplicateRowSummary($record, $import),
+                            'matches' => $service->findDuplicateMatches($record, $import),
+                        ]);
                     }),
                 Action::make('open_partner')
                     ->label('Partner')
@@ -657,59 +653,6 @@ class RowsRelationManager extends RelationManager
     protected function revenuePartnerOptions(?int $includePartnerId = null): array
     {
         return $this->searchRevenuePartners('');
-    }
-
-    /**
-     * @param  list<array{
-     *   source: string,
-     *   row_id: int,
-     *   import_id: int,
-     *   import_title: string,
-     *   period: string,
-     *   service_id: ?string,
-     *   partner_name: ?string,
-     *   amount: ?float,
-     *   status: string,
-     *   sent_at: ?string,
-     *   url: string
-     * }>  $matches
-     */
-    protected function duplicateMatchesHtml(array $matches): string
-    {
-        if ($matches === []) {
-            return '<p class="text-sm text-gray-500 dark:text-gray-400">No matching prior or same-import rows were found. Rematch may clear this if the policy changed.</p>';
-        }
-
-        $items = collect($matches)->map(function (array $match): string {
-            $amount = $match['amount'] !== null
-                ? 'ETB '.number_format((float) $match['amount'], 2)
-                : '—';
-            $sent = $match['sent_at'] ? e($match['sent_at']) : '—';
-            $title = e($match['import_title']);
-            $period = e($match['period']);
-            $serviceId = e((string) ($match['service_id'] ?: '—'));
-            $partner = e((string) ($match['partner_name'] ?: '—'));
-            $status = e($match['status']);
-            $source = e($match['source']);
-            $url = e($match['url']);
-
-            return <<<HTML
-                <li class="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
-                    <div class="mb-1 text-xs font-medium uppercase tracking-wide text-danger-600 dark:text-danger-400">{$source}</div>
-                    <div class="font-medium"><a class="text-primary-600 underline dark:text-primary-400" href="{$url}" target="_blank" rel="noopener">{$title}</a></div>
-                    <div class="mt-1 grid gap-1 text-sm text-gray-600 dark:text-gray-300">
-                        <div>Period: {$period}</div>
-                        <div>Service ID: {$serviceId}</div>
-                        <div>Partner: {$partner}</div>
-                        <div>Amount: {$amount}</div>
-                        <div>Status: {$status}</div>
-                        <div>Sent at: {$sent}</div>
-                    </div>
-                </li>
-            HTML;
-        })->implode('');
-
-        return '<ul class="space-y-3">'.$items.'</ul>';
     }
 
     protected function canDeleteRow(RevenueImportRow $record): bool

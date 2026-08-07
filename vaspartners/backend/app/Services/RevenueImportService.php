@@ -1450,7 +1450,9 @@ class RevenueImportService
             if ($serviceId !== null && $period !== '') {
                 $priorQuery = RevenueImportRow::query()
                     ->where('id', '!=', $row->id)
-                    ->where('service_id', $serviceId)
+                    ->where(function ($q) use ($serviceId): void {
+                        $this->constrainServiceIdVariants($q, $serviceId);
+                    })
                     ->where(function ($q): void {
                         $q->where('status', RevenueImportRowStatus::Sent->value)
                             ->orWhereNotNull('sent_at')
@@ -1462,7 +1464,14 @@ class RevenueImportService
 
         if ($priorQuery !== null) {
             $prior = $priorQuery
-                ->with(['import:id,title,period,public_id', 'partner:id,partner_name'])
+                ->with([
+                    'import:id,title,period,public_id,created_by_user_id,sent_by_user_id,vas_service_id',
+                    'import.creator:id,name,email',
+                    'import.sender:id,name,email',
+                    'import.vasService:id,name',
+                    'partner:id,partner_name,phone',
+                    'vasService:id,name',
+                ])
                 ->orderByDesc('sent_at')
                 ->orderByDesc('id')
                 ->limit(20)
@@ -1479,7 +1488,14 @@ class RevenueImportService
             ->where('revenue_import_id', $import->id)
             ->where('id', '!=', $row->id)
             ->whereNotIn('id', $seenIds)
-            ->with(['import:id,title,period,public_id', 'partner:id,partner_name'])
+            ->with([
+                'import:id,title,period,public_id,created_by_user_id,sent_by_user_id,vas_service_id',
+                'import.creator:id,name,email',
+                'import.sender:id,name,email',
+                'import.vasService:id,name',
+                'partner:id,partner_name,phone',
+                'vasService:id,name',
+            ])
             ->orderBy('id')
             ->limit(40)
             ->get();
@@ -1497,7 +1513,11 @@ class RevenueImportService
                     $this->duplicateContextFromRow($sibling, $import),
                 ) === $fingerprint;
             } elseif ($serviceId !== null) {
-                $isMatch = RevenuePartnerResolver::normalize($sibling->service_id) === $serviceId;
+                $siblingSid = RevenuePartnerResolver::normalize($sibling->service_id);
+                $isMatch = $siblingSid !== null && (
+                    $siblingSid === $serviceId
+                    || ltrim($siblingSid, '0') === ltrim($serviceId, '0')
+                );
             }
 
             if (! $isMatch) {
@@ -1516,12 +1536,21 @@ class RevenueImportService
      *   row_id: int,
      *   import_id: int,
      *   import_title: string,
+     *   import_public_id: ?string,
      *   period: string,
      *   service_id: ?string,
+     *   short_code: ?string,
      *   partner_name: ?string,
+     *   phone: ?string,
      *   amount: ?float,
+     *   amount_label: string,
      *   status: string,
+     *   catalog_service: ?string,
+     *   am_name: ?string,
+     *   am_email: ?string,
+     *   sent_by_name: ?string,
      *   sent_at: ?string,
+     *   sent_at_relative: ?string,
      *   url: string
      * }
      */
@@ -1531,21 +1560,84 @@ class RevenueImportService
         $status = $match->status instanceof RevenueImportRowStatus
             ? $match->status->label()
             : (string) $match->status;
+        $amount = $match->amount !== null ? (float) $match->amount : null;
+        $am = $import?->creator;
+        $sentBy = $import?->sender;
+        $phone = $match->partner?->phone;
+        $catalog = $match->vasService?->name ?: $import?->vasService?->name;
+        $sentAt = $match->sent_at?->timezone(config('app.timezone'));
 
         return [
             'source' => $source,
             'row_id' => (int) $match->id,
             'import_id' => (int) ($import?->id ?? $match->revenue_import_id),
             'import_title' => (string) ($import?->title ?: ('Import #'.($import?->id ?? $match->revenue_import_id))),
+            'import_public_id' => $import?->public_id ? (string) $import->public_id : null,
             'period' => (string) ($import?->period ?? '—'),
             'service_id' => $match->service_id,
+            'short_code' => $match->short_code,
             'partner_name' => $match->partner_name ?: $match->partner?->partner_name,
-            'amount' => $match->amount !== null ? (float) $match->amount : null,
+            'phone' => $phone,
+            'amount' => $amount,
+            'amount_label' => $amount !== null ? 'ETB '.number_format($amount, 2) : '—',
             'status' => $status,
-            'sent_at' => $match->sent_at?->timezone(config('app.timezone'))->format('Y-m-d H:i') ?? null,
+            'catalog_service' => $catalog,
+            'am_name' => $am?->name,
+            'am_email' => $am?->email,
+            'sent_by_name' => $sentBy?->name ?: $am?->name,
+            'sent_at' => $sentAt?->format('Y-m-d H:i') ?? null,
+            'sent_at_relative' => $sentAt?->diffForHumans() ?? null,
             'url' => \App\Filament\Resources\RevenueImports\RevenueImportResource::getUrl('view', [
                 'record' => $import ?? $match->revenue_import_id,
             ]),
+        ];
+    }
+
+    protected function constrainServiceIdVariants(Builder $query, string $serviceId): void
+    {
+        $stripped = ltrim($serviceId, '0');
+        $query->where(function (Builder $inner) use ($serviceId, $stripped): void {
+            $inner->where('service_id', $serviceId);
+            if ($stripped !== '' && $stripped !== $serviceId) {
+                $inner->orWhere('service_id', $stripped)
+                    ->orWhereRaw("ltrim(service_id, '0') = ?", [$stripped]);
+            } else {
+                $inner->orWhereRaw("ltrim(service_id, '0') = ?", [$stripped !== '' ? $stripped : $serviceId]);
+            }
+        });
+    }
+
+    /**
+     * Current payload row summary for the duplicate modal.
+     *
+     * @return array{
+     *   partner_name: ?string,
+     *   service_id: ?string,
+     *   short_code: ?string,
+     *   amount_label: string,
+     *   phone: ?string,
+     *   period: string,
+     *   status: string,
+     *   error: string
+     * }
+     */
+    public function duplicateRowSummary(RevenueImportRow $row, RevenueImport $import): array
+    {
+        $row->loadMissing(['partner:id,partner_name,phone']);
+        $amount = $row->amount !== null ? (float) $row->amount : null;
+        $status = $row->status instanceof RevenueImportRowStatus
+            ? $row->status->label()
+            : (string) $row->status;
+
+        return [
+            'partner_name' => $row->partner_name ?: $row->partner?->partner_name,
+            'service_id' => $row->service_id,
+            'short_code' => $row->short_code,
+            'amount_label' => $amount !== null ? 'ETB '.number_format($amount, 2) : '—',
+            'phone' => $row->partner?->phone,
+            'period' => (string) ($import->period ?: '—'),
+            'status' => $status,
+            'error' => (string) ($row->error ?: 'Marked duplicate by policy.'),
         ];
     }
 
