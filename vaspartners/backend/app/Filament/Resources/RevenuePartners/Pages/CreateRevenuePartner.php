@@ -16,7 +16,7 @@ class CreateRevenuePartner extends CreateRecord
 
     public function getSubheading(): ?string
     {
-        return 'Partner name is from finance/Excel. Optionally link a validated portal company for phone / membership.';
+        return 'Partner name is from finance/Excel. Link a validated portal company — phone is taken from that company’s revenue phone.';
     }
 
     /**
@@ -27,6 +27,13 @@ class CreateRevenuePartner extends CreateRecord
     {
         if (! RevenuePartnerResource::viewerCanAccessAllRevenue()) {
             $data['created_by_user_id'] = auth()->id();
+        }
+
+        if (! empty($data['company_id'])) {
+            $company = \App\Models\Company::query()->find($data['company_id']);
+            if ($company) {
+                $data['phone'] = \App\Support\PhoneNumber::normalizeNullable($company->revenuePhone());
+            }
         }
 
         return $data;

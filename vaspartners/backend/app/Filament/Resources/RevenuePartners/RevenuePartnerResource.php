@@ -23,7 +23,6 @@ use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
@@ -71,12 +70,13 @@ class RevenuePartnerResource extends Resource
                             fn (): array => Company::query()
                                 ->where('is_active', true)
                                 ->orderBy('name')
-                                ->get(['id', 'name', 'phone', 'tin'])
+                                ->get(['id', 'name', 'phone', 'claim_phone', 'revenue_phone', 'tin'])
                                 ->mapWithKeys(function (Company $company): array {
+                                    $revenuePhone = PhoneNumber::normalizeNullable($company->revenuePhone());
                                     $bits = array_filter([
                                         $company->name,
-                                        filled($company->phone) ? $company->phone : null,
-                                        filled($company->tin) ? 'TIN number '.$company->tin : null,
+                                        filled($revenuePhone) ? 'rev '.$revenuePhone : null,
+                                        filled($company->tin) ? 'TIN '.$company->tin : null,
                                     ]);
 
                                     return [$company->id => implode(' · ', $bits)];
@@ -85,37 +85,37 @@ class RevenuePartnerResource extends Resource
                         )
                         ->searchable()
                         ->preload()
-                        ->nullable()
+                        ->required()
                         ->native(false)
                         ->live()
-                        ->afterStateUpdated(function ($state, Set $set, Get $get): void {
+                        ->afterStateUpdated(function ($state, Set $set): void {
                             $company = $state ? Company::query()->find($state) : null;
-                            if (! $company) {
-                                return;
-                            }
-                            // Portal company is validated here; only fill phone when empty.
-                            // Partner name stays the finance-system value.
-                            if (! filled($get('phone'))) {
-                                $set('phone', PhoneNumber::normalizeNullable($company->revenuePhone()));
-                            }
+                            $set(
+                                'phone',
+                                $company
+                                    ? PhoneNumber::normalizeNullable($company->revenuePhone())
+                                    : null,
+                            );
                         })
-                        ->helperText('Optional validated portal company. Search by name, phone, or TIN number.')
+                        ->helperText('Required. Phone is taken from this company’s revenue phone (not editable).')
                         ->columnSpanFull(),
                     TextInput::make('phone')
                         ->label('Phone')
                         ->tel()
                         ->required()
                         ->maxLength(32)
-                        ->helperText('Required for SMS. Last 9 digits (9/7 + 8 digits). Can fill from the linked company.')
+                        ->disabled()
+                        ->dehydrated()
+                        ->helperText('Auto-filled from the selected company’s revenue phone. Manual entry is disabled.')
                         ->dehydrateStateUsing(fn (?string $state): ?string => PhoneNumber::normalizeNullable($state))
                         ->rule(fn (): \Closure => function (string $attribute, mixed $value, \Closure $fail): void {
                             if ($value === null || $value === '') {
-                                $fail('Phone is required.');
+                                $fail('Select a company that has a revenue phone.');
 
                                 return;
                             }
                             if (! PhoneNumber::isValidLocalMobile($value)) {
-                                $fail('Phone must be a local mobile (9/7 + 8 digits).');
+                                $fail('Company revenue phone must be a local mobile (9/7 + 8 digits).');
                             }
                         }),
                     Select::make('created_by_user_id')
