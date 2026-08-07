@@ -4,7 +4,6 @@ namespace App\Filament\Resources\RevenueImports;
 
 use App\Enums\RevenueImportStatus;
 use App\Filament\Imports\MonthlyRevenueImporter;
-use App\Filament\Resources\RevenueImports\Pages\ComposeFromPartners;
 use App\Filament\Resources\RevenueImports\Pages\EditRevenueImport;
 use App\Filament\Resources\RevenueImports\Pages\ListRevenueImports;
 use App\Filament\Resources\RevenueImports\Pages\ViewRevenueImport;
@@ -400,7 +399,6 @@ class RevenueImportResource extends Resource
     {
         return [
             'index' => ListRevenueImports::route('/'),
-            'compose' => ComposeFromPartners::route('/compose'),
             'view' => ViewRevenueImport::route('/{record}'),
             'edit' => EditRevenueImport::route('/{record}/edit'),
         ];

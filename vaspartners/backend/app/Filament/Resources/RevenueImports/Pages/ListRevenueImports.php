@@ -4,7 +4,6 @@ namespace App\Filament\Resources\RevenueImports\Pages;
 
 use App\Filament\Imports\MonthlyRevenueImporter;
 use App\Filament\Resources\RevenueImports\RevenueImportResource;
-use Filament\Actions\Action;
 use Filament\Actions\ImportAction;
 use Filament\Resources\Pages\ListRecords;
 
@@ -14,7 +13,7 @@ class ListRevenueImports extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'Create from your partners or import a CSV, then send collection SMS.';
+        return 'Import a CSV with Service ID and amount. Partner name and phone come from your Revenue Partners list.';
     }
 
     protected function getHeaderActions(): array
@@ -25,15 +24,10 @@ class ListRevenueImports extends ListRecords
         }
 
         return [
-            Action::make('compose_from_partners')
-                ->label('From my partners')
-                ->icon('heroicon-o-user-group')
-                ->color('primary')
-                ->url(RevenueImportResource::getUrl('compose')),
             ImportAction::make()
                 ->importer(MonthlyRevenueImporter::class)
                 ->label('Import CSV')
-                ->color('gray')
+                ->color('primary')
                 ->maxRows(20000)
                 ->chunkSize(100),
         ];

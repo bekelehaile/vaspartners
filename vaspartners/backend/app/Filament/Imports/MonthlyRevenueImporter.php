@@ -24,8 +24,8 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Cleaned monthly revenue CSV: service_id + revenue (short_code optional).
- * Matches against the importing AM's partner master list only.
+ * Monthly revenue CSV: Service ID + amount (short code optional).
+ * Partner name and phone come from the AM's Revenue Partners list.
  */
 class MonthlyRevenueImporter extends Importer
 {
@@ -40,19 +40,22 @@ class MonthlyRevenueImporter extends Importer
                 ->label('Service ID')
                 ->requiredMapping()
                 ->rules(['required', 'max:64'])
-                ->example('0042822000002838')
+                ->example('601654')
+                ->helperText('Required. Matched to your Revenue Partners list.')
                 ->guess(['service id', 'serviceid', 'sid', 'sp code']),
             ImportColumn::make('short_code')
-                ->label('Short code (optional)')
+                ->label('Short code')
                 ->rules(['nullable', 'max:64'])
                 ->example('8100')
+                ->helperText('Optional.')
                 ->guess(['short code', 'shortcode']),
             ImportColumn::make('revenue')
-                ->label('Revenue')
+                ->label('Amount')
                 ->requiredMapping()
                 ->numeric()
                 ->rules(['required', 'numeric', 'gt:0'])
                 ->example('5909566.82')
+                ->helperText('Required. From the finance file.')
                 ->guess(['revenue', 'amount', 'partner share']),
         ];
     }
@@ -61,7 +64,7 @@ class MonthlyRevenueImporter extends Importer
     {
         return [
             RevenueCatalogServices::importSelect(
-                'Catalog service for SMS wording only. Matching uses your partner master list (service ID / short code).',
+                'Used in the SMS message. Matching still uses your Revenue Partners list.',
             ),
             Select::make('period')
                 ->label('Month')
@@ -71,11 +74,11 @@ class MonthlyRevenueImporter extends Importer
                 ->native(false)
                 ->default(fn (): string => now()->format('F Y')),
             Textarea::make('message_template')
-                ->label('SMS template')
+                ->label('SMS message')
                 ->rows(4)
                 ->maxLength(640)
                 ->default(RevenueImportService::DEFAULT_SMS_TEMPLATE)
-                ->helperText('Revenue SMS placeholders: {company_name} {period} {service_type} {service_id} {amount}'),
+                ->helperText('{company_name}, {period}, {service_type}, {service_id}, {amount}'),
         ];
     }
 
@@ -165,19 +168,19 @@ class MonthlyRevenueImporter extends Importer
             $this->data['revenue_partner_id'] = null;
             $this->data['partner_name'] = null;
             $this->data['status'] = RevenueImportRowStatus::MissingPartner->value;
-            $this->data['error'] = 'Unresolved: service ID / short code not in your partner master list.';
+            $this->data['error'] = 'Not found in your Revenue Partners list.';
         } elseif (! $partner->is_active) {
             $this->applyPartnerSnapshot($partner);
             $this->data['status'] = RevenueImportRowStatus::Invalid->value;
-            $this->data['error'] = 'Partner status is inactive.';
+            $this->data['error'] = 'Partner is inactive.';
         } elseif (! $partner->hasUsablePhone()) {
             $this->applyPartnerSnapshot($partner);
             $this->data['status'] = RevenueImportRowStatus::MissingPhone->value;
-            $this->data['error'] = 'Master list phone is empty or invalid.';
+            $this->data['error'] = 'Partner phone is missing or invalid.';
         } elseif ($period !== '' && app(RevenueImportService::class)->wouldDoubleSend($partner, $period)) {
             $this->applyPartnerSnapshot($partner);
             $this->data['status'] = RevenueImportRowStatus::Duplicate->value;
-            $this->data['error'] = "SMS already sent for this partner in period {$period}.";
+            $this->data['error'] = "SMS already sent for this partner in {$period}.";
         } else {
             $this->applyPartnerSnapshot($partner);
             $this->data['status'] = RevenueImportRowStatus::Matched->value;
