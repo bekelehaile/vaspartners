@@ -13,6 +13,9 @@ return [
     ))),
     // Default when a subscription-based service has no interval set yet
     'default_renewal_interval' => env('DEFAULT_RENEWAL_INTERVAL', 'yearly'), // yearly|bi_yearly
+
+    // Rejected tickets stay open for partner resubmit this many days, then the system closes them.
+    'rejected_ticket_auto_close_days' => (int) env('REJECTED_TICKET_AUTO_CLOSE_DAYS', 14),
     // Max size for chat PDF attachments (KB)
     'chat_attachment_max_kb' => (int) env('CHAT_ATTACHMENT_MAX_KB', 2048),
     // Don't re-notify on consecutive messages from the same party within this window

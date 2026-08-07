@@ -80,6 +80,11 @@ return Application::configure(basePath: dirname(__DIR__))
             ->dailyAt('01:00')
             ->description('Open renewal service requests for subscriptions in the renewal lead window');
 
+        $schedule->command('vas:close-stale-rejected')
+            ->dailyAt('01:30')
+            ->withoutOverlapping(120)
+            ->description('System-close Rejected tickets after 14 days without resubmit');
+
         $schedule->command('vas:cleanup-orphan-contacts')
             ->dailyAt('02:30')
             ->description('Permanently delete soft-deleted contacts and live orphans (7+ days, no memberships/tickets/subs)');

@@ -22,6 +22,7 @@ use App\Support\TimestampPublicId;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
@@ -995,6 +996,9 @@ class TicketWorkflowService
 
             $this->assertRequiredDocumentsUploaded($ticket);
 
+            $previousAssigneeId = $ticket->assigned_to_user_id;
+            $fromStatus = $ticket->status;
+
             $ticket->assigned_to_user_id = $assignee->id;
             // Handler assignment clock (separate from in_progress_at status stamp).
             $ticket->assigned_at = now();
@@ -1011,31 +1015,25 @@ class TicketWorkflowService
                 'note' => $note,
             ]);
 
-            if ($ticket->status === TicketStatus::Open) {
+            // Any AM assignment puts the ticket In progress (Pending/Open must not stay assigned).
+            if ($fromStatus !== TicketStatus::Closed) {
+                $isReassignment = $fromStatus === TicketStatus::InProgress
+                    && filled($previousAssigneeId)
+                    && (int) $previousAssigneeId !== (int) $assignee->id;
+
                 $this->transition(
                     $ticket,
                     TicketStatus::InProgress,
                     $assigner,
-                    $note ?? ('Assigned to '.$assignee->name),
+                    $note ?? (($isReassignment || $fromStatus === TicketStatus::InProgress)
+                        ? 'Reassigned to '.$assignee->name
+                        : 'Assigned to '.$assignee->name),
                     [
-                        'event' => 'assigned',
-                        'assignee_user_id' => $assignee->id,
-                        'assignee_name' => $assignee->name,
-                        'assigner_user_id' => $assigner->id,
-                        'assigner_name' => $assigner->name,
-                    ],
-                );
-            } elseif ($ticket->status === TicketStatus::InProgress) {
-                // Reassignment while already in progress: refresh in_progress_at with history.
-                $this->transition(
-                    $ticket,
-                    TicketStatus::InProgress,
-                    $assigner,
-                    $note ?? ('Reassigned to '.$assignee->name),
-                    [
-                        'event' => 'reassigned',
-                        'reassignment' => true,
-                        'skip_partner_notification' => true,
+                        'event' => ($isReassignment || $fromStatus === TicketStatus::InProgress)
+                            ? 'reassigned'
+                            : 'assigned',
+                        'reassignment' => $fromStatus === TicketStatus::InProgress,
+                        'skip_partner_notification' => $fromStatus === TicketStatus::InProgress,
                         'assignee_user_id' => $assignee->id,
                         'assignee_name' => $assignee->name,
                         'assigner_user_id' => $assigner->id,
@@ -1440,6 +1438,89 @@ class TicketWorkflowService
 
             return $ticket->fresh();
         });
+    }
+
+    /**
+     * System close for tickets still Rejected after the grace window (default 14 days).
+     * Partners can resubmit during that window; after it, the request is closed.
+     *
+     * @return array{scanned: int, closed: int, errors: int}
+     */
+    public function closeStaleRejectedTickets(int $days = 14, int $limit = 0, bool $dryRun = false): array
+    {
+        $days = max(1, $days);
+        $cutoff = now()->subDays($days);
+        $scanned = 0;
+        $closed = 0;
+        $errors = 0;
+
+        Ticket::query()
+            ->where('status', TicketStatus::Rejected->value)
+            ->where(function ($q) use ($cutoff): void {
+                $q->where('rejected_at', '<=', $cutoff)
+                    ->orWhere(function ($inner) use ($cutoff): void {
+                        $inner->whereNull('rejected_at')
+                            ->where('updated_at', '<=', $cutoff);
+                    });
+            })
+            ->orderBy('id')
+            ->chunkById(50, function ($tickets) use ($days, $limit, $dryRun, &$scanned, &$closed, &$errors): bool {
+                foreach ($tickets as $ticket) {
+                    /** @var Ticket $ticket */
+                    if ($limit > 0 && $closed >= $limit) {
+                        return false;
+                    }
+
+                    $scanned++;
+
+                    if ($dryRun) {
+                        $closed++;
+
+                        continue;
+                    }
+
+                    try {
+                        DB::transaction(function () use ($ticket, $days): void {
+                            /** @var Ticket $locked */
+                            $locked = Ticket::query()->whereKey($ticket->id)->lockForUpdate()->firstOrFail();
+
+                            if ($locked->status !== TicketStatus::Rejected) {
+                                return;
+                            }
+
+                            $locked->current_approver_user_id = null;
+                            $locked->save();
+
+                            $this->transition(
+                                $locked,
+                                TicketStatus::Closed,
+                                null,
+                                "System closed after {$days} days in Rejected status without resubmit",
+                                [
+                                    'event' => 'closed',
+                                    'source' => 'vas:close-stale-rejected',
+                                    'grace_days' => $days,
+                                    'skip_partner_notification' => true,
+                                    'skip_subscription_apply' => true,
+                                    'skip_document_assert' => true,
+                                ],
+                            );
+                        });
+                        $closed++;
+                    } catch (\Throwable $e) {
+                        $errors++;
+                        Log::warning('closeStaleRejectedTickets failed', [
+                            'ticket_id' => $ticket->id,
+                            'tt_number' => $ticket->tt_number,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+
+                return ! ($limit > 0 && $closed >= $limit);
+            });
+
+        return compact('scanned', 'closed', 'errors');
     }
 
     /**
