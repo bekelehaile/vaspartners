@@ -6,7 +6,6 @@ use App\Enums\RevenueImportRowStatus;
 use App\Enums\RevenueImportStatus;
 use App\Filament\Resources\RevenueImports\RevenueImportResource;
 use App\Filament\Widgets\Concerns\AppliesDashboardFilters;
-use App\Models\RevenueImport;
 use App\Models\RevenueImportRow;
 use Filament\Support\Icons\Heroicon;
 use Filament\Widgets\StatsOverviewWidget;
@@ -17,15 +16,20 @@ class RevenueStatsOverview extends StatsOverviewWidget
 {
     use AppliesDashboardFilters;
 
-    protected static ?int $sort = 6;
+    protected static ?int $sort = 2;
 
-    protected ?string $heading = 'Revenue';
+    protected ?string $heading = 'Monthly revenue';
+
+    protected ?string $description = 'Totals for your latest revenue month. Click a card to open Monthly revenue.';
 
     protected ?string $pollingInterval = '120s';
 
     public static function canView(): bool
     {
-        return Gate::allows('ViewAny:RevenueImport');
+        $user = auth()->user();
+
+        return Gate::allows('ViewAny:RevenueImport')
+            || (bool) ($user && method_exists($user, 'canAccessAllRevenue') && $user->canAccessAllRevenue());
     }
 
     protected function getStats(): array
@@ -33,53 +37,70 @@ class RevenueStatsOverview extends StatsOverviewWidget
         $imports = RevenueImportResource::getEloquentQuery();
         $this->applyDashboardServiceFilter($imports, 'vas_service_id');
 
-        $needsReview = (clone $imports)
+        $latestImport = (clone $imports)
+            ->orderByDesc('id')
+            ->first();
+
+        $period = $latestImport?->period;
+        $periodImports = (clone $imports);
+        if (filled($period)) {
+            $periodImports->where('period', $period);
+        } else {
+            $periodImports->whereRaw('1 = 0');
+        }
+
+        $periodImportIds = (clone $periodImports)->pluck('id');
+
+        $rows = RevenueImportRow::query()->whereIn('revenue_import_id', $periodImportIds);
+
+        $sentCount = (clone $rows)->where('status', RevenueImportRowStatus::Sent)->count();
+        $sentAmount = (float) (clone $rows)->where('status', RevenueImportRowStatus::Sent)->sum('amount');
+
+        $readyCount = (clone $rows)->where('status', RevenueImportRowStatus::Matched)->count();
+        $readyAmount = (float) (clone $rows)->where('status', RevenueImportRowStatus::Matched)->sum('amount');
+
+        $blockedCount = (clone $rows)
+            ->whereIn('status', [
+                RevenueImportRowStatus::MissingPhone,
+                RevenueImportRowStatus::MissingPartner,
+                RevenueImportRowStatus::Invalid,
+                RevenueImportRowStatus::Duplicate,
+            ])
+            ->count();
+
+        $openImports = (clone $periodImports)
             ->whereIn('status', [
                 RevenueImportStatus::Draft,
                 RevenueImportStatus::Reviewing,
                 RevenueImportStatus::Ready,
+                RevenueImportStatus::Sending,
             ])
             ->count();
 
-        $latest = (clone $imports)
-            ->orderByDesc('period')
-            ->orderByDesc('id')
-            ->first();
-
-        $periodLabel = $latest?->period ?: 'No imports';
-        $periodTotal = 0.0;
-        $missingPhone = 0;
-
-        if ($latest) {
-            $rows = RevenueImportRow::query()->where('revenue_import_id', $latest->id);
-            $periodTotal = (float) (clone $rows)
-                ->whereIn('status', [RevenueImportRowStatus::Matched, RevenueImportRowStatus::Sent])
-                ->sum('amount');
-            $missingPhone = (clone $rows)
-                ->where('status', RevenueImportRowStatus::MissingPhone)
-                ->count();
-        }
+        $periodLabel = filled($period) ? (string) $period : 'No imports yet';
+        $indexUrl = RevenueImportResource::getUrl('index');
 
         return [
-            Stat::make('Latest period', $this->formatEtb($periodTotal))
-                ->description($periodLabel.' · matched & sent')
-                ->descriptionIcon(Heroicon::OutlinedBanknotes)
-                ->color($latest ? 'success' : 'gray')
-                ->url($latest
-                    ? RevenueImportResource::getUrl('view', ['record' => $latest])
-                    : RevenueImportResource::getUrl('index')),
-            Stat::make('Needs attention', $needsReview)
-                ->description('Draft / review / ready to send')
-                ->descriptionIcon(Heroicon::OutlinedClipboardDocumentCheck)
-                ->color($needsReview > 0 ? 'warning' : 'gray')
-                ->url(RevenueImportResource::getUrl('index')),
-            Stat::make('Missing phones', $missingPhone)
-                ->description($latest ? $periodLabel.' rows without SMS phone' : '—')
-                ->descriptionIcon(Heroicon::OutlinedPhoneXMark)
-                ->color($missingPhone > 0 ? 'danger' : 'gray')
-                ->url($latest
-                    ? RevenueImportResource::getUrl('view', ['record' => $latest])
-                    : RevenueImportResource::getUrl('index')),
+            Stat::make('SMS sent', $this->formatEtb($sentAmount))
+                ->description($periodLabel.' · '.$sentCount.' partner'.($sentCount === 1 ? '' : 's'))
+                ->descriptionIcon(Heroicon::OutlinedPaperAirplane)
+                ->color($sentCount > 0 ? 'success' : 'gray')
+                ->url($indexUrl),
+            Stat::make('Ready to send', $this->formatEtb($readyAmount))
+                ->description($readyCount.' partner'.($readyCount === 1 ? '' : 's').' matched')
+                ->descriptionIcon(Heroicon::OutlinedCheckCircle)
+                ->color($readyCount > 0 ? 'info' : 'gray')
+                ->url($indexUrl),
+            Stat::make('Needs fixing', $blockedCount)
+                ->description('Missing phone / partner / invalid')
+                ->descriptionIcon(Heroicon::OutlinedExclamationTriangle)
+                ->color($blockedCount > 0 ? 'danger' : 'gray')
+                ->url($indexUrl),
+            Stat::make('Open imports', $openImports)
+                ->description($periodLabel.' · draft / review / ready')
+                ->descriptionIcon(Heroicon::OutlinedClipboardDocumentList)
+                ->color($openImports > 0 ? 'warning' : 'gray')
+                ->url($indexUrl),
         ];
     }
 

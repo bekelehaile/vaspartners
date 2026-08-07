@@ -111,11 +111,11 @@ class Dashboard extends BaseDashboard
     {
         return [
             CompanyStatsOverview::class,
+            RevenueStatsOverview::class,
             TicketStatsOverview::class,
             SubscriptionStatsOverview::class,
             PendingCompanyRequestsStats::class,
             FeedbackStatsOverview::class,
-            RevenueStatsOverview::class,
             TicketsByStatusChart::class,
         ];
     }

@@ -14,7 +14,7 @@ class SubscriptionStatsOverview extends StatsOverviewWidget
 {
     use AppliesDashboardFilters;
 
-    protected static ?int $sort = 3;
+    protected static ?int $sort = 4;
 
     protected ?string $heading = 'Subscriptions';
 

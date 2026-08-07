@@ -14,7 +14,7 @@ class TicketStatsOverview extends StatsOverviewWidget
 {
     use AppliesDashboardFilters;
 
-    protected static ?int $sort = 2;
+    protected static ?int $sort = 3;
 
     protected ?string $heading = 'Service requests';
 

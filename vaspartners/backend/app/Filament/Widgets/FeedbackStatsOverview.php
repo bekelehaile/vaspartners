@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Gate;
 
 class FeedbackStatsOverview extends StatsOverviewWidget
 {
-    protected static ?int $sort = 5;
+    protected static ?int $sort = 6;
 
     protected ?string $heading = 'Partner feedback';
 
