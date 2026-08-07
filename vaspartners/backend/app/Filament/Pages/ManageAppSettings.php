@@ -162,7 +162,7 @@ class ManageAppSettings extends Page
                                     ->options(RevenueDuplicatePolicy::actionOptions())
                                     ->columns(1)
                                     ->visible(fn ($get): bool => filled($get('revenue_duplicate_scope_flags')))
-                                    ->helperText('Pick Block to enforce. Allow surpass keeps the rules without blocking.'),
+                                    ->helperText('Allow surpass does not enforce on new imports/rematch. Existing Duplicate rows stay until you click Rematch on that import.'),
                             ]),
                     ]),
             ])
