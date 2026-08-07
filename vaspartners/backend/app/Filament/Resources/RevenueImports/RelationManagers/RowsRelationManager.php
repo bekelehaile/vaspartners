@@ -7,13 +7,12 @@ use App\Filament\Resources\RevenueImports\RevenueImportResource;
 use App\Filament\Resources\RevenuePartners\RevenuePartnerResource;
 use App\Models\RevenueImport;
 use App\Models\RevenueImportRow;
+use App\Models\RevenuePartner;
 use App\Models\User;
 use App\Services\RevenueImportService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -240,20 +239,66 @@ class RowsRelationManager extends RelationManager
                     ->icon('heroicon-o-pencil-square')
                     ->color(fn (RevenueImportRow $record): string => $record->status === RevenueImportRowStatus::Matched ? 'gray' : 'warning')
                     ->visible(fn (RevenueImportRow $record): bool => $this->canEditRow($record))
-                    ->fillForm(fn (RevenueImportRow $record): array => [
-                        'service_id' => $record->service_id,
-                        'short_code' => $record->short_code,
-                        'amount' => $record->amount,
-                    ])
+                    ->fillForm(function (RevenueImportRow $record): array {
+                        $record->loadMissing('partner');
+
+                        return [
+                            'revenue_partner_id' => $record->revenue_partner_id,
+                            'partner_phone' => $record->partner?->phone,
+                            'service_id' => $record->service_id,
+                            'short_code' => $record->short_code,
+                            'amount' => $record->amount,
+                        ];
+                    })
                     ->form([
+                        Select::make('revenue_partner_id')
+                            ->label('Partner')
+                            ->options(function (): array {
+                                $record = $this->getMountedTableActionRecord();
+                                $includeId = $record instanceof RevenueImportRow && $record->revenue_partner_id
+                                    ? (int) $record->revenue_partner_id
+                                    : null;
+
+                                return $this->revenuePartnerOptions($includeId);
+                            })
+                            ->searchable()
+                            ->preload()
+                            ->nullable()
+                            ->native(false)
+                            ->live()
+                            ->afterStateUpdated(function ($state, callable $set): void {
+                                if (! filled($state)) {
+                                    $set('partner_phone', null);
+
+                                    return;
+                                }
+
+                                $partner = RevenuePartner::query()->find((int) $state);
+                                if (! $partner) {
+                                    $set('partner_phone', null);
+
+                                    return;
+                                }
+
+                                $set('partner_phone', $partner->phone);
+                                $set('service_id', $partner->service_id);
+                                $set('short_code', $partner->short_code);
+                            })
+                            ->helperText('Choose from Revenue Partners. Service ID, short code, and phone fill automatically.'),
+                        TextInput::make('partner_phone')
+                            ->label('Phone')
+                            ->disabled()
+                            ->dehydrated(false)
+                            ->placeholder('Select a partner'),
                         TextInput::make('service_id')
                             ->label('Service ID')
-                            ->required()
-                            ->maxLength(64),
+                            ->required(fn ($get): bool => blank($get('revenue_partner_id')))
+                            ->maxLength(64)
+                            ->helperText('Used when no partner is selected.'),
                         TextInput::make('short_code')
                             ->label('Short code')
                             ->maxLength(64)
-                            ->helperText('Optional. Used with service ID when matching master.'),
+                            ->helperText('Optional. Used with Service ID when matching.'),
                         TextInput::make('amount')
                             ->label('Revenue')
                             ->numeric()
@@ -287,23 +332,40 @@ class RowsRelationManager extends RelationManager
                     ->url(fn (RevenueImportRow $record): ?string => $record->partner
                         ? RevenuePartnerResource::getUrl('view', ['record' => $record->partner])
                         : null),
-                DeleteAction::make()
+                Action::make('delete_row')
                     ->label('Delete')
-                    ->authorize(false)
-                    ->visible(fn (RevenueImportRow $record): bool => $this->canDeleteRow($record))
+                    ->icon('heroicon-o-trash')
+                    ->color('danger')
+                    ->requiresConfirmation()
                     ->modalHeading('Delete payload row')
                     ->modalDescription('Remove this row from the import. Sent rows cannot be deleted.')
-                    ->successNotificationTitle('Row deleted')
-                    ->using(function (RevenueImportRow $record, RevenueImportService $revenueImports): void {
+                    ->visible(fn (RevenueImportRow $record): bool => $this->canDeleteRow($record))
+                    ->action(function (RevenueImportRow $record, RevenueImportService $revenueImports): void {
                         /** @var User $user */
                         $user = auth()->user();
                         /** @var RevenueImport $import */
                         $import = $this->getOwnerRecord();
-                        $result = $revenueImports->deleteRows($import->fresh(), [$record->id], $user);
-                        if ($result['deleted'] < 1) {
-                            throw ValidationException::withMessages([
-                                'row' => $result['errors'][0] ?? 'Row could not be deleted.',
-                            ]);
+                        try {
+                            $result = $revenueImports->deleteRows($import->fresh(), [$record->id], $user);
+                            if ($result['deleted'] < 1) {
+                                Notification::make()
+                                    ->title('Could not delete')
+                                    ->body($result['errors'][0] ?? 'Row could not be deleted.')
+                                    ->danger()
+                                    ->send();
+
+                                return;
+                            }
+                            Notification::make()
+                                ->title('Row deleted')
+                                ->success()
+                                ->send();
+                        } catch (ValidationException $e) {
+                            Notification::make()
+                                ->title('Could not delete')
+                                ->body(collect($e->errors())->flatten()->first() ?? $e->getMessage())
+                                ->danger()
+                                ->send();
                         }
                     }),
             ])
@@ -434,9 +496,11 @@ class RowsRelationManager extends RelationManager
                                     ->send();
                             }
                         }),
-                    DeleteBulkAction::make()
+                    BulkAction::make('delete_selected')
                         ->label('Delete selected')
-                        ->authorize(false)
+                        ->icon('heroicon-o-trash')
+                        ->color('danger')
+                        ->requiresConfirmation()
                         ->modalHeading('Delete selected payload rows')
                         ->modalDescription('Sent rows are skipped. Import counts refresh after delete.')
                         ->deselectRecordsAfterCompletion()
@@ -472,7 +536,62 @@ class RowsRelationManager extends RelationManager
                         }),
                 ]),
             ])
+            ->selectable()
             ->paginated([25, 50, 100]);
+    }
+
+    /**
+     * Active Revenue Partners for this import’s AM (full list for admins).
+     *
+     * @return array<int, string>
+     */
+    protected function revenuePartnerOptions(?int $includePartnerId = null): array
+    {
+        /** @var RevenueImport|null $import */
+        $import = $this->getOwnerRecord();
+        if (! $import) {
+            return [];
+        }
+
+        $ownerUserId = null;
+        $creator = $import->created_by_user_id
+            ? User::query()->find((int) $import->created_by_user_id)
+            : null;
+        if ($creator && ! $creator->canAccessAllRevenue()) {
+            $ownerUserId = (int) $creator->id;
+        }
+
+        $query = RevenuePartner::query()
+            ->orderBy('partner_name')
+            ->orderBy('service_id');
+
+        if ($ownerUserId) {
+            $query->where('created_by_user_id', $ownerUserId);
+        }
+
+        $query->where(function ($q) use ($includePartnerId): void {
+            $q->where('is_active', true);
+            if ($includePartnerId) {
+                $q->orWhere('id', $includePartnerId);
+            }
+        });
+
+        return $query->get(['id', 'partner_name', 'service_id', 'phone', 'is_active'])
+            ->mapWithKeys(function (RevenuePartner $partner): array {
+                $label = trim((string) $partner->partner_name) ?: 'Unnamed partner';
+                $sid = filled($partner->service_id) ? (string) $partner->service_id : 'no Service ID';
+                $notes = [];
+                if (! $partner->is_active) {
+                    $notes[] = 'inactive';
+                }
+                if (! $partner->hasUsablePhone()) {
+                    $notes[] = 'no phone';
+                }
+                $suffix = $notes !== [] ? ' · '.implode(', ', $notes) : '';
+
+                return [$partner->id => "{$label} · {$sid}{$suffix}"];
+            })
+            ->all();
     }
 
     protected function canDeleteRow(RevenueImportRow $record): bool

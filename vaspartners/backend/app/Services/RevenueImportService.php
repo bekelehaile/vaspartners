@@ -391,7 +391,7 @@ class RevenueImportService
     }
 
     /**
-     * @param  array{service_id?: mixed, short_code?: mixed, amount?: mixed}  $data
+     * @param  array{service_id?: mixed, short_code?: mixed, amount?: mixed, revenue_partner_id?: mixed}  $data
      */
     public function updateRow(RevenueImportRow $row, array $data, User $actor): void
     {
@@ -411,21 +411,68 @@ class RevenueImportService
             throw ValidationException::withMessages(['row' => 'This import can no longer be edited.']);
         }
 
-        $serviceId = RevenuePartnerResolver::normalize($data['service_id'] ?? $row->service_id);
-        $shortCode = RevenuePartnerResolver::normalize($data['short_code'] ?? $row->short_code);
         $amount = isset($data['amount']) && is_numeric($data['amount'])
             ? round((float) $data['amount'], 4)
             : ($row->amount !== null ? (float) $row->amount : null);
 
-        if ($serviceId === null) {
-            throw ValidationException::withMessages(['service_id' => 'Service ID is required.']);
-        }
         if ($amount === null || $amount <= 0) {
             throw ValidationException::withMessages(['amount' => 'Revenue must be a positive number.']);
         }
 
+        $partnerId = isset($data['revenue_partner_id']) && filled($data['revenue_partner_id'])
+            ? (int) $data['revenue_partner_id']
+            : 0;
+
         $vasServiceId = (int) $import->vas_service_id;
         $ownerUserId = $this->ownerUserIdForImport($import);
+
+        if ($partnerId > 0) {
+            $partner = RevenuePartner::query()->find($partnerId);
+            if (! $partner) {
+                throw ValidationException::withMessages(['revenue_partner_id' => 'Partner not found.']);
+            }
+            if ($ownerUserId && (int) $partner->created_by_user_id !== $ownerUserId) {
+                throw ValidationException::withMessages(['revenue_partner_id' => 'That partner is not on this AM’s Revenue Partners list.']);
+            }
+
+            DB::transaction(function () use ($import, $row, $partner, $amount, $vasServiceId): void {
+                $status = match (true) {
+                    ! $partner->is_active => RevenueImportRowStatus::Invalid,
+                    ! $partner->hasUsablePhone() => RevenueImportRowStatus::MissingPhone,
+                    default => RevenueImportRowStatus::Matched,
+                };
+                $error = match ($status) {
+                    RevenueImportRowStatus::Invalid => 'Partner is inactive.',
+                    RevenueImportRowStatus::MissingPhone => 'Partner phone is missing or invalid.',
+                    default => null,
+                };
+
+                $row->forceFill([
+                    'service_id' => RevenuePartnerResolver::normalize($partner->service_id)
+                        ?? RevenuePartnerResolver::normalize($row->service_id),
+                    'short_code' => RevenuePartnerResolver::normalize($partner->short_code)
+                        ?? RevenuePartnerResolver::normalize($row->short_code),
+                    'amount' => $amount,
+                    'amount_raw' => (string) $amount,
+                    'revenue_partner_id' => $partner->id,
+                    'partner_name' => $partner->partner_name,
+                    'vas_service_id' => $vasServiceId ?: $partner->vas_service_id,
+                    'status' => $status,
+                    'error' => $error,
+                ])->save();
+
+                $import->resolveStatusFromRows();
+            });
+
+            return;
+        }
+
+        $serviceId = RevenuePartnerResolver::normalize($data['service_id'] ?? $row->service_id);
+        $shortCode = RevenuePartnerResolver::normalize($data['short_code'] ?? $row->short_code);
+
+        if ($serviceId === null) {
+            throw ValidationException::withMessages(['service_id' => 'Service ID is required.']);
+        }
 
         DB::transaction(function () use ($import, $row, $serviceId, $shortCode, $amount, $vasServiceId, $ownerUserId): void {
             $amUserId = $import->created_by_user_id ? (int) $import->created_by_user_id : null;
