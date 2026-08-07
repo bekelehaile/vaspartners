@@ -6,7 +6,6 @@ use App\Models\AppSetting;
 use App\Services\Etrade\EtradeTinLookupService;
 use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 use Filament\Actions\Action;
-use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -144,25 +143,15 @@ class ManageAppSettings extends Page
                         Tab::make('Monthly Revenue')
                             ->icon('heroicon-o-banknotes')
                             ->schema([
-                                CheckboxList::make('revenue_duplicate_scope_flags')
-                                    ->label('Duplicate scope')
-                                    ->options(RevenueDuplicatePolicy::scopeFlagOptions())
-                                    ->columns(1)
-                                    ->live()
-                                    ->helperText('Leave both unchecked to keep imports open (no duplicate checks).'),
-                                CheckboxList::make('revenue_duplicate_match')
-                                    ->label('Match fields (AND)')
-                                    ->options(RevenueDuplicatePolicy::matchOptions())
-                                    ->columns(2)
-                                    ->bulkToggleable()
-                                    ->visible(fn ($get): bool => filled($get('revenue_duplicate_scope_flags')))
-                                    ->helperText('Selected fields are combined with AND — every checked field must match.'),
-                                CheckboxList::make('revenue_duplicate_action')
-                                    ->label('When matched')
-                                    ->options(RevenueDuplicatePolicy::actionOptions())
-                                    ->columns(1)
-                                    ->visible(fn ($get): bool => filled($get('revenue_duplicate_scope_flags')))
-                                    ->helperText('Allow surpass does not enforce on new imports/rematch. Existing Duplicate rows stay until you click Rematch on that import.'),
+                                Toggle::make('revenue_block_same_import')
+                                    ->label('Block the same Service ID twice in one import')
+                                    ->helperText('Stops the same Service ID appearing more than once in a single CSV.'),
+                                Toggle::make('revenue_block_already_sent')
+                                    ->label('Block if already sent for that Service ID this month')
+                                    ->helperText('Stops another SMS when that Service ID was already sent for the same month.'),
+                                Placeholder::make('revenue_duplicate_hint')
+                                    ->hiddenLabel()
+                                    ->content('Leave both off while AMs are learning — they can fix amounts and resend freely. Turn on later when the process is stable.'),
                             ]),
                     ]),
             ])
@@ -236,23 +225,10 @@ class ManageAppSettings extends Page
             (bool) ($data['notify_partner_email'] ?? false),
         );
 
-        $scopeFlags = is_array($data['revenue_duplicate_scope_flags'] ?? null)
-            ? $data['revenue_duplicate_scope_flags']
-            : [];
-        $actionFlags = is_array($data['revenue_duplicate_action'] ?? null)
-            ? $data['revenue_duplicate_action']
-            : [];
-        $action = in_array(RevenueDuplicatePolicy::ACTION_BLOCK, $actionFlags, true)
-            ? RevenueDuplicatePolicy::ACTION_BLOCK
-            : (in_array(RevenueDuplicatePolicy::ACTION_ALLOW_SURPASS, $actionFlags, true)
-                ? RevenueDuplicatePolicy::ACTION_ALLOW_SURPASS
-                : RevenueDuplicatePolicy::ACTION_ALLOW_SURPASS);
-
-        AppSetting::setRevenueDuplicatePolicy(RevenueDuplicatePolicy::fromArray([
-            'scope' => RevenueDuplicatePolicy::scopeFromFlags($scopeFlags),
-            'match' => $data['revenue_duplicate_match'] ?? [],
-            'action' => $action,
-        ]));
+        AppSetting::setRevenueDuplicatePolicy(RevenueDuplicatePolicy::fromSimpleToggles(
+            blockSameImport: (bool) ($data['revenue_block_same_import'] ?? false),
+            blockAlreadySent: (bool) ($data['revenue_block_already_sent'] ?? false),
+        ));
 
         $this->form->fill([
             ...$this->formStateFromStore(),
@@ -355,13 +331,8 @@ class ManageAppSettings extends Page
             'notify_partner_email' => AppSetting::partnerEmailEnabled(),
             'erca_tin_mode' => AppSetting::ercaTinMode(),
             'erca_tin_outage_message' => AppSetting::getValue(AppSetting::KEY_ERCA_TIN_OUTAGE_MESSAGE),
-            'revenue_duplicate_scope_flags' => $policy->scopeFlags(),
-            'revenue_duplicate_match' => $policy->match,
-            'revenue_duplicate_action' => $policy->action === RevenueDuplicatePolicy::ACTION_BLOCK
-                ? [RevenueDuplicatePolicy::ACTION_BLOCK]
-                : ($policy->scope === RevenueDuplicatePolicy::SCOPE_OFF
-                    ? []
-                    : [RevenueDuplicatePolicy::ACTION_ALLOW_SURPASS]),
+            'revenue_block_same_import' => $policy->checksWithinImport(),
+            'revenue_block_already_sent' => $policy->checksPriorSends(),
         ];
     }
 }

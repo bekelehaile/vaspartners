@@ -52,13 +52,35 @@ final class RevenueDuplicatePolicy
     {
         return new self(
             self::SCOPE_OFF,
-            [
-                self::MATCH_SERVICE_ID,
-                self::MATCH_SHORT_CODE,
-                self::MATCH_MONTH,
-            ],
+            [self::MATCH_SERVICE_ID, self::MATCH_MONTH],
             self::ACTION_BLOCK,
         );
+    }
+
+    /**
+     * Simple App settings toggles → full policy.
+     * Off / off keeps imports open (AMs can fix amounts and resend).
+     */
+    public static function fromSimpleToggles(bool $blockSameImport, bool $blockAlreadySent): self
+    {
+        $scope = match (true) {
+            $blockSameImport && $blockAlreadySent => self::SCOPE_BOTH,
+            $blockSameImport => self::SCOPE_WITHIN_IMPORT,
+            $blockAlreadySent => self::SCOPE_PRIOR_SENDS,
+            default => self::SCOPE_OFF,
+        };
+
+        if ($scope === self::SCOPE_OFF) {
+            return self::default();
+        }
+
+        // Same Service ID; also require same month when blocking prior sends.
+        $match = [self::MATCH_SERVICE_ID];
+        if ($blockAlreadySent) {
+            $match[] = self::MATCH_MONTH;
+        }
+
+        return new self($scope, $match, self::ACTION_BLOCK);
     }
 
     /**
