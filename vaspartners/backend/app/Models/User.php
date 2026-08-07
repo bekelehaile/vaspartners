@@ -84,12 +84,12 @@ class User extends Authenticatable implements CanResetPasswordContract, Filament
     }
 
     /**
-     * Super admin and users flagged for ticket supervision see all revenue data.
+     * Super admin, admin, and management-flagged users see all revenue data.
      * Everyone else stays scoped to partners they own.
      */
     public function canAccessAllRevenue(): bool
     {
-        if ($this->hasRole('super_admin')) {
+        if ($this->hasRole(['super_admin', 'admin'])) {
             return true;
         }
 
