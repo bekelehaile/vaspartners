@@ -83,13 +83,16 @@ class ComposeBulkMessage extends Page
                         ->default([])
                         ->placeholder('Select one or more services')
                         ->options(fn (): array => Service::query()
-                            ->where('is_active', true)
                             ->orderBy('sort_order')
                             ->orderBy('name')
-                            ->pluck('name', 'id')
-                            ->mapWithKeys(fn ($name, $id) => [(string) $id => $name])
+                            ->get(['id', 'name', 'is_active'])
+                            ->mapWithKeys(fn (Service $service): array => [
+                                (string) $service->id => $service->is_active
+                                    ? (string) $service->name
+                                    : ((string) $service->name).' (inactive)',
+                            ])
                             ->all())
-                        ->helperText('Multi-select. Leave empty for all services. Matches companies with a subscription to any selected service.')
+                        ->helperText('Multi-select. Includes inactive services. Leave empty for all services. Matches companies with a subscription to any selected service.')
                         ->columnSpanFull(),
                     Toggle::make('alive_subscriptions_only')
                         ->label('Alive subscriptions only')
