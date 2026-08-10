@@ -1567,11 +1567,26 @@ class RevenueImportService
         $catalog = $match->vasService?->name ?: $import?->vasService?->name;
         $sentAt = $match->sent_at?->timezone(config('app.timezone'));
 
+        $amName = $am?->name;
+        if ($amName && $am?->email) {
+            $amName .= ' ('.$am->email.')';
+        }
+
+        $when = $sentAt?->format('Y-m-d H:i');
+        if ($when && $sentAt) {
+            $when .= ' · '.$sentAt->diffForHumans();
+        }
+
+        $importTitle = (string) ($import?->title ?: ('Import #'.($import?->id ?? $match->revenue_import_id)));
+        if ($import?->public_id) {
+            $importTitle .= ' · '.$import->public_id;
+        }
+
         return [
             'source' => $source,
             'row_id' => (int) $match->id,
             'import_id' => (int) ($import?->id ?? $match->revenue_import_id),
-            'import_title' => (string) ($import?->title ?: ('Import #'.($import?->id ?? $match->revenue_import_id))),
+            'import_title' => $importTitle,
             'import_public_id' => $import?->public_id ? (string) $import->public_id : null,
             'period' => (string) ($import?->period ?? '—'),
             'service_id' => $match->service_id,
@@ -1582,10 +1597,10 @@ class RevenueImportService
             'amount_label' => $amount !== null ? 'ETB '.number_format($amount, 2) : '—',
             'status' => $status,
             'catalog_service' => $catalog,
-            'am_name' => $am?->name,
+            'am_name' => $amName,
             'am_email' => $am?->email,
             'sent_by_name' => $sentBy?->name ?: $am?->name,
-            'sent_at' => $sentAt?->format('Y-m-d H:i') ?? null,
+            'sent_at' => $when,
             'sent_at_relative' => $sentAt?->diffForHumans() ?? null,
             'url' => \App\Filament\Resources\RevenueImports\RevenueImportResource::getUrl('view', [
                 'record' => $import ?? $match->revenue_import_id,

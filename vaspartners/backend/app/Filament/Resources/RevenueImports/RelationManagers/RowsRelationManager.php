@@ -17,8 +17,13 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Infolists\Components\RepeatableEntry;
+use Filament\Infolists\Components\RepeatableEntry\TableColumn;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Support\Enums\Alignment;
+use Filament\Support\Enums\FontFamily;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -332,18 +337,86 @@ class RowsRelationManager extends RelationManager
                     ->visible(fn (RevenueImportRow $record): bool => $record->status === RevenueImportRowStatus::Duplicate)
                     ->modalHeading('Duplicate details')
                     ->modalDescription('Who already sent this partner, when, and for how much.')
-                    ->modalWidth('3xl')
+                    ->modalWidth('7xl')
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Close')
-                    ->modalContent(function (RevenueImportRow $record) {
+                    ->formWrapper(false)
+                    ->schema(function (RevenueImportRow $record): array {
                         /** @var RevenueImport $import */
                         $import = $this->getOwnerRecord();
                         $service = app(RevenueImportService::class);
+                        $summary = $service->duplicateRowSummary($record, $import);
+                        $matches = $service->findDuplicateMatches($record, $import);
 
-                        return view('filament.revenue.duplicate-match', [
-                            'summary' => $service->duplicateRowSummary($record, $import),
-                            'matches' => $service->findDuplicateMatches($record, $import),
-                        ]);
+                        return [
+                            TextEntry::make('duplicate_reason')
+                                ->label('Why blocked')
+                                ->state($summary['error'])
+                                ->color('danger')
+                                ->columnSpanFull(),
+                            RepeatableEntry::make('current_row')
+                                ->label('This payload row')
+                                ->state([$summary])
+                                ->table([
+                                    TableColumn::make('Partner'),
+                                    TableColumn::make('Service ID'),
+                                    TableColumn::make('Short code'),
+                                    TableColumn::make('Period'),
+                                    TableColumn::make('Amount')->alignment(Alignment::End),
+                                    TableColumn::make('Phone'),
+                                    TableColumn::make('Status'),
+                                ])
+                                ->schema([
+                                    TextEntry::make('partner_name')->placeholder('—'),
+                                    TextEntry::make('service_id')->placeholder('—')->fontFamily(FontFamily::Mono),
+                                    TextEntry::make('short_code')->placeholder('—'),
+                                    TextEntry::make('period')->placeholder('—'),
+                                    TextEntry::make('amount_label')->placeholder('—'),
+                                    TextEntry::make('phone')->placeholder('—'),
+                                    TextEntry::make('status')->badge()->color('danger'),
+                                ])
+                                ->columnSpanFull(),
+                            RepeatableEntry::make('matches')
+                                ->label('Matching sends')
+                                ->state($matches)
+                                ->placeholder('No matching prior or same-import rows were found.')
+                                ->table([
+                                    TableColumn::make('Source'),
+                                    TableColumn::make('Import'),
+                                    TableColumn::make('AM'),
+                                    TableColumn::make('Sent by'),
+                                    TableColumn::make('When'),
+                                    TableColumn::make('Amount')->alignment(Alignment::End),
+                                    TableColumn::make('Partner'),
+                                    TableColumn::make('Service ID'),
+                                    TableColumn::make('Phone'),
+                                    TableColumn::make('Service'),
+                                    TableColumn::make('Period'),
+                                    TableColumn::make('Status'),
+                                    TableColumn::make('Open')->hiddenHeaderLabel(),
+                                ])
+                                ->schema([
+                                    TextEntry::make('source')->badge()->color('primary'),
+                                    TextEntry::make('import_title')->placeholder('—'),
+                                    TextEntry::make('am_name')->placeholder('—'),
+                                    TextEntry::make('sent_by_name')->placeholder('—'),
+                                    TextEntry::make('sent_at')->placeholder('—'),
+                                    TextEntry::make('amount_label')->placeholder('—'),
+                                    TextEntry::make('partner_name')->placeholder('—'),
+                                    TextEntry::make('service_id')->placeholder('—')->fontFamily(FontFamily::Mono),
+                                    TextEntry::make('phone')->placeholder('—'),
+                                    TextEntry::make('catalog_service')->placeholder('—'),
+                                    TextEntry::make('period')->placeholder('—'),
+                                    TextEntry::make('status')->badge(),
+                                    TextEntry::make('url')
+                                        ->label('Open')
+                                        ->formatStateUsing(fn (): string => 'Open')
+                                        ->url(fn (?string $state): ?string => $state)
+                                        ->openUrlInNewTab()
+                                        ->color('primary'),
+                                ])
+                                ->columnSpanFull(),
+                        ];
                     }),
                 Action::make('open_partner')
                     ->label('Partner')
