@@ -44,7 +44,7 @@ class ImportBulkMessage extends Page
 
     public function getSubheading(): ?string
     {
-        return 'Special bulk only — upload a phone list (CSV/Excel). Rows match company revenue / Claim phone; SMS goes to revenue phone. For revenue collection use Monthly revenue.';
+        return 'Special bulk only — upload a phone list (CSV/Excel). Registered companies are sent to their revenue phone; unregistered numbers are sent directly. For revenue collection use Monthly revenue.';
     }
 
     protected function getHeaderActions(): array

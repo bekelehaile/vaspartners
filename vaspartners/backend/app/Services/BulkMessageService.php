@@ -870,8 +870,8 @@ class BulkMessageService
                 'company_tin' => null,
                 'variables' => $variables,
                 'row_number' => $rowNumber,
-                'status' => BulkMessageRecipientStatus::Skipped,
-                'error' => 'No company matched for this phone (revenue / Claim phone).',
+                'status' => BulkMessageRecipientStatus::Pending,
+                'error' => null,
             ];
         }
 
