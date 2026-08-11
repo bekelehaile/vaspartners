@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\RevenuePartners;
 
+use App\Filament\Exports\RevenuePartnerExporter;
 use App\Filament\Resources\Companies\CompanyResource;
 use App\Filament\Resources\RevenuePartners\Pages\CreateRevenuePartner;
 use App\Filament\Resources\RevenuePartners\Pages\EditRevenuePartner;
@@ -14,7 +15,10 @@ use App\Models\RevenuePartner;
 use App\Models\User;
 use App\Support\PhoneNumber;
 use App\Support\RevenueCatalogServices;
+use Filament\Actions\BulkActionGroup;
 use Filament\Actions\EditAction;
+use Filament\Actions\ExportAction;
+use Filament\Actions\ExportBulkAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -158,7 +162,17 @@ class RevenuePartnerResource extends Resource
                         ->unique(ignoreRecord: true)
                         ->requiredWithout('short_code')
                         ->dehydrateStateUsing(fn (?string $state): ?string => filled(trim((string) $state)) ? trim((string) $state) : null)
-                        ->helperText('Finance endpoint ID. Provide Service ID and/or Short code.'),
+                        ->helperText('Finance endpoint ID. Unique. Provide Service ID and/or Short code.'),
+                    TextInput::make('product_id')
+                        ->label('Product ID')
+                        ->maxLength(64)
+                        ->nullable()
+                        ->dehydrateStateUsing(fn (?string $state): ?string => filled(trim((string) $state)) ? trim((string) $state) : null),
+                    TextInput::make('spid')
+                        ->label('SPID')
+                        ->maxLength(64)
+                        ->nullable()
+                        ->dehydrateStateUsing(fn (?string $state): ?string => filled(trim((string) $state)) ? trim((string) $state) : null),
                     TextInput::make('short_code')
                         ->label('Short code')
                         ->maxLength(64)
@@ -192,7 +206,9 @@ class RevenuePartnerResource extends Resource
             Section::make('Service & billing')->schema([
                 TextEntry::make('vasService.name')->label('Catalog service'),
                 TextEntry::make('service_id')->label('Service ID')->placeholder('—')->copyable(),
-                TextEntry::make('short_code')->label('Short code')->placeholder('—'),
+                TextEntry::make('product_id')->label('Product ID')->placeholder('—')->copyable(),
+                TextEntry::make('spid')->label('SPID')->placeholder('—')->copyable(),
+                TextEntry::make('short_code')->label('Short code')->placeholder('—')->copyable(),
                 TextEntry::make('creator.name')
                     ->label('Account manager')
                     ->placeholder('—')
@@ -213,7 +229,9 @@ class RevenuePartnerResource extends Resource
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('service_id')->label('Service ID')->searchable()->sortable()->copyable(),
-                TextColumn::make('short_code')->label('Short code')->searchable()->toggleable(),
+                TextColumn::make('product_id')->label('Product ID')->searchable()->toggleable()->copyable(),
+                TextColumn::make('spid')->label('SPID')->searchable()->toggleable()->copyable(),
+                TextColumn::make('short_code')->label('Short code')->searchable()->toggleable()->copyable(),
                 TextColumn::make('partner_name')->label('Partner name')->searchable()->sortable()->wrap(),
                 TextColumn::make('company.name')
                     ->label('Company')
@@ -275,12 +293,29 @@ class RevenuePartnerResource extends Resource
                     ),
                 TernaryFilter::make('is_active')->label('Active'),
             ])
+            ->headerActions([
+                ExportAction::make()
+                    ->label('Export')
+                    ->exporter(RevenuePartnerExporter::class)
+                    ->columnMapping(true)
+                    ->modalHeading('Export revenue partners')
+                    ->fileDisk('local'),
+            ])
             ->recordActions([
                 ViewAction::make()
                     ->url(fn (RevenuePartner $record): string => static::getUrl('view', ['record' => $record])),
                 EditAction::make(),
             ])
-            ->toolbarActions([]);
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    ExportBulkAction::make()
+                        ->label('Export selected')
+                        ->exporter(RevenuePartnerExporter::class)
+                        ->columnMapping(true)
+                        ->modalHeading('Export selected revenue partners')
+                        ->fileDisk('local'),
+                ]),
+            ]);
     }
 
     public static function getRelations(): array
