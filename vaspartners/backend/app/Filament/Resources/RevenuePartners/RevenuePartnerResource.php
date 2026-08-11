@@ -232,6 +232,12 @@ class RevenuePartnerResource extends Resource
                 TextColumn::make('product_id')->label('Product ID')->searchable()->toggleable()->copyable(),
                 TextColumn::make('spid')->label('SPID')->searchable()->toggleable()->copyable(),
                 TextColumn::make('short_code')->label('Short code')->searchable()->toggleable()->copyable(),
+                TextColumn::make('customer_base_count')
+                    ->label('Customer base')
+                    ->numeric()
+                    ->sortable()
+                    ->placeholder('—')
+                    ->toggleable(),
                 TextColumn::make('partner_name')->label('Partner name')->searchable()->sortable()->wrap(),
                 TextColumn::make('company.name')
                     ->label('Company')
