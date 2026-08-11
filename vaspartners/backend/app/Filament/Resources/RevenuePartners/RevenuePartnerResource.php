@@ -243,7 +243,7 @@ class RevenuePartnerResource extends Resource
                     ->label('Company')
                     ->placeholder('—')
                     ->searchable()
-                    ->toggleable()
+                    ->toggleable(isToggledHiddenByDefault: false)
                     ->url(fn (RevenuePartner $record): ?string => $record->company
                         ? CompanyResource::getUrl('view', ['record' => $record->company])
                         : null),
@@ -296,6 +296,15 @@ class RevenuePartnerResource extends Resource
                     ->queries(
                         true: fn ($query) => $query->whereNotNull('phone')->where('phone', '!=', ''),
                         false: fn ($query) => $query->where(fn ($q) => $q->whereNull('phone')->orWhere('phone', '')),
+                    ),
+                TernaryFilter::make('company_id')
+                    ->label('Company')
+                    ->placeholder('All')
+                    ->trueLabel('Mapped to company')
+                    ->falseLabel('Not mapped (no company)')
+                    ->queries(
+                        true: fn ($query) => $query->whereNotNull('company_id'),
+                        false: fn ($query) => $query->whereNull('company_id'),
                     ),
                 TernaryFilter::make('is_active')->label('Active'),
             ])
