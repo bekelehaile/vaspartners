@@ -437,6 +437,11 @@ class Company extends Model
         return $this->hasMany(Subscription::class);
     }
 
+    public function revenuePartners(): HasMany
+    {
+        return $this->hasMany(RevenuePartner::class);
+    }
+
     /**
      * Service requests (tickets) for this company:
      * - tickets on company subscriptions

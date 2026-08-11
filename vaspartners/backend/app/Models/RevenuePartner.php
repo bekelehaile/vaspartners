@@ -18,6 +18,7 @@ class RevenuePartner extends Model
         'service_id',
         'product_id',
         'spid',
+        'customer_base_count',
         'short_code',
         'vas_service_id',
         'partner_name',
@@ -100,6 +101,7 @@ class RevenuePartner extends Model
     {
         return [
             'is_active' => 'boolean',
+            'customer_base_count' => 'integer',
         ];
     }
 

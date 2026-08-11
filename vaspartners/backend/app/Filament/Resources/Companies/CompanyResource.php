@@ -12,6 +12,7 @@ use App\Filament\Resources\Companies\RelationManagers\ContactsRelationManager;
 use App\Filament\Resources\Companies\RelationManagers\MembersRelationManager;
 use App\Filament\Resources\Companies\RelationManagers\MembershipAuditRelationManager;
 use App\Filament\Resources\Companies\RelationManagers\ServiceRequestsRelationManager;
+use App\Filament\Resources\Companies\RelationManagers\ServiceDetailsRelationManager;
 use App\Filament\Resources\Companies\RelationManagers\StatusHistoryRelationManager;
 use App\Filament\Resources\Companies\RelationManagers\SubscriptionsRelationManager;
 use App\Models\Company;
@@ -626,6 +627,7 @@ class CompanyResource extends Resource
             StatusHistoryRelationManager::class,
             ServiceRequestsRelationManager::class,
             SubscriptionsRelationManager::class,
+            ServiceDetailsRelationManager::class,
             ChangeRequestsRelationManager::class,
         ];
     }
