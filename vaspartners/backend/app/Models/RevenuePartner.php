@@ -16,6 +16,8 @@ class RevenuePartner extends Model
     protected $fillable = [
         'public_id',
         'service_id',
+        'product_id',
+        'spid',
         'short_code',
         'vas_service_id',
         'partner_name',
@@ -45,7 +47,9 @@ class RevenuePartner extends Model
             }
 
             if (filled($partner->phone)) {
-                $partner->phone = PhoneNumber::normalizeNullable($partner->phone);
+                $normalized = PhoneNumber::normalizeNullable($partner->phone);
+                // Keep non-standard / invalid values for manual cleanup — only normalize clean mobiles.
+                $partner->phone = $normalized ?? mb_substr(trim((string) $partner->phone), 0, 32);
             }
 
             // Auto-link only when phone matches AND partner_name ≈ company name.

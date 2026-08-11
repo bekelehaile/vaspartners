@@ -17,9 +17,10 @@ class ImportExistingAggregatorPartnersCommand extends Command
     protected $signature = 'vas:import-existing-aggregator-partners
         {--path= : JSON snapshot path (default database/data/revenue/existing_aggregator_partners.json)}
         {--dry-run : Count creates/updates without writing}
-        {--link-companies : Link to portal companies by unique name match}';
+        {--link-companies : Link to portal companies by unique name match}
+        {--no-overwrite-phone : Keep existing phones when already set}';
 
-    protected $description = 'Import existing master-aggregator partners into Revenue Partners without duplicating Service IDs';
+    protected $description = 'Import existing master-aggregator partners into Revenue Partners (unique Service ID; Product ID / SPID / Short Code / phone)';
 
     public function handle(ImportExistingAggregatorPartnersService $importer): int
     {
@@ -30,6 +31,7 @@ class ImportExistingAggregatorPartnersCommand extends Command
 
         $dryRun = (bool) $this->option('dry-run');
         $link = (bool) $this->option('link-companies');
+        $overwritePhone = ! (bool) $this->option('no-overwrite-phone');
 
         $this->info(($dryRun ? '[dry-run] ' : '').'Importing existing aggregator partners…');
         if ($link) {
@@ -37,7 +39,7 @@ class ImportExistingAggregatorPartnersCommand extends Command
         }
 
         try {
-            $stats = $importer->import($path, $dryRun, $link);
+            $stats = $importer->import($path, $dryRun, $link, $overwritePhone);
         } catch (\Throwable $e) {
             $this->error($e->getMessage());
 
@@ -45,13 +47,15 @@ class ImportExistingAggregatorPartnersCommand extends Command
         }
 
         $this->table(
-            ['Total', 'Created', 'Updated', 'Unchanged', 'Skipped', 'Linked', 'Already linked', 'No company match'],
+            ['Total', 'Created', 'Updated', 'Unchanged', 'Skipped', 'Phones set', 'Phones invalid', 'Linked', 'Already linked', 'No company'],
             [[
                 $stats['total'],
                 $stats['created'],
                 $stats['updated'],
                 $stats['unchanged'],
                 $stats['skipped'],
+                $stats['phones_set'],
+                $stats['phones_invalid'],
                 $stats['linked'],
                 $stats['already_linked'],
                 $stats['no_company_match'],
@@ -63,7 +67,6 @@ class ImportExistingAggregatorPartnersCommand extends Command
         }
 
         $this->info($dryRun ? 'Dry-run complete — no rows written.' : 'Import complete.');
-        $this->comment('Phones / TIN / owner contacts stay empty until verified in portal onboarding.');
 
         return self::SUCCESS;
     }
