@@ -12,9 +12,11 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('revenue_imports', function (Blueprint $table): void {
-            $table->unsignedInteger('sent_count')->default(0)->after('matched_count');
-        });
+        if (! Schema::hasColumn('revenue_imports', 'sent_count')) {
+            Schema::table('revenue_imports', function (Blueprint $table): void {
+                $table->unsignedInteger('sent_count')->default(0)->after('matched_count');
+            });
+        }
 
         DB::table('revenue_import_rows')
             ->where(function ($q): void {

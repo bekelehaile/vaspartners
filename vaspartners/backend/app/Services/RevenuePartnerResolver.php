@@ -19,32 +19,11 @@ class RevenuePartnerResolver
     }
 
     /**
-     * Find a partner by service ID, tolerating a dropped leading zero
-     * (Excel/CSV often turns 0102132000005008 into 102132000005008).
+     * Find a partner by exact service ID match.
      */
     protected function findByServiceId(Builder $query, string $serviceId): ?RevenuePartner
     {
-        $exact = (clone $query)->where('service_id', $serviceId)->first();
-        if ($exact) {
-            return $exact;
-        }
-
-        // Only for long numeric service IDs — never for short codes.
-        if (! preg_match('/^\d{10,}$/', $serviceId)) {
-            return null;
-        }
-
-        $stripped = ltrim($serviceId, '0');
-        if ($stripped === '') {
-            return null;
-        }
-
-        $candidates = (clone $query)
-            ->whereRaw("NULLIF(LTRIM(service_id, '0'), '') = ?", [$stripped])
-            ->limit(2)
-            ->get();
-
-        return $candidates->count() === 1 ? $candidates->first() : null;
+        return (clone $query)->where('service_id', $serviceId)->first();
     }
 
     /**

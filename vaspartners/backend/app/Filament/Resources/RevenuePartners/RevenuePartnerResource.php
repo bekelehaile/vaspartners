@@ -28,6 +28,7 @@ use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
@@ -74,6 +75,7 @@ class RevenuePartnerResource extends Resource
                         ->options(
                             fn (): array => Company::query()
                                 ->where('is_active', true)
+                                ->where('erca_tin_verified', true)
                                 ->orderBy('name')
                                 ->get(['id', 'name', 'phone', 'claim_phone', 'revenue_phone', 'tin'])
                                 ->mapWithKeys(function (Company $company): array {
@@ -92,7 +94,10 @@ class RevenuePartnerResource extends Resource
                         ->preload()
                         ->native(false)
                         ->live()
-                        ->afterStateUpdated(function ($state, Set $set): void {
+                        ->afterStateUpdated(function ($state, Set $set, Get $get): void {
+                            if (filled($get('phone'))) {
+                                return;
+                            }
                             $company = $state ? Company::query()->find($state) : null;
                             $set(
                                 'phone',
@@ -142,6 +147,9 @@ class RevenuePartnerResource extends Resource
                 ->columns(2),
 
             Section::make('Service & billing')
+                ->description(fn (): string => static::viewerIsAdmin()
+                    ? ''
+                    : 'Editable by admin / super admin only.')
                 ->schema([
                     Select::make('vas_service_id')
                         ->label('Catalog service')
@@ -150,6 +158,8 @@ class RevenuePartnerResource extends Resource
                         ->searchable()
                         ->preload()
                         ->native(false)
+                        ->disabled(fn (): bool => ! static::viewerIsAdmin())
+                        ->dehydrated()
                         ->helperText('For labeling / SMS wording only. Partners belong to the importing account manager.')
                         ->columnSpanFull(),
                     TextInput::make('service_id')
@@ -158,17 +168,23 @@ class RevenuePartnerResource extends Resource
                         ->nullable()
                         ->unique(ignoreRecord: true)
                         ->requiredWithout('short_code')
+                        ->disabled(fn (): bool => ! static::viewerIsAdmin())
+                        ->dehydrated()
                         ->dehydrateStateUsing(fn (?string $state): ?string => filled(trim((string) $state)) ? trim((string) $state) : null)
                         ->helperText('Finance endpoint ID. Unique. Provide Service ID and/or Short code.'),
                     TextInput::make('product_id')
                         ->label('Product ID')
                         ->maxLength(64)
                         ->nullable()
+                        ->disabled(fn (): bool => ! static::viewerIsAdmin())
+                        ->dehydrated()
                         ->dehydrateStateUsing(fn (?string $state): ?string => filled(trim((string) $state)) ? trim((string) $state) : null),
                     TextInput::make('spid')
                         ->label('SPID')
                         ->maxLength(64)
                         ->nullable()
+                        ->disabled(fn (): bool => ! static::viewerIsAdmin())
+                        ->dehydrated()
                         ->dehydrateStateUsing(fn (?string $state): ?string => filled(trim((string) $state)) ? trim((string) $state) : null),
                     TextInput::make('short_code')
                         ->label('Short code')
@@ -176,10 +192,14 @@ class RevenuePartnerResource extends Resource
                         ->nullable()
                         ->unique(ignoreRecord: true)
                         ->requiredWithout('service_id')
+                        ->disabled(fn (): bool => ! static::viewerIsAdmin())
+                        ->dehydrated()
                         ->dehydrateStateUsing(fn (?string $state): ?string => filled(trim((string) $state)) ? trim((string) $state) : null)
                         ->helperText('Provide Service ID and/or Short code. Both may be set together.'),
                     Textarea::make('notes')
                         ->rows(3)
+                        ->disabled(fn (): bool => ! static::viewerIsAdmin())
+                        ->dehydrated()
                         ->columnSpanFull(),
                 ])
                 ->columns(2),
@@ -226,16 +246,16 @@ class RevenuePartnerResource extends Resource
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('service_id')->label('Service ID')->searchable()->sortable()->copyable(),
-                TextColumn::make('product_id')->label('Product ID')->searchable()->toggleable()->copyable(),
-                TextColumn::make('spid')->label('SPID')->searchable()->toggleable()->copyable(),
-                TextColumn::make('short_code')->label('Short code')->searchable()->toggleable()->copyable(),
+                TextColumn::make('product_id')->label('Product ID')->searchable()->toggleable(isToggledHiddenByDefault: true)->copyable(),
+                TextColumn::make('spid')->label('SPID')->searchable()->toggleable(isToggledHiddenByDefault: true)->copyable(),
+                TextColumn::make('short_code')->label('Short code')->searchable()->toggleable(isToggledHiddenByDefault: true)->copyable(),
                 TextColumn::make('customer_base_count')
                     ->label('Customer base')
                     ->numeric()
                     ->sortable()
                     ->placeholder('—')
-                    ->toggleable(),
-                TextColumn::make('partner_name')->label('Partner name')->searchable()->sortable()->wrap(),
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('partner_name')->label('Partner name')->searchable()->sortable()->wrap()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('company.name')
                     ->label('Company')
                     ->placeholder('—')
@@ -421,6 +441,13 @@ class RevenuePartnerResource extends Resource
         $user = auth()->user();
 
         return $user instanceof User && $user->canAccessAllRevenue();
+    }
+
+    public static function viewerIsAdmin(): bool
+    {
+        $user = auth()->user();
+
+        return $user instanceof User && $user->hasRole(['super_admin', 'admin']);
     }
 
     public static function canCreate(): bool

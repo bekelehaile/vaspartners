@@ -14,21 +14,23 @@ class ErcaPortalSearchGuard
     public function assertCanSearch(Contact $contact, string $tin): void
     {
         $contactId = (int) $contact->id;
-        $hourLimit = max(1, (int) config('services.etrade.portal_lookups_per_hour', 12));
-        $dayLimit = max(1, (int) config('services.etrade.portal_lookups_per_day', 20));
-        $uniqueLimit = max(1, (int) config('services.etrade.portal_unique_tins_per_day', 8));
+        $hourLimit = max(1, (int) config('services.etrade.portal_lookups_per_hour', 25));
+        $dayLimit = max(1, (int) config('services.etrade.portal_lookups_per_day', 50));
+        $uniqueLimit = max(1, (int) config('services.etrade.portal_unique_tins_per_day', 20));
 
         $hourCount = (int) Cache::get($this->contactHourKey($contactId), 0);
         if ($hourCount >= $hourLimit) {
+            $minutes = max(1, 60 - (int) now()->format('i'));
             throw ValidationException::withMessages([
-                'company_tin' => 'You have reached the hourly TIN number search limit. Try again later.',
+                'company_tin' => "You have reached the hourly TIN search limit ({$hourLimit}/hour). Try again in about {$minutes} minute(s).",
             ]);
         }
 
         $dayCount = (int) Cache::get($this->contactDayKey($contactId), 0);
         if ($dayCount >= $dayLimit) {
+            $hours = max(1, (int) ceil(now()->endOfDay()->diffInMinutes(now()) / 60));
             throw ValidationException::withMessages([
-                'company_tin' => 'You have reached the daily TIN number search limit. Try again tomorrow.',
+                'company_tin' => "You have reached the daily TIN search limit ({$dayLimit}/day). Try again in about {$hours} hour(s).",
             ]);
         }
 
@@ -38,8 +40,9 @@ class ErcaPortalSearchGuard
             $unique = [];
         }
         if (! in_array($tin, $unique, true) && count($unique) >= $uniqueLimit) {
+            $hours = max(1, (int) ceil(now()->endOfDay()->diffInMinutes(now()) / 60));
             throw ValidationException::withMessages([
-                'company_tin' => 'You have searched too many different TIN numbers today. Try again tomorrow.',
+                'company_tin' => "You have searched too many different TIN numbers today (max {$uniqueLimit}). Try again in about {$hours} hour(s).",
             ]);
         }
     }

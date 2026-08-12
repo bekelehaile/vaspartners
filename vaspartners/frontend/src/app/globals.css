@@ -5481,7 +5481,7 @@ button.bg-primary:hover {
 
 .login-page--secure {
   min-height: min(72vh, 44rem);
-  align-items: flex-start;
+  align-items: center;
   background:
     radial-gradient(ellipse 70% 45% at 50% -8%, color-mix(in oklab, var(--primary) 14%, transparent), transparent 68%),
     linear-gradient(180deg, color-mix(in oklab, var(--et-foam) 75%, white) 0%, white 50%);

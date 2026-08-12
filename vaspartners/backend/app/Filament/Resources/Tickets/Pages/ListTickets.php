@@ -41,7 +41,8 @@ class ListTickets extends ListRecords
                 ->badgeColor('warning')
                 ->modifyQueryUsing(fn (Builder $query) => $query
                     ->whereIn('status', [TicketStatus::Open, TicketStatus::InProgress])
-                    ->whereNotNull('assigned_to_user_id')),
+                    ->whereNull('assigned_to_user_id')
+                    ->where('created_at', '<', now()->subWeek())),
             'rejected' => Tab::make(TicketStatus::Rejected->label())
                 ->badge(fn (): int => $counts()['rejected'])
                 ->badgeColor(TicketStatus::Rejected->getColor())
@@ -93,7 +94,7 @@ class ListTickets extends ListRecords
                 'count(*)::int as c_all,
                 count(*) filter (where status = ?)::int as c_open,
                 count(*) filter (where status = ?)::int as c_in_progress,
-                count(*) filter (where status in (?, ?) and assigned_to_user_id is not null)::int as c_backlog,
+                count(*) filter (where status in (?, ?) and assigned_to_user_id is null and created_at < now() - interval \'7 days\')::int as c_backlog,
                 count(*) filter (where status = ?)::int as c_rejected,
                 count(*) filter (where status = ?)::int as c_completed,
                 count(*) filter (where status = ?)::int as c_closed',

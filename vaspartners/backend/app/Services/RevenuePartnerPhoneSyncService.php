@@ -324,6 +324,7 @@ class RevenuePartnerPhoneSyncService
             'abayneh' => 'abayneh.mekonnen@ethiotelecom.et',
             'aziza' => 'aziza.ali@ethiotelecom.et',
             'kalkidan' => 'kalkidan.sahle@ethiotelecom.et',
+            'tolosa' => 'tolasa.deressa@ethiotelecom.et',
         ];
         if (isset($aliases[$cacheKey])) {
             $user = User::query()->where('email', $aliases[$cacheKey])->first();
@@ -375,50 +376,10 @@ class RevenuePartnerPhoneSyncService
 
     public function findPartner(?string $serviceId, ?string $shortCode): ?RevenuePartner
     {
-        $candidates = [];
-        foreach ([$serviceId, $shortCode] as $key) {
-            if ($key === null || $key === '') {
-                continue;
-            }
-            $candidates[] = $key;
-            // CSV exports often drop leading zeros that Excel / Tele systems keep.
-            $stripped = ltrim($key, '0');
-            if ($stripped !== '' && $stripped !== $key) {
-                $candidates[] = $stripped;
-            }
-            foreach (['0'.$key, '00'.$key, '000'.$key] as $padded) {
-                $candidates[] = $padded;
-            }
-            // Seeded rows sometimes keep a trailing 0 Excel dropped.
-            $candidates[] = $key.'0';
-            if ($stripped !== '') {
-                $candidates[] = $stripped.'0';
-            }
-        }
-        $candidates = array_values(array_unique(array_filter($candidates)));
-
-        foreach ($candidates as $key) {
+        foreach (array_filter([$serviceId, $shortCode]) as $key) {
             $partner = RevenuePartner::query()
                 ->where(function ($q) use ($key): void {
                     $q->where('service_id', $key)->orWhere('short_code', $key);
-                })
-                ->orderBy('id')
-                ->first();
-            if ($partner) {
-                return $partner;
-            }
-        }
-
-        // Last resort: compare without leading zeros on either side.
-        foreach (array_filter([$serviceId, $shortCode]) as $key) {
-            $stripped = ltrim((string) $key, '0');
-            if ($stripped === '') {
-                continue;
-            }
-            $partner = RevenuePartner::query()
-                ->where(function ($q) use ($stripped): void {
-                    $q->whereRaw("ltrim(service_id, '0') = ?", [$stripped])
-                        ->orWhereRaw("ltrim(coalesce(short_code, ''), '0') = ?", [$stripped]);
                 })
                 ->orderBy('id')
                 ->first();
