@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 
 class Company extends Model
 {
@@ -149,6 +150,19 @@ class Company extends Model
 
             if ($markingVerified && TinNumber::isValid($tinValue)) {
                 ErcaTinWriteGuard::assertCanCommit($tinValue, 'tin');
+            }
+        });
+
+        static::saved(function (Company $company): void {
+            // Bidirectional sync: push the company revenue_phone to all linked revenue
+            // partners so both sides stay in sync. Direct DB update avoids recursion.
+            if ($company->isDirty('revenue_phone')) {
+                $revenuePhone = PhoneNumber::normalizeNullable($company->revenuePhone());
+                if (filled($revenuePhone)) {
+                    DB::table('revenue_partners')
+                        ->where('company_id', $company->id)
+                        ->update(['phone' => $revenuePhone, 'updated_at' => now()]);
+                }
             }
         });
     }

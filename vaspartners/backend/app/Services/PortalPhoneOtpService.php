@@ -73,7 +73,7 @@ class PortalPhoneOtpService
             throw new RuntimeException("Please wait {$remaining} second(s) before requesting another code.");
         }
 
-        $this->applyOtpRateLimit($phone);
+        $this->assertOtpRateLimitNotExceeded($phone);
 
         $otp = $this->generateOtp();
         $this->store($phone, $otp);
@@ -87,13 +87,13 @@ class PortalPhoneOtpService
             $this->sms->sendOtp($phone, $message);
         } catch (RuntimeException $e) {
             $this->deleteRecord($phone);
-            // Gateway failure is not the user's fault — release the rate-limit hit so
-            // retries are not blocked by failures they did not cause.
-            RateLimiter::clear('portal-otp:phone:'.$phone);
 
             throw new RuntimeException('Unable to send verification code. Please try again.');
         }
 
+        // Only count against the rate limit after a successful SMS send — gateway
+        // failures (timeouts, SSL errors) must not block the user from retrying.
+        RateLimiter::hit('portal-otp:phone:'.$phone, self::OTP_RATE_DECAY_SECONDS);
         Cache::put($cooldownKey, time() + self::SEND_COOLDOWN_SECONDS, self::SEND_COOLDOWN_SECONDS);
 
         Log::info('Portal login OTP sent', [
@@ -275,7 +275,7 @@ class PortalPhoneOtpService
             ->delete();
     }
 
-    private function applyOtpRateLimit(string $phone): void
+    private function assertOtpRateLimitNotExceeded(string $phone): void
     {
         $key = 'portal-otp:phone:'.$phone;
 
@@ -285,8 +285,6 @@ class PortalPhoneOtpService
 
             throw new RuntimeException("Too many requests. Please try again in about {$minutes} minute(s).");
         }
-
-        RateLimiter::hit($key, self::OTP_RATE_DECAY_SECONDS);
     }
 
     private function verifyAttemptKey(string $phone): string

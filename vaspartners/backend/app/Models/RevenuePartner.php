@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 class RevenuePartner extends Model
 {
@@ -52,6 +53,16 @@ class RevenuePartner extends Model
                 $normalized = PhoneNumber::normalizeNullable($partner->phone);
                 // Keep non-standard / invalid values for manual cleanup — only normalize clean mobiles.
                 $partner->phone = $normalized ?? mb_substr(trim((string) $partner->phone), 0, 32);
+            }
+
+            // Bidirectional sync: push the partner phone to the linked company's revenue_phone
+            // so both sides stay in sync. Direct DB update avoids model-event recursion.
+            if ($partner->company_id && $partner->isDirty('phone') && filled($partner->phone)) {
+                $company = Company::query()->find($partner->company_id);
+                if ($company && PhoneNumber::normalizeNullable($company->revenuePhone()) !== $partner->phone) {
+                    DB::table('companies')->where('id', $partner->company_id)
+                        ->update(['revenue_phone' => $partner->phone, 'updated_at' => now()]);
+                }
             }
 
             // Auto-link only when phone matches AND partner_name ≈ company name.
