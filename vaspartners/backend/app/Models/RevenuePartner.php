@@ -149,6 +149,6 @@ class RevenuePartner extends Model
 
     public function hasUsablePhone(): bool
     {
-        return filled($this->phone) && (bool) preg_match('/^[97]\d{8}$/', (string) $this->phone);
+        return filled($this->phone) && (bool) preg_match('/^[89]\d{8}$/', (string) $this->phone);
     }
 }

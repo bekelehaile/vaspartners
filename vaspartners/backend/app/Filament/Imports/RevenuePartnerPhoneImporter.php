@@ -65,7 +65,7 @@ class RevenuePartnerPhoneImporter extends Importer
         $phone = PhoneNumber::normalizeNullable($raw);
         if ($phone === null || ! PhoneNumber::isValidLocalMobile($phone)) {
             throw ValidationException::withMessages([
-                'phone' => 'Phone must be a local mobile (9/7 + 8 digits).',
+                'phone' => 'Phone must be a local mobile (9/8 + 8 digits).',
             ]);
         }
         $this->data['phone'] = $phone;

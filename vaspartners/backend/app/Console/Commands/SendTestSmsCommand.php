@@ -17,7 +17,7 @@ class SendTestSmsCommand extends Command
         $message = (string) $this->option('message');
 
         if (! $sms->ensurePhoneIsLocal($phone)) {
-            $this->error('Phone must be an Ethiopian mobile (+251 / 09 / 07…).');
+            $this->error('Phone must be an Ethiopian mobile (+251 / 09 / 08…).');
 
             return self::FAILURE;
         }

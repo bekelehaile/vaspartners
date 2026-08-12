@@ -585,10 +585,10 @@ class BulkMessageService
         }
 
         $phone = (string) $recipient->phone_normalized;
-        if ($phone === '' || ! preg_match('/^(9|7)\d{8}$/', $phone)) {
+        if ($phone === '' || ! preg_match('/^(9|8)\d{8}$/', $phone)) {
             $recipient->forceFill([
                 'status' => BulkMessageRecipientStatus::Skipped,
-                'error' => 'Invalid mobile (need local 9/7 + 8 digits).',
+                'error' => 'Invalid mobile (need local 9/8 + 8 digits).',
                 'attempts' => $recipient->attempts + 1,
             ])->save();
             $this->afterRecipientUpdate($campaign);
@@ -824,7 +824,7 @@ class BulkMessageService
                 'variables' => $variables,
                 'row_number' => $rowNumber,
                 'status' => BulkMessageRecipientStatus::Skipped,
-                'error' => 'Invalid phone (need last 9 digits: 9xxxxxxxx / 7xxxxxxxx).',
+                'error' => 'Invalid phone (need last 9 digits: 9xxxxxxxx / 8xxxxxxxx).',
             ];
         }
 
@@ -844,7 +844,7 @@ class BulkMessageService
         }
         $seenKeys[$dedupeKey] = true;
 
-        if (! preg_match('/^(9|7)\d{8}$/', $normalizedFromFile) || ! $this->sms->ensurePhoneIsLocal($normalizedFromFile)) {
+        if (! preg_match('/^(9|8)\d{8}$/', $normalizedFromFile) || ! $this->sms->ensurePhoneIsLocal($normalizedFromFile)) {
             return [
                 'campaign_id' => $campaign->id,
                 'company_id' => null,
@@ -882,7 +882,7 @@ class BulkMessageService
             : '';
 
         if ($sendPhone === '' || strlen($sendPhone) !== 9
-            || ! preg_match('/^(9|7)\d{8}$/', $sendPhone)
+            || ! preg_match('/^(9|8)\d{8}$/', $sendPhone)
             || ! $this->sms->ensurePhoneIsLocal($sendPhone)) {
             return [
                 'campaign_id' => $campaign->id,

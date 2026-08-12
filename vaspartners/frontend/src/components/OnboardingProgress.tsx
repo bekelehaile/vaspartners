@@ -106,7 +106,7 @@ export function maskMobileDisplay(raw: string): string {
         : digits.length === 9
           ? digits
           : digits;
-  if (!/^9\d{8}$/.test(national)) {
+  if (!/^[89]\d{8}$/.test(national)) {
     return raw || "—";
   }
   return `0${national.slice(0, 2)}••••${national.slice(-4)}`;

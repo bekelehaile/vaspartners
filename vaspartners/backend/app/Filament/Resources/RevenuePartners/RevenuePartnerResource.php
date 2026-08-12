@@ -121,7 +121,7 @@ class RevenuePartnerResource extends Resource
                                 return;
                             }
                             if (! PhoneNumber::isValidLocalMobile($value)) {
-                                $fail('Phone must be a local mobile (9/7 + 8 digits).');
+                                $fail('Phone must be a local mobile (9/8 + 8 digits).');
                             }
                         })
                         ->helperText('Defaults to the selected company’s revenue phone. Editable.'),

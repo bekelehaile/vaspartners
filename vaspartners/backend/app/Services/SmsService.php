@@ -37,7 +37,7 @@ class SmsService
         }
 
         if (! $this->ensurePhoneIsLocal($phone)) {
-            Log::warning('SMS skipped — phone must be Ethiopian mobile (+251 / 09 / 07)', [
+            Log::warning('SMS skipped — phone must be Ethiopian mobile (+251 / 09 / 08)', [
                 'phone' => (string) $phone,
             ]);
 
@@ -143,7 +143,7 @@ class SmsService
         }
 
         if (! $this->ensurePhoneIsLocal($phone)) {
-            Log::warning('SMS skipped — phone must be Ethiopian mobile (+251 / 09 / 07)', [
+            Log::warning('SMS skipped — phone must be Ethiopian mobile (+251 / 09 / 08)', [
                 'phone' => (string) $phone,
             ]);
 

@@ -205,14 +205,8 @@ export function LoginPageView() {
     e.preventDefault();
     setError(null);
     setInfo(null);
-    const digits = phone.replace(/\D/g, "");
-    const national =
-      digits.startsWith("251") && digits.length >= 12
-        ? digits.slice(-9)
-        : digits.startsWith("0") && digits.length === 10
-          ? digits.slice(1)
-          : digits;
-    if (!/^9\d{8}$/.test(national)) {
+    const cleaned = phone.replace(/[^\d+]/g, "");
+    if (!/^(\+251|251|0)?[89]\d{8}$/.test(cleaned)) {
       setError("Enter a valid mobile number.");
       return;
     }

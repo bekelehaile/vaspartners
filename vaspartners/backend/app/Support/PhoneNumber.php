@@ -5,7 +5,7 @@ namespace App\Support;
 /**
  * Ethiopian mobile numbers for Ethio telecom SMS.
  *
- * Storage: last 9 digits (9xxxxxxxx / 7xxxxxxxx).
+ * Storage: last 9 digits (9xxxxxxxx / 8xxxxxxxx).
  * Gateway MSISDN: 2519xxxxxxxx (always country code 251).
  * Display E.164: +2519xxxxxxxx.
  */
@@ -31,7 +31,7 @@ final class PhoneNumber
             $digits = substr($digits, strlen(self::COUNTRY_CODE));
         }
 
-        // Strip national trunk 0 (0912… / 07…).
+        // Strip national trunk 0 (0912… / 08…).
         if (str_starts_with($digits, '0') && strlen($digits) === 10) {
             $digits = substr($digits, 1);
         }
@@ -51,7 +51,7 @@ final class PhoneNumber
     }
 
     /**
-     * Ethio telecom mobile (09…) — portal OTP / CRM lookup.
+     * Ethio telecom mobile (09… / 08…) — portal OTP / CRM lookup.
      * Does not accept 07… (other operators).
      */
     public static function isValidEthioTelecomMobile(mixed $phone): bool
@@ -62,11 +62,11 @@ final class PhoneNumber
 
         $normalized = self::normalize($phone);
 
-        return (bool) preg_match('/^9\d{8}$/', $normalized);
+        return (bool) preg_match('/^[89]\d{8}$/', $normalized);
     }
 
     /**
-     * True for Ethio SMS-capable local mobiles (09… or 07…).
+     * True for Ethio SMS-capable local mobiles (09… or 08…).
      * Prefer {@see isValidEthioTelecomMobile()} for portal OTP / CRM.
      */
     public static function isValidLocalMobile(mixed $phone): bool
@@ -77,7 +77,7 @@ final class PhoneNumber
 
         $normalized = self::normalize($phone);
 
-        return (bool) preg_match('/^[97]\d{8}$/', $normalized);
+        return (bool) preg_match('/^[89]\d{8}$/', $normalized);
     }
 
     /**

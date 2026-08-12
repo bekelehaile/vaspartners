@@ -25,19 +25,21 @@ class PhoneNumberTest extends TestCase
             'plus 251' => ['+251912345678', '912345678'],
             '251 prefix' => ['251912345678', '912345678'],
             'spaces' => ['+251 91 234 5678', '912345678'],
-            '07 local' => ['0712345678', '712345678'],
-            'plus 251 7' => ['+251712345678', '712345678'],
+            '08 local' => ['0812345678', '812345678'],
+            'plus 251 8' => ['+251812345678', '812345678'],
         ];
     }
 
-    public function test_portal_otp_accepts_09_only(): void
+    public function test_portal_otp_accepts_09_and_08_only(): void
     {
         $this->assertTrue(PhoneNumber::isValidEthioTelecomMobile('0912345678'));
         $this->assertTrue(PhoneNumber::isValidEthioTelecomMobile('+251912345678'));
+        $this->assertTrue(PhoneNumber::isValidEthioTelecomMobile('0812345678'));
+        $this->assertTrue(PhoneNumber::isValidEthioTelecomMobile('+251812345678'));
         $this->assertFalse(PhoneNumber::isValidEthioTelecomMobile('0712345678'));
         $this->assertFalse(PhoneNumber::isValidEthioTelecomMobile('+251712345678'));
-        // SMS still allows 07 locally; OTP/CRM does not.
-        $this->assertTrue(PhoneNumber::isValidLocalMobile('0712345678'));
+        // 07 is no longer a valid Ethiopian mobile prefix anywhere.
+        $this->assertFalse(PhoneNumber::isValidLocalMobile('0712345678'));
     }
 
     #[DataProvider('invalidNumbers')]
@@ -56,6 +58,7 @@ class PhoneNumberTest extends TestCase
             'empty' => [''],
             'too short' => ['91234567'],
             'landline-ish' => ['0111234567'],
+            '07 local now rejected' => ['0712345678'],
         ];
     }
 }
