@@ -32,6 +32,8 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Forms\Get;
+use Filament\Forms\Set;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -129,8 +131,14 @@ class CompanyResource extends Resource
                 ->label('Claim phone')
                 ->tel()
                 ->maxLength(32)
-                ->helperText('Partner portal sign-in / auto-claim. Last 9 digits. Revenue phone stays the same unless updated separately.')
-                ->dehydrateStateUsing(fn (?string $state): ?string => \App\Support\PhoneNumber::normalizeNullable($state)),
+                ->live(onBlur: true)
+                ->afterStateUpdated(function ($state, Set $set, Get $get): void {
+                    if (! filled($get('revenue_phone'))) {
+                        $set('revenue_phone', PhoneNumber::normalizeNullable($state));
+                    }
+                })
+                ->helperText('Partner portal sign-in / auto-claim. Last 9 digits. Revenue phone defaults to this.')
+                ->dehydrateStateUsing(fn (?string $state): ?string => PhoneNumber::normalizeNullable($state)),
             TextInput::make('erca_phone')
                 ->label('ERCA phone')
                 ->tel()

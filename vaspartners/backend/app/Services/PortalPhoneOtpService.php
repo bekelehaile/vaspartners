@@ -28,17 +28,17 @@ class PortalPhoneOtpService
     private const EXPIRY_MINUTES = 5;
 
     /** Max OTP SMS requests per phone within the decay window. */
-    private const OTP_RATE_LIMIT = 8;
+    private const OTP_RATE_LIMIT = 15;
 
     private const OTP_RATE_DECAY_SECONDS = 300;
 
     /** Min seconds between two OTP sends for the same phone. */
-    private const SEND_COOLDOWN_SECONDS = 30;
+    private const SEND_COOLDOWN_SECONDS = 15;
 
     /** Wrong verify guesses allowed per phone before the OTP is invalidated. */
-    private const VERIFY_MAX_ATTEMPTS = 8;
+    private const VERIFY_MAX_ATTEMPTS = 10;
 
-    private const VERIFY_DECAY_SECONDS = 300;
+    private const VERIFY_DECAY_SECONDS = 180;
 
     public function __construct(
         private readonly SmsService $sms,
@@ -67,8 +67,10 @@ class PortalPhoneOtpService
         // Do not reveal whether the phone is already registered.
 
         $cooldownKey = 'portal-otp:cooldown:'.$phone;
-        if (Cache::has($cooldownKey)) {
-            throw new RuntimeException('Please wait before requesting another code.');
+        $cooldownExpiresAt = Cache::get($cooldownKey);
+        if ($cooldownExpiresAt) {
+            $remaining = max(1, (int) $cooldownExpiresAt - time());
+            throw new RuntimeException("Please wait {$remaining} second(s) before requesting another code.");
         }
 
         $this->applyOtpRateLimit($phone);
@@ -85,11 +87,14 @@ class PortalPhoneOtpService
             $this->sms->sendOtp($phone, $message);
         } catch (RuntimeException $e) {
             $this->deleteRecord($phone);
+            // Gateway failure is not the user's fault — release the rate-limit hit so
+            // retries are not blocked by failures they did not cause.
+            RateLimiter::clear('portal-otp:phone:'.$phone);
 
             throw new RuntimeException('Unable to send verification code. Please try again.');
         }
 
-        Cache::put($cooldownKey, true, self::SEND_COOLDOWN_SECONDS);
+        Cache::put($cooldownKey, time() + self::SEND_COOLDOWN_SECONDS, self::SEND_COOLDOWN_SECONDS);
 
         Log::info('Portal login OTP sent', [
             'phone_masked' => $this->maskPhone($phone),
@@ -136,7 +141,7 @@ class PortalPhoneOtpService
             throw new RuntimeException('Invalid or expired verification code.');
         }
 
-        $this->clearVerifyAttempts($phone);
+        $this->clearAllRateLimits($phone);
         $this->deleteRecord($phone);
 
         $result = $this->findOrCreateContact($phone, $profile ?? []);
@@ -275,7 +280,10 @@ class PortalPhoneOtpService
         $key = 'portal-otp:phone:'.$phone;
 
         if (RateLimiter::tooManyAttempts($key, self::OTP_RATE_LIMIT)) {
-            throw new RuntimeException('Please wait before requesting another code.');
+            $seconds = RateLimiter::availableIn($key);
+            $minutes = max(1, (int) ceil($seconds / 60));
+
+            throw new RuntimeException("Too many requests. Please try again in about {$minutes} minute(s).");
         }
 
         RateLimiter::hit($key, self::OTP_RATE_DECAY_SECONDS);
@@ -320,6 +328,18 @@ class PortalPhoneOtpService
     private function clearVerifyAttempts(string $phone): void
     {
         RateLimiter::clear($this->verifyAttemptKey($phone));
+    }
+
+    /**
+     * Release every portal-OTP rate-limit cache key for this phone so a fresh
+     * session starts clean. Redis TTL also auto-expires these, but this
+     * guarantees immediate release on successful auth.
+     */
+    private function clearAllRateLimits(string $phone): void
+    {
+        RateLimiter::clear('portal-otp:phone:'.$phone);
+        $this->clearVerifyAttempts($phone);
+        Cache::forget('portal-otp:cooldown:'.$phone);
     }
 
     private function generateOtp(int $length = 6): string

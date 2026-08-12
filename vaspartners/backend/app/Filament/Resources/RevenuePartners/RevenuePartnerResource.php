@@ -90,7 +90,6 @@ class RevenuePartnerResource extends Resource
                         )
                         ->searchable()
                         ->preload()
-                        ->required()
                         ->native(false)
                         ->live()
                         ->afterStateUpdated(function ($state, Set $set): void {
@@ -102,27 +101,25 @@ class RevenuePartnerResource extends Resource
                                     : null,
                             );
                         })
-                        ->helperText('Required. Phone is taken from this company’s revenue phone (not editable).')
+                        ->helperText('Optional. Selecting a company defaults the phone to that company’s revenue phone.')
                         ->columnSpanFull(),
                     TextInput::make('phone')
                         ->label('Phone')
                         ->tel()
                         ->required()
                         ->maxLength(32)
-                        ->disabled()
-                        ->dehydrated()
-                        ->helperText('Auto-filled from the selected company’s revenue phone. Manual entry is disabled.')
                         ->dehydrateStateUsing(fn (?string $state): ?string => PhoneNumber::normalizeNullable($state))
                         ->rule(fn (): \Closure => function (string $attribute, mixed $value, \Closure $fail): void {
                             if ($value === null || $value === '') {
-                                $fail('Select a company that has a revenue phone.');
+                                $fail('Phone is required.');
 
                                 return;
                             }
                             if (! PhoneNumber::isValidLocalMobile($value)) {
-                                $fail('Company revenue phone must be a local mobile (9/7 + 8 digits).');
+                                $fail('Phone must be a local mobile (9/7 + 8 digits).');
                             }
-                        }),
+                        })
+                        ->helperText('Defaults to the selected company’s revenue phone. Editable.'),
                     Select::make('created_by_user_id')
                         ->label('Account manager')
                         ->options(fn (): array => static::accountManagerOptions())

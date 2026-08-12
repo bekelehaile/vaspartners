@@ -24,13 +24,6 @@ class EditRevenuePartner extends EditRecord
      */
     protected function mutateFormDataBeforeFill(array $data): array
     {
-        if (! empty($data['company_id'])) {
-            $company = \App\Models\Company::query()->find($data['company_id']);
-            if ($company) {
-                $data['phone'] = \App\Support\PhoneNumber::normalizeNullable($company->revenuePhone());
-            }
-        }
-
         return $data;
     }
 
@@ -42,13 +35,6 @@ class EditRevenuePartner extends EditRecord
     {
         if (! RevenuePartnerResource::viewerCanAccessAllRevenue()) {
             $data['created_by_user_id'] = auth()->id();
-        }
-
-        if (! empty($data['company_id'])) {
-            $company = \App\Models\Company::query()->find($data['company_id']);
-            if ($company) {
-                $data['phone'] = \App\Support\PhoneNumber::normalizeNullable($company->revenuePhone());
-            }
         }
 
         return $data;
