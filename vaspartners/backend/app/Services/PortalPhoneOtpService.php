@@ -67,10 +67,13 @@ class PortalPhoneOtpService
         // Do not reveal whether the phone is already registered.
 
         $cooldownKey = 'portal-otp:cooldown:'.$phone;
-        $cooldownExpiresAt = Cache::get($cooldownKey);
-        if ($cooldownExpiresAt) {
-            $remaining = max(1, (int) $cooldownExpiresAt - time());
-            throw new RuntimeException("Please wait {$remaining} second(s) before requesting another code.");
+        $cooldownSeconds = AppSetting::otpSendCooldown();
+        if ($cooldownSeconds > 0 && AppSetting::otpRateLimitEnabled()) {
+            $cooldownExpiresAt = Cache::get($cooldownKey);
+            if ($cooldownExpiresAt) {
+                $remaining = max(1, (int) $cooldownExpiresAt - time());
+                throw new RuntimeException("Please wait {$remaining} second(s) before requesting another code.");
+            }
         }
 
         $this->assertOtpRateLimitNotExceeded($phone);
@@ -91,10 +94,10 @@ class PortalPhoneOtpService
             throw new RuntimeException('Unable to send verification code. Please try again.');
         }
 
-        // Only count against the rate limit after a successful SMS send — gateway
-        // failures (timeouts, SSL errors) must not block the user from retrying.
         RateLimiter::hit('portal-otp:phone:'.$phone, self::OTP_RATE_DECAY_SECONDS);
-        Cache::put($cooldownKey, time() + self::SEND_COOLDOWN_SECONDS, self::SEND_COOLDOWN_SECONDS);
+        if ($cooldownSeconds > 0 && AppSetting::otpRateLimitEnabled()) {
+            Cache::put($cooldownKey, time() + $cooldownSeconds, $cooldownSeconds);
+        }
 
         Log::info('Portal login OTP sent', [
             'phone_masked' => $this->maskPhone($phone),
@@ -277,9 +280,13 @@ class PortalPhoneOtpService
 
     private function assertOtpRateLimitNotExceeded(string $phone): void
     {
+        if (! AppSetting::otpRateLimitEnabled()) {
+            return;
+        }
+
         $key = 'portal-otp:phone:'.$phone;
 
-        if (RateLimiter::tooManyAttempts($key, self::OTP_RATE_LIMIT)) {
+        if (RateLimiter::tooManyAttempts($key, AppSetting::otpServiceRateLimit())) {
             $seconds = RateLimiter::availableIn($key);
             $minutes = max(1, (int) ceil($seconds / 60));
 
@@ -294,7 +301,11 @@ class PortalPhoneOtpService
 
     private function assertVerifyNotLocked(string $phone): void
     {
-        if (! RateLimiter::tooManyAttempts($this->verifyAttemptKey($phone), self::VERIFY_MAX_ATTEMPTS)) {
+        if (! AppSetting::otpRateLimitEnabled()) {
+            return;
+        }
+
+        if (! RateLimiter::tooManyAttempts($this->verifyAttemptKey($phone), AppSetting::otpVerifyMaxAttempts())) {
             return;
         }
 
@@ -308,10 +319,14 @@ class PortalPhoneOtpService
 
     private function recordFailedVerify(string $phone): void
     {
+        if (! AppSetting::otpRateLimitEnabled()) {
+            return;
+        }
+
         $key = $this->verifyAttemptKey($phone);
         RateLimiter::hit($key, self::VERIFY_DECAY_SECONDS);
 
-        if (! RateLimiter::tooManyAttempts($key, self::VERIFY_MAX_ATTEMPTS)) {
+        if (! RateLimiter::tooManyAttempts($key, AppSetting::otpVerifyMaxAttempts())) {
             return;
         }
 

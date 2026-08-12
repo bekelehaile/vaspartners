@@ -24,6 +24,7 @@ use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\HtmlString;
 
 /**
@@ -188,6 +189,72 @@ class ManageAppSettings extends Page
                                     ->addActionLabel('Add coverage')
                                     ->columnSpanFull(),
                             ]),
+                        Tab::make('Rate limits')
+                            ->icon('heroicon-o-clock')
+                            ->schema([
+                                Toggle::make('otp_rate_limit_enabled')
+                                    ->label('Enable OTP rate limiting')
+                                    ->helperText('Turn off to disable all customer-portal OTP rate limits (HTTP throttle + service caps). Use temporarily for debugging.'),
+                                TextInput::make('otp_request_burst')
+                                    ->label('OTP requests per 5 minutes (per IP)')
+                                    ->numeric()
+                                    ->minValue(1)
+                                    ->helperText('HTTP throttle burst limit for OTP send requests.'),
+                                TextInput::make('otp_request_hourly')
+                                    ->label('OTP requests per hour (per IP)')
+                                    ->numeric()
+                                    ->minValue(1),
+                                TextInput::make('otp_verify_burst')
+                                    ->label('OTP verifications per 5 minutes (per IP)')
+                                    ->numeric()
+                                    ->minValue(1)
+                                    ->helperText('HTTP throttle burst limit for OTP verify attempts.'),
+                                TextInput::make('otp_verify_hourly')
+                                    ->label('OTP verifications per hour (per IP)')
+                                    ->numeric()
+                                    ->minValue(1),
+                                TextInput::make('otp_send_cooldown')
+                                    ->label('Send cooldown (seconds)')
+                                    ->numeric()
+                                    ->minValue(0)
+                                    ->helperText('Minimum seconds between two OTP sends for the same phone.'),
+                                TextInput::make('otp_service_rate_limit')
+                                    ->label('Service rate limit (per phone, per 5 min)')
+                                    ->numeric()
+                                    ->minValue(1)
+                                    ->helperText('Max OTP SMS requests per phone within the 5-minute decay window.'),
+                                TextInput::make('otp_verify_max_attempts')
+                                    ->label('Max wrong verify attempts (per phone)')
+                                    ->numeric()
+                                    ->minValue(1)
+                                    ->helperText('Wrong guesses allowed before the OTP is invalidated.'),
+                                Toggle::make('tin_rate_limit_enabled')
+                                    ->label('Enable TIN lookup rate limiting')
+                                    ->helperText('Turn off to disable all customer-portal TIN search rate limits (HTTP throttle + per-contact caps).'),
+                                TextInput::make('tin_lookup_per_minute')
+                                    ->label('TIN lookups per minute (per user)')
+                                    ->numeric()
+                                    ->minValue(1)
+                                    ->helperText('HTTP throttle per authenticated user.'),
+                                TextInput::make('tin_lookup_per_ip_minute')
+                                    ->label('TIN lookups per minute (per IP)')
+                                    ->numeric()
+                                    ->minValue(1)
+                                    ->helperText('HTTP throttle per IP address.'),
+                                TextInput::make('tin_lookup_per_hour')
+                                    ->label('TIN lookups per hour (per contact)')
+                                    ->numeric()
+                                    ->minValue(1),
+                                TextInput::make('tin_lookup_per_day')
+                                    ->label('TIN lookups per day (per contact)')
+                                    ->numeric()
+                                    ->minValue(1),
+                                TextInput::make('tin_unique_tins_per_day')
+                                    ->label('Unique TINs per day (per contact)')
+                                    ->numeric()
+                                    ->minValue(1)
+                                    ->helperText('Max different TIN numbers a contact can search per day.'),
+                            ]),
                     ]),
             ])
             ->statePath('data');
@@ -267,6 +334,31 @@ class ManageAppSettings extends Page
         AppSetting::setRevenueAmDelegations(
             is_array($data['revenue_am_delegations'] ?? null) ? $data['revenue_am_delegations'] : [],
         );
+
+        AppSetting::setBoolValue(
+            AppSetting::KEY_OTP_RATE_LIMIT_ENABLED,
+            (bool) ($data['otp_rate_limit_enabled'] ?? true),
+        );
+        AppSetting::setValue(AppSetting::KEY_OTP_REQUEST_BURST, (string) max(1, (int) ($data['otp_request_burst'] ?? 30)));
+        AppSetting::setValue(AppSetting::KEY_OTP_REQUEST_HOURLY, (string) max(1, (int) ($data['otp_request_hourly'] ?? 60)));
+        AppSetting::setValue(AppSetting::KEY_OTP_VERIFY_BURST, (string) max(1, (int) ($data['otp_verify_burst'] ?? 60)));
+        AppSetting::setValue(AppSetting::KEY_OTP_VERIFY_HOURLY, (string) max(1, (int) ($data['otp_verify_hourly'] ?? 200)));
+        AppSetting::setValue(AppSetting::KEY_OTP_SEND_COOLDOWN, (string) max(0, (int) ($data['otp_send_cooldown'] ?? 15)));
+        AppSetting::setValue(AppSetting::KEY_OTP_SERVICE_RATE_LIMIT, (string) max(1, (int) ($data['otp_service_rate_limit'] ?? 15)));
+        AppSetting::setValue(AppSetting::KEY_OTP_VERIFY_MAX_ATTEMPTS, (string) max(1, (int) ($data['otp_verify_max_attempts'] ?? 10)));
+
+        AppSetting::setBoolValue(
+            AppSetting::KEY_TIN_RATE_LIMIT_ENABLED,
+            (bool) ($data['tin_rate_limit_enabled'] ?? true),
+        );
+        AppSetting::setValue(AppSetting::KEY_TIN_LOOKUP_PER_MINUTE, (string) max(1, (int) ($data['tin_lookup_per_minute'] ?? 10)));
+        AppSetting::setValue(AppSetting::KEY_TIN_LOOKUP_PER_IP_MINUTE, (string) max(1, (int) ($data['tin_lookup_per_ip_minute'] ?? 30)));
+        AppSetting::setValue(AppSetting::KEY_TIN_LOOKUP_PER_HOUR, (string) max(1, (int) ($data['tin_lookup_per_hour'] ?? 25)));
+        AppSetting::setValue(AppSetting::KEY_TIN_LOOKUP_PER_DAY, (string) max(1, (int) ($data['tin_lookup_per_day'] ?? 50)));
+        AppSetting::setValue(AppSetting::KEY_TIN_UNIQUE_TINS_PER_DAY, (string) max(1, (int) ($data['tin_unique_tins_per_day'] ?? 20)));
+
+        // Clear all rate-limit cache entries so new limits take effect immediately.
+        Cache::flush();
 
         $this->form->fill([
             ...$this->formStateFromStore(),
@@ -372,6 +464,20 @@ class ManageAppSettings extends Page
             'revenue_block_same_import' => $policy->checksWithinImport(),
             'revenue_block_already_sent' => $policy->checksPriorSends(),
             'revenue_am_delegations' => AppSetting::revenueAmDelegations(),
+            'otp_rate_limit_enabled' => AppSetting::otpRateLimitEnabled(),
+            'otp_request_burst' => AppSetting::otpRequestBurst(),
+            'otp_request_hourly' => AppSetting::otpRequestHourly(),
+            'otp_verify_burst' => AppSetting::otpVerifyBurst(),
+            'otp_verify_hourly' => AppSetting::otpVerifyHourly(),
+            'otp_send_cooldown' => AppSetting::otpSendCooldown(),
+            'otp_service_rate_limit' => AppSetting::otpServiceRateLimit(),
+            'otp_verify_max_attempts' => AppSetting::otpVerifyMaxAttempts(),
+            'tin_rate_limit_enabled' => AppSetting::tinRateLimitEnabled(),
+            'tin_lookup_per_minute' => AppSetting::tinLookupPerMinute(),
+            'tin_lookup_per_ip_minute' => AppSetting::tinLookupPerIpMinute(),
+            'tin_lookup_per_hour' => AppSetting::tinLookupPerHour(),
+            'tin_lookup_per_day' => AppSetting::tinLookupPerDay(),
+            'tin_unique_tins_per_day' => AppSetting::tinUniqueTinsPerDay(),
         ];
     }
 

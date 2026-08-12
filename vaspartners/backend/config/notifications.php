@@ -85,14 +85,14 @@ return [
     | sms_*                 — gateway caps applied only on sync OTP sends
     |
     */
-    'otp_rate' => [
+     'otp_rate' => [
         'ip_request' => [
-            'max_per_5_minutes' => (int) env('OTP_IP_REQUEST_MAX_5M', 10),
-            'max_per_hour' => (int) env('OTP_IP_REQUEST_MAX_HOUR', 20),
+            'max_per_5_minutes' => (int) env('OTP_IP_REQUEST_MAX_5M', 30),
+            'max_per_hour' => (int) env('OTP_IP_REQUEST_MAX_HOUR', 60),
         ],
         'ip_verify' => [
-            'max_per_5_minutes' => (int) env('OTP_IP_VERIFY_MAX_5M', 40),
-            'max_per_hour' => (int) env('OTP_IP_VERIFY_MAX_HOUR', 100),
+            'max_per_5_minutes' => (int) env('OTP_IP_VERIFY_MAX_5M', 60),
+            'max_per_hour' => (int) env('OTP_IP_VERIFY_MAX_HOUR', 200),
         ],
         'sms_per_phone' => [
             'max' => (int) env('OTP_SMS_PER_PHONE_MAX', 8),

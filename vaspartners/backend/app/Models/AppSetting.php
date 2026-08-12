@@ -53,6 +53,34 @@ class AppSetting extends Model
      */
     public const KEY_REVENUE_AM_DELEGATIONS = 'revenue_am_delegations';
 
+    public const KEY_OTP_RATE_LIMIT_ENABLED = 'otp_rate_limit_enabled';
+
+    public const KEY_OTP_REQUEST_BURST = 'otp_request_burst';
+
+    public const KEY_OTP_REQUEST_HOURLY = 'otp_request_hourly';
+
+    public const KEY_OTP_VERIFY_BURST = 'otp_verify_burst';
+
+    public const KEY_OTP_VERIFY_HOURLY = 'otp_verify_hourly';
+
+    public const KEY_OTP_SEND_COOLDOWN = 'otp_send_cooldown';
+
+    public const KEY_OTP_SERVICE_RATE_LIMIT = 'otp_service_rate_limit';
+
+    public const KEY_OTP_VERIFY_MAX_ATTEMPTS = 'otp_verify_max_attempts';
+
+    public const KEY_TIN_RATE_LIMIT_ENABLED = 'tin_rate_limit_enabled';
+
+    public const KEY_TIN_LOOKUP_PER_MINUTE = 'tin_lookup_per_minute';
+
+    public const KEY_TIN_LOOKUP_PER_IP_MINUTE = 'tin_lookup_per_ip_minute';
+
+    public const KEY_TIN_LOOKUP_PER_HOUR = 'tin_lookup_per_hour';
+
+    public const KEY_TIN_LOOKUP_PER_DAY = 'tin_lookup_per_day';
+
+    public const KEY_TIN_UNIQUE_TINS_PER_DAY = 'tin_unique_tins_per_day';
+
     protected $fillable = [
         'key',
         'value',
@@ -187,6 +215,76 @@ class AppSetting extends Model
     public static function partnerEmailEnabled(): bool
     {
         return static::boolValue(self::KEY_NOTIFY_PARTNER_EMAIL, false);
+    }
+
+    public static function otpRateLimitEnabled(): bool
+    {
+        return static::boolValue(self::KEY_OTP_RATE_LIMIT_ENABLED, true);
+    }
+
+    public static function otpRequestBurst(): int
+    {
+        return max(1, (int) static::getValue(self::KEY_OTP_REQUEST_BURST, '30'));
+    }
+
+    public static function otpRequestHourly(): int
+    {
+        return max(1, (int) static::getValue(self::KEY_OTP_REQUEST_HOURLY, '60'));
+    }
+
+    public static function otpVerifyBurst(): int
+    {
+        return max(1, (int) static::getValue(self::KEY_OTP_VERIFY_BURST, '60'));
+    }
+
+    public static function otpVerifyHourly(): int
+    {
+        return max(1, (int) static::getValue(self::KEY_OTP_VERIFY_HOURLY, '200'));
+    }
+
+    public static function otpSendCooldown(): int
+    {
+        return max(0, (int) static::getValue(self::KEY_OTP_SEND_COOLDOWN, '15'));
+    }
+
+    public static function otpServiceRateLimit(): int
+    {
+        return max(1, (int) static::getValue(self::KEY_OTP_SERVICE_RATE_LIMIT, '15'));
+    }
+
+    public static function otpVerifyMaxAttempts(): int
+    {
+        return max(1, (int) static::getValue(self::KEY_OTP_VERIFY_MAX_ATTEMPTS, '10'));
+    }
+
+    public static function tinRateLimitEnabled(): bool
+    {
+        return static::boolValue(self::KEY_TIN_RATE_LIMIT_ENABLED, true);
+    }
+
+    public static function tinLookupPerMinute(): int
+    {
+        return max(1, (int) static::getValue(self::KEY_TIN_LOOKUP_PER_MINUTE, '10'));
+    }
+
+    public static function tinLookupPerIpMinute(): int
+    {
+        return max(1, (int) static::getValue(self::KEY_TIN_LOOKUP_PER_IP_MINUTE, '30'));
+    }
+
+    public static function tinLookupPerHour(): int
+    {
+        return max(1, (int) static::getValue(self::KEY_TIN_LOOKUP_PER_HOUR, '25'));
+    }
+
+    public static function tinLookupPerDay(): int
+    {
+        return max(1, (int) static::getValue(self::KEY_TIN_LOOKUP_PER_DAY, '50'));
+    }
+
+    public static function tinUniqueTinsPerDay(): int
+    {
+        return max(1, (int) static::getValue(self::KEY_TIN_UNIQUE_TINS_PER_DAY, '20'));
     }
 
     public static function revenueDuplicatePolicy(): RevenueDuplicatePolicy

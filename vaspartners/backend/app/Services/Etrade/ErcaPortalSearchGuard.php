@@ -2,6 +2,7 @@
 
 namespace App\Services\Etrade;
 
+use App\Models\AppSetting;
 use App\Models\Contact;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\ValidationException;
@@ -13,10 +14,14 @@ class ErcaPortalSearchGuard
 {
     public function assertCanSearch(Contact $contact, string $tin): void
     {
+        if (! AppSetting::tinRateLimitEnabled()) {
+            return;
+        }
+
         $contactId = (int) $contact->id;
-        $hourLimit = max(1, (int) config('services.etrade.portal_lookups_per_hour', 25));
-        $dayLimit = max(1, (int) config('services.etrade.portal_lookups_per_day', 50));
-        $uniqueLimit = max(1, (int) config('services.etrade.portal_unique_tins_per_day', 20));
+        $hourLimit = AppSetting::tinLookupPerHour();
+        $dayLimit = AppSetting::tinLookupPerDay();
+        $uniqueLimit = AppSetting::tinUniqueTinsPerDay();
 
         $hourCount = (int) Cache::get($this->contactHourKey($contactId), 0);
         if ($hourCount >= $hourLimit) {

@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Models\AppSetting;
 use App\Models\User;
 use Filament\Tables\Table;
 use Illuminate\Auth\Events\Login;
@@ -75,12 +76,13 @@ class AppServiceProvider extends ServiceProvider
 
     private function configurePortalOtpRateLimiters(): void
     {
-        // IP caps on top of per-phone limits inside PortalPhoneOtpService.
-        // Burst + hourly so shared NAT still works but SMS spray is costly.
         RateLimiter::for('portal-otp-request', function ($request) {
+            if (! AppSetting::otpRateLimitEnabled()) {
+                return Limit::none();
+            }
             $ip = (string) $request->ip();
-            $burst = max(1, (int) config('notifications.otp_rate.ip_request.max_per_5_minutes', 10));
-            $hourly = max(1, (int) config('notifications.otp_rate.ip_request.max_per_hour', 20));
+            $burst = AppSetting::otpRequestBurst();
+            $hourly = AppSetting::otpRequestHourly();
 
             return [
                 Limit::perMinutes(5, $burst)->by('portal-otp-req:'.$ip),
@@ -89,9 +91,12 @@ class AppServiceProvider extends ServiceProvider
         });
 
         RateLimiter::for('portal-otp-verify', function ($request) {
+            if (! AppSetting::otpRateLimitEnabled()) {
+                return Limit::none();
+            }
             $ip = (string) $request->ip();
-            $burst = max(1, (int) config('notifications.otp_rate.ip_verify.max_per_5_minutes', 40));
-            $hourly = max(1, (int) config('notifications.otp_rate.ip_verify.max_per_hour', 100));
+            $burst = AppSetting::otpVerifyBurst();
+            $hourly = AppSetting::otpVerifyHourly();
 
             return [
                 Limit::perMinutes(5, $burst)->by('portal-otp-ver:'.$ip),
@@ -127,9 +132,12 @@ class AppServiceProvider extends ServiceProvider
     private function configurePortalTinLookupRateLimiters(): void
     {
         RateLimiter::for('portal-tin-lookup', function ($request) {
+            if (! AppSetting::tinRateLimitEnabled()) {
+                return Limit::none();
+            }
             $userId = $request->user()?->id ?? 'guest';
-            $perUser = max(1, (int) config('services.etrade.portal_lookups_per_minute', 5));
-            $perIp = max(1, (int) config('services.etrade.portal_lookups_per_ip_minute', 15));
+            $perUser = AppSetting::tinLookupPerMinute();
+            $perIp = AppSetting::tinLookupPerIpMinute();
 
             return [
                 Limit::perMinute($perUser)->by('portal-tin-user:'.$userId),
