@@ -1078,6 +1078,8 @@ class CompanyMembershipService
             ]);
         }
 
+        $this->refreshMemberCrmProfile($member);
+
         Log::info('Owner updated company member phone', [
             'company_id' => $company->id,
             'owner_id' => $actor->id,
@@ -1087,6 +1089,22 @@ class CompanyMembershipService
         ]);
 
         return $member->fresh(['company', 'memberships.company']) ?? $member;
+    }
+
+    /**
+     * Re-sync the member's profile name from CRM (BSS) after a phone correction.
+     * Failures are logged but never block the phone update.
+     */
+    protected function refreshMemberCrmProfile(Contact $member): void
+    {
+        try {
+            app(ContactIdentityService::class)->refreshCrmProfile($member);
+        } catch (\Throwable $e) {
+            Log::warning('CRM profile refresh failed after member phone update', [
+                'member_contact_id' => $member->id,
+                'message' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

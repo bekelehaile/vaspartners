@@ -241,6 +241,52 @@ class ContactIdentityService
         return $contact->fresh() ?? $contact;
     }
 
+    /**
+     * Re-fetch the CRM (BSS GetCustomer) profile for the contact's current phone
+     * and update the name + snapshot. Used after a phone correction so the profile
+     * name stays in sync with CRM. Fayda-verified contacts are left untouched.
+     *
+     * @return \App\Models\Contact|null  refreshed contact when CRM updated the profile, null otherwise
+     */
+    public function refreshCrmProfile(Contact $contact): ?Contact
+    {
+        if ($contact->identity_verified_via === IdentityVerifiedVia::Fayda->value) {
+            return null;
+        }
+
+        $lookup = $this->crm->lookupByPhone((string) $contact->phone_number);
+        if ($lookup === null || ! ($lookup['found'] ?? false) || blank($lookup['customer_name'] ?? null)) {
+            return null;
+        }
+
+        $name = trim((string) $lookup['customer_name']);
+        $snapshot = is_array($lookup['raw'] ?? null) ? $lookup['raw'] : $lookup;
+
+        $contact->syncFromFayda([
+            'sub' => $contact->sub ?: ('crm-'.$contact->phone_number),
+            'name' => $name,
+            'phone_number' => $contact->phone_number,
+            'email' => $lookup['email'] ?? $contact->email,
+            'gender' => $lookup['gender'] ?? $contact->gender,
+            'nationality' => $lookup['nationality']
+                ?? ($contact->nationality ?: PortalProfileOptions::DEFAULT_NATIONALITY),
+            'birthdate' => $lookup['birthdate'] ?? $contact->birthdate,
+            'identification_type' => $lookup['identification_type']
+                ?? ($contact->identification_type ?: '2'),
+            'identification_number' => $lookup['identification_number']
+                ?? ($contact->identification_number ?: ('crm-'.$contact->phone_number)),
+            'address' => $contact->address,
+        ]);
+
+        $contact->forceFill(['crm_identity_snapshot' => $snapshot])->save();
+
+        if (! $this->isVerified($contact)) {
+            $contact->markIdentityVerified(IdentityVerifiedVia::Crm, $snapshot);
+        }
+
+        return $contact->fresh() ?? $contact;
+    }
+
     protected function autoApproveOwnedCompanies(Contact $contact): void
     {
         try {
