@@ -102,7 +102,7 @@ class RevenuePartnerResource extends Resource
                             $set(
                                 'phone',
                                 $company
-                                    ? PhoneNumber::normalizeNullable($company->revenuePhone())
+                                    ? PhoneNumber::normalizeNullable($company->claimPhone())
                                     : null,
                             );
                         })
