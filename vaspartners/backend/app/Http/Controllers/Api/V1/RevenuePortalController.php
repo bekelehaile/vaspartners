@@ -66,6 +66,25 @@ class RevenuePortalController extends Controller
             );
         }
 
+        $partners = RevenuePartner::query()
+            ->whereIn('id', $partnerIds)
+            ->get(['id', 'public_id', 'service_id', 'partner_name', 'phone', 'company_id', 'vas_service_id']);
+        $serviceIds = $partners
+            ->pluck('service_id')
+            ->map(fn ($id) => trim((string) $id))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+        $partnerPhones = $partners
+            ->map(fn (RevenuePartner $p) => PhoneNumber::normalizeNullable($p->phone))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+        $smsPhones = array_values(array_unique([...$matchPhones, ...$partnerPhones]));
+        $partnersByServiceId = $this->indexPartnersByServiceId($partners);
+
         $query = RevenueImportRow::query()
             ->with([
                 'import:id,public_id,title,period,status,bulk_message_id,sent_at,imported_at',
@@ -73,7 +92,31 @@ class RevenuePortalController extends Controller
                 'partner.vasService:id,name',
                 'vasService:id,name',
             ])
-            ->whereIn('revenue_partner_id', $partnerIds)
+            // Most import rows are unmatched (null revenue_partner_id); also accept
+            // orphans whose service_id belongs to a phone/company-matched partner.
+            ->where(function ($q) use ($partnerIds, $serviceIds): void {
+                $q->whereIn('revenue_partner_id', $partnerIds);
+                if ($serviceIds !== []) {
+                    $q->orWhere(function ($inner) use ($serviceIds): void {
+                        $inner->whereNull('revenue_partner_id')
+                            ->where(function ($sidQ) use ($serviceIds): void {
+                                $sidQ->whereIn('service_id', $serviceIds);
+                                foreach ($serviceIds as $sid) {
+                                    if (! preg_match('/^\d{10,}$/', $sid)) {
+                                        continue;
+                                    }
+                                    $stripped = ltrim($sid, '0');
+                                    if ($stripped !== '') {
+                                        $sidQ->orWhereRaw(
+                                            "NULLIF(LTRIM(service_id, '0'), '') = ?",
+                                            [$stripped],
+                                        );
+                                    }
+                                }
+                            });
+                    });
+                }
+            })
             ->whereNotNull('amount')
             ->where('amount', '>', 0)
             ->whereHas('import', function ($q): void {
@@ -90,15 +133,15 @@ class RevenuePortalController extends Controller
         // SMS filter needs recipient status — page after enrichment when filtered.
         if ($smsFilter === 'all') {
             $page = $query->paginate($perPage);
-            $rows = $page->getCollection();
-            $smsByKey = $this->smsStatusIndex($rows, $matchPhones);
+            $rows = $this->hydratePartners($page->getCollection(), $partnersByServiceId);
+            $smsByKey = $this->smsStatusIndex($rows, $smsPhones);
             $page->setCollection($this->mapRows($rows, $smsByKey));
 
             return response()->json($page);
         }
 
-        $allRows = $query->limit(500)->get();
-        $smsByKey = $this->smsStatusIndex($allRows, $matchPhones);
+        $allRows = $this->hydratePartners($query->limit(500)->get(), $partnersByServiceId);
+        $smsByKey = $this->smsStatusIndex($allRows, $smsPhones);
         $mapped = $this->mapRows($allRows, $smsByKey)->values();
 
         $filtered = $mapped->filter(function (array $row) use ($smsFilter): bool {
@@ -149,6 +192,68 @@ class RevenuePortalController extends Controller
         }
 
         return array_keys($phones);
+    }
+
+    /**
+     * Attach matched partners onto orphan import rows (null revenue_partner_id) by service_id.
+     *
+     * @param  \Illuminate\Support\Collection<int, RevenueImportRow>  $rows
+     * @param  \Illuminate\Support\Collection<string, RevenuePartner>  $partnersByServiceId
+     * @return \Illuminate\Support\Collection<int, RevenueImportRow>
+     */
+    protected function hydratePartners($rows, $partnersByServiceId)
+    {
+        foreach ($rows as $row) {
+            if ($row->partner) {
+                continue;
+            }
+
+            $serviceId = trim((string) ($row->service_id ?? ''));
+            if ($serviceId === '') {
+                continue;
+            }
+
+            $partner = $partnersByServiceId->get($serviceId);
+            if (! $partner && preg_match('/^\d{10,}$/', $serviceId)) {
+                $stripped = ltrim($serviceId, '0');
+                if ($stripped !== '') {
+                    $partner = $partnersByServiceId->get($stripped);
+                }
+            }
+
+            if ($partner) {
+                $row->setRelation('partner', $partner);
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Index partners by service_id and zero-stripped form for orphan row hydration.
+     *
+     * @param  \Illuminate\Support\Collection<int, RevenuePartner>  $partners
+     * @return \Illuminate\Support\Collection<string, RevenuePartner>
+     */
+    protected function indexPartnersByServiceId($partners)
+    {
+        $index = collect();
+        foreach ($partners as $partner) {
+            $sid = trim((string) ($partner->service_id ?? ''));
+            if ($sid === '') {
+                continue;
+            }
+
+            $index->put($sid, $partner);
+            if (preg_match('/^\d{10,}$/', $sid)) {
+                $stripped = ltrim($sid, '0');
+                if ($stripped !== '') {
+                    $index->put($stripped, $partner);
+                }
+            }
+        }
+
+        return $index;
     }
 
     /**
