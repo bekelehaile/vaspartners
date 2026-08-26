@@ -22,8 +22,8 @@ class RevenuePortalController extends Controller
      *
      * Scope (Abay often reuses one SMS contact phone across many partners):
      *  - revenue_partners.company_id = this company, or
-     *  - same company phone AND partner_name ≈ company name, or
-     *  - same company phone when that phone is unique on the master list.
+     *  - same company phone or revenue phone AND partner_name ≈ company name, or
+     *  - same company/revenue phone when that phone is unique on the master list.
      */
     public function index(Request $request, CompanyMembershipService $membership)
     {
@@ -55,12 +55,12 @@ class RevenuePortalController extends Controller
             return $this->emptyPage('Company not found.', $perPage);
         }
 
-        $companyPhone = PhoneNumber::normalizeNullable($company->revenuePhone());
-        $partnerIds = $this->partnerIdsForCompany($company, $companyPhone);
+        $matchPhones = $this->companyMatchPhones($company);
+        $partnerIds = $this->partnerIdsForCompany($company, $matchPhones);
         if ($partnerIds === []) {
             return $this->emptyPage(
-                $companyPhone === null
-                    ? 'This company has no revenue phone on file and no linked revenue partners yet.'
+                $matchPhones === []
+                    ? 'This company has no company or revenue phone on file and no linked revenue partners yet.'
                     : 'No revenue partners match this company yet (phone + partner name).',
                 $perPage,
             );
@@ -91,14 +91,14 @@ class RevenuePortalController extends Controller
         if ($smsFilter === 'all') {
             $page = $query->paginate($perPage);
             $rows = $page->getCollection();
-            $smsByKey = $this->smsStatusIndex($rows, $companyPhone);
+            $smsByKey = $this->smsStatusIndex($rows, $matchPhones);
             $page->setCollection($this->mapRows($rows, $smsByKey));
 
             return response()->json($page);
         }
 
         $allRows = $query->limit(500)->get();
-        $smsByKey = $this->smsStatusIndex($allRows, $companyPhone);
+        $smsByKey = $this->smsStatusIndex($allRows, $matchPhones);
         $mapped = $this->mapRows($allRows, $smsByKey)->values();
 
         $filtered = $mapped->filter(function (array $row) use ($smsFilter): bool {
@@ -127,6 +127,28 @@ class RevenuePortalController extends Controller
             'from' => $total === 0 ? null : (($pageNum - 1) * $perPage) + 1,
             'to' => $total === 0 ? null : (($pageNum - 1) * $perPage) + $slice->count(),
         ]);
+    }
+
+    /**
+     * Distinct phones used to scope portal revenue: claim/company phone and revenue phone.
+     *
+     * @return list<string>
+     */
+    protected function companyMatchPhones(Company $company): array
+    {
+        $phones = [];
+        foreach ([
+            PhoneNumber::normalizeNullable($company->claimPhone()),
+            PhoneNumber::normalizeNullable($company->phone),
+            PhoneNumber::normalizeNullable($company->revenuePhone()),
+            PhoneNumber::normalizeNullable($company->revenue_phone),
+        ] as $phone) {
+            if ($phone !== null && $phone !== '') {
+                $phones[$phone] = true;
+            }
+        }
+
+        return array_keys($phones);
     }
 
     /**
@@ -191,9 +213,10 @@ class RevenuePortalController extends Controller
     /**
      * Revenue partners visible to a portal company.
      *
+     * @param  list<string>  $matchPhones
      * @return list<int>
      */
-    protected function partnerIdsForCompany(Company $company, ?string $companyPhone): array
+    protected function partnerIdsForCompany(Company $company, array $matchPhones): array
     {
         $ids = RevenuePartner::query()
             ->where('is_active', true)
@@ -202,18 +225,20 @@ class RevenuePortalController extends Controller
             ->map(fn ($id) => (int) $id)
             ->all();
 
-        if ($companyPhone === null) {
+        if ($matchPhones === []) {
             return array_values(array_unique($ids));
         }
 
         $phonePartners = RevenuePartner::query()
             ->where('is_active', true)
-            ->where(function ($q) use ($companyPhone): void {
-                $q->where('phone', $companyPhone)
-                    ->orWhereRaw(
+            ->where(function ($q) use ($matchPhones): void {
+                $q->whereIn('phone', $matchPhones);
+                foreach ($matchPhones as $phone) {
+                    $q->orWhereRaw(
                         "RIGHT(REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]', '', 'g'), 9) = ?",
-                        [$companyPhone],
+                        [$phone],
                     );
+                }
             })
             ->get(['id', 'partner_name', 'phone', 'company_id']);
 
@@ -221,18 +246,26 @@ class RevenuePortalController extends Controller
             return array_values(array_unique($ids));
         }
 
-        $matched = $phonePartners
-            ->filter(fn (RevenuePartner $p) => PartnerCompanyNameMatcher::matches(
-                $p->partner_name,
-                $company->name,
-            ))
-            ->pluck('id')
-            ->map(fn ($id) => (int) $id)
-            ->all();
+        // Per phone: name match, or unique master-list phone when names diverge.
+        $matched = [];
+        $byPhone = $phonePartners->groupBy(
+            fn (RevenuePartner $p) => PhoneNumber::normalizeNullable($p->phone) ?: (string) $p->id,
+        );
+        foreach ($byPhone as $group) {
+            $nameMatched = $group
+                ->filter(fn (RevenuePartner $p) => PartnerCompanyNameMatcher::matches(
+                    $p->partner_name,
+                    $company->name,
+                ))
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
 
-        // Unique phone on the master list → safe even when names diverge.
-        if ($matched === [] && $phonePartners->count() === 1) {
-            $matched = [(int) $phonePartners->first()->id];
+            if ($nameMatched !== []) {
+                array_push($matched, ...$nameMatched);
+            } elseif ($group->count() === 1) {
+                $matched[] = (int) $group->first()->id;
+            }
         }
 
         return array_values(array_unique([...$ids, ...$matched]));
@@ -240,9 +273,10 @@ class RevenuePortalController extends Controller
 
     /**
      * @param  \Illuminate\Support\Collection<int, RevenueImportRow>  $rows
+     * @param  list<string>  $matchPhones
      * @return array<string, array{status: string, error: ?string, sent_at: ?string, phone: ?string}>
      */
-    protected function smsStatusIndex($rows, ?string $companyPhone): array
+    protected function smsStatusIndex($rows, array $matchPhones): array
     {
         $campaignIds = $rows
             ->map(fn (RevenueImportRow $r) => $r->import?->bulk_message_id)
@@ -265,13 +299,15 @@ class RevenuePortalController extends Controller
         $recipientsQuery = BulkMessageRecipient::query()
             ->whereIn('campaign_id', $campaignIds);
 
-        if ($companyPhone !== null) {
-            $recipientsQuery->where(function ($q) use ($companyPhone): void {
-                $q->where('phone_normalized', $companyPhone)
-                    ->orWhereRaw(
+        if ($matchPhones !== []) {
+            $recipientsQuery->where(function ($q) use ($matchPhones): void {
+                $q->whereIn('phone_normalized', $matchPhones);
+                foreach ($matchPhones as $phone) {
+                    $q->orWhereRaw(
                         "RIGHT(REGEXP_REPLACE(COALESCE(phone_normalized, phone_raw, ''), '[^0-9]', '', 'g'), 9) = ?",
-                        [$companyPhone],
+                        [$phone],
                     );
+                }
             });
         }
 
