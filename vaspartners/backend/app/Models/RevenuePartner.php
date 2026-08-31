@@ -39,16 +39,6 @@ class RevenuePartner extends Model
         });
 
         static::saving(function (RevenuePartner $partner): void {
-            // Company is our validated portal record. Partner name comes from finance — never overwrite it.
-            // Phone defaults to the linked company's revenue phone when the company is newly linked and no
-            // phone is set yet; manual edits are preserved.
-            if ($partner->company_id && $partner->isDirty('company_id') && ! filled($partner->phone)) {
-                $company = Company::query()->find($partner->company_id);
-                if ($company && filled($company->revenuePhone())) {
-                    $partner->phone = PhoneNumber::normalizeNullable($company->revenuePhone());
-                }
-            }
-
             if (filled($partner->phone)) {
                 $normalized = PhoneNumber::normalizeNullable($partner->phone);
                 // Keep non-standard / invalid values for manual cleanup — only normalize clean mobiles.

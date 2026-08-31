@@ -16,7 +16,7 @@ class CreateRevenuePartner extends CreateRecord
 
     public function getSubheading(): ?string
     {
-        return 'Partner name is from finance/Excel. Link a validated portal company — phone is taken from that company’s revenue phone.';
+        return 'Partner name is from finance/Excel. Link a validated portal company and enter the revenue SMS phone.';
     }
 
     /**

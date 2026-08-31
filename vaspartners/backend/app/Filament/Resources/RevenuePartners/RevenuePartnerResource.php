@@ -28,8 +28,6 @@ use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\Utilities\Get;
-use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -93,20 +91,7 @@ class RevenuePartnerResource extends Resource
                         ->searchable()
                         ->preload()
                         ->native(false)
-                        ->live()
-                        ->afterStateUpdated(function ($state, Set $set, Get $get): void {
-                            if (filled($get('phone'))) {
-                                return;
-                            }
-                            $company = $state ? Company::query()->find($state) : null;
-                            $set(
-                                'phone',
-                                $company
-                                    ? PhoneNumber::normalizeNullable($company->claimPhone())
-                                    : null,
-                            );
-                        })
-                        ->helperText('Optional. Selecting a company defaults the phone to that company’s revenue phone.')
+                        ->helperText('Optional. Link a validated portal company for revenue matching.')
                         ->columnSpanFull(),
                     TextInput::make('phone')
                         ->label('Phone')
@@ -124,7 +109,7 @@ class RevenuePartnerResource extends Resource
                                 $fail('Phone must be a local mobile (9/8 + 8 digits).');
                             }
                         })
-                        ->helperText('Defaults to the selected company’s revenue phone. Editable.'),
+                        ->helperText('Local mobile used for revenue SMS (9/8 + 8 digits).'),
                     Select::make('created_by_user_id')
                         ->label('Account manager')
                         ->options(fn (): array => static::accountManagerOptions())
