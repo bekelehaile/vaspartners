@@ -34,6 +34,7 @@ class BackfillRevenueRowSentPhonesService
      *   from_partner: int,
      *   from_legacy_csv: int,
      *   from_company: int,
+     *   from_partner_name: int,
      *   already_set: int,
      *   still_missing: int
      * }
@@ -46,6 +47,7 @@ class BackfillRevenueRowSentPhonesService
             'from_partner' => 0,
             'from_legacy_csv' => 0,
             'from_company' => 0,
+            'from_partner_name' => 0,
             'already_set' => 0,
             'still_missing' => 0,
         ];
@@ -103,6 +105,7 @@ class BackfillRevenueRowSentPhonesService
                     'partner', 'partner_lookup' => $stats['from_partner']++,
                     'legacy_csv' => $stats['from_legacy_csv']++,
                     'company' => $stats['from_company']++,
+                    'partner_name' => $stats['from_partner_name']++,
                     default => null,
                 };
 
@@ -161,7 +164,39 @@ class BackfillRevenueRowSentPhonesService
             return [$companyPhone, 'company'];
         }
 
+        $namePhone = $this->phoneFromUniquePartnerName($row->partner_name);
+        if ($namePhone !== null) {
+            return [$namePhone, 'partner_name'];
+        }
+
         return [null, null];
+    }
+
+    protected function phoneFromUniquePartnerName(?string $name): ?string
+    {
+        $name = trim((string) $name);
+        if ($name === '' || str_starts_with($name, 'Partner ')) {
+            return null;
+        }
+
+        $matches = RevenuePartner::query()
+            ->where('is_active', true)
+            ->whereNotNull('phone')
+            ->where('phone', '!=', '')
+            ->get(['partner_name', 'phone'])
+            ->filter(fn (RevenuePartner $partner) => PartnerCompanyNameMatcher::matches(
+                $name,
+                $partner->partner_name,
+            ))
+            ->values();
+
+        if ($matches->count() !== 1) {
+            return null;
+        }
+
+        $phone = PhoneNumber::normalizeNullable($matches->first()->phone);
+
+        return $phone !== null && $this->isUsablePhone($phone) ? $phone : null;
     }
 
     /**

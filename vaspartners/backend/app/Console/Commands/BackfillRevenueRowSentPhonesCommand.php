@@ -33,11 +33,12 @@ class BackfillRevenueRowSentPhonesCommand extends Command
                 ['Filled from partner phone', $stats['from_partner']],
                 ['Filled from legacy CSV (consolidated partners)', $stats['from_legacy_csv']],
                 ['Filled from company phone', $stats['from_company']],
+                ['Filled from unique partner name match', $stats['from_partner_name']],
                 ['Still missing phone', $stats['still_missing']],
             ],
         );
 
-        if ($dryRun && ($stats['from_sms'] + $stats['from_partner'] + $stats['from_legacy_csv'] + $stats['from_company']) > 0) {
+        if ($dryRun && ($stats['from_sms'] + $stats['from_partner'] + $stats['from_legacy_csv'] + $stats['from_company'] + $stats['from_partner_name']) > 0) {
             $this->comment('Re-run without --dry-run to apply.');
         }
 
