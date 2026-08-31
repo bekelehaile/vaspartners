@@ -325,6 +325,8 @@ class RevenuePartnerPhoneSyncService
             'aziza' => 'aziza.ali@ethiotelecom.et',
             'kalkidan' => 'kalkidan.sahle@ethiotelecom.et',
             'tolosa' => 'tolasa.deressa@ethiotelecom.et',
+            'mohammed' => 'mohamed.saidm@ethiotelecom.et',
+            'mohamed said muhea' => 'mohamed.saidm@ethiotelecom.et',
         ];
         if (isset($aliases[$cacheKey])) {
             $user = User::query()->where('email', $aliases[$cacheKey])->first();
