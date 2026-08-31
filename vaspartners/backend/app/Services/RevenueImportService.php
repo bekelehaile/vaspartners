@@ -716,6 +716,7 @@ class RevenueImportService
                     ? null
                     : 'Partner phone missing — set phone then Sync phones / Rematch.',
                 'sent_at' => null,
+                'sent_phone' => null,
                 'bulk_message_id' => null,
                 'bulk_message_recipient_id' => null,
             ])->save();
@@ -886,6 +887,7 @@ class RevenueImportService
                     'bulk_message_id' => $campaign->id,
                     'bulk_message_recipient_id' => $recipient->id,
                     'sent_at' => $sentAt,
+                    'sent_phone' => $normalized !== '' ? $normalized : null,
                     'status' => RevenueImportRowStatus::Sent,
                     'error' => null,
                 ])->save();

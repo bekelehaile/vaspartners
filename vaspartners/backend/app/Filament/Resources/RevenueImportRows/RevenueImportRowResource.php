@@ -12,6 +12,7 @@ use App\Filament\Resources\RevenuePartners\RevenuePartnerResource;
 use App\Models\AppSetting;
 use App\Models\RevenueImportRow;
 use App\Models\User;
+use App\Support\PhoneNumber;
 use App\Support\RevenueCatalogServices;
 use Filament\Actions\ViewAction;
 use Filament\Infolists\Components\TextEntry;
@@ -20,6 +21,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -74,9 +76,16 @@ class RevenueImportRowResource extends Resource
                         ->label('Short code')
                         ->placeholder('—')
                         ->copyable(),
-                    TextEntry::make('partner.phone')
+                    TextEntry::make('sent_phone')
                         ->label('Phone')
-                        ->placeholder('—'),
+                        ->formatStateUsing(fn ($state) => static::formatPhone($state))
+                        ->placeholder('—')
+                        ->copyable(),
+                    TextEntry::make('partner.phone')
+                        ->label('Current partner phone')
+                        ->formatStateUsing(fn ($state) => static::formatPhone($state))
+                        ->placeholder('—')
+                        ->visible(fn (RevenueImportRow $record): bool => filled($record->partner?->phone)),
                     TextEntry::make('partner.company.name')
                         ->label('Linked company')
                         ->placeholder('—')
@@ -204,10 +213,17 @@ class RevenueImportRowResource extends Resource
                     ->searchable()
                     ->toggleable()
                     ->placeholder('—'),
-                TextColumn::make('partner.phone')
+                TextColumn::make('sent_phone')
                     ->label('Phone')
+                    ->formatStateUsing(fn ($state) => static::formatPhone($state))
                     ->searchable()
-                    ->toggleable()
+                    ->sortable()
+                    ->copyable()
+                    ->placeholder('—'),
+                TextColumn::make('partner.phone')
+                    ->label('Current partner phone')
+                    ->formatStateUsing(fn ($state) => static::formatPhone($state))
+                    ->toggleable(isToggledHiddenByDefault: true)
                     ->placeholder('—'),
                 TextColumn::make('partner.company.name')
                     ->label('Company')
@@ -272,6 +288,15 @@ class RevenueImportRowResource extends Resource
                     )
                     ->searchable()
                     ->preload(),
+                TernaryFilter::make('has_phone')
+                    ->label('Phone')
+                    ->trueLabel('Has phone')
+                    ->falseLabel('Missing phone')
+                    ->queries(
+                        true: fn (Builder $query) => $query->whereNotNull('sent_phone')->where('sent_phone', '!=', ''),
+                        false: fn (Builder $query) => $query->where(fn (Builder $q) => $q->whereNull('sent_phone')->orWhere('sent_phone', '')),
+                        blank: fn (Builder $query) => $query,
+                    ),
             ])
             ->recordActions([
                 ViewAction::make(),
@@ -328,6 +353,7 @@ class RevenueImportRowResource extends Resource
         /** @var RevenueImportRow $record */
         return array_filter([
             'Service ID' => $record->service_id,
+            'Phone' => static::formatPhone($record->sent_phone),
             'Amount' => number_format((float) $record->amount, 2).' ETB',
             'Status' => $record->status instanceof RevenueImportRowStatus
                 ? $record->status->label()
@@ -341,9 +367,28 @@ class RevenueImportRowResource extends Resource
             'partner_name',
             'service_id',
             'short_code',
+            'sent_phone',
             'import.period',
-            'partner.phone',
             'partner.company.name',
         ];
+    }
+
+    protected static function formatPhone(mixed $phone): ?string
+    {
+        if ($phone === null || $phone === '') {
+            return null;
+        }
+
+        $normalized = PhoneNumber::normalizeNullable($phone);
+        if ($normalized !== null && strlen($normalized) >= 9) {
+            return substr($normalized, -9);
+        }
+
+        $digits = preg_replace('/\D+/', '', (string) $phone) ?? '';
+        if (strlen($digits) < 9) {
+            return null;
+        }
+
+        return substr($digits, -9);
     }
 }

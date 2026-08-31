@@ -24,6 +24,7 @@ class RevenueImportRow extends Model
         'bulk_message_id',
         'bulk_message_recipient_id',
         'sent_at',
+        'sent_phone',
     ];
 
     protected function casts(): array

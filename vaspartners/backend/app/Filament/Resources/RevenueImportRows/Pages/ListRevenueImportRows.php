@@ -11,6 +11,6 @@ class ListRevenueImportRows extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'Search individual partner amounts across all monthly revenue imports.';
+        return 'Search partner revenue by name, service ID, or phone.';
     }
 }
