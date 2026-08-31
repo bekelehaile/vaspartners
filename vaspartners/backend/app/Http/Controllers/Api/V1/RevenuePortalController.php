@@ -11,7 +11,6 @@ use App\Models\Contact;
 use App\Models\RevenueImportRow;
 use App\Models\RevenuePartner;
 use App\Services\CompanyMembershipService;
-use App\Support\PartnerCompanyNameMatcher;
 use App\Support\PhoneNumber;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -21,9 +20,9 @@ class RevenuePortalController extends Controller
     /**
      * Partner-facing revenue ledger for the current company.
      *
-     * Rows come from revenue_import_rows (same data as Partner Revenue admin).
-     * Matched when the master partner phone equals the company phone or revenue phone,
-     * plus linked partner, service ID, and name fallbacks.
+     * Rows come from revenue_import_rows (Partner Revenue). Matched when the row
+     * sent_phone or linked partner phone equals the company phone or revenue phone
+     * (exact or last 9 digits).
      */
     public function index(Request $request, CompanyMembershipService $membership)
     {
@@ -56,25 +55,8 @@ class RevenuePortalController extends Controller
         }
 
         $matchPhones = $this->companyMatchPhones($company);
-        $partnerIds = $this->partnerIdsForCompany($company, $matchPhones);
-        $serviceIds = $this->serviceIdsForPartnerIds($partnerIds);
-        $hasNameScope = PartnerCompanyNameMatcher::normalize($company->name) !== '';
-
-        if ($partnerIds === [] && $matchPhones === [] && ! $hasNameScope) {
-            return $this->emptyPage('This company has no phone or name we can match revenue against yet.', $perPage);
-        }
-
-        $smsPhones = $matchPhones;
-        if ($partnerIds !== []) {
-            $smsPhones = array_values(array_unique([
-                ...$smsPhones,
-                ...RevenuePartner::query()
-                    ->whereIn('id', $partnerIds)
-                    ->pluck('phone')
-                    ->map(fn ($p) => PhoneNumber::normalizeNullable($p))
-                    ->filter()
-                    ->all(),
-            ]));
+        if ($matchPhones === []) {
+            return $this->emptyPage('Add a company phone or revenue phone to view partner revenue.', $perPage);
         }
 
         $partnersByServiceId = $this->globalPartnersByServiceId();
@@ -86,8 +68,8 @@ class RevenuePortalController extends Controller
                 'partner.vasService:id,name',
                 'vasService:id,name',
             ])
-            ->where(function (Builder $q) use ($company, $partnerIds, $serviceIds, $matchPhones): void {
-                $this->applyRowScopeForCompany($q, $company, $partnerIds, $serviceIds, $matchPhones);
+            ->where(function (Builder $q) use ($matchPhones): void {
+                $this->applyRowPhoneScope($q, $matchPhones);
             })
             ->whereNotNull('amount')
             ->where('amount', '>', 0)
@@ -104,18 +86,17 @@ class RevenuePortalController extends Controller
             })
             ->orderByDesc('id');
 
-        // SMS filter needs recipient status — page after enrichment when filtered.
         if ($smsFilter === 'all') {
             $page = $query->paginate($perPage);
             $rows = $this->hydratePartners($page->getCollection(), $partnersByServiceId);
-            $smsByKey = $this->smsStatusIndex($rows, $smsPhones);
+            $smsByKey = $this->smsStatusIndex($rows, $matchPhones);
             $page->setCollection($this->mapRows($rows, $smsByKey));
 
             return response()->json($page);
         }
 
         $allRows = $this->hydratePartners($query->limit(500)->get(), $partnersByServiceId);
-        $smsByKey = $this->smsStatusIndex($allRows, $smsPhones);
+        $smsByKey = $this->smsStatusIndex($allRows, $matchPhones);
         $mapped = $this->mapRows($allRows, $smsByKey)->values();
 
         $filtered = $mapped->filter(function (array $row) use ($smsFilter): bool {
@@ -147,7 +128,7 @@ class RevenuePortalController extends Controller
     }
 
     /**
-     * Company phone and revenue phone used to match master partners and revenue rows.
+     * Company phone and revenue phone used to match Partner Revenue rows.
      *
      * @return list<string>
      */
@@ -168,52 +149,44 @@ class RevenuePortalController extends Controller
     }
 
     /**
-     * @param  list<int>  $partnerIds
-     * @param  list<string>  $serviceIds
+     * Match revenue_import_rows by sent_phone or linked partner phone.
+     *
      * @param  list<string>  $matchPhones
      */
-    protected function applyRowScopeForCompany(
-        Builder $query,
-        Company $company,
-        array $partnerIds,
-        array $serviceIds,
-        array $matchPhones,
-    ): void {
-        $query->where(function (Builder $q) use ($company, $partnerIds, $serviceIds, $matchPhones): void {
-            $hasClause = false;
+    protected function applyRowPhoneScope(Builder $query, array $matchPhones): void
+    {
+        if ($matchPhones === []) {
+            $query->whereRaw('1 = 0');
 
-            if ($partnerIds !== []) {
-                $q->whereIn('revenue_partner_id', $partnerIds);
-                $hasClause = true;
-            }
+            return;
+        }
 
-            if ($matchPhones !== []) {
-                $method = $hasClause ? 'orWhere' : 'where';
-                $q->{$method}(function (Builder $inner) use ($matchPhones): void {
-                    $inner->whereHas('partner', function (Builder $partnerQuery) use ($matchPhones): void {
-                        $this->applyPartnerPhoneScope($partnerQuery, $matchPhones);
-                    });
-                });
-                $hasClause = true;
-            }
-
-            if ($serviceIds !== []) {
-                $method = $hasClause ? 'orWhere' : 'where';
-                $q->{$method}(function (Builder $inner) use ($serviceIds): void {
-                    $this->applyServiceIdScope($inner, $serviceIds);
-                });
-                $hasClause = true;
-            }
-
-            $method = $hasClause ? 'orWhere' : 'where';
-            $q->{$method}(function (Builder $inner) use ($company): void {
-                $this->applyNormalizedNameScope($inner, 'partner_name', $company->name);
+        $query->where(function (Builder $q) use ($matchPhones): void {
+            $this->applyImportRowPhoneScope($q, $matchPhones);
+            $q->orWhereHas('partner', function (Builder $partnerQuery) use ($matchPhones): void {
+                $this->applyPartnerPhoneScope($partnerQuery, $matchPhones);
             });
         });
     }
 
     /**
-     * Match revenue partner phones to company / revenue phone (exact or last 9 digits).
+     * @param  list<string>  $matchPhones
+     */
+    protected function applyImportRowPhoneScope(Builder $query, array $matchPhones): void
+    {
+        $query->where(function (Builder $phoneQuery) use ($matchPhones): void {
+            $phoneQuery->whereIn('sent_phone', $matchPhones);
+            foreach ($matchPhones as $phone) {
+                $phoneQuery->orWhereRaw(
+                    "RIGHT(REGEXP_REPLACE(COALESCE(sent_phone, ''), '[^0-9]', '', 'g'), 9) = ?",
+                    [$phone],
+                );
+            }
+        });
+    }
+
+    /**
+     * Match revenue partner phones (exact or last 9 digits).
      *
      * @param  list<string>  $matchPhones
      */
@@ -234,62 +207,6 @@ class RevenuePortalController extends Controller
                 );
             }
         });
-    }
-
-    /**
-     * @param  list<string>  $serviceIds
-     */
-    protected function applyServiceIdScope(Builder $query, array $serviceIds): void
-    {
-        $query->whereIn('service_id', $serviceIds);
-        foreach ($serviceIds as $sid) {
-            if (! preg_match('/^\d{10,}$/', $sid)) {
-                continue;
-            }
-            $stripped = ltrim($sid, '0');
-            if ($stripped !== '') {
-                $query->orWhereRaw(
-                    "NULLIF(LTRIM(service_id, '0'), '') = ?",
-                    [$stripped],
-                );
-            }
-        }
-    }
-
-    protected function applyNormalizedNameScope(Builder $query, string $column, ?string $companyName): void
-    {
-        $normalized = PartnerCompanyNameMatcher::normalize($companyName);
-        if ($normalized === '' || strlen($normalized) < 4) {
-            $query->whereRaw('1 = 0');
-
-            return;
-        }
-
-        $sqlColumn = "REGEXP_REPLACE(LOWER(COALESCE({$column}, '')), '[^a-z0-9]', '', 'g')";
-        $query->where(function (Builder $q) use ($sqlColumn, $normalized): void {
-            $q->whereRaw("{$sqlColumn} LIKE ?", ['%'.$normalized.'%'])
-                ->orWhereRaw("? LIKE '%' || {$sqlColumn} || '%'", [$normalized]);
-        });
-    }
-
-    /**
-     * @param  list<int>  $partnerIds
-     * @return list<string>
-     */
-    protected function serviceIdsForPartnerIds(array $partnerIds): array
-    {
-        if ($partnerIds === []) {
-            return [];
-        }
-
-        return RevenuePartner::query()
-            ->whereIn('id', $partnerIds)
-            ->pluck('service_id')
-            ->map(fn ($id) => trim((string) $id))
-            ->filter()
-            ->unique()
-            ->values()
-            ->all();
     }
 
     /**
@@ -349,8 +266,6 @@ class RevenuePortalController extends Controller
     }
 
     /**
-     * Index partners by service_id and zero-stripped form for orphan row hydration.
-     *
      * @param  \Illuminate\Support\Collection<int, RevenuePartner>  $partners
      * @return \Illuminate\Support\Collection<string, RevenuePartner>
      */
@@ -388,8 +303,9 @@ class RevenuePortalController extends Controller
             $key = ($import?->bulk_message_id ?: 0).'|'.(string) $row->service_id;
             $sms = $smsByKey[$key] ?? null;
 
+            $rowPhone = PhoneNumber::normalizeNullable($row->sent_phone);
             $partnerPhone = PhoneNumber::normalizeNullable($partner?->phone);
-            $smsPhone = PhoneNumber::normalizeNullable($sms['phone'] ?? null) ?: $partnerPhone;
+            $smsPhone = PhoneNumber::normalizeNullable($sms['phone'] ?? null) ?: $rowPhone ?: $partnerPhone;
 
             return [
                 'id' => $row->id,
@@ -399,7 +315,7 @@ class RevenuePortalController extends Controller
                 'partner_name' => $partner?->partner_name ?: $row->partner_name,
                 'service_type' => $row->vasService?->name
                     ?: $partner?->vasService?->name,
-                'phone' => $partnerPhone,
+                'phone' => $partnerPhone ?: $rowPhone,
                 'sms_phone' => $smsPhone,
                 'sms_phone_display' => $smsPhone
                     ? (PhoneNumber::toE164($smsPhone) ?: $smsPhone)
@@ -432,43 +348,6 @@ class RevenuePortalController extends Controller
             'from' => null,
             'to' => null,
         ]);
-    }
-
-    /**
-     * Revenue partners for a portal company: linked, same phone, or similar name.
-     *
-     * @param  list<string>  $matchPhones
-     * @return list<int>
-     */
-    protected function partnerIdsForCompany(Company $company, array $matchPhones): array
-    {
-        $ids = RevenuePartner::query()
-            ->where('is_active', true)
-            ->where('company_id', $company->id)
-            ->pluck('id')
-            ->map(fn ($id) => (int) $id)
-            ->all();
-
-        $phoneOrNameQuery = RevenuePartner::query()
-            ->where('is_active', true)
-            ->where(function (Builder $q) use ($matchPhones, $company): void {
-                if ($matchPhones !== []) {
-                    $q->where(function (Builder $phoneQ) use ($matchPhones): void {
-                        $this->applyPartnerPhoneScope($phoneQ, $matchPhones);
-                    });
-                }
-
-                $q->orWhere(function (Builder $nameQ) use ($company): void {
-                    $this->applyNormalizedNameScope($nameQ, 'partner_name', $company->name);
-                });
-            });
-
-        $extraIds = $phoneOrNameQuery
-            ->pluck('id')
-            ->map(fn ($id) => (int) $id)
-            ->all();
-
-        return array_values(array_unique([...$ids, ...$extraIds]));
     }
 
     /**
@@ -534,7 +413,6 @@ class RevenuePortalController extends Controller
                 : (string) $recipient->status;
 
             $key = $recipient->campaign_id.'|'.$serviceId;
-            // Prefer failed/sent over pending when duplicates exist.
             $existing = $index[$key]['status'] ?? null;
             if ($existing === 'failed' || $existing === 'sent') {
                 if ($status === 'pending' || $status === 'skipped') {
