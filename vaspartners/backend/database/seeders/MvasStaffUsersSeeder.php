@@ -57,7 +57,6 @@ class MvasStaffUsersSeeder extends Seeder
                 'name' => $row['name'],
                 'username' => $row['phone'],
                 'phone' => $row['phone'],
-                'must_change_password' => true,
                 'is_management' => $row['is_management'],
                 'is_active' => true,
                 'email_verified_at' => now(),
@@ -66,6 +65,7 @@ class MvasStaffUsersSeeder extends Seeder
             // Only set the default password when creating — never reset prod passwords on redeploy.
             if (! $existing) {
                 $attrs['password'] = $password;
+                $attrs['must_change_password'] = true;
                 $attrs['manager_id'] = null;
             }
 
