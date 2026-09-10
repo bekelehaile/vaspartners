@@ -2106,7 +2106,8 @@ class CompanyMembershipService
 
     /**
      * Admin: replace company owner/claim contact after ERCA verification.
-     * CRM match required. Updates claim phone only; preserves revenue/ERCA phones.
+     * Uses an existing contact by phone when present; otherwise creates via CRM.
+     * Updates claim phone only; preserves revenue/ERCA phones.
      * Previous owner membership is disabled on this company only.
      */
     public function adminChangeCompanyContact(
@@ -2131,8 +2132,15 @@ class CompanyMembershipService
         $oldOwner = $company->ownerContact();
         $oldClaim = PhoneNumber::normalizeNullable($company->claimPhone());
 
-        // CRM lookup + contact create/update happens before the membership transaction.
-        $newContact = app(ContactIdentityService::class)->findOrCreateFromCrmPhone($normalized);
+        // Prefer an existing partner contact (real user). CRM only when creating a new one.
+        $newContact = Contact::query()->where('phone_number', $normalized)->first();
+        if ($newContact) {
+            if (! $newContact->is_active) {
+                $newContact->forceFill(['is_active' => true])->save();
+            }
+        } else {
+            $newContact = app(ContactIdentityService::class)->findOrCreateFromCrmPhone($normalized);
+        }
 
         if (! $newContact->is_active) {
             throw ValidationException::withMessages([
