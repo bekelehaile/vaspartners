@@ -45,19 +45,33 @@ class MvasStaffUsersSeeder extends Seeder
         $byLegacy = [];
 
         foreach ($rows as $row) {
+            $existing = User::withTrashed()->where('email', $row['email'])->first();
+            if ($existing?->trashed()) {
+                // Soft-deleted staff stay deleted — do not recreate (unique email) or restore.
+                $byLegacy[$row['legacy_id']] = $existing;
+
+                continue;
+            }
+
+            $attrs = [
+                'name' => $row['name'],
+                'username' => $row['phone'],
+                'phone' => $row['phone'],
+                'must_change_password' => true,
+                'is_management' => $row['is_management'],
+                'is_active' => true,
+                'email_verified_at' => now(),
+            ];
+
+            // Only set the default password when creating — never reset prod passwords on redeploy.
+            if (! $existing) {
+                $attrs['password'] = $password;
+                $attrs['manager_id'] = null;
+            }
+
             $user = User::query()->updateOrCreate(
                 ['email' => $row['email']],
-                [
-                    'name' => $row['name'],
-                    'username' => $row['phone'],
-                    'phone' => $row['phone'],
-                    'password' => $password,
-                    'must_change_password' => true,
-                    'is_management' => $row['is_management'],
-                    'is_active' => true,
-                    'email_verified_at' => now(),
-                    'manager_id' => null,
-                ]
+                $attrs,
             );
 
             $byLegacy[$row['legacy_id']] = $user;
@@ -83,12 +97,21 @@ class MvasStaffUsersSeeder extends Seeder
             }
 
             $user = $byLegacy[$row['legacy_id']];
-            $managerId = $byLegacy[$managerLegacy]->id;
+            if ($user->trashed()) {
+                continue;
+            }
+
+            $manager = $byLegacy[$managerLegacy];
+            if ($manager->trashed()) {
+                continue;
+            }
+
+            $managerId = $manager->id;
             if ($user->manager_id !== $managerId) {
                 $user->forceFill(['manager_id' => $managerId])->save();
             }
         }
 
-        $this->command?->info('Seeded '.count($rows).' MVAS staff users (password: password).');
+        $this->command?->info('Seeded '.count($rows).' MVAS staff users (new accounts only get password: password).');
     }
 }
