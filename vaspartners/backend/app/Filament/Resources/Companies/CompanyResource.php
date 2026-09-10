@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Companies;
 
 use App\Enums\CompanyRole;
 use App\Filament\Exports\CompanyExporter;
+use App\Filament\Resources\Companies\Pages\ChangeCompanyContact;
 use App\Filament\Resources\Companies\Pages\EditCompany;
 use App\Filament\Resources\Companies\Pages\ListCompanies;
 use App\Filament\Resources\Companies\Pages\ViewCompany;
@@ -187,7 +188,15 @@ class CompanyResource extends Resource
                         ->label('Owner')
                         ->state(fn (Company $record): ?string => $record->ownerContact()?->name)
                         ->placeholder('No owner')
-                        ->color(fn (Company $record): string => $record->isOwnerless() ? 'warning' : 'success'),
+                        ->color(fn (Company $record): string => $record->isOwnerless() ? 'warning' : 'success')
+                        ->hintAction(
+                            Action::make('change_contact_hint')
+                                ->label('Change')
+                                ->icon('heroicon-m-user-plus')
+                                ->visible(fn (Company $record): bool => (bool) $record->erca_tin_verified
+                                    && static::canEdit($record))
+                                ->url(fn (Company $record): string => static::getUrl('change-contact', ['record' => $record])),
+                        ),
                     TextEntry::make('members_count')
                         ->label('Members')
                         ->state(fn (Company $record): int => $record->memberCount()),
@@ -646,6 +655,7 @@ class CompanyResource extends Resource
             'index' => ListCompanies::route('/'),
             'view' => ViewCompany::route('/{record}'),
             'edit' => EditCompany::route('/{record}/edit'),
+            'change-contact' => ChangeCompanyContact::route('/{record}/change-contact'),
         ];
     }
 

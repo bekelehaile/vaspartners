@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Companies\Pages;
 use App\Filament\Resources\Companies\CompanyResource;
 use App\Models\User;
 use App\Services\CompanyMembershipService;
+use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
 use Filament\Resources\Pages\EditRecord;
 
@@ -19,6 +20,13 @@ class EditCompany extends EditRecord
     {
         return [
             ViewAction::make(),
+            Action::make('change_company_contact')
+                ->label('Change contact')
+                ->icon('heroicon-o-user-plus')
+                ->color('warning')
+                ->visible(fn (): bool => (bool) $this->getRecord()->erca_tin_verified
+                    && CompanyResource::canEdit($this->getRecord()))
+                ->url(fn (): string => CompanyResource::getUrl('change-contact', ['record' => $this->getRecord()])),
         ];
     }
 
