@@ -212,6 +212,111 @@ class ContactIdentityService
     }
 
     /**
+     * Admin company-contact change: CRM match is required.
+     * Finds or creates the contact, applies CRM KYC, marks identity verified via CRM.
+     *
+     * @throws ValidationException when CRM is unavailable or the phone is not found
+     */
+    public function findOrCreateFromCrmPhone(string $phone): Contact
+    {
+        $normalized = PhoneNumber::normalize($phone);
+        if ($normalized === '' || ! PhoneNumber::isValidEthioTelecomMobile($normalized)) {
+            throw ValidationException::withMessages([
+                'phone' => 'Enter a valid Ethio telecom mobile number.',
+            ]);
+        }
+
+        $lookup = $this->crm->lookupByPhone($normalized);
+        if ($lookup === null) {
+            throw ValidationException::withMessages([
+                'phone' => 'CRM is unavailable. Cannot change company contact without a CRM match.',
+            ]);
+        }
+
+        if (! ($lookup['found'] ?? false) || blank($lookup['customer_name'] ?? null)) {
+            throw ValidationException::withMessages([
+                'phone' => 'Phone not found in CRM. Company contact change requires a CRM match.',
+            ]);
+        }
+
+        $proposal = [
+            'source' => IdentityVerifiedVia::Crm->value,
+            'phone' => PhoneNumber::normalize((string) ($lookup['phone'] ?? $normalized)),
+            'name' => (string) $lookup['customer_name'],
+            'email' => $lookup['email'] ?? null,
+            'gender' => $lookup['gender'] ?? null,
+            'nationality' => $lookup['nationality'] ?? null,
+            'birthdate' => $lookup['birthdate'] ?? null,
+            'identification_type' => $lookup['identification_type'] ?? null,
+            'identification_number' => $lookup['identification_number'] ?? null,
+            'snapshot' => $lookup['raw'] ?? $lookup,
+        ];
+
+        $contact = Contact::query()->where('phone_number', $normalized)->first();
+        if (! $contact) {
+            $contact = new Contact;
+            $contact->syncFromFayda([
+                'sub' => 'crm-'.$normalized,
+                'name' => trim((string) $proposal['name']),
+                'phone_number' => $normalized,
+                'email' => $proposal['email'] ?? null,
+                'gender' => $proposal['gender'] ?? null,
+                'nationality' => $proposal['nationality'] ?? PortalProfileOptions::DEFAULT_NATIONALITY,
+                'birthdate' => $proposal['birthdate'] ?? null,
+                'identification_type' => $proposal['identification_type'] ?: '2',
+                'identification_number' => $proposal['identification_number'] ?: ('crm-'.$normalized),
+            ]);
+            $contact->forceFill(['is_active' => true])->save();
+        }
+
+        return $this->applyCrmProposal($contact->fresh() ?? $contact, $proposal);
+    }
+
+    /**
+     * Preview CRM match for admin UI (no DB writes).
+     *
+     * @return array{found: bool, name: ?string, phone: string, message: ?string}
+     */
+    public function previewCrmPhone(string $phone): array
+    {
+        $normalized = PhoneNumber::normalize($phone);
+        if ($normalized === '' || ! PhoneNumber::isValidEthioTelecomMobile($normalized)) {
+            return [
+                'found' => false,
+                'name' => null,
+                'phone' => $normalized,
+                'message' => 'Enter a valid Ethio telecom mobile number.',
+            ];
+        }
+
+        $lookup = $this->crm->lookupByPhone($normalized);
+        if ($lookup === null) {
+            return [
+                'found' => false,
+                'name' => null,
+                'phone' => $normalized,
+                'message' => 'CRM is unavailable.',
+            ];
+        }
+
+        if (! ($lookup['found'] ?? false) || blank($lookup['customer_name'] ?? null)) {
+            return [
+                'found' => false,
+                'name' => null,
+                'phone' => $normalized,
+                'message' => 'Phone not found in CRM.',
+            ];
+        }
+
+        return [
+            'found' => true,
+            'name' => (string) $lookup['customer_name'],
+            'phone' => $normalized,
+            'message' => null,
+        ];
+    }
+
+    /**
      * @param  array<string, mixed>  $proposal
      */
     protected function applyCrmProposal(Contact $contact, array $proposal): Contact

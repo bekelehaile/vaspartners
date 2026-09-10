@@ -62,6 +62,7 @@ class CompanyMembershipAuditLog extends Model
             'permissions_updated' => 'Permissions updated',
             'access_enabled' => 'Access enabled',
             'access_disabled' => 'Access disabled',
+            'contact_changed' => 'Company contact changed',
             default => str_replace('_', ' ', ucfirst((string) $this->action)),
         };
     }

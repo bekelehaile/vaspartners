@@ -2104,6 +2104,126 @@ class CompanyMembershipService
         });
     }
 
+    /**
+     * Admin: replace company owner/claim contact after ERCA verification.
+     * CRM match required. Updates claim phone only; preserves revenue/ERCA phones.
+     * Previous owner membership is disabled on this company only.
+     */
+    public function adminChangeCompanyContact(
+        Company $company,
+        string $phone,
+        User $admin,
+        ?string $note = null,
+    ): Company {
+        if (! $company->erca_tin_verified) {
+            throw ValidationException::withMessages([
+                'company' => 'Company contact can only be changed after the TIN number is ERCA-verified.',
+            ]);
+        }
+
+        $normalized = PhoneNumber::normalize($phone);
+        if ($normalized === '' || ! PhoneNumber::isValidEthioTelecomMobile($normalized)) {
+            throw ValidationException::withMessages([
+                'phone' => 'Enter a valid Ethio telecom mobile number.',
+            ]);
+        }
+
+        $oldOwner = $company->ownerContact();
+        $oldClaim = PhoneNumber::normalizeNullable($company->claimPhone());
+
+        // CRM lookup + contact create/update happens before the membership transaction.
+        $newContact = app(ContactIdentityService::class)->findOrCreateFromCrmPhone($normalized);
+
+        if (! $newContact->is_active) {
+            throw ValidationException::withMessages([
+                'phone' => 'Cannot assign an inactive partner as company contact.',
+            ]);
+        }
+
+        if (
+            $oldOwner
+            && (int) $oldOwner->id === (int) $newContact->id
+            && $oldClaim === $normalized
+        ) {
+            return $company->fresh(['memberships.contact']);
+        }
+
+        $preservedRevenue = PhoneNumber::normalizeNullable($company->revenue_phone);
+        $preservedErca = PhoneNumber::normalizeNullable($company->erca_phone);
+        $adminNote = filled($note) ? trim((string) $note) : null;
+
+        return DB::transaction(function () use (
+            $company,
+            $newContact,
+            $oldOwner,
+            $admin,
+            $normalized,
+            $preservedRevenue,
+            $preservedErca,
+            $adminNote,
+            $oldClaim,
+        ) {
+            $company = Company::query()->lockForUpdate()->findOrFail($company->id);
+            $newContact = Contact::query()->lockForUpdate()->findOrFail($newContact->id);
+
+            if (! $company->hasOwner()) {
+                $this->linkContact($newContact, $company, CompanyRole::Owner, switchTo: true);
+                if (! filled($company->created_by_contact_id)) {
+                    $company->forceFill(['created_by_contact_id' => $newContact->id])->save();
+                }
+            } elseif (! $oldOwner || (int) $oldOwner->id !== (int) $newContact->id) {
+                if (! $this->membershipFor($newContact, $company)) {
+                    $this->linkContact($newContact, $company, CompanyRole::Member, switchTo: true);
+                }
+                $this->transferOwnership($company, $newContact, $admin);
+            }
+
+            // Claim phone only — keep revenue/ERCA phones unchanged.
+            $company->forceFill([
+                'claim_phone' => $normalized,
+                'phone' => $normalized,
+                'revenue_phone' => $preservedRevenue,
+                'erca_phone' => $preservedErca,
+            ])->save();
+
+            $this->syncAllMembersDenormalizedFields($company->fresh() ?? $company);
+
+            if ($oldOwner && (int) $oldOwner->id !== (int) $newContact->id) {
+                $this->setMembershipActive($company, $oldOwner->fresh() ?? $oldOwner, false, $admin);
+            }
+
+            $newMembership = $this->membershipFor($newContact, $company);
+            if ($newMembership) {
+                $this->recordMembershipAudit(
+                    $company,
+                    $newMembership,
+                    $newContact,
+                    'contact_changed',
+                    actorUser: $admin,
+                    before: [
+                        'owner_contact_id' => $oldOwner?->id,
+                        'claim_phone' => $oldClaim,
+                    ],
+                    after: [
+                        'owner_contact_id' => $newContact->id,
+                        'claim_phone' => $normalized,
+                    ],
+                    note: $adminNote,
+                );
+            }
+
+            Log::info('Admin changed company contact', [
+                'company_id' => $company->id,
+                'old_owner_id' => $oldOwner?->id,
+                'new_owner_id' => $newContact->id,
+                'admin_id' => $admin->id,
+                'claim_phone' => $normalized,
+            ]);
+
+            return $company->fresh(['memberships.contact']);
+        });
+    }
+
     public function setMembershipActive(Company $company, Contact $member, bool $active, User|Contact|null $actor = null): Contact
     {
         $membership = $this->membershipFor($member, $company);
