@@ -212,11 +212,19 @@ class CompanyPurgeService
             )
             ->pluck('id');
 
+        $viaExplicitCompany = Ticket::withTrashed()
+            ->where('company_id', $companyId)
+            ->pluck('id');
+
         $viaExclusiveContacts = $exclusiveContactIds->isEmpty()
             ? collect()
             : Ticket::withTrashed()->whereIn('contact_id', $exclusiveContactIds)->pluck('id');
 
-        return $viaSubscription->merge($viaExclusiveContacts)->unique()->values();
+        return $viaSubscription
+            ->merge($viaExplicitCompany)
+            ->merge($viaExclusiveContacts)
+            ->unique()
+            ->values();
     }
 
     /**

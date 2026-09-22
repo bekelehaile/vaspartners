@@ -451,6 +451,11 @@ class Company extends Model
         return $this->hasMany(Subscription::class);
     }
 
+    public function tickets(): HasMany
+    {
+        return $this->hasMany(Ticket::class, 'company_id');
+    }
+
     public function revenuePartners(): HasMany
     {
         return $this->hasMany(RevenuePartner::class);
@@ -458,6 +463,7 @@ class Company extends Model
 
     /**
      * Service requests (tickets) for this company:
+     * - tickets explicitly assigned to this company
      * - tickets on company subscriptions
      * - tickets owned by current members
      * - tickets owned by migrated contact with same legacy_mvas_id
@@ -469,8 +475,8 @@ class Company extends Model
 
         return Ticket::query()
             ->where(function (Builder $query) use ($companyId, $legacyMvasId): void {
-                $query
-                    ->whereHas(
+                $query->where('company_id', $companyId)
+                    ->orWhereHas(
                         'subscription',
                         fn (Builder $q) => $q->where('company_id', $companyId),
                     )

@@ -20,6 +20,7 @@ class Ticket extends Model
         'assigned_to_user_id', 'current_approver_user_id', 'status', 'document_review_status',
         'needs_reverification', 'building', 'location', 'description', 'assigned_at',
         'opened_at', 'in_progress_at', 'escalated_at', 'completed_at', 'rejected_at', 'closed_at',
+        'company_id',
     ];
 
     protected function casts(): array
@@ -145,15 +146,19 @@ class Ticket extends Model
     public function service(): BelongsTo { return $this->belongsTo(Service::class); }
     public function requisition(): BelongsTo { return $this->belongsTo(Requisition::class); }
     public function subscription(): BelongsTo { return $this->belongsTo(Subscription::class); }
+    public function company(): BelongsTo { return $this->belongsTo(Company::class); }
 
     /**
-     * Company this request serves (subscription company, else contact current company).
+     * Company this request serves: explicit assignment, else subscription company,
+     * else the requester's current company.
      */
     public function serviceCompany(): ?Company
     {
         $this->loadMissing(['subscription.company', 'contact.company']);
 
-        return $this->subscription?->company ?? $this->contact?->company;
+        return $this->company
+            ?? $this->subscription?->company
+            ?? $this->contact?->company;
     }
 
     public function parentTicket(): BelongsTo { return $this->belongsTo(self::class, 'parent_ticket_id'); }
