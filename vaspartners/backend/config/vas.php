@@ -62,8 +62,10 @@ return [
     | Contract renewal SMS (subscription.renewal_date)
     |--------------------------------------------------------------------------
     |
-    | Daily job vas:notify-contract-renewals SMSes partners when days until
-    | renewal_date matches one of these offsets (0 = on the renewal day).
+    | Default only. Live values are managed in Filament → App settings →
+    | Notifications (enable toggle + days-before). Env is the fallback when
+    | App settings has not been saved yet.
+    |
     | Independent of service.renewal_lead_days (that opens renewal tickets).
     |
     */

@@ -37,6 +37,14 @@ class AppSetting extends Model
     /** Partner email — reserved; delivery not wired yet. */
     public const KEY_NOTIFY_PARTNER_EMAIL = 'notify_partner_email';
 
+    /** Daily vas:notify-contract-renewals job (contract renewal_date SMS). */
+    public const KEY_NOTIFY_CONTRACT_RENEWAL_SMS = 'notify_contract_renewal_sms';
+
+    /** Comma-separated days-before offsets for contract renewal SMS (e.g. 30,7,0). */
+    public const KEY_CONTRACT_RENEWAL_SMS_DAYS_BEFORE = 'contract_renewal_sms_days_before';
+
+    public const DEFAULT_CONTRACT_RENEWAL_SMS_DAYS_BEFORE = '30,7,0';
+
     /**
      * Monthly Revenue duplicate policy (JSON). Replaces the old on/off toggle.
      *
@@ -215,6 +223,59 @@ class AppSetting extends Model
     public static function partnerEmailEnabled(): bool
     {
         return static::boolValue(self::KEY_NOTIFY_PARTNER_EMAIL, false);
+    }
+
+    /** Scheduled contract renewal SMS (also requires partner SMS to be on for delivery). */
+    public static function contractRenewalSmsEnabled(): bool
+    {
+        return static::boolValue(self::KEY_NOTIFY_CONTRACT_RENEWAL_SMS, true);
+    }
+
+    /**
+     * Days before renewal_date to send reminder SMS (0 = on the day).
+     *
+     * @return list<int>
+     */
+    public static function contractRenewalSmsDaysBefore(): array
+    {
+        $raw = static::getValue(self::KEY_CONTRACT_RENEWAL_SMS_DAYS_BEFORE);
+        if (! filled($raw)) {
+            $fromConfig = config('vas.contract_renewal_sms_days_before', [30, 7, 0]);
+            if (is_array($fromConfig) && $fromConfig !== []) {
+                return static::normalizeDaysBeforeList($fromConfig);
+            }
+            $raw = self::DEFAULT_CONTRACT_RENEWAL_SMS_DAYS_BEFORE;
+        }
+
+        return static::normalizeDaysBeforeList(explode(',', (string) $raw));
+    }
+
+    public static function setContractRenewalSmsDaysBefore(string|array $days): void
+    {
+        $normalized = static::normalizeDaysBeforeList(
+            is_array($days) ? $days : explode(',', $days),
+        );
+        static::setValue(
+            self::KEY_CONTRACT_RENEWAL_SMS_DAYS_BEFORE,
+            $normalized === []
+                ? self::DEFAULT_CONTRACT_RENEWAL_SMS_DAYS_BEFORE
+                : implode(',', $normalized),
+        );
+    }
+
+    /**
+     * @param  list<mixed>  $parts
+     * @return list<int>
+     */
+    public static function normalizeDaysBeforeList(array $parts): array
+    {
+        $days = array_values(array_unique(array_filter(
+            array_map(static fn ($d): int => (int) trim((string) $d), $parts),
+            static fn (int $d): bool => $d >= 0,
+        )));
+        sort($days);
+
+        return $days;
     }
 
     public static function otpRateLimitEnabled(): bool

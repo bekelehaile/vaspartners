@@ -107,6 +107,18 @@ class ManageAppSettings extends Page
                                     ->label('Email')
                                     ->disabled()
                                     ->dehydrated(true),
+                                Toggle::make('notify_contract_renewal_sms')
+                                    ->label('Contract renewal SMS')
+                                    ->helperText('Daily job vas:notify-contract-renewals. Still requires Partner SMS above to deliver.'),
+                                TextInput::make('contract_renewal_sms_days_before')
+                                    ->label('Renewal reminder days before')
+                                    ->placeholder(AppSetting::DEFAULT_CONTRACT_RENEWAL_SMS_DAYS_BEFORE)
+                                    ->helperText('Comma-separated days before renewal_date (0 = on the day). Example: 30,7,0')
+                                    ->maxLength(64)
+                                    ->regex('/^\s*\d+(\s*,\s*\d+)*\s*$/')
+                                    ->validationMessages([
+                                        'regex' => 'Use comma-separated non-negative numbers, e.g. 30,7,0.',
+                                    ]),
                             ]),
                         Tab::make('TIN lookup')
                             ->icon('heroicon-o-building-library')
@@ -326,6 +338,15 @@ class ManageAppSettings extends Page
             AppSetting::KEY_NOTIFY_PARTNER_EMAIL,
             (bool) ($data['notify_partner_email'] ?? false),
         );
+        AppSetting::setBoolValue(
+            AppSetting::KEY_NOTIFY_CONTRACT_RENEWAL_SMS,
+            (bool) ($data['notify_contract_renewal_sms'] ?? true),
+        );
+        AppSetting::setContractRenewalSmsDaysBefore(
+            filled($data['contract_renewal_sms_days_before'] ?? null)
+                ? (string) $data['contract_renewal_sms_days_before']
+                : AppSetting::DEFAULT_CONTRACT_RENEWAL_SMS_DAYS_BEFORE,
+        );
 
         AppSetting::setRevenueDuplicatePolicy(RevenueDuplicatePolicy::fromSimpleToggles(
             blockSameImport: (bool) ($data['revenue_block_same_import'] ?? false),
@@ -459,6 +480,8 @@ class ManageAppSettings extends Page
             'notify_partner_sms' => AppSetting::partnerSmsEnabled(),
             'notify_partner_in_app' => AppSetting::partnerInAppEnabled(),
             'notify_partner_email' => AppSetting::partnerEmailEnabled(),
+            'notify_contract_renewal_sms' => AppSetting::contractRenewalSmsEnabled(),
+            'contract_renewal_sms_days_before' => implode(',', AppSetting::contractRenewalSmsDaysBefore()),
             'erca_tin_mode' => AppSetting::ercaTinMode(),
             'erca_tin_outage_message' => AppSetting::getValue(AppSetting::KEY_ERCA_TIN_OUTAGE_MESSAGE),
             'revenue_block_same_import' => $policy->checksWithinImport(),

@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Enums\SubscriptionStatus;
+use App\Models\AppSetting;
 use App\Models\Subscription;
 use App\Services\PartnerNotificationService;
 use Illuminate\Console\Command;
@@ -22,7 +23,7 @@ class NotifyContractRenewalsCommand extends Command
                             {--force : Send even if already notified for this milestone}
                             {--limit=0 : Max subscriptions to notify (0 = no limit)}
                             {--chunk=50 : Subscriptions loaded per batch}
-                            {--days= : Comma-separated days-before offsets (overrides config)}';
+                            {--days= : Comma-separated days-before offsets (overrides App settings)}';
 
     protected $description = 'SMS partners when subscription renewal_date hits reminder offsets (contract date / renewal date)';
 
@@ -33,9 +34,15 @@ class NotifyContractRenewalsCommand extends Command
         $limit = max(0, (int) $this->option('limit'));
         $chunk = max(1, (int) $this->option('chunk'));
 
+        if (! AppSetting::contractRenewalSmsEnabled() && ! $force) {
+            $this->warn('Contract renewal SMS is disabled in App settings → Notifications. Use --force to run anyway.');
+
+            return self::SUCCESS;
+        }
+
         $offsets = $this->resolveOffsets();
         if ($offsets === []) {
-            $this->warn('No reminder offsets configured (CONTRACT_RENEWAL_SMS_DAYS_BEFORE / --days).');
+            $this->warn('No reminder offsets configured (App settings → Renewal reminder days before / --days).');
 
             return self::SUCCESS;
         }
@@ -170,24 +177,9 @@ class NotifyContractRenewalsCommand extends Command
     {
         $raw = $this->option('days');
         if (is_string($raw) && trim($raw) !== '') {
-            $parts = array_map(
-                static fn (string $d): int => (int) trim($d),
-                explode(',', $raw),
-            );
-        } else {
-            $parts = config('vas.contract_renewal_sms_days_before', [30, 7, 0]);
-            if (! is_array($parts)) {
-                $parts = [30, 7, 0];
-            }
-            $parts = array_map(static fn ($d): int => (int) $d, $parts);
+            return AppSetting::normalizeDaysBeforeList(explode(',', $raw));
         }
 
-        $parts = array_values(array_unique(array_filter(
-            $parts,
-            static fn (int $d): bool => $d >= 0,
-        )));
-        sort($parts);
-
-        return $parts;
+        return AppSetting::contractRenewalSmsDaysBefore();
     }
 }
