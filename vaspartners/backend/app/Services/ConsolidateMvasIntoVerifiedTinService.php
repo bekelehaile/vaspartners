@@ -329,7 +329,7 @@ class ConsolidateMvasIntoVerifiedTinService
             CompanyStatusHistory::query()->create([
                 'company_id' => $new->id,
                 'action' => 'mvas_consolidated',
-                'actor_user_id' => null,
+                'actor_user_id' => auth()->id(),
                 'actor_contact_id' => null,
                 'note' => 'Merged placeholder company '.$old->tin.' into TIN-verified company',
                 'meta' => [

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Companies\RelationManagers;
 
 use App\Enums\TicketStatus;
+use App\Filament\Resources\Companies\CompanyResource;
 use App\Filament\Resources\Tickets\TicketResource;
 use App\Models\Company;
 use App\Models\Ticket;
