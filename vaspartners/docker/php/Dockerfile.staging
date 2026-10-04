@@ -27,7 +27,7 @@ COPY backend/composer.json backend/composer.lock ./
 RUN --mount=type=cache,target=/tmp/composer-cache \
     composer install \
         --no-dev \
-        --prefer-source \
+        --prefer-dist \
         --no-interaction \
         --no-scripts \
         --optimize-autoloader

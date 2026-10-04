@@ -56,4 +56,22 @@ return [
     'revenue' => [
         'duplicate_policy' => null,
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Contract renewal SMS (subscription.renewal_date)
+    |--------------------------------------------------------------------------
+    |
+    | Daily job vas:notify-contract-renewals SMSes partners when days until
+    | renewal_date matches one of these offsets (0 = on the renewal day).
+    | Independent of service.renewal_lead_days (that opens renewal tickets).
+    |
+    */
+    'contract_renewal_sms_days_before' => array_values(array_unique(array_filter(
+        array_map(
+            static fn (string $d): int => (int) trim($d),
+            explode(',', (string) env('CONTRACT_RENEWAL_SMS_DAYS_BEFORE', '30,7,0')),
+        ),
+        static fn (int $d): bool => $d >= 0,
+    ))),
 ];

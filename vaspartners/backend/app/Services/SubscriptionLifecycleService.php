@@ -24,7 +24,8 @@ use Illuminate\Validation\ValidationException;
  * Renewal cadence (yearly / bi-yearly) is configured per service.
  *
  * Staff may also Close a subscription after contract expiration follow-up
- * (contract signing date + renewal year; premium also needs VAS license expiry).
+ * (contract signing date + renewal year; premium also needs VAS license expiry),
+ * and Renew a Closed/Expired subscription from Filament without a partner ticket.
  *
  * Request status "closed" is never a subscription status.
  */
@@ -380,6 +381,128 @@ class SubscriptionLifecycleService
                     'renewal_date' => optional($locked->renewal_date)?->toDateString(),
                     'automatic_renewal' => (bool) $locked->automatic_renewal,
                     'vas_license_expires_at' => optional($locked->vas_license_expires_at)?->toDateString(),
+                ],
+            );
+
+            return $locked->fresh(['service', 'company']);
+        });
+    }
+
+    /**
+     * Admin renew: reopen a Closed (or Expired) subscription as Active.
+     * Extends the service period and records new contract follow-up dates.
+     * Does not require a partner renew/new ticket.
+     *
+     * @param  array{
+     *   contract_signed_at?: mixed,
+     *   renewal_years?: mixed,
+     *   renewal_date?: mixed,
+     *   automatic_renewal?: mixed,
+     *   vas_license_expires_at?: mixed,
+     *   note?: ?string
+     * }  $data
+     */
+    public function renewByAdmin(Subscription $subscription, array $data = [], ?Model $actor = null): Subscription
+    {
+        $subscription->loadMissing('service', 'company');
+
+        if (! in_array($subscription->status, [SubscriptionStatus::Closed, SubscriptionStatus::Expired], true)) {
+            throw ValidationException::withMessages([
+                'status' => 'Only closed or expired subscriptions can be renewed by admin.',
+            ]);
+        }
+
+        if (! $subscription->company_id) {
+            throw ValidationException::withMessages([
+                'company' => 'Cannot renew a subscription without a company.',
+            ]);
+        }
+
+        if (! $subscription->service) {
+            throw ValidationException::withMessages([
+                'service' => 'Cannot renew a subscription without a service.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($subscription, $data, $actor) {
+            /** @var Subscription $locked */
+            $locked = Subscription::query()->whereKey($subscription->id)->lockForUpdate()->firstOrFail();
+            $locked->loadMissing('service', 'company');
+
+            if (! in_array($locked->status, [SubscriptionStatus::Closed, SubscriptionStatus::Expired], true)) {
+                throw ValidationException::withMessages([
+                    'status' => 'Only closed or expired subscriptions can be renewed by admin.',
+                ]);
+            }
+
+            $alive = $this->aliveSubscriptionFor((int) $locked->company_id, (int) $locked->service_id);
+            if ($alive && $alive->id !== $locked->id) {
+                throw ValidationException::withMessages([
+                    'status' => 'This company already has an active subscription for this service.',
+                ]);
+            }
+
+            $merged = [
+                'contract_signed_at' => $data['contract_signed_at'] ?? $locked->contract_signed_at ?? now()->toDateString(),
+                'renewal_years' => $data['renewal_years'] ?? $locked->renewal_years ?? 1,
+                'renewal_date' => $data['renewal_date'] ?? null,
+                'automatic_renewal' => array_key_exists('automatic_renewal', $data)
+                    ? (bool) $data['automatic_renewal']
+                    : (bool) $locked->automatic_renewal,
+                'vas_license_expires_at' => $data['vas_license_expires_at'] ?? $locked->vas_license_expires_at,
+            ];
+
+            $payload = $this->validatedContractPayload($locked, $merged, requireComplete: true);
+
+            $interval = $locked->renewal_interval
+                ?? $locked->service->renewal_interval
+                ?? RenewalInterval::from(config('vas.default_renewal_interval', 'yearly'));
+
+            $periodStart = now();
+            $periodEnd = $periodStart->copy()->addMonthsNoOverflow($interval->months());
+            $leadDays = (int) ($locked->service->renewal_lead_days ?? 30);
+
+            $from = SubscriptionProvisioningLogService::statusValue($locked->status);
+
+            $locked->fill(array_merge($payload, [
+                'status' => SubscriptionStatus::Active,
+                'renewal_interval' => $interval,
+                'closed_at' => null,
+                'terminated_at' => null,
+                'terminated_by_ticket_id' => null,
+                'current_period_start' => $periodStart,
+                'current_period_end' => $periodEnd,
+                'next_renewal_due_at' => $periodEnd->copy()->subDays($leadDays),
+            ]))->save();
+
+            if (
+                $locked->vas_license_expires_at !== null
+                && $locked->company_id
+            ) {
+                $locked->company?->forceFill([
+                    'license_valid_until' => $locked->vas_license_expires_at,
+                ])->save();
+            }
+
+            app(SubscriptionProvisioningLogService::class)->record(
+                $locked,
+                'renewed',
+                $actor,
+                null,
+                $from,
+                SubscriptionStatus::Active->value,
+                filled($data['note'] ?? null)
+                    ? trim((string) $data['note'])
+                    : 'Subscription renewed by admin (no partner ticket)',
+                [
+                    'admin_renewal' => true,
+                    'contract_signed_at' => optional($locked->contract_signed_at)?->toDateString(),
+                    'renewal_years' => $locked->renewal_years,
+                    'renewal_date' => optional($locked->renewal_date)?->toDateString(),
+                    'automatic_renewal' => (bool) $locked->automatic_renewal,
+                    'vas_license_expires_at' => optional($locked->vas_license_expires_at)?->toDateString(),
+                    'period_start' => $periodStart->toIso8601String(),
+                    'period_end' => $periodEnd->toIso8601String(),
                 ],
             );
 

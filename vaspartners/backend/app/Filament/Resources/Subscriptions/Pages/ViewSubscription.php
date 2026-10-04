@@ -151,6 +151,70 @@ class ViewSubscription extends ViewRecord
                         'next_renewal_due_at',
                     ]);
                 }),
+            Action::make('renew_admin')
+                ->label('Renew subscription')
+                ->icon(Heroicon::ArrowPath)
+                ->color('success')
+                ->visible(fn (Subscription $record): bool => in_array(
+                    $record->status,
+                    [SubscriptionStatus::Closed, SubscriptionStatus::Expired],
+                    true,
+                ))
+                ->modalHeading('Renew subscription')
+                ->modalDescription(fn (Subscription $record): string => $this->contractModalDescription($record).' — reopen as Active and set new contract dates.')
+                ->modalIcon(Heroicon::ArrowPath)
+                ->modalIconColor('success')
+                ->modalWidth(Width::Large)
+                ->modalSubmitActionLabel('Renew subscription')
+                ->modalCancelActionLabel('Cancel')
+                ->form(fn (Subscription $record): array => [
+                    ...$this->contractFormSchema($record, required: true),
+                    Section::make('Renewal note')
+                        ->icon(Heroicon::ChatBubbleBottomCenterText)
+                        ->compact()
+                        ->schema([
+                            Textarea::make('note')
+                                ->label('Note')
+                                ->rows(3)
+                                ->placeholder('Optional note…')
+                                ->columnSpanFull(),
+                        ]),
+                ])
+                ->fillForm(fn (Subscription $record): array => $this->renewAdminFormDefaults($record))
+                ->requiresConfirmation()
+                ->action(function (Subscription $record, array $data, SubscriptionLifecycleService $lifecycle): void {
+                    try {
+                        $lifecycle->renewByAdmin($record, $data, auth()->user());
+                    } catch (ValidationException $e) {
+                        Notification::make()
+                            ->title('Cannot renew subscription')
+                            ->body(collect($e->errors())->flatten()->implode(' '))
+                            ->danger()
+                            ->send();
+
+                        throw $e;
+                    }
+
+                    Notification::make()
+                        ->title('Subscription renewed')
+                        ->body('Status is Active with a new service period.')
+                        ->success()
+                        ->send();
+
+                    $this->refreshFormData([
+                        'status',
+                        'closed_at',
+                        'terminated_at',
+                        'contract_signed_at',
+                        'renewal_years',
+                        'renewal_date',
+                        'automatic_renewal',
+                        'vas_license_expires_at',
+                        'current_period_start',
+                        'current_period_end',
+                        'next_renewal_due_at',
+                    ]);
+                }),
             Action::make('set_uptime')
                 ->label('Set uptime status')
                 ->icon(Heroicon::Signal)
@@ -424,6 +488,28 @@ HTML;
             'renewal_years' => $years,
             'renewal_date' => $record->renewal_date
                 ?? Subscription::composeRenewalDate($record->contract_signed_at, $years),
+            'vas_license_expires_at' => $record->vas_license_expires_at
+                ?? $record->company?->license_valid_until,
+        ];
+    }
+
+    /**
+     * Defaults for admin renew: new signing date today, keep prior renewal years.
+     *
+     * @return array<string, mixed>
+     */
+    protected function renewAdminFormDefaults(Subscription $record): array
+    {
+        $years = $record->renewal_years
+            ?? Subscription::renewalYearsBetween($record->contract_signed_at, $record->renewal_date)
+            ?? 1;
+        $signedAt = now()->toDateString();
+
+        return [
+            'automatic_renewal' => (bool) $record->automatic_renewal,
+            'contract_signed_at' => $signedAt,
+            'renewal_years' => $years,
+            'renewal_date' => Subscription::composeRenewalDate($signedAt, $years),
             'vas_license_expires_at' => $record->vas_license_expires_at
                 ?? $record->company?->license_valid_until,
         ];

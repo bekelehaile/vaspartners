@@ -8,6 +8,7 @@ use App\Filament\Resources\Tickets\TicketResource;
 use App\Models\Contact;
 use App\Models\Company;
 use App\Models\CompanyChangeRequest;
+use App\Models\Subscription;
 use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Models\User;
@@ -526,6 +527,75 @@ class PartnerNotificationService
     }
 
     /**
+     * Contract renewal reminder based on subscription.renewal_date (and signing date in copy).
+     * SMS + portal notify to the subscription contact, falling back to company owner.
+     *
+     * @param  int  $daysRemaining  Whole days until renewal_date (0 = today).
+     */
+    public function subscriptionRenewalReminder(Subscription $subscription, int $daysRemaining): void
+    {
+        $subscription->loadMissing(['contact', 'company', 'service']);
+
+        $contact = $subscription->contact;
+        if (! $contact instanceof Contact) {
+            $contact = $subscription->company?->ownerContact();
+        }
+
+        if (! $contact instanceof Contact) {
+            Log::info('SMS skipped — subscription renewal has no contact', [
+                'subscription_id' => $subscription->id,
+                'public_id' => $subscription->public_id,
+            ]);
+
+            return;
+        }
+
+        $portalUrl = rtrim((string) config('vas.frontend_url', ''), '/');
+        if ($portalUrl !== '') {
+            $portalUrl .= '/login';
+        }
+
+        $renewalDate = $subscription->renewal_date?->format('Y-m-d') ?: '—';
+        $contractSigned = $subscription->contract_signed_at?->format('Y-m-d') ?: '—';
+        $daysLabel = $daysRemaining <= 0
+            ? 'today'
+            : ($daysRemaining === 1 ? 'in 1 day' : "in {$daysRemaining} days");
+
+        $template = 'subscription_renewal_reminder';
+        $placeholders = [
+            'contact_name' => $contact->name ?: 'Partner',
+            'company_name' => $subscription->company?->name
+                ?: $contact->company_name
+                ?: 'your organisation',
+            'service' => $subscription->service?->name ?: 'VAS service',
+            'renewal_date' => $renewalDate,
+            'contract_signed_at' => $contractSigned,
+            'days_remaining' => $daysLabel,
+            'portal_url' => $portalUrl !== '' ? $portalUrl : 'the VAS Partners portal',
+            'note' => '',
+        ];
+
+        $smsBody = $this->render('templates', $template, $placeholders);
+        $portalBody = $this->render('portal', $template, $placeholders);
+
+        if (filled($contact->phone_number)) {
+            $this->sms->send($contact->phone_number, $smsBody);
+        } else {
+            Log::info('SMS skipped — contact has no phone', [
+                'subscription_id' => $subscription->id,
+                'template' => $template,
+            ]);
+        }
+
+        $contact->notify(new PartnerPortalNotification(
+            title: $this->titleFor($template),
+            body: Str::limit($portalBody, 280),
+            template: $template,
+            url: '/portal',
+        ));
+    }
+
+    /**
      * Automated scan: company has an invalid TIN number (not 10-digit Ethiopian).
      * Queues SMS on the bulk queue to the owner phone and/or company phone.
      */
@@ -830,6 +900,7 @@ class PartnerNotificationService
             'company_member_added' => 'Added to company',
             'company_transfer_approved' => 'Ownership transfer approved',
             'company_transfer_rejected' => 'Ownership transfer rejected',
+            'subscription_renewal_reminder' => 'Subscription renewal reminder',
             default => 'Portal update',
         };
     }

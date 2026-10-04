@@ -9,6 +9,7 @@ return [
     |
     | Placeholders: {contact_name}, {company_name}, {tt_number} (request number),
     | {service}, {requisition}, {status}, {note}
+    | Subscription renewal: {renewal_date}, {contract_signed_at}, {days_remaining}, {portal_url}
     |
     | `templates`     — SMS (gateway). Keep concise.
     | `portal`        — In-app notification body (partner portal).
@@ -206,6 +207,10 @@ SMS,
 Dear {contact_name}, your request to leave {company_name} was not approved. {note} — Ethio telecom
 SMS,
 
+        'subscription_renewal_reminder' => <<<'SMS'
+Dear {contact_name}, your {service} subscription for {company_name} renews on {renewal_date} ({days_remaining}). Contract signed {contract_signed_at}. Open the VAS Partners portal to renew. {portal_url} — Ethio telecom
+SMS,
+
     ],
 
     'portal' => [
@@ -261,6 +266,8 @@ SMS,
         'company_detach_approved' => 'You were detached from {company_name}. You can create or attach to another company.',
 
         'company_detach_rejected' => 'Your request to leave {company_name} was not approved.',
+
+        'subscription_renewal_reminder' => 'Your {service} subscription for {company_name} renews on {renewal_date} ({days_remaining}). Contract signed {contract_signed_at}. Open the portal to renew.',
 
     ],
 

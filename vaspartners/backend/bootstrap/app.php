@@ -76,6 +76,11 @@ return Application::configure(basePath: dirname(__DIR__))
             ->withoutOverlapping(120)
             ->description('Daily SMS: subscribed companies with ERCA name mismatch');
 
+        $schedule->command('vas:notify-contract-renewals')
+            ->dailyAt('09:30')
+            ->withoutOverlapping(120)
+            ->description('Daily SMS: subscriptions with contract renewal_date at reminder offsets');
+
         $schedule->command('vas:open-due-renewals')
             ->dailyAt('01:00')
             ->description('Open renewal service requests for subscriptions in the renewal lead window');
