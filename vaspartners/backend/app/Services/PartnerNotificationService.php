@@ -99,6 +99,25 @@ class PartnerNotificationService
         }
     }
 
+    /** Staff DB alert when an already-assigned ticket is handed to a different AM. */
+    public function ticketReassigned(Ticket $ticket, User $assignee): void
+    {
+        $assignee = $this->activeAccountManager($assignee);
+        if (! $assignee) {
+            return;
+        }
+
+        $ticket->loadMissing('service');
+
+        $this->notifyStaffDatabase(
+            collect([$assignee]),
+            'Ticket reassigned to you',
+            sprintf('Request number %s (%s) was reassigned to you.', $ticket->tt_number, $ticket->service?->name ?: 'VAS'),
+            $ticket,
+            icon: 'heroicon-o-arrow-path',
+        );
+    }
+
     public function documentsNeedAttention(Ticket $ticket, ?string $note = null): void
     {
         $this->notifyPartner($ticket, 'documents_need_attention', $note);

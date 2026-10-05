@@ -603,29 +603,36 @@ class TicketResource extends Resource
                     ->visible(fn (Ticket $record) => $record->status === TicketStatus::Open
                         && blank($record->assigned_to_user_id)
                         && ($record->serviceCompany()?->isTinValidated() ?? false))
-                    ->form([
-                        Select::make('assigned_to_user_id')
-                            ->label('Account manager')
-                            ->options(fn (Ticket $record) => User::assignableManagersForCategory(
-                                $record->category_id ? (int) $record->category_id : null
-                            ))
-                            ->required()
-                            ->searchable()
-                            ->preload(),
-                        Select::make('priority_id')
-                            ->relationship('priority', 'name')
-                            ->searchable()
-                            ->preload(),
-                        Textarea::make('note'),
-                    ])
+                    ->form(fn (Ticket $record): array => static::assignmentForm($record))
                     ->action(function (Ticket $record, array $data, TicketWorkflowService $workflow) {
-                        $workflow->assign(
-                            $record,
-                            auth()->user(),
-                            User::findOrFail($data['assigned_to_user_id']),
-                            $data['priority_id'] ?? null,
-                            $data['note'] ?? null,
-                        );
+                        static::runAssignment($record, $data, $workflow);
+                    }),
+                Action::make('reassign')
+                    ->label('Reassign AM')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('warning')
+                    ->visible(fn (Ticket $record): bool => static::mayReassignTicket($record))
+                    ->modalHeading(fn (Ticket $record): string => 'Reassign '.$record->tt_number)
+                    ->modalDescription(fn (Ticket $record): string => 'Currently assigned to '
+                        .($record->assignee?->name ?: '—')
+                        .'. Change the account manager to reassign.')
+                    ->fillForm(fn (Ticket $record): array => static::reassignmentFillData($record))
+                    ->form(fn (Ticket $record): array => static::assignmentForm($record, reassign: true))
+                    ->action(function (Ticket $record, array $data, TicketWorkflowService $workflow) {
+                        if ((int) ($data['assigned_to_user_id'] ?? 0) === (int) $record->assigned_to_user_id) {
+                            Notification::make()
+                                ->title('Pick a different account manager')
+                                ->warning()
+                                ->send();
+
+                            return;
+                        }
+
+                        static::runAssignment($record, $data, $workflow);
+                        Notification::make()
+                            ->title('Ticket reassigned')
+                            ->success()
+                            ->send();
                     }),
                 Action::make('verify_docs')
                     ->label('Verify docs')
@@ -926,6 +933,70 @@ class TicketResource extends Resource
                             }
                         })
                         ->deselectRecordsAfterCompletion(),
+                    BulkAction::make('reassign')
+                        ->label('Reassign AM')
+                        ->icon('heroicon-o-arrow-path')
+                        ->color('warning')
+                        ->form([
+                            Select::make('assigned_to_user_id')
+                                ->label('Account manager')
+                                ->options(fn () => User::assignableManagersForCategory(null))
+                                ->required()
+                                ->searchable()
+                                ->preload(),
+                            Select::make('priority_id')
+                                ->label('Priority')
+                                ->options(fn () => Priority::query()->orderBy('name')->pluck('name', 'id'))
+                                ->searchable()
+                                ->preload(),
+                            Textarea::make('note'),
+                        ])
+                        ->requiresConfirmation()
+                        ->modalHeading('Reassign selected tickets')
+                        ->modalDescription('Only tickets that already have an account manager (and are not closed) will be reassigned.')
+                        ->action(function (Collection $records, array $data, TicketWorkflowService $workflow): void {
+                            $assignee = User::findOrFail($data['assigned_to_user_id']);
+                            $assigner = auth()->user();
+                            $reassigned = 0;
+                            $skipped = 0;
+
+                            foreach ($records as $ticket) {
+                                if (! static::mayReassignTicket($ticket)
+                                    || (int) $ticket->assigned_to_user_id === (int) $assignee->id) {
+                                    $skipped++;
+
+                                    continue;
+                                }
+
+                                try {
+                                    $workflow->assign(
+                                        $ticket,
+                                        $assigner,
+                                        $assignee,
+                                        $data['priority_id'] ?? null,
+                                        $data['note'] ?? null,
+                                    );
+                                    $reassigned++;
+                                } catch (Throwable) {
+                                    $skipped++;
+                                }
+                            }
+
+                            if ($reassigned > 0) {
+                                Notification::make()
+                                    ->title("Reassigned {$reassigned} ticket(s)")
+                                    ->body($skipped > 0 ? "{$skipped} skipped." : null)
+                                    ->success()
+                                    ->send();
+                            } else {
+                                Notification::make()
+                                    ->title('No tickets reassigned')
+                                    ->body('Select assigned, non-closed tickets and a different account manager.')
+                                    ->warning()
+                                    ->send();
+                            }
+                        })
+                        ->deselectRecordsAfterCompletion(),
                     BulkAction::make('reject')
                         ->label('Reject')
                         ->icon('heroicon-o-x-circle')
@@ -1001,6 +1072,88 @@ class TicketResource extends Resource
     public static function accountManagerMayAct(Ticket $record): bool
     {
         return auth()->user() !== null;
+    }
+
+    /** Already-assigned, non-closed tickets can change account manager. */
+    public static function mayReassignTicket(Ticket $record): bool
+    {
+        return auth()->user() !== null
+            && filled($record->assigned_to_user_id)
+            && $record->status !== TicketStatus::Closed;
+    }
+
+    /**
+     * Shared Assign / Reassign AM form fields.
+     *
+     * @return array<int, Select|Textarea>
+     */
+    public static function assignmentForm(Ticket $record, bool $reassign = false): array
+    {
+        $currentId = $record->assigned_to_user_id ? (int) $record->assigned_to_user_id : null;
+
+        return [
+            Select::make('assigned_to_user_id')
+                ->label('Account manager')
+                ->options(function () use ($record, $reassign, $currentId) {
+                    $options = User::assignableManagersForCategory(
+                        $record->category_id ? (int) $record->category_id : null
+                    );
+
+                    if (! $reassign || ! $currentId) {
+                        return $options;
+                    }
+
+                    $hasCurrent = $options->keys()->contains(
+                        fn (mixed $id): bool => (int) $id === $currentId
+                    );
+
+                    // Keep the current AM visible even if they are inactive / out of category.
+                    if (! $hasCurrent) {
+                        $record->loadMissing('assignee');
+                        $name = $record->assignee?->name ?: ('User #'.$currentId);
+
+                        return collect([$currentId => $name.' (current)'])->union($options);
+                    }
+
+                    return $options->map(
+                        fn (string $name, mixed $id): string => (int) $id === $currentId
+                            ? $name.' (current)'
+                            : $name
+                    );
+                })
+                ->required()
+                ->searchable()
+                ->preload()
+                ->helperText($reassign
+                    ? 'Shows the current account manager — change to reassign.'
+                    : null),
+            Select::make('priority_id')
+                ->relationship('priority', 'name')
+                ->searchable()
+                ->preload(),
+            Textarea::make('note')
+                ->label($reassign ? 'Note (optional)' : 'Note'),
+        ];
+    }
+
+    /** Prefill reassign modal with the ticket's current AM and priority. */
+    public static function reassignmentFillData(Ticket $record): array
+    {
+        return [
+            'assigned_to_user_id' => $record->assigned_to_user_id,
+            'priority_id' => $record->priority_id,
+        ];
+    }
+
+    public static function runAssignment(Ticket $record, array $data, TicketWorkflowService $workflow): Ticket
+    {
+        return $workflow->assign(
+            $record,
+            auth()->user(),
+            User::findOrFail($data['assigned_to_user_id']),
+            isset($data['priority_id']) ? (int) $data['priority_id'] : null,
+            $data['note'] ?? null,
+        );
     }
 
     public static function companyTinWarning(Ticket $record): ?string

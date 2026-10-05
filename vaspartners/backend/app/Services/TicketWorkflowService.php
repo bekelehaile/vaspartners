@@ -1017,29 +1017,40 @@ class TicketWorkflowService
 
             // Any AM assignment puts the ticket In progress (Pending/Open must not stay assigned).
             if ($fromStatus !== TicketStatus::Closed) {
-                $isReassignment = $fromStatus === TicketStatus::InProgress
-                    && filled($previousAssigneeId)
+                $hadAssignee = filled($previousAssigneeId);
+                $assigneeChanged = $hadAssignee
                     && (int) $previousAssigneeId !== (int) $assignee->id;
+                // Handing an already-owned ticket to someone else (any non-closed status).
+                $isReassignment = $assigneeChanged;
 
                 $this->transition(
                     $ticket,
                     TicketStatus::InProgress,
                     $assigner,
-                    $note ?? (($isReassignment || $fromStatus === TicketStatus::InProgress)
+                    $note ?? ($isReassignment || $hadAssignee
                         ? 'Reassigned to '.$assignee->name
                         : 'Assigned to '.$assignee->name),
                     [
-                        'event' => ($isReassignment || $fromStatus === TicketStatus::InProgress)
-                            ? 'reassigned'
-                            : 'assigned',
-                        'reassignment' => $fromStatus === TicketStatus::InProgress,
-                        'skip_partner_notification' => $fromStatus === TicketStatus::InProgress,
+                        'event' => ($isReassignment || $hadAssignee) ? 'reassigned' : 'assigned',
+                        'reassignment' => $isReassignment || $hadAssignee,
+                        // Changing AM is internal — do not SMS/portal-notify the partner.
+                        'skip_partner_notification' => $isReassignment || $hadAssignee,
                         'assignee_user_id' => $assignee->id,
                         'assignee_name' => $assignee->name,
                         'assigner_user_id' => $assigner->id,
                         'assigner_name' => $assigner->name,
+                        'previous_assignee_user_id' => $previousAssigneeId,
                     ],
                 );
+
+                if ($isReassignment) {
+                    DB::afterCommit(function () use ($ticket, $assignee) {
+                        $this->notifications->ticketReassigned(
+                            $ticket->fresh(['service']),
+                            $assignee,
+                        );
+                    });
+                }
             }
 
             return $ticket->fresh();

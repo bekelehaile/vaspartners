@@ -1,15 +1,21 @@
 import type { Metadata } from "next";
-import { Poppins } from "next/font/google";
+import localFont from "next/font/local";
 import { QueryProvider } from "@/providers/query-provider";
 import { absoluteUrl, getSiteUrl, siteConfig } from "@/lib/site";
 import { cn } from "@/lib/utils";
 import "./globals.css";
 
-const sans = Poppins({
+/** Local Poppins — avoids Google Fonts fetch during Docker builds. */
+const sans = localFont({
   variable: "--font-sans",
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
   display: "swap",
+  src: [
+    { path: "../fonts/poppins/Poppins-300.woff2", weight: "300", style: "normal" },
+    { path: "../fonts/poppins/Poppins-400.woff2", weight: "400", style: "normal" },
+    { path: "../fonts/poppins/Poppins-500.woff2", weight: "500", style: "normal" },
+    { path: "../fonts/poppins/Poppins-600.woff2", weight: "600", style: "normal" },
+    { path: "../fonts/poppins/Poppins-700.woff2", weight: "700", style: "normal" },
+  ],
 });
 
 export const metadata: Metadata = {

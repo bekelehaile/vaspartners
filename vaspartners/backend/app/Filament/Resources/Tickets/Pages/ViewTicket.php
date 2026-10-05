@@ -133,6 +133,48 @@ class ViewTicket extends ViewRecord
                 ->action(function (Ticket $record, array $data, SmsService $sms): void {
                     TicketResource::dispatchTicketSms($record, (string) ($data['message'] ?? ''), $sms);
                 }),
+            Action::make('assign')
+                ->label('Assign AM')
+                ->icon('heroicon-o-user-plus')
+                ->color('primary')
+                ->visible(fn (Ticket $record): bool => $record->status === TicketStatus::Open
+                    && blank($record->assigned_to_user_id)
+                    && ($record->serviceCompany()?->isTinValidated() ?? false))
+                ->form(fn (Ticket $record): array => TicketResource::assignmentForm($record))
+                ->action(function (Ticket $record, array $data, TicketWorkflowService $workflow): void {
+                    TicketResource::runAssignment($record, $data, $workflow);
+                    Notification::make()
+                        ->title('Ticket assigned')
+                        ->success()
+                        ->send();
+                }),
+            Action::make('reassign')
+                ->label('Reassign AM')
+                ->icon('heroicon-o-arrow-path')
+                ->color('warning')
+                ->visible(fn (Ticket $record): bool => TicketResource::mayReassignTicket($record))
+                ->modalHeading(fn (Ticket $record): string => 'Reassign '.$record->tt_number)
+                ->modalDescription(fn (Ticket $record): string => 'Currently assigned to '
+                    .($record->assignee?->name ?: '—')
+                    .'. Change the account manager to reassign.')
+                ->fillForm(fn (Ticket $record): array => TicketResource::reassignmentFillData($record))
+                ->form(fn (Ticket $record): array => TicketResource::assignmentForm($record, reassign: true))
+                ->action(function (Ticket $record, array $data, TicketWorkflowService $workflow): void {
+                    if ((int) ($data['assigned_to_user_id'] ?? 0) === (int) $record->assigned_to_user_id) {
+                        Notification::make()
+                            ->title('Pick a different account manager')
+                            ->warning()
+                            ->send();
+
+                        return;
+                    }
+
+                    TicketResource::runAssignment($record, $data, $workflow);
+                    Notification::make()
+                        ->title('Ticket reassigned')
+                        ->success()
+                        ->send();
+                }),
             Action::make('verify_docs')
                 ->label('Verify docs')
                 ->visible(fn (Ticket $record) => $record->assigned_to_user_id === auth()->id()
