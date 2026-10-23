@@ -1,10 +1,10 @@
-FROM php:8.4-cli-bookworm
+FROM php:8.5.12-cli-bookworm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git unzip curl libpq-dev libzip-dev libicu-dev \
         $PHPIZE_DEPS \
     && docker-php-ext-install -j$(nproc) intl pdo_pgsql zip pcntl bcmath \
-    && pecl install redis \
+    && pecl install redis-6.3.0 \
     && docker-php-ext-enable redis \
     && apt-get purge -y --auto-remove $PHPIZE_DEPS \
     && rm -rf /var/lib/apt/lists/*
