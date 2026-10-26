@@ -256,18 +256,25 @@ class ProvisioningPortalController extends Controller
      */
     protected function summarize(ServiceProvisioning $p, bool $forPartner = false): array
     {
-        return [
+        $base = [
             'public_id' => $p->public_id,
             'status' => $p->status?->value,
             'status_label' => $p->status?->label(),
-            'workflow_key' => $p->workflow_key?->value ?? $p->workflow_key,
-            'current_step_key' => $p->current_step_key,
             'service' => $p->service?->only(['id', 'name', 'slug']),
             'subscription_public_id' => $p->subscription?->public_id,
-            'overall_days' => $p->overallElapsedDays(),
             'started_at' => optional($p->started_at)?->toIso8601String(),
             'completed_at' => optional($p->completed_at)?->toIso8601String(),
         ];
+
+        if ($forPartner) {
+            return $base;
+        }
+
+        return array_merge($base, [
+            'workflow_key' => $p->workflow_key?->value ?? $p->workflow_key,
+            'current_step_key' => $p->current_step_key,
+            'overall_days' => $p->overallElapsedDays(),
+        ]);
     }
 
     /**
@@ -323,22 +330,68 @@ class ProvisioningPortalController extends Controller
             'attachment_label' => $attachmentLabel,
             'attachment_accepted_mimes' => $acceptedMimes,
             'attachment_max_kb' => $maxKb,
-            'chat_locked' => $messageService->chatLocked($p),
+            'chat_locked' => ! $messageService->partnerMessagingOpen($p),
+            'chat_block_reason' => $messageService->partnerChatBlockReason($p),
             'chat_attachment_max_kb' => $messageService->maxAttachmentKb(),
             'messages' => $thread['data'],
             'messages_meta' => $thread['meta'],
             'credentials' => $credentials,
-            'follow_up' => $p->steps->map(fn ($s) => [
-                'step_key' => $s->step_key,
-                'what' => $s->label,
-                'where' => $s->whereLabel(),
-                'status' => $s->status?->value,
-                'status_label' => $s->status?->label(),
-                'created_at' => optional($s->created_at)?->toIso8601String(),
-                'created_by' => null,
-                'days_in_step' => $s->daysInStep(),
-                'remark' => $s->remark,
-            ])->values(),
+            'follow_up' => $this->partnerFollowUp($p),
         ]);
+    }
+
+    /**
+     * Partner-safe progress only — no internal department handoffs, remarks, or queues.
+     *
+     * @return array{headline: string, awaiting_ethio_telecom: bool, items: list<array<string, mixed>>}
+     */
+    protected function partnerFollowUp(ServiceProvisioning $p): array
+    {
+        $partnerLabels = [
+            'partner_resource_request' => 'Your activation request',
+            'sales_share_credentials' => 'Credentials shared with you',
+            'partner_config_completed' => 'Your configuration confirmation',
+            'go_live' => 'Go Live',
+        ];
+
+        $items = [];
+        foreach ($p->steps as $step) {
+            $from = $step->from_department?->value ?? (string) $step->from_department;
+            $to = $step->to_department?->value ?? (string) $step->to_department;
+            $involvesPartner = $from === 'partner' || $to === 'partner';
+            if (! $involvesPartner) {
+                continue;
+            }
+
+            $key = (string) $step->step_key;
+            $items[] = [
+                'step_key' => $key,
+                'what' => $partnerLabels[$key] ?? 'Update for you',
+                'status' => $step->status?->value,
+                'status_label' => $step->status?->label(),
+                'needs_you' => $step->status === ProvisioningStepStatus::Waiting && $from === 'partner',
+            ];
+        }
+
+        $waiting = $p->steps->firstWhere('status', ProvisioningStepStatus::Waiting);
+        $waitingOnPartner = $waiting
+            && ($waiting->from_department?->value === 'partner');
+        $awaitingEthio = $waiting !== null && ! $waitingOnPartner
+            && ! in_array($p->status, [ProvisioningStatus::GoLive, ProvisioningStatus::Cancelled, ProvisioningStatus::Rejected], true);
+
+        $headline = match (true) {
+            $p->status === ProvisioningStatus::GoLive => 'Service activation is complete (Go Live).',
+            $p->status === ProvisioningStatus::Cancelled => 'This activation was cancelled.',
+            $p->status === ProvisioningStatus::Rejected => 'This activation was not approved.',
+            $waitingOnPartner => 'Action needed from you — see Your action above or messages.',
+            $awaitingEthio => 'Ethio telecom is processing your activation. We will notify you when something is ready.',
+            default => 'Activation in progress.',
+        };
+
+        return [
+            'headline' => $headline,
+            'awaiting_ethio_telecom' => $awaitingEthio,
+            'items' => array_values($items),
+        ];
     }
 }

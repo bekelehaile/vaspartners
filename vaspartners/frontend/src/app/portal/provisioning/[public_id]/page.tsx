@@ -190,40 +190,44 @@ export default function ProvisioningDetailPage() {
                 </div>
               ) : null}
 
-              <div className="rounded-lg border border-border overflow-x-auto">
-                <h2 className="border-b border-border px-4 py-3 text-base font-semibold">
-                  Follow-up status
-                </h2>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/40 text-left">
-                      <th className="px-3 py-2">What</th>
-                      <th className="px-3 py-2">Where</th>
-                      <th className="px-3 py-2">Status</th>
-                      <th className="px-3 py-2">Days</th>
-                      <th className="px-3 py-2">Created</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(data.follow_up || []).map((row) => (
-                      <tr key={row.step_key} className="border-b border-border/70">
-                        <td className="px-3 py-2">{row.what}</td>
-                        <td className="px-3 py-2">{row.where}</td>
-                        <td className="px-3 py-2">{row.status_label || row.status}</td>
-                        <td className="px-3 py-2">{row.days_in_step ?? 0}</td>
-                        <td className="px-3 py-2">
-                          {row.created_at ? new Date(row.created_at).toLocaleString() : "—"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="rounded-lg border border-border p-4 space-y-3">
+                <h2 className="text-base font-semibold">Progress</h2>
+                <p className="text-sm text-muted-foreground">
+                  {!Array.isArray(data.follow_up) && data.follow_up?.headline
+                    ? data.follow_up.headline
+                    : "Limited updates for your activation. Internal Ethio telecom steps are not shown here."}
+                </p>
+                {!Array.isArray(data.follow_up) && data.follow_up?.awaiting_ethio_telecom ? (
+                  <p className="text-sm font-medium text-foreground">
+                    Currently with Ethio telecom — no action needed from you right now.
+                  </p>
+                ) : null}
+                <ul className="space-y-2 text-sm">
+                  {(Array.isArray(data.follow_up)
+                    ? data.follow_up
+                    : data.follow_up?.items ?? []
+                  ).map((row) => (
+                    <li
+                      key={row.step_key}
+                      className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2 last:border-0 last:pb-0"
+                    >
+                      <span>
+                        {row.what}
+                        {"needs_you" in row && row.needs_you ? (
+                          <span className="ml-2 text-xs font-semibold text-amber-700">Needs you</span>
+                        ) : null}
+                      </span>
+                      <span className="status-chip is-alive">{row.status_label || row.status || "—"}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
 
             <ProvisioningChatPanel
               publicId={publicId}
               chatLocked={!!data.chat_locked}
+              chatBlockReason={data.chat_block_reason}
               maxKb={data.chat_attachment_max_kb ?? 2048}
               initialMessages={data.messages ?? []}
               subscriptionPublicId={data.subscription_public_id}

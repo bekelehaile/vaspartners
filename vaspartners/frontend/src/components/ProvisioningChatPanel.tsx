@@ -53,16 +53,19 @@ async function downloadAttachment(message: TicketMessage) {
 export function ProvisioningChatPanel({
   publicId,
   chatLocked,
+  chatBlockReason,
   maxKb = 2048,
   initialMessages = [],
   subscriptionPublicId,
 }: {
   publicId: string;
   chatLocked?: boolean;
+  chatBlockReason?: "closed" | "not_ready" | string | null;
   maxKb?: number;
   initialMessages?: TicketMessage[];
   subscriptionPublicId?: string | null;
 }) {
+  const blockReason = chatBlockReason ?? (chatLocked ? "closed" : null);
   const qc = useQueryClient();
   const [body, setBody] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -134,10 +137,11 @@ export function ProvisioningChatPanel({
         <div>
           <h2>Messages</h2>
           <p className="muted">
-            Chat with your account manager during service activation. PDF up to {maxKb} KB.
-            {chatLocked
-              ? " Go Live is complete — use Subscription Manage for further changes."
-              : ""}
+            {blockReason === "not_ready"
+              ? "Messaging opens after Ethio telecom shares credentials for you to configure."
+              : blockReason === "closed"
+                ? "Go Live is complete — use Subscription Manage for further changes."
+                : `Chat with your account manager while configuring credentials. PDF up to ${maxKb} KB.`}
           </p>
         </div>
       </div>
@@ -163,7 +167,9 @@ export function ProvisioningChatPanel({
         {messages.length === 0 ? (
           <div className="portal-empty chat-empty">
             <p>
-              No messages yet. Ask your account manager for help configuring the shared credentials.
+              {blockReason === "not_ready"
+                ? "No messages yet. You can chat here once credentials are shared."
+                : "No messages yet. Ask your account manager for help configuring the shared credentials."}
             </p>
           </div>
         ) : (
@@ -200,7 +206,14 @@ export function ProvisioningChatPanel({
         )}
       </div>
 
-      {chatLocked ? (
+      {blockReason === "not_ready" ? (
+        <div className="mt-4">
+          <p className="muted">
+            Messaging is not available yet. Ethio telecom will share credentials when configuration
+            is ready; then you can chat with your account manager here.
+          </p>
+        </div>
+      ) : blockReason === "closed" || chatLocked ? (
         <div className="mt-4 space-y-2">
           <p className="muted">
             Messaging is closed after Go Live. Use Subscription Manage for renewals and further

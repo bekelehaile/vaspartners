@@ -20,6 +20,7 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\FontWeight;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -100,31 +101,41 @@ class ServiceProvisioningResource extends Resource
     public static function infolist(Schema $schema): Schema
     {
         return $schema->components([
-            Section::make('Case')->schema([
-                TextEntry::make('public_id')->label('PRV number'),
-                TextEntry::make('status')->badge(),
-                TextEntry::make('workflow_key')->label('Workflow')->badge(),
-                TextEntry::make('company.name')->label('Company'),
-                TextEntry::make('service.name')->label('Service'),
-                TextEntry::make('subscription.public_id')
-                    ->label('Subscription')
-                    ->url(fn (ServiceProvisioning $record): ?string => $record->subscription
-                        ? \App\Filament\Resources\Subscriptions\SubscriptionResource::getUrl('view', ['record' => $record->subscription])
-                        : null),
-                TextEntry::make('current_step_key')->label('Current step'),
-                TextEntry::make('overall_days')
-                    ->label('Overall provisioning time')
-                    ->state(fn (ServiceProvisioning $record): string => $record->overallElapsedDays().' day(s)'),
-                TextEntry::make('started_at')->dateTime(),
-                TextEntry::make('completed_at')->dateTime()->placeholder('—'),
-            ])->columns(3),
-            Section::make('Shared credentials')
-                ->description('Shown when credentials have been released to the partner.')
+            Section::make('Overview')
+                ->compact()
+                ->columns([
+                    'default' => 2,
+                    'md' => 3,
+                    'xl' => 4,
+                ])
+                ->schema([
+                    TextEntry::make('public_id')->label('PRV')->weight(FontWeight::SemiBold)->copyable(),
+                    TextEntry::make('status')->badge(),
+                    TextEntry::make('workflow_key')->label('Workflow')->badge(),
+                    TextEntry::make('overall_days')
+                        ->label('Days')
+                        ->state(fn (ServiceProvisioning $record): string => (string) $record->overallElapsedDays()),
+                    TextEntry::make('company.name')->label('Company')->wrap(),
+                    TextEntry::make('service.name')->label('Service')->wrap(),
+                    TextEntry::make('subscription.public_id')
+                        ->label('Subscription')
+                        ->url(fn (ServiceProvisioning $record): ?string => $record->subscription
+                            ? \App\Filament\Resources\Subscriptions\SubscriptionResource::getUrl('view', ['record' => $record->subscription])
+                            : null),
+                    TextEntry::make('current_step_key')->label('Current step')->placeholder('—'),
+                    TextEntry::make('started_at')->label('Started')->dateTime('Y-m-d H:i')->placeholder('—'),
+                    TextEntry::make('completed_at')->label('Completed')->dateTime('Y-m-d H:i')->placeholder('—'),
+                ]),
+            Section::make('Credentials')
+                ->compact()
+                ->collapsed()
+                ->collapsible()
                 ->visible(fn (ServiceProvisioning $record): bool => (bool) ($record->shared_payload['credentials_released_to_partner'] ?? false)
                     && filled($record->shared_payload['credentials'] ?? null))
                 ->schema([
                     KeyValueEntry::make('credentials')
                         ->label('')
+                        ->columnSpanFull()
                         ->state(fn (ServiceProvisioning $record): array => (array) ($record->shared_payload['credentials'] ?? [])),
                 ]),
         ]);
@@ -195,8 +206,8 @@ class ServiceProvisioningResource extends Resource
             ->recordActions([
                 ViewAction::make(),
                 ActionGroup::make(ProvisioningStepActions::forTable())
-                    ->label('Section actions')
-                    ->icon('heroicon-o-play')
+                    ->label(fn (ServiceProvisioning $record): string => ProvisioningStepActions::groupLabel($record))
+                    ->icon('heroicon-o-paper-airplane')
                     ->color('primary')
                     ->button()
                     ->visible(fn (ServiceProvisioning $record): bool => ProvisioningStepActions::actionableSteps($record)->isNotEmpty()),

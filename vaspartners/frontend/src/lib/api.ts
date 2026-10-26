@@ -560,6 +560,7 @@ export type ProvisioningCase = {
   attachment_max_kb?: number | null;
   credentials?: Record<string, string> | null;
   chat_locked?: boolean;
+  chat_block_reason?: "closed" | "not_ready" | string | null;
   chat_attachment_max_kb?: number;
   messages?: TicketMessage[];
   messages_meta?: {
@@ -569,15 +570,22 @@ export type ProvisioningCase = {
     oldest_id?: number | null;
     newest_id?: number | null;
   };
-  follow_up?: Array<{
+  follow_up?: {
+    headline?: string;
+    awaiting_ethio_telecom?: boolean;
+    items?: Array<{
+      step_key: string;
+      what: string;
+      status?: string | null;
+      status_label?: string | null;
+      needs_you?: boolean;
+    }>;
+  } | Array<{
     step_key: string;
     what: string;
-    where: string;
+    where?: string;
     status?: string | null;
     status_label?: string | null;
-    created_at?: string | null;
-    days_in_step?: number;
-    remark?: string | null;
   }>;
 };
 

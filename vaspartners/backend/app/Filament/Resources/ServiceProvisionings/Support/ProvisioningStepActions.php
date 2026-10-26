@@ -100,6 +100,34 @@ class ProvisioningStepActions
     }
 
     /**
+     * Button / menu label: "Submit to VAS Operation", "Submit to IS Billing", etc.
+     */
+    public static function submitToLabel(ServiceProvisioningStep|string|null $toOrStep): string
+    {
+        $to = $toOrStep instanceof ServiceProvisioningStep
+            ? ($toOrStep->to_department?->value ?? (string) $toOrStep->to_department)
+            : (string) $toOrStep;
+
+        $dept = ProvisioningDepartment::tryFrom($to);
+        $name = $dept?->label() ?: (filled($to) ? str_replace('_', ' ', ucwords($to, '_')) : 'next section');
+
+        return 'Submit to '.$name;
+    }
+
+    /**
+     * ActionGroup button label for the case (single destination or generic Submit).
+     */
+    public static function groupLabel(ServiceProvisioning $case, ?User $user = null): string
+    {
+        $steps = static::actionableSteps($case, $user);
+        if ($steps->count() === 1) {
+            return static::submitToLabel($steps->first());
+        }
+
+        return 'Submit';
+    }
+
+    /**
      * One Filament action per waiting step the user can act on for this case.
      *
      * @return list<Action>
@@ -139,9 +167,12 @@ class ProvisioningStepActions
                     continue;
                 }
 
+                $to = (string) ($def['to'] ?? '');
+                $submitLabel = static::submitToLabel($to);
+
                 $actions[] = Action::make('act_'.$stepKey)
-                    ->label((string) ($def['label'] ?? $stepKey))
-                    ->icon('heroicon-o-play')
+                    ->label($submitLabel)
+                    ->icon('heroicon-o-paper-airplane')
                     ->color('primary')
                     ->visible(function (ServiceProvisioning $record) use ($stepKey): bool {
                         $step = $record->steps->firstWhere('step_key', $stepKey);
@@ -154,13 +185,10 @@ class ProvisioningStepActions
 
                         return static::userCanActOnStep(auth()->user(), $step, $record);
                     })
-                    ->modalHeading(fn (ServiceProvisioning $record): string => (string) (
-                        $record->steps->firstWhere('step_key', $stepKey)?->label
-                        ?? $registry->step($record->workflow_key, $stepKey)['label']
-                        ?? $stepKey
-                    ))
+                    ->modalHeading($submitLabel)
                     ->modalDescription(fn (ServiceProvisioning $record): string => (string) (
-                        $record->steps->firstWhere('step_key', $stepKey)?->whereLabel() ?? ''
+                        $record->steps->firstWhere('step_key', $stepKey)?->whereLabel()
+                        ?: ($def['label'] ?? '')
                     ))
                     ->form(function (ServiceProvisioning $record) use ($stepKey, $registry): array {
                         $def = $registry->step($record->workflow_key, $stepKey) ?? [];
@@ -236,12 +264,14 @@ class ProvisioningStepActions
         $registry = app(ProvisioningWorkflowRegistry::class);
         $def = $registry->step($case->workflow_key, $step->step_key) ?? [];
 
+        $submitLabel = static::submitToLabel($step);
+
         return Action::make('act_'.$step->step_key)
-            ->label($step->label)
-            ->icon('heroicon-o-play')
+            ->label($submitLabel)
+            ->icon('heroicon-o-paper-airplane')
             ->color('primary')
-            ->modalHeading($step->label)
-            ->modalDescription($step->whereLabel())
+            ->modalHeading($submitLabel)
+            ->modalDescription($step->whereLabel().(filled($step->label) ? ' · '.$step->label : ''))
             ->form(static::formFields($def))
             ->action(function (array $data) use ($case, $step, $afterSuccess): void {
                 static::runStep($case, $step->step_key, $data);

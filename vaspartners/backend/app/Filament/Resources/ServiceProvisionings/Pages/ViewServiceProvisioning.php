@@ -47,8 +47,8 @@ class ViewServiceProvisioning extends ViewRecord
 
         return [
             ActionGroup::make($stepActions)
-                ->label('Section actions')
-                ->icon('heroicon-o-play')
+                ->label(ProvisioningStepActions::groupLabel($record))
+                ->icon('heroicon-o-paper-airplane')
                 ->color('primary')
                 ->button(),
         ];

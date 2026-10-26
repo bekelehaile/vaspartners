@@ -20,6 +20,9 @@ class ServiceProvisioningMessageService
         return max(1, (int) config('vas.chat_attachment_max_kb', 2048));
     }
 
+    /**
+     * Case is finished — no new messages from anyone (except allowWhenLocked).
+     */
     public function chatLocked(ServiceProvisioning $case): bool
     {
         return in_array($case->status, [
@@ -27,6 +30,52 @@ class ServiceProvisioningMessageService
             ProvisioningStatus::Cancelled,
             ProvisioningStatus::Rejected,
         ], true);
+    }
+
+    /**
+     * Partner may message only after credentials / configuration were shared with them.
+     */
+    public function partnerMessagingOpen(ServiceProvisioning $case): bool
+    {
+        if ($this->chatLocked($case)) {
+            return false;
+        }
+
+        $shared = $case->shared_payload ?? [];
+
+        return (bool) ($shared['credentials_released_to_partner'] ?? false);
+    }
+
+    /**
+     * Whether this author may post on the case right now.
+     */
+    public function authorCanPost(ServiceProvisioning $case, Contact|User $author): bool
+    {
+        if ($this->chatLocked($case)) {
+            return false;
+        }
+
+        if ($author instanceof Contact) {
+            return $this->partnerMessagingOpen($case);
+        }
+
+        return true;
+    }
+
+    /**
+     * @return 'closed'|'not_ready'|null
+     */
+    public function partnerChatBlockReason(ServiceProvisioning $case): ?string
+    {
+        if ($this->chatLocked($case)) {
+            return 'closed';
+        }
+
+        if (! $this->partnerMessagingOpen($case)) {
+            return 'not_ready';
+        }
+
+        return null;
     }
 
     /**
@@ -50,6 +99,11 @@ class ServiceProvisioningMessageService
             if ((int) $author->company_id !== (int) $case->company_id) {
                 throw ValidationException::withMessages([
                     'body' => 'You cannot message on this provisioning case.',
+                ]);
+            }
+            if (! $allowWhenLocked && ! $this->partnerMessagingOpen($case)) {
+                throw ValidationException::withMessages([
+                    'body' => 'Messaging opens after Ethio telecom shares credentials for configuration.',
                 ]);
             }
             $isPublic = true;
