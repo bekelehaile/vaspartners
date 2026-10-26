@@ -7,8 +7,10 @@ use App\Enums\ProvisioningStepStatus;
 use App\Models\ServiceProvisioning;
 use App\Models\ServiceProvisioningStep;
 use App\Models\User;
+use App\Services\Provisioning\ProvisioningPermissions;
 use App\Services\Provisioning\ProvisioningWorkflowRegistry;
 use App\Services\Provisioning\ServiceProvisioningService;
+use Illuminate\Support\Facades\Gate;
 use Filament\Actions\Action;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Repeater;
@@ -55,17 +57,27 @@ class ProvisioningStepActions
         ServiceProvisioningStep $step,
         ?ServiceProvisioning $case = null,
     ): bool {
-        if (! $user) {
+        if (! $user || ! $case instanceof ServiceProvisioning) {
             return false;
         }
 
         $from = $step->from_department?->value ?? (string) $step->from_department;
-        if (! $user->canActAsProvisioningDepartment($from)) {
+        if ($from === ProvisioningDepartment::Partner->value) {
+            return false;
+        }
+
+        // Shield custom action permission (Roles UI under ServiceProvisioning).
+        $ability = ProvisioningPermissions::abilityForStep((string) $step->step_key);
+        if ($ability === null || ! Gate::forUser($user)->allows($ability, $case)) {
             return false;
         }
 
         if ($user->canBypassServiceProvisioningScope()) {
             return true;
+        }
+
+        if (! $user->canActAsProvisioningDepartment($from)) {
+            return false;
         }
 
         // Explicit department attachment covers that section anywhere.
@@ -75,8 +87,7 @@ class ProvisioningStepActions
 
         // AM without vas_sales department: only assigned cases.
         if ($user->hasRole(User::ROLE_ACCOUNT_MANAGER)
-            && $from === ProvisioningDepartment::VasSales->value
-            && $case instanceof ServiceProvisioning) {
+            && $from === ProvisioningDepartment::VasSales->value) {
             return $user->ownsServiceProvisioningCase($case);
         }
 

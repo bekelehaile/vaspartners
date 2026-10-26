@@ -19,6 +19,7 @@ use App\Support\SecureUploadedFile;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
@@ -545,14 +546,21 @@ class ServiceProvisioningService
         }
 
         if ($actor instanceof User) {
-            if (! $actor->canActAsProvisioningDepartment($from)) {
+            $ability = ProvisioningPermissions::abilityForStep((string) $step->step_key);
+            if ($ability === null || ! Gate::forUser($actor)->allows($ability, $case)) {
                 throw ValidationException::withMessages([
-                    'step' => 'Your role cannot act on this department step.',
+                    'step' => 'You are not permitted to run this service activation action. Ask an admin to grant it in Roles (Shield).',
                 ]);
             }
 
             if ($actor->canBypassServiceProvisioningScope()) {
                 return;
+            }
+
+            if (! $actor->canActAsProvisioningDepartment($from)) {
+                throw ValidationException::withMessages([
+                    'step' => 'Your role cannot act on this department step.',
+                ]);
             }
 
             // Department-attached users may act on their sections for any in-scope case.

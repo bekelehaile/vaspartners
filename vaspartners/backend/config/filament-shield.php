@@ -187,6 +187,17 @@ return [
                 'sendSmsAny',
                 'reject',
             ],
+            // Service activation section submit actions (grant in Shield Roles UI)
+            \App\Filament\Resources\ServiceProvisionings\ServiceProvisioningResource::class => [
+                'actSalesPack',
+                'actServiceConfig',
+                'actBillingConfig',
+                'actProductCreation',
+                'actShareCredentials',
+                'actSecurityAssessment',
+                'actGoLive',
+                'viewCredentials',
+            ],
         ],
         'exclude' => [
             //

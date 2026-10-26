@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Enums\ProvisioningDepartment;
 use App\Enums\ProvisioningWorkflow;
 use App\Models\Service;
+use App\Services\Provisioning\ProvisioningPermissions;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -13,10 +14,12 @@ class ProvisioningRolesSeeder extends Seeder
 {
     public function run(): void
     {
-        $permissions = [
-            'View:ServiceProvisioning',
-            'ViewAny:ServiceProvisioning',
-            'Update:ServiceProvisioning',
+        foreach (ProvisioningPermissions::allPermissions() as $name) {
+            Permission::findOrCreate($name, 'web');
+        }
+
+        // Legacy names from earlier seed — keep so existing role pivots do not break until re-synced.
+        foreach ([
             'Act:ProvisioningResourceAllocation',
             'Act:ProvisioningSalesPack',
             'Act:ProvisioningServiceConfig',
@@ -26,33 +29,46 @@ class ProvisioningRolesSeeder extends Seeder
             'View:ProvisioningCredentials',
             'Act:ProvisioningSecurityAssessment',
             'Act:ProvisioningGoLive',
-        ];
-
-        foreach ($permissions as $name) {
-            Permission::findOrCreate($name, 'web');
+        ] as $legacy) {
+            Permission::findOrCreate($legacy, 'web');
         }
 
         $rolePerms = [
             ProvisioningDepartment::VasSales->value => [
-                'View:ServiceProvisioning', 'ViewAny:ServiceProvisioning', 'Update:ServiceProvisioning',
-                'Act:ProvisioningSalesPack', 'Act:ProvisioningShareCredentials',
-                'Act:ProvisioningSecurityAssessment', 'Act:ProvisioningGoLive',
+                'View:ServiceProvisioning',
+                'ViewAny:ServiceProvisioning',
+                'Update:ServiceProvisioning',
+                'ActSalesPack:ServiceProvisioning',
+                'ActShareCredentials:ServiceProvisioning',
+                'ActSecurityAssessment:ServiceProvisioning',
+                'ActGoLive:ServiceProvisioning',
+                'ViewCredentials:ServiceProvisioning',
             ],
             ProvisioningDepartment::VasOperation->value => [
-                'View:ServiceProvisioning', 'ViewAny:ServiceProvisioning', 'Update:ServiceProvisioning',
-                'Act:ProvisioningServiceConfig', 'View:ProvisioningCredentials',
+                'View:ServiceProvisioning',
+                'ViewAny:ServiceProvisioning',
+                'Update:ServiceProvisioning',
+                'ActServiceConfig:ServiceProvisioning',
+                'ViewCredentials:ServiceProvisioning',
             ],
             ProvisioningDepartment::IsBilling->value => [
-                'View:ServiceProvisioning', 'ViewAny:ServiceProvisioning', 'Update:ServiceProvisioning',
-                'Act:ProvisioningBillingConfig',
+                'View:ServiceProvisioning',
+                'ViewAny:ServiceProvisioning',
+                'Update:ServiceProvisioning',
+                'ActBillingConfig:ServiceProvisioning',
             ],
             ProvisioningDepartment::Ma->value => [
-                'View:ServiceProvisioning', 'ViewAny:ServiceProvisioning', 'Update:ServiceProvisioning',
-                'Act:ProvisioningProductCreation', 'View:ProvisioningCredentials',
+                'View:ServiceProvisioning',
+                'ViewAny:ServiceProvisioning',
+                'Update:ServiceProvisioning',
+                'ActProductCreation:ServiceProvisioning',
+                'ViewCredentials:ServiceProvisioning',
             ],
             ProvisioningDepartment::IsSecurity->value => [
-                'View:ServiceProvisioning', 'ViewAny:ServiceProvisioning', 'Update:ServiceProvisioning',
-                'Act:ProvisioningSecurityAssessment',
+                'View:ServiceProvisioning',
+                'ViewAny:ServiceProvisioning',
+                'Update:ServiceProvisioning',
+                'ActSecurityAssessment:ServiceProvisioning',
             ],
         ];
 
@@ -61,16 +77,17 @@ class ProvisioningRolesSeeder extends Seeder
             $role->givePermissionTo($perms);
         }
 
-        // Account managers open / submit sales-side activation on cases they already own.
+        // Account managers: sales-side actions on assigned cases (Shield-grantable).
         $accountManager = Role::findOrCreate('account_manager', 'web');
         $accountManager->givePermissionTo([
             'View:ServiceProvisioning',
             'ViewAny:ServiceProvisioning',
             'Update:ServiceProvisioning',
-            'Act:ProvisioningSalesPack',
-            'Act:ProvisioningShareCredentials',
-            'Act:ProvisioningSecurityAssessment',
-            'Act:ProvisioningGoLive',
+            'ActSalesPack:ServiceProvisioning',
+            'ActShareCredentials:ServiceProvisioning',
+            'ActSecurityAssessment:ServiceProvisioning',
+            'ActGoLive:ServiceProvisioning',
+            'ViewCredentials:ServiceProvisioning',
         ]);
 
         Service::query()

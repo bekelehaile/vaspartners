@@ -153,7 +153,8 @@ class ServiceProvisioningResource extends Resource
                 ->collapsed()
                 ->collapsible()
                 ->visible(fn (ServiceProvisioning $record): bool => (bool) ($record->shared_payload['credentials_released_to_partner'] ?? false)
-                    && filled($record->shared_payload['credentials'] ?? null))
+                    && filled($record->shared_payload['credentials'] ?? null)
+                    && (auth()->user()?->can('viewCredentials', $record) ?? false))
                 ->schema([
                     KeyValueEntry::make('credentials')
                         ->label('')
