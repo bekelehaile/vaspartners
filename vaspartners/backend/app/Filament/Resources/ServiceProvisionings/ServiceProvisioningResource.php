@@ -100,34 +100,56 @@ class ServiceProvisioningResource extends Resource
 
     public static function infolist(Schema $schema): Schema
     {
-        return $schema->components([
+        return $schema
+            ->columns(1)
+            ->components([
             Section::make('Overview')
                 ->compact()
-                ->columns([
-                    'default' => 2,
-                    'md' => 3,
-                    'xl' => 4,
-                ])
+                ->columnSpanFull()
+                ->columns(3)
                 ->schema([
-                    TextEntry::make('public_id')->label('PRV')->weight(FontWeight::SemiBold)->copyable(),
+                    TextEntry::make('public_id')
+                        ->label('PRV')
+                        ->weight(FontWeight::SemiBold)
+                        ->copyable()
+                        ->copyMessage('PRV copied'),
                     TextEntry::make('status')->badge(),
-                    TextEntry::make('workflow_key')->label('Workflow')->badge(),
-                    TextEntry::make('overall_days')
-                        ->label('Days')
-                        ->state(fn (ServiceProvisioning $record): string => (string) $record->overallElapsedDays()),
-                    TextEntry::make('company.name')->label('Company')->wrap(),
-                    TextEntry::make('service.name')->label('Service')->wrap(),
+                    TextEntry::make('workflow_key')->label('Workflow')->badge()->placeholder('—'),
+                    TextEntry::make('company.name')->label('Company')->placeholder('—')->wrap(),
+                    TextEntry::make('service.name')->label('Service')->placeholder('—')->wrap(),
                     TextEntry::make('subscription.public_id')
                         ->label('Subscription')
+                        ->placeholder('—')
                         ->url(fn (ServiceProvisioning $record): ?string => $record->subscription
                             ? \App\Filament\Resources\Subscriptions\SubscriptionResource::getUrl('view', ['record' => $record->subscription])
                             : null),
-                    TextEntry::make('current_step_key')->label('Current step')->placeholder('—'),
-                    TextEntry::make('started_at')->label('Started')->dateTime('Y-m-d H:i')->placeholder('—'),
-                    TextEntry::make('completed_at')->label('Completed')->dateTime('Y-m-d H:i')->placeholder('—'),
+                    TextEntry::make('current_step')
+                        ->label('Current step')
+                        ->badge()
+                        ->color('warning')
+                        ->weight(FontWeight::SemiBold)
+                        ->columnSpanFull()
+                        ->placeholder('—')
+                        ->state(function (ServiceProvisioning $record): ?string {
+                            $key = $record->current_step_key;
+                            if (! filled($key)) {
+                                return null;
+                            }
+                            $label = $record->steps
+                                ->firstWhere('step_key', $key)
+                                ?->label;
+
+                            return filled($label) ? $label.' ('.$key.')' : (string) $key;
+                        }),
+                    TextEntry::make('overall_days')
+                        ->label('Elapsed days')
+                        ->state(fn (ServiceProvisioning $record): string => $record->overallElapsedDays().' day(s)'),
+                    TextEntry::make('started_at')->label('Started')->dateTime('d M Y, H:i')->placeholder('—'),
+                    TextEntry::make('completed_at')->label('Completed')->dateTime('d M Y, H:i')->placeholder('—'),
                 ]),
-            Section::make('Credentials')
+            Section::make('Shared credentials')
                 ->compact()
+                ->columnSpanFull()
                 ->collapsed()
                 ->collapsible()
                 ->visible(fn (ServiceProvisioning $record): bool => (bool) ($record->shared_payload['credentials_released_to_partner'] ?? false)

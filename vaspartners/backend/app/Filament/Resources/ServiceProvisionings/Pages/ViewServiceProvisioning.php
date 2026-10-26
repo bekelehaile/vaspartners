@@ -12,14 +12,12 @@ class ViewServiceProvisioning extends ViewRecord
 {
     protected static string $resource = ServiceProvisioningResource::class;
 
+    /**
+     * Keep Overview as a compact strip above the tabs (not a full-height Overview tab).
+     */
     public function hasCombinedRelationManagerTabsWithContent(): bool
     {
-        return true;
-    }
-
-    public function getContentTabLabel(): ?string
-    {
-        return 'Overview';
+        return false;
     }
 
     protected function getHeaderActions(): array
