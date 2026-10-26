@@ -12,6 +12,13 @@ return new class extends Migration
 {
     public function up(): void
     {
+        $partners = database_path(SeedRevenueExcelSnapshotService::PARTNERS_FILE);
+        $rows = database_path(SeedRevenueExcelSnapshotService::ROWS_FILE);
+        if (! is_file($partners) || ! is_file($rows)) {
+            // Stage / fresh envs without finance snapshots — skip; prod already applied.
+            return;
+        }
+
         $seeder = app(SeedRevenueExcelSnapshotService::class);
         $seeder->seedPartners();
         $seeder->seedMonthlyImports();

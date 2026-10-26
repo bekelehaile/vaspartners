@@ -237,7 +237,7 @@ services:
     container_name: vaspartners-stage-nginx
     restart: unless-stopped
     ports:
-      # Direct TLS for stage (prod TLS certs). Does not bind production :443 / :30011.
+      # Direct TLS for stage (prod TLS certs). Requires host :8443 free (fbb_staging down).
       - "8443:443"
       - "127.0.0.1:30012:80"
     volumes:

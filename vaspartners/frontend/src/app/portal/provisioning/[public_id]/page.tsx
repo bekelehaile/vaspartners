@@ -5,8 +5,7 @@ import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { PortalPageHeader } from "@/components/PortalPageHeader";
-import { getToken } from "@/lib/auth-token";
-import { getProvisioning, submitProvisioningStep } from "@/lib/api";
+import { getToken, getProvisioning, submitProvisioningStep } from "@/lib/api";
 
 export default function ProvisioningDetailPage() {
   const params = useParams<{ public_id: string | string[] }>();

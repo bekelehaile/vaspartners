@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { PortalPageHeader } from "@/components/PortalPageHeader";
-import { getToken } from "@/lib/auth-token";
-import { listProvisioning } from "@/lib/api";
+import { getToken, listProvisioning } from "@/lib/api";
 
 export default function ProvisioningListPage() {
   const { data, isLoading, isError, error } = useQuery({

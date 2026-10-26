@@ -2,6 +2,7 @@
 #
 # STAGE deploy for VAS Partners (feature testing).
 # Access: https://vaspartnersportal.ethiotelecom.et:8443
+# (requires host :8443 free — stop fbb_staging first if it holds the port)
 #
 # Does NOT touch production (compose.prod.yml / :443).
 #
