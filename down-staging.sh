@@ -10,18 +10,18 @@ for arg in "$@"; do
     -v|--volumes) REMOVE_VOLUMES=true ;;
     -h|--help)
       echo "Usage: ./down-staging.sh [--volumes|-v]"
-      echo "  Stop staging containers. Use -v to wipe staging Postgres/Redis volumes."
-      echo "  Does not affect production mvasportal."
+      echo "  Stop STAGE containers. Use -v to wipe stage Postgres/Redis volumes."
+      echo "  Does not affect production (compose.prod.yml)."
       exit 0
       ;;
   esac
 done
 
-echo "Stopping VAS Partners staging stack..."
+echo "Stopping VAS Partners STAGE stack..."
 if [[ "$REMOVE_VOLUMES" == "true" ]]; then
   docker compose -f compose.staging.yml down -v --remove-orphans
-  echo "Staging down (volumes removed)."
+  echo "Stage down (volumes removed)."
 else
   docker compose -f compose.staging.yml down --remove-orphans
-  echo "Staging down (data volumes kept). Wipe with: ./down-staging.sh -v"
+  echo "Stage down (data volumes kept). Wipe with: ./down-staging.sh -v"
 fi

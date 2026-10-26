@@ -8,6 +8,7 @@ use App\Filament\Resources\Tickets\TicketResource;
 use App\Models\Contact;
 use App\Models\Company;
 use App\Models\CompanyChangeRequest;
+use App\Models\ServiceProvisioning;
 use App\Models\Subscription;
 use App\Models\Ticket;
 use App\Models\TicketComment;
@@ -782,6 +783,28 @@ class PartnerNotificationService
             title: $this->titleFor('profile_completed'),
             body: Str::limit(preg_replace('/\s+/', ' ', $portalBody) ?? $portalBody, 280),
             template: 'profile_completed',
+        ));
+    }
+
+    /**
+     * @param  array<string, scalar|null>  $placeholders
+     */
+    public function notifyProvisioningTemplate(
+        Contact $contact,
+        ServiceProvisioning $case,
+        string $templateKey,
+        string $body,
+        array $placeholders = [],
+    ): void {
+        if (filled($contact->phone_number)) {
+            $this->sms->send($contact->phone_number, $body);
+        }
+
+        $contact->notify(new PartnerPortalNotification(
+            title: (string) ($placeholders['prv_number'] ?? $case->public_id),
+            body: Str::limit($body, 280),
+            template: $templateKey,
+            url: '/portal/provisioning/'.$case->public_id,
         ));
     }
 

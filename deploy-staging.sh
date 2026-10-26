@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# PRODUCTION deploy for VAS Partners (script name is historical: deploy-staging.sh).
-# Public URL: https://vaspartnersportal.ethiotelecom.et (host nginx → :30011).
+# STAGE deploy for VAS Partners (feature testing).
+# Access: https://vaspartnersportal.ethiotelecom.et:8443
 #
-# This is NOT a separate staging environment — it ships the live portal.
+# Does NOT touch production (compose.prod.yml / :443).
 #
 # Usage:
 #   ./deploy-staging.sh
@@ -14,27 +14,25 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 
-VERSION="${1:-$(git rev-parse --short HEAD 2>/dev/null || echo prod)}"
+VERSION="${1:-$(git rev-parse --short HEAD 2>/dev/null || echo stage)}"
 COMPOSE=(docker compose -f compose.staging.yml)
 
 if [[ ! -f .env.staging ]]; then
-  if [[ -f vaspartners/backend/.env ]]; then
-    echo "==> Creating .env.staging from vaspartners/backend/.env (edit Fayda + URLs if needed)"
-    cp vaspartners/backend/.env .env.staging
-  elif [[ -f .env.staging.example ]]; then
+  if [[ -f .env.staging.example ]]; then
     echo "==> Creating .env.staging from .env.staging.example — fill FAYDA_* before use"
     cp .env.staging.example .env.staging
+  elif [[ -f vaspartners/backend/.env ]]; then
+    echo "==> Creating .env.staging from vaspartners/backend/.env (edit Fayda + URLs for :8443)"
+    cp vaspartners/backend/.env .env.staging
   else
     echo "Missing .env.staging — copy .env.staging.example and set FAYDA_* first."
     exit 1
   fi
 fi
 
-# Ensure production public URLs (do not rely on local localhost values)
 ensure_kv() {
   local key="$1" val="$2" file=".env.staging"
   if grep -q "^${key}=" "$file"; then
-    # portable in-place replace
     awk -v k="$key" -v v="$val" 'BEGIN{FS=OFS="="} $1==k{$0=k"="v} {print}' "$file" > "${file}.tmp"
     mv "${file}.tmp" "$file"
   else
@@ -42,30 +40,26 @@ ensure_kv() {
   fi
 }
 
-ensure_kv APP_URL "https://vaspartnersportal.ethiotelecom.et"
-ensure_kv FRONTEND_URL "https://vaspartnersportal.ethiotelecom.et"
-ensure_kv FAYDA_REDIRECT_URI "https://vaspartnersportal.ethiotelecom.et/callback"
-ensure_kv SANCTUM_STATEFUL_DOMAINS "vaspartnersportal.ethiotelecom.et"
-# Keep APP_ENV from .env.staging (should be production) — do not force overwrite.
+ensure_kv APP_URL "https://vaspartnersportal.ethiotelecom.et:8443"
+ensure_kv FRONTEND_URL "https://vaspartnersportal.ethiotelecom.et:8443"
+ensure_kv FAYDA_REDIRECT_URI "https://vaspartnersportal.ethiotelecom.et:8443/callback"
+ensure_kv SANCTUM_STATEFUL_DOMAINS "vaspartnersportal.ethiotelecom.et:8443,vaspartnersportal.ethiotelecom.et"
 ensure_kv TRUSTED_PROXIES "*"
-ensure_kv APP_DEBUG "false"
+ensure_kv APP_DEBUG "true"
 
 if [[ ! -r /etc/nginx/ssl/fullchain-wildcard.crt || ! -r /etc/nginx/ssl/ethiotelecom-wildcard.key ]]; then
   echo "Tele SSL certs not readable at /etc/nginx/ssl/fullchain-wildcard.crt (+ key)."
-  echo "Nginx mounts these for TLS on :8443 (host :443 uses system nginx)."
   exit 1
 fi
 
-echo "==> Building PRODUCTION images (${VERSION})..."
+echo "==> Building STAGE images (${VERSION}) — project vaspartners-stage (production untouched)..."
 DOCKER_BUILDKIT=1 "${COMPOSE[@]}" build \
-  --build-arg NEXT_PUBLIC_API_URL=https://vaspartnersportal.ethiotelecom.et/api/v1 \
-  --build-arg NEXT_PUBLIC_SITE_URL=https://vaspartnersportal.ethiotelecom.et
+  --build-arg NEXT_PUBLIC_API_URL=https://vaspartnersportal.ethiotelecom.et:8443/api/v1 \
+  --build-arg NEXT_PUBLIC_SITE_URL=https://vaspartnersportal.ethiotelecom.et:8443
 
-echo "==> Starting PRODUCTION stack (Postgres + PgBouncer + Redis + app + otp/import/export/sms/default workers + web + nginx)..."
+echo "==> Starting STAGE stack..."
 "${COMPOSE[@]}" up -d --remove-orphans
 
-# Nginx caches upstream IPs unless config uses Docker DNS variables; always
-# reload after app/frontend recreate so a stale IP cannot cause 502s.
 echo "==> Reloading nginx upstreams..."
 "${COMPOSE[@]}" exec -T nginx nginx -s reload 2>/dev/null \
   || "${COMPOSE[@]}" restart nginx
@@ -83,11 +77,11 @@ for i in $(seq 1 90); do
 done
 
 echo
-echo "VAS Partners PRODUCTION up (${VERSION})."
-echo "  Portal:  https://vaspartnersportal.ethiotelecom.et"
-echo "  Admin:   https://vaspartnersportal.ethiotelecom.et/admin"
-echo "  API:     https://vaspartnersportal.ethiotelecom.et/api/v1"
+echo "VAS Partners STAGE up (${VERSION})."
+echo "  Portal:  https://vaspartnersportal.ethiotelecom.et:8443"
+echo "  Admin:   https://vaspartnersportal.ethiotelecom.et:8443/admin"
+echo "  API:     https://vaspartnersportal.ethiotelecom.et:8443/api/v1"
 echo
-echo "  Host nginx :443 → 127.0.0.1:30011 → vaspartners-nginx"
+echo "  Direct TLS :8443 → vaspartners-stage-nginx (production :443 untouched)"
 echo "  Logs:    docker compose -f compose.staging.yml logs -f"
 echo "  Down:    ./down-staging.sh"

@@ -23,6 +23,7 @@ class Service extends Model
         'description',
         'image',
         'type',
+        'provisioning_workflow',
         'is_active',
         'has_monthly_revenue',
         'is_subscription_based',

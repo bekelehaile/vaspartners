@@ -650,6 +650,7 @@ class ContactPortalController extends Controller
                 'renewal_interval' => $renewal?->value,
                 'renewal_interval_label' => $renewal?->label(),
                 'started_at' => optional($subscription->started_at)?->toIso8601String(),
+                'contract_signed_at' => optional($subscription->contract_signed_at)?->toDateString(),
                 'current_period_start' => optional($subscription->current_period_start)?->toIso8601String(),
                 'current_period_end' => optional($subscription->current_period_end)?->toIso8601String(),
                 'next_renewal_due_at' => optional($subscription->next_renewal_due_at)?->toIso8601String(),

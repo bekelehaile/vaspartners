@@ -271,4 +271,20 @@ SMS,
 
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Service provisioning (editable over time)
+    |--------------------------------------------------------------------------
+    |
+    | Placeholders: {prv_number}, {company}, {service}, {short_code}, {step},
+    | {from}, {to}
+    |
+    */
+    'provisioning' => [
+        'provisioning.step_waiting_partner' => '[{prv_number}] {step}. Action needed in the VAS Partners portal for {service}. — Ethio telecom',
+        'provisioning.step_waiting_staff' => '[{prv_number}] {step}: {from} → {to}. {company} / {service} (short code {short_code}).',
+        'provisioning.go_live' => '[{prv_number}] Your {service} provisioning is Go Live approved. Open the portal for details. — Ethio telecom',
+        'provisioning.credentials_ready' => '[{prv_number}] Service credentials are ready in the VAS Partners portal for {service}. Do not share this SMS. — Ethio telecom',
+    ],
+
 ];

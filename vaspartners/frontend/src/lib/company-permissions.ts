@@ -23,6 +23,11 @@ export function contactCanManageServices(me?: Contact | null): boolean {
   return hasPermission(me, "manage_services");
 }
 
+/** Start / complete partner provisioning steps. */
+export function contactCanManageProvisioning(me?: Contact | null): boolean {
+  return hasPermission(me, "manage_provisioning") || contactCanManageServices(me);
+}
+
 /** Either journey is allowed. */
 export function contactCanCreateServiceRequests(me?: Contact | null): boolean {
   return contactCanCreateSubscriptions(me) || contactCanManageServices(me);

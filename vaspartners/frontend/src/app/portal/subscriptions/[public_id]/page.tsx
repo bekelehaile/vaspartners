@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
 import { JourneyLaunchActions, PortalPageHeader } from "@/components/PortalPageHeader";
 import {
   Card,
@@ -12,11 +13,12 @@ import {
 } from "@/components/ui/card";
 import { useContact, useSubscription } from "@/hooks/use-contact";
 import {
+  contactCanManageProvisioning,
   contactCanManageServices,
   isAliveSubscriptionStatus,
   subscriptionStatusLabel,
 } from "@/lib/company-permissions";
-import { statusCopy } from "@/lib/api";
+import { startProvisioning, statusCopy } from "@/lib/api";
 
 function formatDateTime(value?: string | null): string {
   if (!value) return "—";
@@ -43,11 +45,19 @@ export default function SubscriptionDetailPage() {
   const raw = params.public_id;
   const publicId = decodeURIComponent(Array.isArray(raw) ? raw[0] ?? "" : raw ?? "");
 
+  const router = useRouter();
   const { data: me } = useContact();
   const { data: sub, isLoading, isError, error } = useSubscription(publicId);
+  const [shortCode, setShortCode] = useState("");
+  const [dataSyncUrl, setDataSyncUrl] = useState("");
+  const [startError, setStartError] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
 
   const canManage = contactCanManageServices(me);
+  const canProvision = contactCanManageProvisioning(me);
   const alive = isAliveSubscriptionStatus(sub?.status);
+  const contractSigned = Boolean(sub?.contract_signed_at);
+  const canStartProvisioning = Boolean(sub && canProvision && alive && contractSigned);
 
   return (
     <>
@@ -92,6 +102,71 @@ export default function SubscriptionDetailPage() {
           </Card>
         ) : (
           <div className="flex flex-col gap-5">
+            {canStartProvisioning ? (
+              <Card size="sm">
+                <CardHeader>
+                  <CardTitle>Service provisioning</CardTitle>
+                  <CardDescription>
+                    Contract is signed. Request resource allocation to start provisioning (PRV case).
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="block text-sm">
+                      <span className="mb-1 block font-medium">Short code</span>
+                      <input
+                        className="w-full rounded-md border border-border bg-background px-3 py-2"
+                        value={shortCode}
+                        onChange={(e) => setShortCode(e.target.value)}
+                        placeholder="e.g. 8080"
+                        required
+                      />
+                    </label>
+                    <label className="block text-sm">
+                      <span className="mb-1 block font-medium">Data Sync URL (optional)</span>
+                      <input
+                        className="w-full rounded-md border border-border bg-background px-3 py-2"
+                        value={dataSyncUrl}
+                        onChange={(e) => setDataSyncUrl(e.target.value)}
+                        placeholder="https://"
+                      />
+                    </label>
+                  </div>
+                  {startError ? <p className="text-sm text-destructive">{startError}</p> : null}
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={starting || !shortCode.trim()}
+                    onClick={async () => {
+                      setStartError(null);
+                      setStarting(true);
+                      try {
+                        const created = await startProvisioning({
+                          subscription_public_id: sub.public_id,
+                          short_code: shortCode.trim(),
+                          data_sync_url: dataSyncUrl.trim() || undefined,
+                        });
+                        router.push(`/portal/provisioning/${encodeURIComponent(created.public_id)}`);
+                      } catch (e) {
+                        setStartError(e instanceof Error ? e.message : "Could not start provisioning");
+                      } finally {
+                        setStarting(false);
+                      }
+                    }}
+                  >
+                    {starting ? "Submitting…" : "Request resource allocation"}
+                  </button>
+                  <p className="text-xs text-muted-foreground">
+                    Or open existing cases from{" "}
+                    <Link href="/portal/provisioning" className="text-primary hover:underline">
+                      Provisioning
+                    </Link>
+                    .
+                  </p>
+                </CardContent>
+              </Card>
+            ) : null}
+
             <Card size="sm">
               <CardContent className="pt-(--card-spacing)">
                 <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

@@ -202,6 +202,23 @@ class Subscription extends Model
         return $this->hasMany(Ticket::class);
     }
 
+    public function provisionings(): HasMany
+    {
+        return $this->hasMany(ServiceProvisioning::class);
+    }
+
+    public function activeProvisioning(): ?ServiceProvisioning
+    {
+        return $this->provisionings()
+            ->whereIn('status', [
+                \App\Enums\ProvisioningStatus::Draft->value,
+                \App\Enums\ProvisioningStatus::InProgress->value,
+                \App\Enums\ProvisioningStatus::Blocked->value,
+            ])
+            ->latest('id')
+            ->first();
+    }
+
     /** Partner/staff chat across all tickets on this subscription. */
     public function comments(): HasManyThrough
     {

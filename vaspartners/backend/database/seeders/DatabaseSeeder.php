@@ -59,6 +59,7 @@ class DatabaseSeeder extends Seeder
         $this->call(RevenuePermissionsSeeder::class);
         $this->call(CompanyPermissionsSeeder::class);
         $this->call(TicketPermissionsSeeder::class);
+        $this->call(ProvisioningRolesSeeder::class);
         $this->call(FeedbackPermissionsSeeder::class);
         $this->call(AccountManagerWorkloadPermissionSeeder::class);
         $this->call(CatalogSeeder::class);

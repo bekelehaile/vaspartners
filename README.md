@@ -5,12 +5,22 @@ Rebuild of Ethio Telecom **MVAS Partners Portal**.
 Layout (same as `mvasportal`):
 
 ```
-/data-disk/applications/vaspartners/     # parent (compose, deploy scripts, .env.staging)
+/data-disk/applications/vaspartners/     # parent (compose + deploy scripts)
 └── vaspartners/                         # app (backend, frontend, docker)
     ├── backend/                         # Laravel API + Filament
     ├── frontend/                        # Next.js portal
     └── docker/
 ```
+
+## Stage vs production (do not mix)
+
+| Env | Compose | Deploy | Access |
+|-----|---------|--------|--------|
+| **stage** | `compose.staging.yml` | `./deploy-staging.sh` | https://vaspartnersportal.ethiotelecom.et:8443 |
+| **production** | `compose.prod.yml` | `./deploy-prod.sh` | https://vaspartnersportal.ethiotelecom.et (:443) |
+
+Secrets: `.env.staging` / `.env.prod` are gitignored — only `*.example` files are committed.
+Feature work: deploy with **`./deploy-staging.sh` only** (never rebuild production for feature testing).
 
 | Layer | Stack | Path |
 |-------|--------|------|

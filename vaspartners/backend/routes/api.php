@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\FaydaAuthController;
 use App\Http\Controllers\Api\V1\FeedbackController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\PortalAuthController;
+use App\Http\Controllers\Api\V1\ProvisioningPortalController;
 use App\Http\Controllers\Api\V1\RevenuePortalController;
 use App\Http\Controllers\Api\V1\WebsiteContentController;
 use Illuminate\Support\Facades\Route;
@@ -83,6 +84,12 @@ Route::prefix('v1')->group(function () {
         Route::get('tickets/{ticket}/comments/{comment}/attachment', [ContactPortalController::class, 'downloadCommentAttachment']);
         Route::get('subscriptions', [ContactPortalController::class, 'subscriptions']);
         Route::get('subscriptions/{subscription}', [ContactPortalController::class, 'showSubscription']);
+
+        Route::get('provisioning', [ProvisioningPortalController::class, 'index']);
+        Route::post('provisioning', [ProvisioningPortalController::class, 'start']);
+        Route::get('provisioning/{publicId}', [ProvisioningPortalController::class, 'show']);
+        Route::post('provisioning/{publicId}/steps/{stepKey}', [ProvisioningPortalController::class, 'submitStep']);
+
         Route::get('revenue', [RevenuePortalController::class, 'index']);
 
         Route::get('feedback', [FeedbackController::class, 'index']);

@@ -8,6 +8,7 @@ enum CompanyMemberPermission: string
     case ManageServices = 'manage_services';
     case ManageMembershipRequests = 'manage_membership_requests';
     case EditCompanyProfile = 'edit_company_profile';
+    case ManageProvisioning = 'manage_provisioning';
 
     public function label(): string
     {
@@ -16,6 +17,7 @@ enum CompanyMemberPermission: string
             self::ManageServices => 'Manage service',
             self::ManageMembershipRequests => 'Approve membership requests',
             self::EditCompanyProfile => 'Edit company profile',
+            self::ManageProvisioning => 'Service provisioning',
         };
     }
 
@@ -26,6 +28,7 @@ enum CompanyMemberPermission: string
             self::ManageServices => 'Change, renew, or terminate (partner consent) existing services, and request non-subscription services.',
             self::ManageMembershipRequests => 'Approve or reject partners asking to join the company.',
             self::EditCompanyProfile => 'Update company details while waiting for admin approval.',
+            self::ManageProvisioning => 'Start and complete partner provisioning steps after contract sign-off.',
         };
     }
 

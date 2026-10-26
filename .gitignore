@@ -5,8 +5,37 @@
 *.sql.bz2
 mvas_*.dump
 
-# Staging secrets (keep .env.staging.example)
+# Secrets / env (keep *.example committed)
+.env
+.env.*
+!.env.example
+!.env.*.example
+!.env.staging.example
+!.env.prod.example
+
+# Explicit env files (defense in depth)
 .env.staging
+.env.prod
+vaspartners/backend/.env
+vaspartners/frontend/.env
+vaspartners/frontend/.env.local
+vaspartners/frontend/.env*.local
+
+# TLS / keys / credentials (never commit)
+*.pem
+*.key
+*.p12
+*.pfx
+*privkey*
+*fullchain*
+credentials.json
+secrets/
 
 # Local MVAS attachment host backups (large binaries)
 /backups/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*~
