@@ -2,10 +2,11 @@
 
 namespace App\Models;
 
-use Filament\Models\Contracts\FilamentUser;
-use Filament\Panel;
+use App\Enums\ProvisioningDepartment;
 use App\Support\EmailAddress;
 use App\Support\PhoneNumber;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 use Illuminate\Auth\Passwords\CanResetPassword;
 use Illuminate\Contracts\Auth\CanResetPassword as CanResetPasswordContract;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -131,6 +132,113 @@ class User extends Authenticatable implements CanResetPasswordContract, Filament
         }
 
         return $this->hasRole(self::ROLE_ACCOUNT_MANAGER);
+    }
+
+    /**
+     * Department role values attached to this user (optional multi-select at user creation).
+     * Excludes partner — staff only.
+     *
+     * @return list<string>
+     */
+    public function provisioningDepartments(): array
+    {
+        return collect(ProvisioningDepartment::cases())
+            ->reject(fn (ProvisioningDepartment $d) => $d === ProvisioningDepartment::Partner)
+            ->map(fn (ProvisioningDepartment $d) => $d->value)
+            ->filter(fn (string $role) => $this->hasRole($role))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Roles / flags that see all service-activation cases (out of list scoping).
+     * Actions on steps are still gated by department / AM ownership rules.
+     */
+    public function canBypassServiceProvisioningScope(): bool
+    {
+        if (! $this->is_active) {
+            return false;
+        }
+
+        if ((bool) $this->is_management) {
+            return true;
+        }
+
+        return $this->hasRole(['super_admin', 'admin', 'supervisor']);
+    }
+
+    /**
+     * Whether this staff member may submit a handoff for the given from-department.
+     * Account managers act as VAS Sales on cases they already own (SR / contract / activation).
+     * Other sections use department role(s) — a user may belong to many departments.
+     */
+    public function canActAsProvisioningDepartment(?string $department): bool
+    {
+        if (! $this->is_active || ! filled($department)) {
+            return false;
+        }
+
+        if ($department === ProvisioningDepartment::Partner->value) {
+            return false;
+        }
+
+        if ($this->canBypassServiceProvisioningScope()) {
+            return true;
+        }
+
+        // Third-party / internal sections: only departments attached on the user.
+        if (in_array($department, $this->provisioningDepartments(), true)) {
+            return true;
+        }
+
+        // Assigned AM is the VAS Sales actor for that case (no department attachment).
+        if ($department === ProvisioningDepartment::VasSales->value
+            && $this->hasRole(self::ROLE_ACCOUNT_MANAGER)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * True when this AM owns the activation case (ticket assignee / approver).
+     * Ownership means they are the VAS Sales user for that case.
+     */
+    public function ownsServiceProvisioningCase(ServiceProvisioning $case): bool
+    {
+        if (! $this->hasRole(self::ROLE_ACCOUNT_MANAGER)) {
+            return false;
+        }
+
+        $subscriptionId = (int) ($case->subscription_id ?? 0);
+        if ($subscriptionId < 1) {
+            return false;
+        }
+
+        return Ticket::query()
+            ->where('subscription_id', $subscriptionId)
+            ->where(function ($q): void {
+                $q->where('assigned_to_user_id', $this->id)
+                    ->orWhere('current_approver_user_id', $this->id);
+            })
+            ->exists();
+    }
+
+    /**
+     * Whether this user is the effective VAS Sales actor on the case
+     * (assigned AM, or explicit vas_sales department, or bypass role).
+     */
+    public function isVasSalesForProvisioning(ServiceProvisioning $case): bool
+    {
+        if ($this->canBypassServiceProvisioningScope()) {
+            return true;
+        }
+
+        if (in_array(ProvisioningDepartment::VasSales->value, $this->provisioningDepartments(), true)) {
+            return true;
+        }
+
+        return $this->ownsServiceProvisioningCase($case);
     }
 
     /**

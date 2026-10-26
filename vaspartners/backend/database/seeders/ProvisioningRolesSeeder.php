@@ -61,6 +61,18 @@ class ProvisioningRolesSeeder extends Seeder
             $role->givePermissionTo($perms);
         }
 
+        // Account managers open / submit sales-side activation on cases they already own.
+        $accountManager = Role::findOrCreate('account_manager', 'web');
+        $accountManager->givePermissionTo([
+            'View:ServiceProvisioning',
+            'ViewAny:ServiceProvisioning',
+            'Update:ServiceProvisioning',
+            'Act:ProvisioningSalesPack',
+            'Act:ProvisioningShareCredentials',
+            'Act:ProvisioningSecurityAssessment',
+            'Act:ProvisioningGoLive',
+        ]);
+
         Service::query()
             ->where(function ($q): void {
                 $q->whereNull('provisioning_workflow')

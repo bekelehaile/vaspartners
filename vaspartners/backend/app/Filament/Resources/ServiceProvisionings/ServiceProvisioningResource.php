@@ -2,13 +2,20 @@
 
 namespace App\Filament\Resources\ServiceProvisionings;
 
+use App\Enums\ProvisioningDepartment;
 use App\Enums\ProvisioningStatus;
+use App\Enums\ProvisioningStepStatus;
 use App\Filament\Resources\ServiceProvisionings\Pages\ListServiceProvisionings;
 use App\Filament\Resources\ServiceProvisionings\Pages\ViewServiceProvisioning;
+use App\Filament\Resources\ServiceProvisionings\RelationManagers\AttachmentsRelationManager;
 use App\Filament\Resources\ServiceProvisionings\RelationManagers\MessagesRelationManager;
+use App\Filament\Resources\ServiceProvisionings\RelationManagers\StepsRelationManager;
+use App\Filament\Resources\ServiceProvisionings\Support\ProvisioningStepActions;
 use App\Models\ServiceProvisioning;
+use App\Models\User;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\ViewAction;
-use Filament\Infolists\Components\RepeatableEntry;
+use Filament\Infolists\Components\KeyValueEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
@@ -18,7 +25,6 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Model;
 
 class ServiceProvisioningResource extends Resource
 {
@@ -42,7 +48,48 @@ class ServiceProvisioningResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['company', 'service', 'subscription', 'steps']);
+        $query = parent::getEloquentQuery()->with(['company', 'service', 'subscription', 'steps']);
+
+        /** @var User|null $user */
+        $user = auth()->user();
+        if (! $user) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        // Bypass roles (super_admin, admin, supervisor, management): unscoped view access.
+        if ($user->canBypassServiceProvisioningScope()) {
+            return $query;
+        }
+
+        $deptRoles = $user->provisioningDepartments();
+        $isAm = $user->hasRole(User::ROLE_ACCOUNT_MANAGER);
+
+        // No department attachment and not AM → nothing in the list.
+        if ($deptRoles === [] && ! $isAm) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->where(function (Builder $q) use ($user, $deptRoles, $isAm): void {
+            // Third-party / section users: cases for departments attached at user creation.
+            if ($deptRoles !== []) {
+                $q->where(function (Builder $inner) use ($deptRoles): void {
+                    $inner->whereHas('steps', function (Builder $steps) use ($deptRoles): void {
+                        $steps->whereIn('from_department', $deptRoles);
+                    });
+                });
+            }
+
+            // Account managers: only cases on subscriptions assigned to them.
+            if ($isAm) {
+                $method = $deptRoles !== [] ? 'orWhereHas' : 'whereHas';
+                $q->{$method}('subscription.tickets', function (Builder $tickets) use ($user): void {
+                    $tickets->where(function (Builder $t) use ($user): void {
+                        $t->where('assigned_to_user_id', $user->id)
+                            ->orWhere('current_approver_user_id', $user->id);
+                    });
+                });
+            }
+        });
     }
 
     public static function form(Schema $schema): Schema
@@ -71,28 +118,14 @@ class ServiceProvisioningResource extends Resource
                 TextEntry::make('started_at')->dateTime(),
                 TextEntry::make('completed_at')->dateTime()->placeholder('—'),
             ])->columns(3),
-            Section::make('Follow-up tracking')
-                ->description('Collapsed by default — expand to review handoffs.')
-                ->collapsed()
+            Section::make('Shared credentials')
+                ->description('Shown when credentials have been released to the partner.')
+                ->visible(fn (ServiceProvisioning $record): bool => (bool) ($record->shared_payload['credentials_released_to_partner'] ?? false)
+                    && filled($record->shared_payload['credentials'] ?? null))
                 ->schema([
-                    RepeatableEntry::make('steps')
+                    KeyValueEntry::make('credentials')
                         ->label('')
-                        ->schema([
-                            TextEntry::make('label')->label('What'),
-                            TextEntry::make('where')
-                                ->label('Where')
-                                ->state(fn (Model $record): string => $record instanceof \App\Models\ServiceProvisioningStep
-                                    ? $record->whereLabel()
-                                    : '—'),
-                            TextEntry::make('status')->badge(),
-                            TextEntry::make('created_at')->label('Created at')->dateTime(),
-                            TextEntry::make('days')
-                                ->label('Days in step')
-                                ->state(fn (Model $record): string => $record instanceof \App\Models\ServiceProvisioningStep
-                                    ? (string) $record->daysInStep()
-                                    : '—'),
-                        ])
-                        ->columns(5),
+                        ->state(fn (ServiceProvisioning $record): array => (array) ($record->shared_payload['credentials'] ?? [])),
                 ]),
         ]);
     }
@@ -106,7 +139,26 @@ class ServiceProvisioningResource extends Resource
                 TextColumn::make('company.name')->label('Company')->searchable()->wrap(),
                 TextColumn::make('service.name')->label('Service')->wrap(),
                 TextColumn::make('status')->badge()->sortable(),
-                TextColumn::make('current_step_key')->label('Current step')->toggleable(),
+                TextColumn::make('waiting_on')
+                    ->label('Waiting on')
+                    ->state(function (ServiceProvisioning $record): string {
+                        $labels = $record->steps
+                            ->filter(fn ($s) => $s->status === ProvisioningStepStatus::Waiting)
+                            ->map(function ($s): string {
+                                $dept = $s->from_department instanceof ProvisioningDepartment
+                                    ? $s->from_department->label()
+                                    : (string) $s->from_department;
+
+                                return $dept !== '' ? $dept : '—';
+                            })
+                            ->unique()
+                            ->values();
+
+                        return $labels->isEmpty() ? '—' : $labels->implode(', ');
+                    })
+                    ->wrap()
+                    ->toggleable(),
+                TextColumn::make('current_step_key')->label('Current step')->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('overall_days')
                     ->label('Overall days')
                     ->state(fn (ServiceProvisioning $record): int => $record->overallElapsedDays())
@@ -120,16 +172,43 @@ class ServiceProvisioningResource extends Resource
                 SelectFilter::make('status')->options(collect(ProvisioningStatus::cases())->mapWithKeys(
                     fn (ProvisioningStatus $s) => [$s->value => $s->label()]
                 )),
+                SelectFilter::make('waiting_department')
+                    ->label('Waiting department')
+                    ->options(
+                        collect(ProvisioningDepartment::cases())
+                            ->reject(fn (ProvisioningDepartment $d) => $d === ProvisioningDepartment::Partner)
+                            ->mapWithKeys(fn (ProvisioningDepartment $d) => [$d->value => $d->label()])
+                            ->all()
+                    )
+                    ->query(function (Builder $query, array $data): Builder {
+                        $value = $data['value'] ?? null;
+                        if (! filled($value)) {
+                            return $query;
+                        }
+
+                        return $query->whereHas('steps', function (Builder $steps) use ($value): void {
+                            $steps->where('status', ProvisioningStepStatus::Waiting->value)
+                                ->where('from_department', $value);
+                        });
+                    }),
             ])
             ->recordActions([
                 ViewAction::make(),
+                ActionGroup::make(ProvisioningStepActions::forTable())
+                    ->label('Section actions')
+                    ->icon('heroicon-o-play')
+                    ->color('primary')
+                    ->button()
+                    ->visible(fn (ServiceProvisioning $record): bool => ProvisioningStepActions::actionableSteps($record)->isNotEmpty()),
             ]);
     }
 
     public static function getRelations(): array
     {
         return [
+            StepsRelationManager::class,
             MessagesRelationManager::class,
+            AttachmentsRelationManager::class,
         ];
     }
 

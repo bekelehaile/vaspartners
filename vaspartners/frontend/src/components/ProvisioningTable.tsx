@@ -381,7 +381,7 @@ function ActivationRequestForm({
         subscription_public_id: subscription.public_id,
         short_code: shortCode.trim(),
         data_sync_url: dataSyncUrl.trim() || undefined,
-        remark: remark.trim() || undefined,
+        remark: remark.trim(),
         attachment: letter,
       });
     },
@@ -437,12 +437,13 @@ function ActivationRequestForm({
           </span>
         </label>
         <label className="block text-sm sm:col-span-2">
-          <span className="mb-1 block font-medium">Remark (optional)</span>
+          <span className="mb-1 block font-medium">Remark *</span>
           <textarea
             className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
             rows={2}
             value={remark}
             onChange={(e) => setRemark(e.target.value)}
+            required
           />
         </label>
       </div>
@@ -456,7 +457,7 @@ function ActivationRequestForm({
       <button
         type="button"
         className="btn-primary"
-        disabled={mutate.isPending || !shortCode.trim() || !letter}
+        disabled={mutate.isPending || !shortCode.trim() || !letter || !remark.trim()}
         onClick={() => mutate.mutate()}
       >
         {mutate.isPending ? "Submitting…" : "Submit"}

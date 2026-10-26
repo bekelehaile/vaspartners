@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Users;
 
+use App\Enums\ProvisioningDepartment;
 use App\Filament\Resources\Users\Pages\CreateUser;
 use App\Filament\Resources\Users\Pages\EditUser;
 use App\Filament\Resources\Users\Pages\ListUsers;
@@ -16,6 +17,8 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
+use Spatie\Permission\Models\Role;
 use STS\FilamentImpersonate\Actions\Impersonate;
 use UnitEnum;
 
@@ -65,12 +68,25 @@ class UserResource extends Resource
                     titleAttribute: 'name',
                     modifyQueryUsing: fn (Builder $query) => $query
                         ->where('name', '!=', 'super_admin')
+                        ->whereNotIn('name', static::departmentRoleNames())
                         ->orderBy('name'),
                 )
                 ->multiple()
                 ->preload()
                 ->searchable()
                 ->required()
+                ->helperText('Job roles such as account manager or supervisor.')
+                ->columnSpanFull(),
+            Select::make('departments')
+                ->label('Belongs to departments')
+                ->options(static::departmentOptions())
+                ->multiple()
+                ->searchable()
+                ->preload()
+                ->nullable()
+                ->dehydrated(false)
+                ->placeholder('Optional — e.g. VAS Operation, IS Billing, IS Security')
+                ->helperText('Optional for third-party / section staff (VAS Operation, MA, IS Billing, IS Security; also VAS Sales if needed). A user may belong to many. Account managers do not need this — when a case is assigned to them they already act as VAS Sales.')
                 ->columnSpanFull(),
             Select::make('manager_id')
                 ->label('Reports to')
@@ -115,10 +131,22 @@ class UserResource extends Resource
                 TextColumn::make('username')->searchable()->sortable(),
                 TextColumn::make('phone')->searchable()->toggleable(),
                 TextColumn::make('email')->searchable()->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('roles.name')
+                TextColumn::make('job_roles')
                     ->label('Roles')
                     ->badge()
-                    ->separator(','),
+                    ->state(fn (User $record): array => $record->getRoleNames()
+                        ->reject(fn (string $name): bool => in_array($name, static::departmentRoleNames(), true)
+                            || $name === 'super_admin')
+                        ->values()
+                        ->all())
+                    ->placeholder('—'),
+                TextColumn::make('departments')
+                    ->label('Departments')
+                    ->badge()
+                    ->state(fn (User $record): array => collect($record->provisioningDepartments())
+                        ->map(fn (string $value): string => ProvisioningDepartment::tryFrom($value)?->label() ?? $value)
+                        ->all())
+                    ->placeholder('—'),
                 TextColumn::make('manager.name')->label('Reports to')->toggleable(),
                 IconColumn::make('is_management')->label('Alerts')->boolean()->toggleable(),
                 IconColumn::make('must_change_password')->label('Temp PW')->boolean()->toggleable(),
@@ -148,5 +176,53 @@ class UserResource extends Resource
             'create' => CreateUser::route('/create'),
             'edit' => EditUser::route('/{record}/edit'),
         ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function departmentRoleNames(): array
+    {
+        return collect(ProvisioningDepartment::cases())
+            ->reject(fn (ProvisioningDepartment $d) => $d === ProvisioningDepartment::Partner)
+            ->map(fn (ProvisioningDepartment $d) => $d->value)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function departmentOptions(): array
+    {
+        return collect(ProvisioningDepartment::cases())
+            ->reject(fn (ProvisioningDepartment $d) => $d === ProvisioningDepartment::Partner)
+            ->mapWithKeys(fn (ProvisioningDepartment $d) => [$d->value => $d->label()])
+            ->all();
+    }
+
+    /**
+     * Sync optional multi-department Spatie roles without touching other roles.
+     *
+     * @param  list<string>|Collection<int, string>|null  $departments
+     */
+    public static function syncDepartments(User $user, array|Collection|null $departments): void
+    {
+        $selected = collect($departments ?? [])
+            ->map(fn ($v) => (string) $v)
+            ->filter(fn (string $v) => in_array($v, static::departmentRoleNames(), true))
+            ->unique()
+            ->values();
+
+        foreach (static::departmentRoleNames() as $roleName) {
+            Role::findOrCreate($roleName, 'web');
+            if ($selected->contains($roleName)) {
+                if (! $user->hasRole($roleName)) {
+                    $user->assignRole($roleName);
+                }
+            } elseif ($user->hasRole($roleName)) {
+                $user->removeRole($roleName);
+            }
+        }
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Services\Provisioning;
 
+use App\Enums\ProvisioningDepartment;
 use App\Enums\ProvisioningStatus;
 use App\Enums\ProvisioningStepStatus;
 use App\Enums\ProvisioningWorkflow;
@@ -544,17 +545,31 @@ class ServiceProvisioningService
         }
 
         if ($actor instanceof User) {
-            if ($actor->hasRole('super_admin') || (bool) $actor->is_management) {
-                return;
-            }
-
-            if (! $actor->hasRole($from)) {
+            if (! $actor->canActAsProvisioningDepartment($from)) {
                 throw ValidationException::withMessages([
                     'step' => 'Your role cannot act on this department step.',
                 ]);
             }
 
-            return;
+            if ($actor->canBypassServiceProvisioningScope()) {
+                return;
+            }
+
+            // Department-attached users may act on their sections for any in-scope case.
+            if (in_array($from, $actor->provisioningDepartments(), true)) {
+                return;
+            }
+
+            // AM without department attachment: only cases assigned to them.
+            if ($from === ProvisioningDepartment::VasSales->value
+                && $actor->hasRole(User::ROLE_ACCOUNT_MANAGER)
+                && $actor->ownsServiceProvisioningCase($case)) {
+                return;
+            }
+
+            throw ValidationException::withMessages([
+                'step' => 'You are not assigned to this service activation case.',
+            ]);
         }
 
         throw ValidationException::withMessages(['step' => 'Unauthorized actor.']);

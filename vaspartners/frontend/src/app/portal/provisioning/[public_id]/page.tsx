@@ -35,7 +35,7 @@ export default function ProvisioningDetailPage() {
   const act = useMutation({
     mutationFn: () => {
       const payload: Record<string, string | undefined> & { attachment?: File } = {
-        remark: remark || undefined,
+        remark: remark.trim(),
       };
       for (const f of data?.can_act_fields ?? []) {
         const v = String(fields[f.name] ?? "").trim();
@@ -162,17 +162,22 @@ export default function ProvisioningDetailPage() {
                       </span>
                     </label>
                   ) : null}
-                  <textarea
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                    rows={3}
-                    placeholder="Remark (optional)"
-                    value={remark}
-                    onChange={(e) => setRemark(e.target.value)}
-                  />
+                  <label className="block text-sm">
+                    <span className="mb-1 block font-medium">Remark *</span>
+                    <textarea
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                      rows={3}
+                      value={remark}
+                      onChange={(e) => setRemark(e.target.value)}
+                      required
+                    />
+                  </label>
                   <button
                     type="button"
                     className="btn-primary"
-                    disabled={act.isPending || requiredMissing || attachmentMissing}
+                    disabled={
+                      act.isPending || requiredMissing || attachmentMissing || !remark.trim()
+                    }
                     onClick={() => act.mutate()}
                   >
                     {act.isPending ? "Submitting…" : "Submit"}

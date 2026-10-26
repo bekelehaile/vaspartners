@@ -8,6 +8,7 @@ use App\Support\TimestampPublicId;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
@@ -79,6 +80,18 @@ class ServiceProvisioning extends Model
     public function messages(): HasMany
     {
         return $this->hasMany(ServiceProvisioningMessage::class)->orderBy('id');
+    }
+
+    public function media(): HasManyThrough
+    {
+        return $this->hasManyThrough(
+            ServiceProvisioningMedia::class,
+            ServiceProvisioningStep::class,
+            'service_provisioning_id',
+            'service_provisioning_step_id',
+            'id',
+            'id',
+        )->latest('service_provisioning_media.id');
     }
 
     public function createdBy(): MorphTo

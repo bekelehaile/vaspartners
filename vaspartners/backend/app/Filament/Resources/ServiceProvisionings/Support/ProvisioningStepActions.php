@@ -1,0 +1,284 @@
+<?php
+
+namespace App\Filament\Resources\ServiceProvisionings\Support;
+
+use App\Enums\ProvisioningDepartment;
+use App\Enums\ProvisioningStepStatus;
+use App\Models\ServiceProvisioning;
+use App\Models\ServiceProvisioningStep;
+use App\Models\User;
+use App\Services\Provisioning\ProvisioningWorkflowRegistry;
+use App\Services\Provisioning\ServiceProvisioningService;
+use Filament\Actions\Action;
+use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
+use Illuminate\Support\Collection;
+use Illuminate\Validation\ValidationException;
+
+class ProvisioningStepActions
+{
+    /**
+     * Department role values the user may act as (multi-department + AM as VAS Sales).
+     *
+     * @return list<string>
+     */
+    public static function actorDepartmentRoles(?User $user): array
+    {
+        if (! $user) {
+            return [];
+        }
+
+        if ($user->canBypassServiceProvisioningScope()) {
+            return collect(ProvisioningDepartment::cases())
+                ->reject(fn (ProvisioningDepartment $d) => $d === ProvisioningDepartment::Partner)
+                ->map(fn (ProvisioningDepartment $d) => $d->value)
+                ->values()
+                ->all();
+        }
+
+        $roles = $user->provisioningDepartments();
+
+        // AM may run VAS Sales steps on assigned cases even without a department attachment.
+        if ($user->hasRole(User::ROLE_ACCOUNT_MANAGER)
+            && ! in_array(ProvisioningDepartment::VasSales->value, $roles, true)) {
+            $roles[] = ProvisioningDepartment::VasSales->value;
+        }
+
+        return array_values(array_unique($roles));
+    }
+
+    public static function userCanActOnStep(
+        ?User $user,
+        ServiceProvisioningStep $step,
+        ?ServiceProvisioning $case = null,
+    ): bool {
+        if (! $user) {
+            return false;
+        }
+
+        $from = $step->from_department?->value ?? (string) $step->from_department;
+        if (! $user->canActAsProvisioningDepartment($from)) {
+            return false;
+        }
+
+        if ($user->canBypassServiceProvisioningScope()) {
+            return true;
+        }
+
+        // Explicit department attachment covers that section anywhere.
+        if (in_array($from, $user->provisioningDepartments(), true)) {
+            return true;
+        }
+
+        // AM without vas_sales department: only assigned cases.
+        if ($user->hasRole(User::ROLE_ACCOUNT_MANAGER)
+            && $from === ProvisioningDepartment::VasSales->value
+            && $case instanceof ServiceProvisioning) {
+            return $user->ownsServiceProvisioningCase($case);
+        }
+
+        return false;
+    }
+
+    /**
+     * Waiting steps on the case that the current staff user may complete.
+     *
+     * @return Collection<int, ServiceProvisioningStep>
+     */
+    public static function actionableSteps(ServiceProvisioning $case, ?User $user = null): Collection
+    {
+        $user ??= auth()->user();
+        $case->loadMissing('steps');
+
+        return $case->steps
+            ->filter(fn (ServiceProvisioningStep $step) => $step->status === ProvisioningStepStatus::Waiting)
+            ->filter(fn (ServiceProvisioningStep $step) => static::userCanActOnStep($user, $step, $case))
+            ->values();
+    }
+
+    /**
+     * One Filament action per waiting step the user can act on for this case.
+     *
+     * @return list<Action>
+     */
+    public static function forCase(ServiceProvisioning $case, ?User $user = null, ?callable $afterSuccess = null): array
+    {
+        $actions = [];
+        foreach (static::actionableSteps($case, $user) as $step) {
+            $actions[] = static::makeStepAction($case, $step, $afterSuccess);
+        }
+
+        return $actions;
+    }
+
+    /**
+     * Static table/header actions for every known workflow step key.
+     * Visibility is scoped per-row to waiting steps the logged-in section can run.
+     *
+     * @return list<Action>
+     */
+    public static function forTable(): array
+    {
+        $registry = app(ProvisioningWorkflowRegistry::class);
+        $seen = [];
+        $actions = [];
+
+        foreach (config('provisioning_workflows.workflows', []) as $workflowKey => $graph) {
+            foreach ($graph['steps'] ?? [] as $def) {
+                $stepKey = (string) ($def['key'] ?? '');
+                if ($stepKey === '' || isset($seen[$stepKey])) {
+                    continue;
+                }
+                $seen[$stepKey] = true;
+
+                $from = (string) ($def['from'] ?? '');
+                if ($from === ProvisioningDepartment::Partner->value) {
+                    continue;
+                }
+
+                $actions[] = Action::make('act_'.$stepKey)
+                    ->label((string) ($def['label'] ?? $stepKey))
+                    ->icon('heroicon-o-play')
+                    ->color('primary')
+                    ->visible(function (ServiceProvisioning $record) use ($stepKey): bool {
+                        $step = $record->steps->firstWhere('step_key', $stepKey);
+                        if (! $step instanceof ServiceProvisioningStep) {
+                            return false;
+                        }
+                        if ($step->status !== ProvisioningStepStatus::Waiting) {
+                            return false;
+                        }
+
+                        return static::userCanActOnStep(auth()->user(), $step, $record);
+                    })
+                    ->modalHeading(fn (ServiceProvisioning $record): string => (string) (
+                        $record->steps->firstWhere('step_key', $stepKey)?->label
+                        ?? $registry->step($record->workflow_key, $stepKey)['label']
+                        ?? $stepKey
+                    ))
+                    ->modalDescription(fn (ServiceProvisioning $record): string => (string) (
+                        $record->steps->firstWhere('step_key', $stepKey)?->whereLabel() ?? ''
+                    ))
+                    ->form(function (ServiceProvisioning $record) use ($stepKey, $registry): array {
+                        $def = $registry->step($record->workflow_key, $stepKey) ?? [];
+
+                        return static::formFields($def);
+                    })
+                    ->action(function (ServiceProvisioning $record, array $data) use ($stepKey): void {
+                        static::runStep($record, $stepKey, $data);
+                    });
+            }
+        }
+
+        return $actions;
+    }
+
+    /**
+     * @param  array<string, mixed>  $def
+     * @return list<\Filament\Forms\Components\Component>
+     */
+    public static function formFields(array $def): array
+    {
+        $fields = [];
+
+        foreach ($def['form_fields'] ?? [] as $field) {
+            $name = $field['name'];
+            $label = $field['label'] ?? $name;
+            $required = ! empty($field['required']);
+
+            $component = match ($field['type'] ?? 'text') {
+                'textarea' => Textarea::make($name)->label($label)->rows(3),
+                'url' => TextInput::make($name)->label($label)->url(),
+                'password' => TextInput::make($name)->label($label)->password()->revealable(),
+                'file' => FileUpload::make($name)->label($label)->disk('local')->directory('provisioning-tmp'),
+                'packages' => Repeater::make($name)
+                    ->label($label)
+                    ->schema([
+                        TextInput::make('package')->label('Package')->required(),
+                        TextInput::make('price_point')->label('Price point')->required(),
+                        TextInput::make('sub_keyword')->label('Subscription keyword')->required(),
+                        TextInput::make('unsub_keyword')->label('Un-sub keyword')->required(),
+                    ])
+                    ->defaultItems(1)
+                    ->collapsible(),
+                default => TextInput::make($name)->label($label),
+            };
+
+            if ($required && ($field['type'] ?? '') !== 'file') {
+                $component = $component->required();
+            }
+
+            $fields[] = $component;
+        }
+
+        $fields[] = Textarea::make('remark')->label('Remark')->rows(2);
+        $attachmentLabel = (string) ($def['attachment_label'] ?? 'Attachment');
+        $attachment = FileUpload::make('attachment')
+            ->label($attachmentLabel)
+            ->disk('local')
+            ->directory('provisioning-tmp');
+        if (! empty($def['requires_attachment'])) {
+            $attachment = $attachment->required();
+        }
+        $fields[] = $attachment;
+
+        return $fields;
+    }
+
+    public static function makeStepAction(
+        ServiceProvisioning $case,
+        ServiceProvisioningStep $step,
+        ?callable $afterSuccess = null,
+    ): Action {
+        $registry = app(ProvisioningWorkflowRegistry::class);
+        $def = $registry->step($case->workflow_key, $step->step_key) ?? [];
+
+        return Action::make('act_'.$step->step_key)
+            ->label($step->label)
+            ->icon('heroicon-o-play')
+            ->color('primary')
+            ->modalHeading($step->label)
+            ->modalDescription($step->whereLabel())
+            ->form(static::formFields($def))
+            ->action(function (array $data) use ($case, $step, $afterSuccess): void {
+                static::runStep($case, $step->step_key, $data);
+                if ($afterSuccess) {
+                    $afterSuccess();
+                }
+            });
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    public static function runStep(ServiceProvisioning $case, string $stepKey, array $data): void
+    {
+        try {
+            if (! empty($data['attachment'])) {
+                unset($data['attachment']);
+            }
+            unset($data['service_proposal']);
+
+            app(ServiceProvisioningService::class)->submitStep(
+                $case,
+                $stepKey,
+                auth()->user(),
+                $data,
+                null,
+            );
+
+            Notification::make()->title('Step completed')->success()->send();
+        } catch (ValidationException $e) {
+            Notification::make()
+                ->title('Could not complete step')
+                ->body(collect($e->errors())->flatten()->implode(' '))
+                ->danger()
+                ->send();
+
+            throw $e;
+        }
+    }
+}

@@ -106,7 +106,7 @@ class ProvisioningPortalController extends Controller
             'subscription_public_id' => ['required', 'string'],
             'short_code' => ['required', 'string', 'max:64'],
             'data_sync_url' => ['nullable', 'url', 'max:500'],
-            'remark' => ['nullable', 'string', 'max:2000'],
+            'remark' => ['required', 'string', 'min:1', 'max:2000'],
             // Deep type/size/MIME checks run in ServiceProvisioningService (same as ticket documents).
             'attachment' => ['required', 'file'],
         ]);
@@ -140,7 +140,7 @@ class ProvisioningPortalController extends Controller
         $contact = $this->contact($request);
 
         $data = $request->validate([
-            'remark' => ['nullable', 'string', 'max:2000'],
+            'remark' => ['required', 'string', 'min:1', 'max:2000'],
             'attachment' => ['nullable', 'file'],
             'short_code' => ['nullable', 'string', 'max:64'],
             'data_sync_url' => ['nullable', 'url', 'max:500'],
