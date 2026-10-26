@@ -7,39 +7,15 @@ use App\Models\DocumentType;
 use App\Models\ServiceRequisitionDocument;
 use App\Models\Ticket;
 use App\Models\TicketDocument;
+use App\Support\SecureUploadedFile;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
 class TicketDocumentService
 {
-    /**
-     * Allowed MIME types for each admin-configured extension.
-     *
-     * @var array<string, list<string>>
-     */
-    public const EXTENSION_MIME_MAP = [
-        'pdf' => ['application/pdf'],
-        'doc' => ['application/msword'],
-        'docx' => [
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'application/zip', // some browsers sniff docx as zip
-        ],
-        'xls' => ['application/vnd.ms-excel', 'application/msexcel'],
-        'xlsx' => [
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'application/zip',
-        ],
-        'png' => ['image/png'],
-        'jpg' => ['image/jpeg', 'image/jpg'],
-        'jpeg' => ['image/jpeg', 'image/jpg'],
-        'gif' => ['image/gif'],
-        'webp' => ['image/webp'],
-        'txt' => ['text/plain'],
-        'csv' => ['text/csv', 'text/plain', 'application/csv', 'application/vnd.ms-excel'],
-        'zip' => ['application/zip', 'application/x-zip-compressed', 'multipart/x-zip'],
-    ];
+    /** @deprecated Use SecureUploadedFile::EXTENSION_MIME_MAP */
+    public const EXTENSION_MIME_MAP = SecureUploadedFile::EXTENSION_MIME_MAP;
 
     public function assertContactCanMutateDocuments(Ticket $ticket): void
     {
@@ -153,115 +129,19 @@ class TicketDocumentService
 
     public function assertFileMatchesDocumentType(UploadedFile $file, DocumentType $documentType): void
     {
-        if (! $file->isValid()) {
-            throw ValidationException::withMessages([
-                'file' => 'The uploaded file is invalid or incomplete.',
-            ]);
-        }
-
-        $extensions = $this->acceptedExtensions($documentType);
-        if ($extensions === []) {
-            throw ValidationException::withMessages([
-                'file' => 'No accepted file types are configured for '.$documentType->name.'.',
-            ]);
-        }
-
-        $maxKb = max(1, (int) $documentType->max_size_kb);
-        $label = $documentType->name;
-        $allowedList = implode(', ', $extensions);
-
-        // Laravel enforces size (KB) + mime/extension sniff against admin config.
-        $validator = Validator::make(
-            ['file' => $file],
-            [
-                'file' => [
-                    'required',
-                    'file',
-                    'max:'.$maxKb,
-                    'mimes:'.implode(',', $extensions),
-                ],
-            ],
-            [
-                'file.required' => "A file is required for {$label}.",
-                'file.file' => "The upload for {$label} must be a file.",
-                'file.max' => "{$label} must be {$maxKb} KB or smaller (admin limit).",
-                'file.mimes' => "{$label} must be one of: {$allowedList} (admin config).",
-            ]
+        SecureUploadedFile::assert(
+            $file,
+            'file',
+            $documentType->name,
+            $this->acceptedExtensions($documentType),
+            max(1, (int) $documentType->max_size_kb),
         );
-
-        if ($validator->fails()) {
-            throw ValidationException::withMessages($validator->errors()->toArray());
-        }
-
-        $sizeBytes = (int) $file->getSize();
-        if ($sizeBytes <= 0) {
-            throw ValidationException::withMessages([
-                'file' => "{$label} cannot be an empty file.",
-            ]);
-        }
-
-        $maxBytes = $maxKb * 1024;
-        if ($sizeBytes > $maxBytes) {
-            throw ValidationException::withMessages([
-                'file' => "{$label} must be {$maxKb} KB or smaller (admin limit).",
-            ]);
-        }
-
-        $ext = strtolower((string) $file->getClientOriginalExtension());
-        $guessedExt = strtolower((string) ($file->guessExtension() ?: ''));
-        $detectedMime = strtolower((string) ($file->getMimeType() ?: ''));
-        $clientMime = strtolower((string) ($file->getClientMimeType() ?: ''));
-
-        if ($ext === '' || ! in_array($ext, $extensions, true)) {
-            throw ValidationException::withMessages([
-                'file' => "{$label} file extension must be one of: {$allowedList}.",
-            ]);
-        }
-
-        // Reject extension spoofing when PHP can guess a different extension.
-        if ($guessedExt !== '' && ! in_array($guessedExt, $extensions, true)) {
-            // jpg/jpeg are interchangeable when both allowed or either maps to jpeg.
-            $jpegFamily = ['jpg', 'jpeg'];
-            $spoofed = ! (
-                in_array($ext, $jpegFamily, true)
-                && in_array($guessedExt, $jpegFamily, true)
-                && count(array_intersect($extensions, $jpegFamily)) > 0
-            );
-
-            if ($spoofed) {
-                throw ValidationException::withMessages([
-                    'file' => "{$label} content does not match an allowed type ({$allowedList}).",
-                ]);
-            }
-        }
-
-        $allowedMimes = $this->allowedMimeTypesForExtensions($extensions);
-        if ($allowedMimes !== [] && $detectedMime !== '') {
-            if (! in_array($detectedMime, $allowedMimes, true)) {
-                throw ValidationException::withMessages([
-                    'file' => "{$label} content type \"{$detectedMime}\" is not allowed. Use: {$allowedList}.",
-                ]);
-            }
-        }
-
-        if ($clientMime !== '' && $clientMime !== 'application/octet-stream' && $allowedMimes !== []) {
-            if (! in_array($clientMime, $allowedMimes, true)) {
-                throw ValidationException::withMessages([
-                    'file' => "{$label} reported type \"{$clientMime}\" is not allowed. Use: {$allowedList}.",
-                ]);
-            }
-        }
     }
 
     /** @return list<string> */
     public function acceptedExtensions(DocumentType $documentType): array
     {
-        $parts = preg_split('/[,\s]+/', (string) $documentType->accepted_mimes) ?: [];
-
-        return array_values(array_unique(array_filter(array_map(
-            static fn (string $part): string => strtolower(trim($part, " \t\n\r\0\x0B.")),
-            $parts
-        ))));
+        return SecureUploadedFile::normalizeExtensions((string) $documentType->accepted_mimes);
     }
 
     /**
@@ -270,22 +150,12 @@ class TicketDocumentService
      */
     public function allowedMimeTypesForExtensions(array $extensions): array
     {
-        $mimes = [];
-        foreach ($extensions as $ext) {
-            foreach (self::EXTENSION_MIME_MAP[$ext] ?? [] as $mime) {
-                $mimes[$mime] = true;
-            }
-        }
-
-        return array_keys($mimes);
+        return SecureUploadedFile::mimeTypesForExtensions($extensions);
     }
 
     protected function safeOriginalName(UploadedFile $file): string
     {
-        $name = basename((string) $file->getClientOriginalName());
-        $name = preg_replace('/[^\w.\- ()\[\]]+/u', '_', $name) ?: 'upload';
-
-        return mb_substr($name, 0, 180);
+        return SecureUploadedFile::safeOriginalName($file);
     }
 
     protected function purgeStoredFile(TicketDocument $document): void

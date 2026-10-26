@@ -26,7 +26,8 @@ export default function ProvisioningListPage() {
           <p className="text-sm text-destructive">{(error as Error)?.message || "Failed to load."}</p>
         ) : !data?.length ? (
           <p className="text-sm text-muted-foreground">
-            No provisioning cases yet. Open an active subscription with a signed contract to start.
+            No provisioning cases yet. After contract sign-off, open your subscription and
+            start provisioning with a resource allocation request.
           </p>
         ) : (
           <div className="overflow-x-auto rounded-lg border border-border">

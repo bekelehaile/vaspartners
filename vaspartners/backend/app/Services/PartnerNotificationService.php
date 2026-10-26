@@ -547,6 +547,127 @@ class PartnerNotificationService
     }
 
     /**
+     * Message 1 — contract sign-off success (SMS + in-app).
+     */
+    public function subscriptionContractSigned(Subscription $subscription): void
+    {
+        $contact = $this->resolveSubscriptionContact($subscription);
+        if (! $contact) {
+            return;
+        }
+
+        $portalPath = '/portal/subscriptions/'.$subscription->public_id;
+        $this->sendSubscriptionPartnerNotice(
+            $contact,
+            $subscription,
+            'subscription_contract_signed',
+            [
+                'contract_signed_at' => $subscription->contract_signed_at?->format('Y-m-d') ?: '—',
+                'prv_number' => '',
+                'portal_url' => $this->portalAbsoluteUrl($portalPath),
+            ],
+            $portalPath,
+        );
+    }
+
+    /**
+     * Message 2 — invite customer to initiate provisioning (SMS + in-app). PRV is created only when they start.
+     */
+    public function subscriptionProvisioningInvite(Subscription $subscription): void
+    {
+        $contact = $this->resolveSubscriptionContact($subscription);
+        if (! $contact) {
+            return;
+        }
+
+        // Only invite when this service has a provisioning workflow.
+        $workflow = $subscription->service?->provisioning_workflow;
+        if (! filled($workflow)) {
+            return;
+        }
+
+        $portalPath = '/portal/provisioning';
+        $this->sendSubscriptionPartnerNotice(
+            $contact,
+            $subscription,
+            'subscription_provisioning_invite',
+            [
+                'contract_signed_at' => $subscription->contract_signed_at?->format('Y-m-d') ?: '—',
+                'prv_number' => '',
+                'portal_url' => $this->portalAbsoluteUrl($portalPath),
+            ],
+            $portalPath,
+        );
+    }
+
+    protected function resolveSubscriptionContact(Subscription $subscription): ?Contact
+    {
+        $subscription->loadMissing(['contact', 'company', 'service']);
+
+        $contact = $subscription->contact;
+        if (! $contact instanceof Contact) {
+            $contact = $subscription->company?->ownerContact();
+        }
+
+        if (! $contact instanceof Contact) {
+            Log::info('Partner notify skipped — subscription has no contact', [
+                'subscription_id' => $subscription->id,
+                'public_id' => $subscription->public_id,
+            ]);
+
+            return null;
+        }
+
+        return $contact;
+    }
+
+    protected function portalAbsoluteUrl(string $path): string
+    {
+        $base = rtrim((string) config('vas.frontend_url', config('app.frontend_url', '')), '/');
+
+        return $base !== '' ? $base.$path : 'the VAS Partners portal';
+    }
+
+    /**
+     * @param  array<string, string>  $extra
+     */
+    protected function sendSubscriptionPartnerNotice(
+        Contact $contact,
+        Subscription $subscription,
+        string $template,
+        array $extra,
+        string $portalPath,
+    ): void {
+        $placeholders = array_merge([
+            'contact_name' => $contact->name ?: 'Partner',
+            'company_name' => $subscription->company?->name
+                ?: $contact->company_name
+                ?: 'your organisation',
+            'service' => $subscription->service?->name ?: 'VAS service',
+            'note' => '',
+        ], $extra);
+
+        $smsBody = $this->render('templates', $template, $placeholders);
+        $portalBody = $this->render('portal', $template, $placeholders);
+
+        if (filled($contact->phone_number)) {
+            $this->sms->send($contact->phone_number, $smsBody);
+        } else {
+            Log::info('SMS skipped — contact has no phone', [
+                'subscription_id' => $subscription->id,
+                'template' => $template,
+            ]);
+        }
+
+        $contact->notify(new PartnerPortalNotification(
+            title: $this->titleFor($template),
+            body: Str::limit($portalBody, 280),
+            template: $template,
+            url: $portalPath,
+        ));
+    }
+
+    /**
      * Contract renewal reminder based on subscription.renewal_date (and signing date in copy).
      * SMS + portal notify to the subscription contact, falling back to company owner.
      *
@@ -943,6 +1064,8 @@ class PartnerNotificationService
             'company_transfer_approved' => 'Ownership transfer approved',
             'company_transfer_rejected' => 'Ownership transfer rejected',
             'subscription_renewal_reminder' => 'Subscription renewal reminder',
+            'subscription_contract_signed' => 'Contract signed successfully',
+            'subscription_provisioning_invite' => 'Initiate service provisioning',
             default => 'Portal update',
         };
     }

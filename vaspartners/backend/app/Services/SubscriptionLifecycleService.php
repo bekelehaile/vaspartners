@@ -10,6 +10,7 @@ use App\Models\Requisition;
 use App\Models\Service;
 use App\Models\Subscription;
 use App\Models\Ticket;
+use App\Services\PartnerNotificationService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -296,7 +297,14 @@ class SubscriptionLifecycleService
                 $payload,
             );
 
-            return $locked->fresh(['service', 'company']);
+            $fresh = $locked->fresh(['service', 'company', 'contact']);
+
+            // Partner initiates PRV; admin only notifies: (1) contract success (2) please start provisioning.
+            $notifier = app(PartnerNotificationService::class);
+            $notifier->subscriptionContractSigned($fresh);
+            $notifier->subscriptionProvisioningInvite($fresh);
+
+            return $fresh;
         });
     }
 

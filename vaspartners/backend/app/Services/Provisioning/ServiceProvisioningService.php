@@ -14,6 +14,7 @@ use App\Models\ServiceProvisioningStep;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Services\SubscriptionProvisioningLogService;
+use App\Support\SecureUploadedFile;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +28,76 @@ class ServiceProvisioningService
         protected SubscriptionProvisioningLogService $lifecycleLogs,
         protected ProvisioningNotificationService $notifications,
     ) {}
+
+    /**
+     * After contract sign-off, open a PRV case waiting on the partner for resource allocation.
+     * Idempotent: returns the existing open case when one already exists.
+     */
+    /**
+     * @param  bool  $notifyPartner  When false, caller sends the contract-signed SMS/in-app instead (avoids double notify).
+     */
+    public function openAfterContract(
+        Subscription $subscription,
+        ?Model $actor = null,
+        bool $notifyPartner = true,
+    ): ?ServiceProvisioning {
+        $subscription->loadMissing(['service', 'company', 'contact']);
+
+        if ($subscription->status !== SubscriptionStatus::Active) {
+            return null;
+        }
+
+        if ($subscription->contract_signed_at === null) {
+            return null;
+        }
+
+        $workflow = $this->resolveWorkflow($subscription);
+        if ($workflow === null) {
+            return null;
+        }
+
+        $existing = ServiceProvisioning::query()
+            ->where('subscription_id', $subscription->id)
+            ->whereIn('status', [
+                ProvisioningStatus::Draft->value,
+                ProvisioningStatus::InProgress->value,
+                ProvisioningStatus::Blocked->value,
+            ])
+            ->latest('id')
+            ->first();
+
+        if ($existing) {
+            return $existing->load(['steps', 'service', 'company', 'subscription']);
+        }
+
+        return DB::transaction(function () use ($subscription, $actor, $workflow, $notifyPartner) {
+            $createdBy = $actor;
+            if ($createdBy === null) {
+                $createdBy = $subscription->contact;
+            }
+
+            $case = ServiceProvisioning::query()->create([
+                'subscription_id' => $subscription->id,
+                'service_id' => $subscription->service_id,
+                'company_id' => $subscription->company_id,
+                'workflow_key' => $workflow,
+                'status' => ProvisioningStatus::InProgress,
+                'started_at' => now(),
+                'created_by_type' => $createdBy ? $createdBy::class : null,
+                'created_by_id' => $createdBy?->getKey(),
+                'shared_payload' => $this->contextSnapshot($subscription),
+            ]);
+
+            $this->seedSteps($case);
+
+            $fresh = $case->fresh(['steps', 'service', 'company', 'subscription']);
+            if ($notifyPartner) {
+                $this->notifications->notifyHandoff($fresh);
+            }
+
+            return $fresh;
+        });
+    }
 
     public function startFromPartner(
         Subscription $subscription,
@@ -55,21 +126,6 @@ class ServiceProvisioningService
             ]);
         }
 
-        $open = ServiceProvisioning::query()
-            ->where('subscription_id', $subscription->id)
-            ->whereIn('status', [
-                ProvisioningStatus::Draft->value,
-                ProvisioningStatus::InProgress->value,
-                ProvisioningStatus::Blocked->value,
-            ])
-            ->exists();
-
-        if ($open) {
-            throw ValidationException::withMessages([
-                'subscription' => 'An open provisioning case already exists for this subscription.',
-            ]);
-        }
-
         $shortCode = trim((string) ($input['short_code'] ?? ''));
         if ($shortCode === '') {
             throw ValidationException::withMessages([
@@ -77,25 +133,59 @@ class ServiceProvisioningService
             ]);
         }
 
-        return DB::transaction(function () use ($subscription, $actor, $input, $attachment, $workflow, $shortCode) {
-            $case = ServiceProvisioning::query()->create([
-                'subscription_id' => $subscription->id,
-                'service_id' => $subscription->service_id,
-                'company_id' => $subscription->company_id,
-                'workflow_key' => $workflow,
-                'status' => ProvisioningStatus::InProgress,
-                'started_at' => now(),
-                'created_by_type' => $actor::class,
-                'created_by_id' => $actor->getKey(),
-                'shared_payload' => $this->contextSnapshot($subscription, [
-                    'short_code' => $shortCode,
-                    'data_sync_url' => trim((string) ($input['data_sync_url'] ?? '')) ?: null,
-                ]),
+        if (! $attachment instanceof UploadedFile) {
+            throw ValidationException::withMessages([
+                'attachment' => 'Service activation letter attachment is required.',
             ]);
+        }
 
-            $this->seedSteps($case);
+        $this->assertSecureAttachment(
+            $attachment,
+            'Service activation letter',
+            $this->registry->step($workflow, 'partner_resource_request') ?? [],
+        );
 
-            $first = $case->steps()->where('step_key', 'partner_resource_request')->firstOrFail();
+        return DB::transaction(function () use ($subscription, $actor, $input, $attachment, $workflow, $shortCode) {
+            $case = ServiceProvisioning::query()
+                ->where('subscription_id', $subscription->id)
+                ->whereIn('status', [
+                    ProvisioningStatus::Draft->value,
+                    ProvisioningStatus::InProgress->value,
+                    ProvisioningStatus::Blocked->value,
+                ])
+                ->lockForUpdate()
+                ->latest('id')
+                ->first();
+
+            if (! $case) {
+                $case = ServiceProvisioning::query()->create([
+                    'subscription_id' => $subscription->id,
+                    'service_id' => $subscription->service_id,
+                    'company_id' => $subscription->company_id,
+                    'workflow_key' => $workflow,
+                    'status' => ProvisioningStatus::InProgress,
+                    'started_at' => now(),
+                    'created_by_type' => $actor::class,
+                    'created_by_id' => $actor->getKey(),
+                    'shared_payload' => $this->contextSnapshot($subscription),
+                ]);
+                $this->seedSteps($case);
+            }
+
+            $first = $case->steps()->where('step_key', 'partner_resource_request')->lockForUpdate()->firstOrFail();
+
+            if ($first->status === ProvisioningStepStatus::Completed) {
+                throw ValidationException::withMessages([
+                    'subscription' => 'Resource allocation was already submitted for this provisioning case.',
+                ]);
+            }
+
+            if ($first->status !== ProvisioningStepStatus::Waiting) {
+                throw ValidationException::withMessages([
+                    'subscription' => 'An open provisioning case already exists for this subscription.',
+                ]);
+            }
+
             $this->completeStep(
                 $case,
                 $first,
@@ -133,6 +223,22 @@ class ServiceProvisioningService
 
             $def = $this->registry->step($case->workflow_key, $stepKey) ?? [];
             $payload = $this->validateAndBuildPayload($case, $def, $input);
+
+            if (! empty($def['requires_attachment'])) {
+                $label = (string) ($def['attachment_label'] ?? 'Attachment');
+                if (! $attachment instanceof UploadedFile) {
+                    throw ValidationException::withMessages([
+                        'attachment' => $label.' is required.',
+                    ]);
+                }
+                $this->assertSecureAttachment($attachment, $label, $def);
+            } elseif ($attachment instanceof UploadedFile) {
+                $this->assertSecureAttachment(
+                    $attachment,
+                    (string) ($def['attachment_label'] ?? 'Attachment'),
+                    $def,
+                );
+            }
 
             $this->completeStep(
                 $case,
@@ -349,7 +455,7 @@ class ServiceProvisioningService
         return array_merge([
             'company_name' => $company?->legal_name ?: $company?->name,
             'customer_name' => $company?->legal_name ?: $company?->name,
-            'contact_number' => $company?->partnerClaimPhone() ?: $contact?->phone,
+            'contact_number' => $company?->claimPhone() ?: $contact?->phone_number,
             'contact_email' => $company?->email ?: $contact?->email,
             'service_type' => $service?->type ?: $service?->name,
             'service_name' => $service?->name,
@@ -367,6 +473,19 @@ class ServiceProvisioningService
         return $shared;
     }
 
+    /**
+     * @param  array<string, mixed>  $stepDef
+     */
+    protected function assertSecureAttachment(UploadedFile $file, string $label, array $stepDef = []): void
+    {
+        $mimes = $stepDef['attachment_accepted_mimes']
+            ?? config('provisioning_workflows.attachment_accepted_mimes', 'pdf,doc,docx,png,jpg,jpeg');
+        $maxKb = (int) ($stepDef['attachment_max_kb']
+            ?? config('provisioning_workflows.attachment_max_kb', 10240));
+
+        SecureUploadedFile::assert($file, 'attachment', $label, $mimes, $maxKb);
+    }
+
     protected function storeAttachment(ServiceProvisioningStep $step, Model $actor, UploadedFile $file): void
     {
         $path = $file->store('provisioning/'.$step->service_provisioning_id.'/'.$step->id, 'local');
@@ -375,8 +494,8 @@ class ServiceProvisioningService
             'service_provisioning_step_id' => $step->id,
             'disk' => 'local',
             'path' => $path,
-            'original_name' => $file->getClientOriginalName(),
-            'mime' => $file->getClientMimeType(),
+            'original_name' => SecureUploadedFile::safeOriginalName($file),
+            'mime' => $file->getMimeType() ?: $file->getClientMimeType(),
             'size' => $file->getSize(),
             'uploaded_by_type' => $actor::class,
             'uploaded_by_id' => $actor->getKey(),

@@ -38,7 +38,8 @@ class ServiceProvisioning extends Model
             'workflow_key' => ProvisioningWorkflow::class,
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
-            'shared_payload' => 'encrypted:array',
+            // JSON column — encrypt sensitive credential keys in application code, not the whole blob.
+            'shared_payload' => 'array',
         ];
     }
 

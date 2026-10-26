@@ -49,15 +49,21 @@ class ProvisioningNotificationService
             'to' => $step->to_department?->label() ?? '',
         ];
 
+        $from = $step->from_department?->value;
         $to = $step->to_department?->value;
 
-        if ($to === 'partner') {
+        // Partner acts when they are the FROM department (e.g. resource allocation request).
+        if ($from === 'partner' || $to === 'partner') {
             $this->notifyPartners($case, 'provisioning.step_waiting_partner', $placeholders);
 
-            return;
+            if ($from === 'partner') {
+                return;
+            }
         }
 
-        $this->notifyStaffRole($to, 'provisioning.step_waiting_staff', $placeholders);
+        if ($to && $to !== 'partner') {
+            $this->notifyStaffRole($to, 'provisioning.step_waiting_staff', $placeholders);
+        }
     }
 
     /**

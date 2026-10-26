@@ -211,6 +211,14 @@ SMS,
 Dear {contact_name}, your {service} subscription for {company_name} renews on {renewal_date} ({days_remaining}). Contract signed {contract_signed_at}. Open the VAS Partners portal to renew. {portal_url} — Ethio telecom
 SMS,
 
+        'subscription_contract_signed' => <<<'SMS'
+Dear {contact_name}, contract sign-off for {service} ({company_name}) was completed successfully on {contract_signed_at}. — Ethio telecom
+SMS,
+
+        'subscription_provisioning_invite' => <<<'SMS'
+Dear {contact_name}, please initiate service provisioning for {service} ({company_name}) in the VAS Partners portal. Open Provisioning and submit the resource allocation request with your service activation letter. {portal_url} — Ethio telecom
+SMS,
+
     ],
 
     'portal' => [
@@ -268,6 +276,10 @@ SMS,
         'company_detach_rejected' => 'Your request to leave {company_name} was not approved.',
 
         'subscription_renewal_reminder' => 'Your {service} subscription for {company_name} renews on {renewal_date} ({days_remaining}). Contract signed {contract_signed_at}. Open the portal to renew.',
+
+        'subscription_contract_signed' => 'Contract sign-off for {service} ({company_name}) completed successfully on {contract_signed_at}.',
+
+        'subscription_provisioning_invite' => 'Please initiate service provisioning for {service} ({company_name}). Open Provisioning and submit the resource allocation request with your service activation letter.',
 
     ],
 

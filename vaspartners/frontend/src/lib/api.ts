@@ -172,6 +172,7 @@ export type Subscription = {
   };
   started_at?: string | null;
   contract_signed_at?: string | null;
+  open_provisioning_public_id?: string | null;
   current_period_start?: string | null;
   current_period_end?: string | null;
   next_renewal_due_at?: string | null;
@@ -546,6 +547,17 @@ export type ProvisioningCase = {
   completed_at?: string | null;
   company_name?: string | null;
   can_act_step?: string | null;
+  can_act_label?: string | null;
+  can_act_fields?: Array<{
+    name: string;
+    label: string;
+    type: string;
+    required?: boolean;
+  }>;
+  requires_attachment?: boolean;
+  attachment_label?: string | null;
+  attachment_accepted_mimes?: string | null;
+  attachment_max_kb?: number | null;
   credentials?: Record<string, string> | null;
   follow_up?: Array<{
     step_key: string;
@@ -574,12 +586,14 @@ export async function startProvisioning(payload: {
   short_code: string;
   data_sync_url?: string;
   remark?: string;
+  attachment: File;
 }): Promise<ProvisioningCase> {
   const body = new FormData();
   body.set("subscription_public_id", payload.subscription_public_id);
   body.set("short_code", payload.short_code);
   if (payload.data_sync_url) body.set("data_sync_url", payload.data_sync_url);
   if (payload.remark) body.set("remark", payload.remark);
+  body.set("attachment", payload.attachment);
   const res = await api<{ data: ProvisioningCase }>("/provisioning", {
     method: "POST",
     body,
@@ -590,10 +604,14 @@ export async function startProvisioning(payload: {
 export async function submitProvisioningStep(
   publicId: string,
   stepKey: string,
-  payload: { remark?: string },
+  payload: Record<string, string | undefined> & { attachment?: File },
 ): Promise<ProvisioningCase> {
   const body = new FormData();
-  if (payload.remark) body.set("remark", payload.remark);
+  for (const [key, value] of Object.entries(payload)) {
+    if (key === "attachment") continue;
+    if (typeof value === "string" && value !== "") body.set(key, value);
+  }
+  if (payload.attachment) body.set("attachment", payload.attachment);
   const res = await api<{ data: ProvisioningCase }>(
     `/provisioning/${encodeURIComponent(publicId)}/steps/${encodeURIComponent(stepKey)}`,
     { method: "POST", body },

@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Contact;
 use App\Models\ServiceProvisioning;
 use App\Models\Subscription;
+use App\Services\Provisioning\ProvisioningWorkflowRegistry;
 use App\Services\Provisioning\ServiceProvisioningService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -50,7 +51,8 @@ class ProvisioningPortalController extends Controller
             'short_code' => ['required', 'string', 'max:64'],
             'data_sync_url' => ['nullable', 'url', 'max:500'],
             'remark' => ['nullable', 'string', 'max:2000'],
-            'attachment' => ['nullable', 'file', 'max:10240'],
+            // Deep type/size/MIME checks run in ServiceProvisioningService (same as ticket documents).
+            'attachment' => ['required', 'file'],
         ]);
 
         $subscription = Subscription::query()
@@ -83,7 +85,9 @@ class ProvisioningPortalController extends Controller
 
         $data = $request->validate([
             'remark' => ['nullable', 'string', 'max:2000'],
-            'attachment' => ['nullable', 'file', 'max:10240'],
+            'attachment' => ['nullable', 'file'],
+            'short_code' => ['nullable', 'string', 'max:64'],
+            'data_sync_url' => ['nullable', 'url', 'max:500'],
         ]);
 
         $case = $service->submitStep(
@@ -151,12 +155,43 @@ class ProvisioningPortalController extends Controller
         }
 
         $waiting = $p->steps->firstWhere('status', ProvisioningStepStatus::Waiting);
+        $canAct = $waiting && ($waiting->from_department?->value === 'partner')
+            ? $waiting->step_key
+            : null;
+
+        $formFields = [];
+        $requiresAttachment = false;
+        $attachmentLabel = 'Attachment';
+        if ($canAct) {
+            $def = app(ProvisioningWorkflowRegistry::class)->step($p->workflow_key, $canAct) ?? [];
+            $formFields = collect($def['form_fields'] ?? [])
+                ->map(fn (array $f) => [
+                    'name' => $f['name'],
+                    'label' => $f['label'] ?? $f['name'],
+                    'type' => $f['type'] ?? 'text',
+                    'required' => (bool) ($f['required'] ?? false),
+                ])
+                ->values()
+                ->all();
+            $requiresAttachment = (bool) ($def['requires_attachment'] ?? false);
+            $attachmentLabel = (string) ($def['attachment_label'] ?? 'Attachment');
+        }
+
+        $acceptedMimes = (string) config(
+            'provisioning_workflows.attachment_accepted_mimes',
+            'pdf,doc,docx,png,jpg,jpeg'
+        );
+        $maxKb = (int) config('provisioning_workflows.attachment_max_kb', 10240);
 
         return array_merge($this->summarize($p, true), [
             'company_name' => $p->company?->name,
-            'can_act_step' => $waiting && ($waiting->from_department?->value === 'partner')
-                ? $waiting->step_key
-                : null,
+            'can_act_step' => $canAct,
+            'can_act_label' => $waiting?->label,
+            'can_act_fields' => $formFields,
+            'requires_attachment' => $requiresAttachment,
+            'attachment_label' => $attachmentLabel,
+            'attachment_accepted_mimes' => $acceptedMimes,
+            'attachment_max_kb' => $maxKb,
             'credentials' => $credentials,
             'follow_up' => $p->steps->map(fn ($s) => [
                 'step_key' => $s->step_key,

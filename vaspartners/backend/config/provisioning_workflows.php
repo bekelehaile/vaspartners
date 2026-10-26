@@ -6,12 +6,16 @@ use App\Enums\ProvisioningDepartment as Dept;
  * Service provisioning workflow graphs.
  *
  * form_fields: only fields the actor types on that step (simple forms).
- * Common optional remark + attachment are always available (not listed).
+ * Optional remark is always available. Attachment is optional unless requires_attachment.
  * Auto/carry-forward values are merged server-side into payload for the follow-up table.
  */
 return [
 
     'public_id_prefix' => 'PRV-',
+
+    // Same family of checks as service-request DocumentType uploads (size + extension + MIME sniff).
+    'attachment_accepted_mimes' => env('PROVISIONING_ATTACHMENT_MIMES', 'pdf,doc,docx,png,jpg,jpeg'),
+    'attachment_max_kb' => (int) env('PROVISIONING_ATTACHMENT_MAX_KB', 10240),
 
     'workflows' => [
 
@@ -28,6 +32,8 @@ return [
                         ['name' => 'short_code', 'label' => 'Short code', 'type' => 'text', 'required' => true],
                         ['name' => 'data_sync_url', 'label' => 'Data Sync URL', 'type' => 'url', 'required' => false],
                     ],
+                    'requires_attachment' => true,
+                    'attachment_label' => 'Service activation letter',
                 ],
                 [
                     'key' => 'sales_to_operation',

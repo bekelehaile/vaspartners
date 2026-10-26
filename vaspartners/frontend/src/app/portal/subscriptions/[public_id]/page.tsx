@@ -50,6 +50,7 @@ export default function SubscriptionDetailPage() {
   const { data: sub, isLoading, isError, error } = useSubscription(publicId);
   const [shortCode, setShortCode] = useState("");
   const [dataSyncUrl, setDataSyncUrl] = useState("");
+  const [activationLetter, setActivationLetter] = useState<File | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
 
@@ -57,7 +58,8 @@ export default function SubscriptionDetailPage() {
   const canProvision = contactCanManageProvisioning(me);
   const alive = isAliveSubscriptionStatus(sub?.status);
   const contractSigned = Boolean(sub?.contract_signed_at);
-  const canStartProvisioning = Boolean(sub && canProvision && alive && contractSigned);
+  const openPrv = sub?.open_provisioning_public_id || null;
+  const canStartProvisioning = Boolean(sub && canProvision && alive && contractSigned && !openPrv);
 
   return (
     <>
@@ -102,6 +104,25 @@ export default function SubscriptionDetailPage() {
           </Card>
         ) : (
           <div className="flex flex-col gap-5">
+            {openPrv ? (
+              <Card size="sm">
+                <CardHeader>
+                  <CardTitle>Service provisioning</CardTitle>
+                  <CardDescription>
+                    Contract is signed. A provisioning case is waiting for your action.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Link
+                    href={`/portal/provisioning/${encodeURIComponent(openPrv)}`}
+                    className="btn-primary inline-flex"
+                  >
+                    Open {openPrv}
+                  </Link>
+                </CardContent>
+              </Card>
+            ) : null}
+
             {canStartProvisioning ? (
               <Card size="sm">
                 <CardHeader>
@@ -131,13 +152,30 @@ export default function SubscriptionDetailPage() {
                         placeholder="https://"
                       />
                     </label>
+                    <label className="block text-sm sm:col-span-2">
+                      <span className="mb-1 block font-medium">Service activation letter *</span>
+                      <input
+                        className="w-full rounded-md border border-border bg-background px-3 py-2"
+                        type="file"
+                        accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,application/pdf,image/*"
+                        onChange={(e) => setActivationLetter(e.target.files?.[0] ?? null)}
+                        required
+                      />
+                      <span className="mt-1 block text-xs text-muted-foreground">
+                        PDF, Word, or image — max 10 MB. Validated on the server.
+                      </span>
+                    </label>
                   </div>
                   {startError ? <p className="text-sm text-destructive">{startError}</p> : null}
                   <button
                     type="button"
                     className="btn-primary"
-                    disabled={starting || !shortCode.trim()}
+                    disabled={starting || !shortCode.trim() || !activationLetter}
                     onClick={async () => {
+                      if (!activationLetter) {
+                        setStartError("Service activation letter is required.");
+                        return;
+                      }
                       setStartError(null);
                       setStarting(true);
                       try {
@@ -145,6 +183,7 @@ export default function SubscriptionDetailPage() {
                           subscription_public_id: sub.public_id,
                           short_code: shortCode.trim(),
                           data_sync_url: dataSyncUrl.trim() || undefined,
+                          attachment: activationLetter,
                         });
                         router.push(`/portal/provisioning/${encodeURIComponent(created.public_id)}`);
                       } catch (e) {
