@@ -42,12 +42,12 @@ return [
                     'to' => Dept::VasOperation->value,
                     'seq' => 2,
                     'form_fields' => [
-                        ['name' => 'service_price', 'label' => 'Service price', 'type' => 'text', 'required' => true],
-                        ['name' => 'free_trial_period', 'label' => 'Free trial period', 'type' => 'text', 'required' => false],
-                        ['name' => 'packages', 'label' => 'Subscription packages', 'type' => 'packages', 'required' => true],
-                        ['name' => 'payer_party_type', 'label' => 'Payer party type', 'type' => 'text', 'required' => true],
                         ['name' => 'crm_order', 'label' => 'CRM order', 'type' => 'text', 'required' => true],
+                        ['name' => 'payer_party_type', 'label' => 'Payer party type', 'type' => 'text', 'required' => true],
+                        ['name' => 'service_price', 'label' => 'Service price', 'type' => 'text', 'required' => true],
                         ['name' => 'tariff', 'label' => 'Tariff', 'type' => 'text', 'required' => true],
+                        ['name' => 'packages', 'label' => 'Subscription packages', 'type' => 'packages', 'required' => true],
+                        ['name' => 'free_trial_period', 'label' => 'Free trial period', 'type' => 'text', 'required' => false],
                     ],
                 ],
                 [

@@ -548,6 +548,7 @@ export type ProvisioningCase = {
   company_name?: string | null;
   can_act_step?: string | null;
   can_act_label?: string | null;
+  can_act_submit_label?: string | null;
   can_act_fields?: Array<{
     name: string;
     label: string;

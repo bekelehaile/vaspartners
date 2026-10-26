@@ -117,61 +117,80 @@ export default function ProvisioningDetailPage() {
 
               {data.can_act_step ? (
                 <div className="rounded-lg border border-border p-4 space-y-3">
-                  <h2 className="text-base font-semibold">Your action</h2>
+                  <h2 className="text-base font-semibold">
+                    {data.can_act_submit_label || data.can_act_label || "Your action"}
+                  </h2>
                   <p className="text-sm text-muted-foreground">
-                    {data.can_act_label || data.can_act_step}
+                    Complete the fields below, then submit to continue activation.
                   </p>
-                  {(data.can_act_fields ?? []).map((f) => (
-                    <label key={f.name} className="block text-sm">
-                      <span className="mb-1 block font-medium">
-                        {f.label}
-                        {f.required ? " *" : ""}
-                      </span>
-                      <input
-                        className="w-full rounded-md border border-border bg-background px-3 py-2"
-                        type={f.type === "url" ? "url" : f.type === "password" ? "password" : "text"}
-                        value={fields[f.name] ?? ""}
-                        onChange={(e) =>
-                          setFields((prev) => ({ ...prev, [f.name]: e.target.value }))
-                        }
-                        placeholder={f.type === "url" ? "https://" : undefined}
-                        required={!!f.required}
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {(data.can_act_fields ?? []).map((f) => (
+                      <label
+                        key={f.name}
+                        className={`block text-sm${f.type === "textarea" || f.type === "file" ? " sm:col-span-2" : ""}`}
+                      >
+                        <span className="mb-1 block font-medium">
+                          {f.label}
+                          {f.required ? " *" : ""}
+                        </span>
+                        {f.type === "textarea" ? (
+                          <textarea
+                            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                            rows={3}
+                            value={fields[f.name] ?? ""}
+                            onChange={(e) =>
+                              setFields((prev) => ({ ...prev, [f.name]: e.target.value }))
+                            }
+                            required={!!f.required}
+                          />
+                        ) : (
+                          <input
+                            className="w-full rounded-md border border-border bg-background px-3 py-2"
+                            type={f.type === "url" ? "url" : f.type === "password" ? "password" : "text"}
+                            value={fields[f.name] ?? ""}
+                            onChange={(e) =>
+                              setFields((prev) => ({ ...prev, [f.name]: e.target.value }))
+                            }
+                            placeholder={f.type === "url" ? "https://" : undefined}
+                            required={!!f.required}
+                          />
+                        )}
+                      </label>
+                    ))}
+                    {data.requires_attachment || data.attachment_label ? (
+                      <label className="block text-sm sm:col-span-2">
+                        <span className="mb-1 block font-medium">
+                          {data.attachment_label || "Attachment"}
+                          {data.requires_attachment ? " *" : ""}
+                        </span>
+                        <input
+                          className="w-full rounded-md border border-border bg-background px-3 py-2"
+                          type="file"
+                          accept={(data.attachment_accepted_mimes || "pdf,doc,docx,png,jpg,jpeg")
+                            .split(",")
+                            .map((e) => `.${e.trim()}`)
+                            .join(",")}
+                          onChange={(e) => setAttachment(e.target.files?.[0] ?? null)}
+                          required={!!data.requires_attachment}
+                        />
+                        <span className="mt-1 block text-xs text-muted-foreground">
+                          Allowed: {data.attachment_accepted_mimes || "pdf,doc,docx,png,jpg,jpeg"}
+                          {data.attachment_max_kb ? ` · max ${data.attachment_max_kb} KB` : ""}. Validated
+                          on the server.
+                        </span>
+                      </label>
+                    ) : null}
+                    <label className="block text-sm sm:col-span-2">
+                      <span className="mb-1 block font-medium">Remark *</span>
+                      <textarea
+                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                        rows={3}
+                        value={remark}
+                        onChange={(e) => setRemark(e.target.value)}
+                        required
                       />
                     </label>
-                  ))}
-                  {data.requires_attachment || data.attachment_label ? (
-                    <label className="block text-sm">
-                      <span className="mb-1 block font-medium">
-                        {data.attachment_label || "Attachment"}
-                        {data.requires_attachment ? " *" : ""}
-                      </span>
-                      <input
-                        className="w-full rounded-md border border-border bg-background px-3 py-2"
-                        type="file"
-                        accept={(data.attachment_accepted_mimes || "pdf,doc,docx,png,jpg,jpeg")
-                          .split(",")
-                          .map((e) => `.${e.trim()}`)
-                          .join(",")}
-                        onChange={(e) => setAttachment(e.target.files?.[0] ?? null)}
-                        required={!!data.requires_attachment}
-                      />
-                      <span className="mt-1 block text-xs text-muted-foreground">
-                        Allowed: {data.attachment_accepted_mimes || "pdf,doc,docx,png,jpg,jpeg"}
-                        {data.attachment_max_kb ? ` · max ${data.attachment_max_kb} KB` : ""}. Validated
-                        on the server.
-                      </span>
-                    </label>
-                  ) : null}
-                  <label className="block text-sm">
-                    <span className="mb-1 block font-medium">Remark *</span>
-                    <textarea
-                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                      rows={3}
-                      value={remark}
-                      onChange={(e) => setRemark(e.target.value)}
-                      required
-                    />
-                  </label>
+                  </div>
                   <button
                     type="button"
                     className="btn-primary"
@@ -180,7 +199,9 @@ export default function ProvisioningDetailPage() {
                     }
                     onClick={() => act.mutate()}
                   >
-                    {act.isPending ? "Submitting…" : "Submit"}
+                    {act.isPending
+                      ? "Submitting…"
+                      : data.can_act_submit_label || data.can_act_label || "Submit"}
                   </button>
                   {act.isError ? (
                     <p className="text-sm text-destructive">

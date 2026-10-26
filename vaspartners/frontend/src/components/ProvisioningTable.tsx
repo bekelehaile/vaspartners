@@ -161,7 +161,14 @@ export function ProvisioningTable() {
           const row = info.row.original;
           return (
             <span className="table-actions">
-              {row.kind === "case" ? (
+              {row.kind === "case" && row.caseRow?.can_act_step ? (
+                <Link
+                  href={`/portal/provisioning/${encodeURIComponent(row.reference)}`}
+                  className="btn-primary table-action"
+                >
+                  {row.caseRow.can_act_submit_label || "Continue"}
+                </Link>
+              ) : row.kind === "case" ? (
                 <Link
                   href={`/portal/provisioning/${encodeURIComponent(row.reference)}`}
                   className="btn-ghost table-action"
@@ -175,7 +182,7 @@ export function ProvisioningTable() {
                   className="btn-primary table-action"
                   onClick={() => setActivating(row.startable ?? null)}
                 >
-                  Service activation request
+                  Submit to VAS Sales
                 </button>
               ) : null}
             </span>
@@ -279,7 +286,14 @@ export function ProvisioningTable() {
                     </span>
                   </div>
                   <div className="portal-mobile-card-actions">
-                    {row.kind === "case" ? (
+                    {row.kind === "case" && row.caseRow?.can_act_step ? (
+                      <Link
+                        href={`/portal/provisioning/${encodeURIComponent(row.reference)}`}
+                        className="btn-primary table-action"
+                      >
+                        {row.caseRow.can_act_submit_label || "Continue"}
+                      </Link>
+                    ) : row.kind === "case" ? (
                       <Link
                         href={`/portal/provisioning/${encodeURIComponent(row.reference)}`}
                         className="btn-ghost table-action"
@@ -293,7 +307,7 @@ export function ProvisioningTable() {
                         className="btn-primary table-action"
                         onClick={() => setActivating(row.startable ?? null)}
                       >
-                        Service activation request
+                        Submit to VAS Sales
                       </button>
                     ) : null}
                   </div>
@@ -460,7 +474,7 @@ function ActivationRequestForm({
         disabled={mutate.isPending || !shortCode.trim() || !letter || !remark.trim()}
         onClick={() => mutate.mutate()}
       >
-        {mutate.isPending ? "Submitting…" : "Submit"}
+        {mutate.isPending ? "Submitting…" : "Submit to VAS Sales"}
       </button>
     </div>
   );

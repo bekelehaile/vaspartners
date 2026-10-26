@@ -17,7 +17,10 @@ use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Grid;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class ProvisioningStepActions
@@ -126,16 +129,11 @@ class ProvisioningStepActions
     }
 
     /**
-     * ActionGroup button label for the case (single destination or generic Submit).
+     * ActionGroup button label — fixed; destinations stay on each menu item.
      */
     public static function groupLabel(ServiceProvisioning $case, ?User $user = null): string
     {
-        $steps = static::actionableSteps($case, $user);
-        if ($steps->count() === 1) {
-            return static::submitToLabel($steps->first());
-        }
-
-        return 'Submit';
+        return 'Actions';
     }
 
     /**
@@ -183,8 +181,9 @@ class ProvisioningStepActions
 
                 $actions[] = Action::make('act_'.$stepKey)
                     ->label($submitLabel)
-                    ->icon('heroicon-o-paper-airplane')
+                    ->icon(false)
                     ->color('primary')
+                    ->slideOver()
                     ->visible(function (ServiceProvisioning $record) use ($stepKey): bool {
                         $step = $record->steps->firstWhere('step_key', $stepKey);
                         if (! $step instanceof ServiceProvisioningStep) {
@@ -217,22 +216,38 @@ class ProvisioningStepActions
 
     /**
      * @param  array<string, mixed>  $def
-     * @return list<\Filament\Forms\Components\Component>
+     * @return list<\Filament\Schemas\Components\Component|\Filament\Forms\Components\Component>
      */
     public static function formFields(array $def): array
     {
         $fields = [];
 
-        foreach ($def['form_fields'] ?? [] as $field) {
+        // Required attributes first, then optional (stable within each group).
+        $sorted = collect($def['form_fields'] ?? [])
+            ->values()
+            ->sortBy(fn (array $field): array => [
+                empty($field['required']) ? 1 : 0,
+                (string) ($field['label'] ?? $field['name'] ?? ''),
+            ])
+            ->values()
+            ->all();
+
+        foreach ($sorted as $field) {
             $name = $field['name'];
             $label = $field['label'] ?? $name;
             $required = ! empty($field['required']);
 
-            $component = match ($field['type'] ?? 'text') {
-                'textarea' => Textarea::make($name)->label($label)->rows(3),
+            $type = $field['type'] ?? 'text';
+
+            $component = match ($type) {
+                'textarea' => Textarea::make($name)->label($label)->rows(3)->columnSpanFull(),
                 'url' => TextInput::make($name)->label($label)->url(),
                 'password' => TextInput::make($name)->label($label)->password()->revealable(),
-                'file' => FileUpload::make($name)->label($label)->disk('local')->directory('provisioning-tmp'),
+                'file' => FileUpload::make($name)
+                    ->label($label)
+                    ->disk('local')
+                    ->directory('provisioning-tmp')
+                    ->columnSpanFull(),
                 'packages' => Repeater::make($name)
                     ->label($label)
                     ->schema([
@@ -241,30 +256,37 @@ class ProvisioningStepActions
                         TextInput::make('sub_keyword')->label('Subscription keyword')->required(),
                         TextInput::make('unsub_keyword')->label('Un-sub keyword')->required(),
                     ])
+                    ->columns(2)
                     ->defaultItems(1)
-                    ->collapsible(),
+                    ->collapsible()
+                    ->columnSpanFull(),
                 default => TextInput::make($name)->label($label),
             };
 
-            if ($required && ($field['type'] ?? '') !== 'file') {
+            if ($required && $type !== 'file') {
                 $component = $component->required();
             }
 
             $fields[] = $component;
         }
 
-        $fields[] = Textarea::make('remark')->label('Remark')->rows(2);
         $attachmentLabel = (string) ($def['attachment_label'] ?? 'Attachment');
         $attachment = FileUpload::make('attachment')
             ->label($attachmentLabel)
             ->disk('local')
-            ->directory('provisioning-tmp');
+            ->directory('provisioning-tmp')
+            ->columnSpanFull();
         if (! empty($def['requires_attachment'])) {
             $attachment = $attachment->required();
         }
         $fields[] = $attachment;
 
-        return $fields;
+        $fields[] = Textarea::make('remark')->label('Remark')->rows(2)->required()->columnSpanFull();
+
+        // Action has no ->columns(); wrap fields in a 2-col Grid (textarea/attachment span full).
+        return [
+            Grid::make(2)->schema($fields),
+        ];
     }
 
     public static function makeStepAction(
@@ -279,8 +301,9 @@ class ProvisioningStepActions
 
         return Action::make('act_'.$step->step_key)
             ->label($submitLabel)
-            ->icon('heroicon-o-paper-airplane')
+            ->icon(false)
             ->color('primary')
+            ->slideOver()
             ->modalHeading($submitLabel)
             ->modalDescription($step->whereLabel().(filled($step->label) ? ' · '.$step->label : ''))
             ->form(static::formFields($def))
@@ -298,28 +321,63 @@ class ProvisioningStepActions
     public static function runStep(ServiceProvisioning $case, string $stepKey, array $data): void
     {
         try {
-            if (! empty($data['attachment'])) {
-                unset($data['attachment']);
-            }
-            unset($data['service_proposal']);
+            $attachment = static::resolveUploadedFile($data['attachment'] ?? null)
+                ?? static::resolveUploadedFile($data['service_proposal'] ?? null);
+
+            unset($data['attachment'], $data['service_proposal']);
 
             app(ServiceProvisioningService::class)->submitStep(
                 $case,
                 $stepKey,
                 auth()->user(),
                 $data,
-                null,
+                $attachment,
             );
 
-            Notification::make()->title('Step completed')->success()->send();
+            Notification::make()
+                ->title('Step completed')
+                ->icon(null)
+                ->success()
+                ->send();
         } catch (ValidationException $e) {
             Notification::make()
                 ->title('Could not complete step')
                 ->body(collect($e->errors())->flatten()->implode(' '))
+                ->icon(null)
                 ->danger()
                 ->send();
 
             throw $e;
         }
+    }
+
+    protected static function resolveUploadedFile(mixed $value): ?UploadedFile
+    {
+        if ($value instanceof UploadedFile) {
+            return $value;
+        }
+
+        if (is_array($value)) {
+            $value = $value[0] ?? null;
+        }
+
+        if (! is_string($value) || $value === '') {
+            return null;
+        }
+
+        $disk = Storage::disk('local');
+        if (! $disk->exists($value)) {
+            return null;
+        }
+
+        $absolute = $disk->path($value);
+
+        return new UploadedFile(
+            $absolute,
+            basename($value),
+            mime_content_type($absolute) ?: 'application/octet-stream',
+            null,
+            true,
+        );
     }
 }

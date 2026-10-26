@@ -230,7 +230,7 @@ class ServiceProvisioningResource extends Resource
                 ViewAction::make(),
                 ActionGroup::make(ProvisioningStepActions::forTable())
                     ->label(fn (ServiceProvisioning $record): string => ProvisioningStepActions::groupLabel($record))
-                    ->icon('heroicon-o-paper-airplane')
+                    ->icon(false)
                     ->color('primary')
                     ->button()
                     ->visible(fn (ServiceProvisioning $record): bool => ProvisioningStepActions::actionableSteps($record)->isNotEmpty()),

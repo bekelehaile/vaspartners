@@ -8,6 +8,7 @@ use App\Enums\SubscriptionStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Contact;
 use App\Models\ServiceProvisioning;
+use App\Models\ServiceProvisioningStep;
 use App\Models\Subscription;
 use App\Services\PartnerNotificationService;
 use App\Services\Provisioning\ProvisioningWorkflowRegistry;
@@ -27,7 +28,11 @@ class ProvisioningPortalController extends Controller
         $companyId = (int) $contact->company_id;
 
         $rows = ServiceProvisioning::query()
-            ->with(['service:id,name,slug', 'subscription:id,public_id,contract_signed_at,status'])
+            ->with([
+                'service:id,name,slug',
+                'subscription:id,public_id,contract_signed_at,status',
+                'steps',
+            ])
             ->where('company_id', $companyId)
             ->latest('id')
             ->paginate(20);
@@ -264,17 +269,38 @@ class ProvisioningPortalController extends Controller
             'subscription_public_id' => $p->subscription?->public_id,
             'started_at' => optional($p->started_at)?->toIso8601String(),
             'completed_at' => optional($p->completed_at)?->toIso8601String(),
+            'overall_days' => $p->overallElapsedDays(),
         ];
 
         if ($forPartner) {
-            return $base;
+            $waiting = $p->relationLoaded('steps')
+                ? $p->steps->firstWhere('status', ProvisioningStepStatus::Waiting)
+                : null;
+            $canAct = $waiting && ($waiting->from_department?->value === 'partner')
+                ? $waiting->step_key
+                : null;
+
+            return array_merge($base, [
+                'can_act_step' => $canAct,
+                'can_act_submit_label' => $canAct ? $this->partnerSubmitLabel($waiting) : null,
+            ]);
         }
 
         return array_merge($base, [
             'workflow_key' => $p->workflow_key?->value ?? $p->workflow_key,
             'current_step_key' => $p->current_step_key,
-            'overall_days' => $p->overallElapsedDays(),
         ]);
+    }
+
+    /**
+     * Same destination wording as admin ActionGroup items: "Submit to VAS Sales".
+     */
+    protected function partnerSubmitLabel(?ServiceProvisioningStep $waiting): string
+    {
+        $to = $waiting?->to_department;
+        $name = $to?->label() ?: 'next section';
+
+        return 'Submit to '.$name;
     }
 
     /**
@@ -324,7 +350,8 @@ class ProvisioningPortalController extends Controller
         return array_merge($this->summarize($p, true), [
             'company_name' => $p->company?->name,
             'can_act_step' => $canAct,
-            'can_act_label' => $waiting?->label,
+            'can_act_label' => $canAct ? $this->partnerSubmitLabel($waiting) : null,
+            'can_act_submit_label' => $canAct ? $this->partnerSubmitLabel($waiting) : null,
             'can_act_fields' => $formFields,
             'requires_attachment' => $requiresAttachment,
             'attachment_label' => $attachmentLabel,
@@ -383,7 +410,7 @@ class ProvisioningPortalController extends Controller
             $p->status === ProvisioningStatus::GoLive => 'Service activation is complete (Go Live).',
             $p->status === ProvisioningStatus::Cancelled => 'This activation was cancelled.',
             $p->status === ProvisioningStatus::Rejected => 'This activation was not approved.',
-            $waitingOnPartner => 'Action needed from you — see Your action above or messages.',
+            $waitingOnPartner => 'Action needed from you — use Submit to continue, or check messages.',
             $awaitingEthio => 'Ethio telecom is processing your activation. We will notify you when something is ready.',
             default => 'Activation in progress.',
         };

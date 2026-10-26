@@ -135,6 +135,13 @@ class ServiceProvisioningService
             ]);
         }
 
+        $remark = trim((string) ($input['remark'] ?? ''));
+        if ($remark === '') {
+            throw ValidationException::withMessages([
+                'remark' => 'Remark is required.',
+            ]);
+        }
+
         if (! $attachment instanceof UploadedFile) {
             throw ValidationException::withMessages([
                 'attachment' => 'Service activation letter attachment is required.',
@@ -147,7 +154,7 @@ class ServiceProvisioningService
             $this->registry->step($workflow, 'partner_resource_request') ?? [],
         );
 
-        return DB::transaction(function () use ($subscription, $actor, $input, $attachment, $workflow, $shortCode) {
+        return DB::transaction(function () use ($subscription, $actor, $input, $attachment, $workflow, $shortCode, $remark) {
             $case = ServiceProvisioning::query()
                 ->where('subscription_id', $subscription->id)
                 ->whereIn('status', [
@@ -196,7 +203,7 @@ class ServiceProvisioningService
                     'short_code' => $shortCode,
                     'data_sync_url' => trim((string) ($input['data_sync_url'] ?? '')) ?: null,
                 ],
-                $input['remark'] ?? null,
+                $remark,
                 $attachment,
             );
 
@@ -226,6 +233,13 @@ class ServiceProvisioningService
             $def = $this->registry->step($case->workflow_key, $stepKey) ?? [];
             $payload = $this->validateAndBuildPayload($case, $def, $input);
 
+            $remark = trim((string) ($input['remark'] ?? ''));
+            if ($remark === '') {
+                throw ValidationException::withMessages([
+                    'remark' => 'Remark is required.',
+                ]);
+            }
+
             if (! empty($def['requires_attachment'])) {
                 $label = (string) ($def['attachment_label'] ?? 'Attachment');
                 if (! $attachment instanceof UploadedFile) {
@@ -242,12 +256,24 @@ class ServiceProvisioningService
                 );
             }
 
+            // Required file-type form fields (e.g. service proposal) must be uploaded.
+            foreach ($def['form_fields'] ?? [] as $field) {
+                if (($field['type'] ?? '') !== 'file' || empty($field['required'])) {
+                    continue;
+                }
+                if (! $attachment instanceof UploadedFile) {
+                    throw ValidationException::withMessages([
+                        $field['name'] => ($field['label'] ?? $field['name']).' is required.',
+                    ]);
+                }
+            }
+
             $this->completeStep(
                 $case,
                 $step,
                 $actor,
                 $payload,
-                $input['remark'] ?? null,
+                $remark,
                 $attachment,
             );
 
