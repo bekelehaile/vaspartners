@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Filament\Widgets\CompanyStatsOverview;
 use App\Filament\Widgets\FeedbackStatsOverview;
 use App\Filament\Widgets\PendingCompanyRequestsStats;
+use App\Filament\Widgets\ProvisioningStatsOverview;
 use App\Filament\Widgets\RevenueStatsOverview;
 use App\Filament\Widgets\SubscriptionStatsOverview;
 use App\Filament\Widgets\TicketStatsOverview;
@@ -114,6 +115,7 @@ class Dashboard extends BaseDashboard
             RevenueStatsOverview::class,
             TicketStatsOverview::class,
             SubscriptionStatsOverview::class,
+            ProvisioningStatsOverview::class,
             PendingCompanyRequestsStats::class,
             FeedbackStatsOverview::class,
             TicketsByStatusChart::class,

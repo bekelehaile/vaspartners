@@ -76,6 +76,11 @@ class ServiceProvisioning extends Model
         return $this->hasMany(ServiceProvisioningStep::class)->orderBy('seq');
     }
 
+    public function messages(): HasMany
+    {
+        return $this->hasMany(ServiceProvisioningMessage::class)->orderBy('id');
+    }
+
     public function createdBy(): MorphTo
     {
         return $this->morphTo();

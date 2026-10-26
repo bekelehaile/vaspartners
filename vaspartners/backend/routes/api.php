@@ -89,6 +89,9 @@ Route::prefix('v1')->group(function () {
         Route::post('provisioning', [ProvisioningPortalController::class, 'start']);
         Route::get('provisioning/{publicId}', [ProvisioningPortalController::class, 'show']);
         Route::post('provisioning/{publicId}/steps/{stepKey}', [ProvisioningPortalController::class, 'submitStep']);
+        Route::get('provisioning/{publicId}/messages', [ProvisioningPortalController::class, 'messages']);
+        Route::post('provisioning/{publicId}/messages', [ProvisioningPortalController::class, 'postMessage']);
+        Route::get('provisioning/{publicId}/messages/{messageId}/attachment', [ProvisioningPortalController::class, 'downloadMessageAttachment']);
 
         Route::get('revenue', [RevenuePortalController::class, 'index']);
 

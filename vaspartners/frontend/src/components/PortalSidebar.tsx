@@ -45,7 +45,7 @@ const workspaceNav: NavItem[] = [
   },
   {
     href: "/portal/provisioning",
-    label: "Provisioning",
+    label: "Service activation",
     icon: FileTextIcon,
     match: (path) => path.startsWith("/portal/provisioning"),
   },

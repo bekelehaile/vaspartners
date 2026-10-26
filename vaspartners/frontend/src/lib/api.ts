@@ -559,6 +559,16 @@ export type ProvisioningCase = {
   attachment_accepted_mimes?: string | null;
   attachment_max_kb?: number | null;
   credentials?: Record<string, string> | null;
+  chat_locked?: boolean;
+  chat_attachment_max_kb?: number;
+  messages?: TicketMessage[];
+  messages_meta?: {
+    total: number;
+    has_more_older?: boolean;
+    has_more_newer?: boolean;
+    oldest_id?: number | null;
+    newest_id?: number | null;
+  };
   follow_up?: Array<{
     step_key: string;
     what: string;
@@ -571,9 +581,33 @@ export type ProvisioningCase = {
   }>;
 };
 
-export async function listProvisioning(): Promise<ProvisioningCase[]> {
-  const res = await api<{ data: ProvisioningCase[] }>("/provisioning");
-  return Array.isArray(res.data) ? res.data : [];
+export type ProvisioningStartable = {
+  public_id: string;
+  status?: string | null;
+  contract_signed_at?: string | null;
+  service?: { id?: number; name?: string; slug?: string } | null;
+};
+
+export type ProvisioningListResponse = {
+  data: ProvisioningCase[];
+  startable: ProvisioningStartable[];
+  attachment_accepted_mimes?: string;
+  attachment_max_kb?: number;
+};
+
+export async function listProvisioning(): Promise<ProvisioningListResponse> {
+  const res = await api<{
+    data?: ProvisioningCase[];
+    startable?: ProvisioningStartable[];
+    attachment_accepted_mimes?: string;
+    attachment_max_kb?: number;
+  }>("/provisioning");
+  return {
+    data: Array.isArray(res.data) ? res.data : [],
+    startable: Array.isArray(res.startable) ? res.startable : [],
+    attachment_accepted_mimes: res.attachment_accepted_mimes,
+    attachment_max_kb: res.attachment_max_kb,
+  };
 }
 
 export async function getProvisioning(publicId: string): Promise<ProvisioningCase> {

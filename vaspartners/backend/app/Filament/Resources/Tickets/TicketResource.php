@@ -55,11 +55,17 @@ class TicketResource extends Resource
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-ticket';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Tickets';
+    protected static string|\UnitEnum|null $navigationGroup = 'Services';
 
-    protected static ?string $navigationLabel = 'All tickets';
+    protected static ?string $navigationLabel = 'Service requests';
 
     protected static ?int $navigationSort = 2;
+
+    protected static ?string $modelLabel = 'Service request';
+
+    protected static ?string $pluralModelLabel = 'Service requests';
+
+    protected static ?string $slug = 'service-requests';
 
     protected static ?string $recordTitleAttribute = 'tt_number';
 
@@ -74,7 +80,7 @@ class TicketResource extends Resource
 
     public static function getNavigationBadgeTooltip(): ?string
     {
-        return 'Pending tickets';
+        return 'Open service requests';
     }
 
     public static function form(Schema $schema): Schema

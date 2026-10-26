@@ -11,6 +11,7 @@ use App\Filament\Resources\Subscriptions\Pages\ViewSubscription;
 use App\Filament\Resources\Subscriptions\RelationManagers\DocumentsRelationManager;
 use App\Filament\Resources\Subscriptions\RelationManagers\MessagesRelationManager;
 use App\Filament\Resources\Subscriptions\RelationManagers\ProvisioningLogsRelationManager;
+use App\Filament\Resources\Subscriptions\RelationManagers\ServiceProvisioningsRelationManager;
 use App\Filament\Resources\Subscriptions\RelationManagers\StatusHistoryRelationManager;
 use App\Filament\Resources\Subscriptions\RelationManagers\TicketsRelationManager;
 use App\Filament\Resources\Tickets\TicketResource;
@@ -297,6 +298,7 @@ class SubscriptionResource extends Resource
     {
         return [
             TicketsRelationManager::class,
+            ServiceProvisioningsRelationManager::class,
             MessagesRelationManager::class,
             DocumentsRelationManager::class,
             ProvisioningLogsRelationManager::class,

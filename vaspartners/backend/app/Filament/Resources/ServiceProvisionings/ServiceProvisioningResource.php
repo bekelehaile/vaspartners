@@ -5,6 +5,7 @@ namespace App\Filament\Resources\ServiceProvisionings;
 use App\Enums\ProvisioningStatus;
 use App\Filament\Resources\ServiceProvisionings\Pages\ListServiceProvisionings;
 use App\Filament\Resources\ServiceProvisionings\Pages\ViewServiceProvisioning;
+use App\Filament\Resources\ServiceProvisionings\RelationManagers\MessagesRelationManager;
 use App\Models\ServiceProvisioning;
 use Filament\Actions\ViewAction;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -25,15 +26,17 @@ class ServiceProvisioningResource extends Resource
 
     protected static string|\BackedEnum|null $navigationIcon = Heroicon::OutlinedRocketLaunch;
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Provisioning';
+    protected static string|\UnitEnum|null $navigationGroup = 'Services';
 
-    protected static ?string $navigationLabel = 'All cases';
+    protected static ?string $navigationLabel = 'Service activation';
 
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 3;
 
-    protected static ?string $modelLabel = 'Provisioning';
+    protected static ?string $modelLabel = 'Service activation';
 
-    protected static ?string $pluralModelLabel = 'Provisioning cases';
+    protected static ?string $pluralModelLabel = 'Service activations';
+
+    protected static ?string $slug = 'service-activations';
 
     protected static ?string $recordTitleAttribute = 'public_id';
 
@@ -121,6 +124,13 @@ class ServiceProvisioningResource extends Resource
             ->recordActions([
                 ViewAction::make(),
             ]);
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            MessagesRelationManager::class,
+        ];
     }
 
     public static function getPages(): array

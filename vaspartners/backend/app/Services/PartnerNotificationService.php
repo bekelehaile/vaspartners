@@ -8,7 +8,10 @@ use App\Filament\Resources\Tickets\TicketResource;
 use App\Models\Contact;
 use App\Models\Company;
 use App\Models\CompanyChangeRequest;
+use App\Enums\ProvisioningDepartment;
+use App\Filament\Resources\ServiceProvisionings\ServiceProvisioningResource;
 use App\Models\ServiceProvisioning;
+use App\Models\ServiceProvisioningMessage;
 use App\Models\Subscription;
 use App\Models\Ticket;
 use App\Models\TicketComment;
@@ -547,6 +550,113 @@ class PartnerNotificationService
     }
 
     /**
+     * Provisioning chat: partner ↔ VAS Sales / account manager (SMS + in-app / Filament).
+     */
+    public function provisioningMessagePosted(
+        ServiceProvisioning $case,
+        Contact|User $author,
+        ServiceProvisioningMessage $message,
+    ): void {
+        $case->loadMissing(['subscription.contact', 'company', 'service']);
+        $preview = Str::limit(trim((string) $message->body), 120);
+        if ($message->hasAttachment()) {
+            $preview = trim($preview.' [PDF: '.($message->attachment_original_name ?: 'attachment').']');
+        }
+
+        if ($author instanceof Contact) {
+            $recipients = User::query()
+                ->where('is_active', true)
+                ->role([
+                    ProvisioningDepartment::VasSales->value,
+                    User::ROLE_ACCOUNT_MANAGER,
+                    'super_admin',
+                    'supervisor',
+                ])
+                ->get()
+                ->merge($this->managementUsers())
+                ->unique('id');
+
+            $this->notifyStaffDatabase(
+                $recipients,
+                'Partner provisioning message',
+                sprintf(
+                    '%s messaged on %s (%s): %s',
+                    $author->name ?: 'Partner',
+                    $case->public_id,
+                    $case->service?->name ?: 'VAS',
+                    $preview !== '' ? $preview : 'Sent an attachment',
+                ),
+                url: ServiceProvisioningResource::getUrl('view', ['record' => $case]),
+                icon: 'heroicon-o-chat-bubble-left-right',
+            );
+
+            return;
+        }
+
+        if (! $message->is_public) {
+            return;
+        }
+
+        if (! $this->shouldNotifyForProvisioningChat($case, $message)) {
+            return;
+        }
+
+        $contact = $case->subscription?->contact ?: $case->company?->ownerContact();
+        if (! $contact instanceof Contact) {
+            return;
+        }
+
+        $portalPath = '/portal/provisioning/'.$case->public_id;
+        $placeholders = [
+            'contact_name' => $contact->name ?: 'Partner',
+            'company_name' => $case->company?->name ?: 'your organisation',
+            'service' => $case->service?->name ?: 'VAS service',
+            'prv_number' => $case->public_id,
+            'note' => $preview !== '' ? $preview : 'Sent an attachment',
+            'portal_url' => $this->portalAbsoluteUrl($portalPath),
+        ];
+
+        $smsBody = $this->render('templates', 'provisioning_message', $placeholders);
+        $portalBody = $this->render('portal', 'provisioning_message', $placeholders);
+
+        if (filled($contact->phone_number)) {
+            $this->sms->send($contact->phone_number, $smsBody);
+        }
+
+        $contact->notify(new PartnerPortalNotification(
+            title: $this->titleFor('provisioning_message'),
+            body: Str::limit($portalBody, 280),
+            template: 'provisioning_message',
+            url: $portalPath,
+        ));
+    }
+
+    protected function shouldNotifyForProvisioningChat(
+        ServiceProvisioning $case,
+        ServiceProvisioningMessage $message,
+    ): bool {
+        $quietMinutes = max(1, (int) config('vas.chat_notify_quiet_minutes', 10));
+
+        $previous = ServiceProvisioningMessage::query()
+            ->where('service_provisioning_id', $case->id)
+            ->where('is_public', true)
+            ->where('id', '<', $message->id)
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $previous || ! $previous->created_at || ! $message->created_at) {
+            return true;
+        }
+
+        if ($previous->author_type !== $message->author_type
+            || (int) $previous->author_id !== (int) $message->author_id) {
+            return true;
+        }
+
+        return $previous->created_at->diffInMinutes($message->created_at) >= $quietMinutes;
+    }
+
+    /**
      * Message 1 — contract sign-off success (SMS + in-app).
      */
     public function subscriptionContractSigned(Subscription $subscription): void
@@ -1065,7 +1175,8 @@ class PartnerNotificationService
             'company_transfer_rejected' => 'Ownership transfer rejected',
             'subscription_renewal_reminder' => 'Subscription renewal reminder',
             'subscription_contract_signed' => 'Contract signed successfully',
-            'subscription_provisioning_invite' => 'Initiate service provisioning',
+            'subscription_provisioning_invite' => 'Initiate service activation',
+            'provisioning_message' => 'New message on your service activation',
             default => 'Portal update',
         };
     }

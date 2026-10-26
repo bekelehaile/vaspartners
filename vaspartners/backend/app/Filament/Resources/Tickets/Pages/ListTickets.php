@@ -13,6 +13,11 @@ class ListTickets extends ListRecords
 {
     protected static string $resource = TicketResource::class;
 
+    public function getTitle(): string
+    {
+        return 'Service requests';
+    }
+
     /**
      * Cached tab badge counts for this request (one aggregate query + one approval count).
      *

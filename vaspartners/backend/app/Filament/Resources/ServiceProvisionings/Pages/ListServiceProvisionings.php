@@ -11,11 +11,11 @@ class ListServiceProvisionings extends ListRecords
 
     public function getTitle(): string
     {
-        return 'Provisioning cases';
+        return 'Service activation';
     }
 
     public function getSubheading(): ?string
     {
-        return 'Track PRV cases, overall provisioning time, and department queues.';
+        return 'Track activation cases (PRV), overall time, and department queues.';
     }
 }

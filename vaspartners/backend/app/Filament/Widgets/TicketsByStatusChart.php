@@ -11,7 +11,7 @@ class TicketsByStatusChart extends ChartWidget
 {
     use AppliesDashboardFilters;
 
-    protected static ?int $sort = 7;
+    protected static ?int $sort = 8;
 
     protected ?string $heading = 'Tickets by status';
 

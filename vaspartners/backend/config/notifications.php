@@ -216,7 +216,11 @@ Dear {contact_name}, contract sign-off for {service} ({company_name}) was comple
 SMS,
 
         'subscription_provisioning_invite' => <<<'SMS'
-Dear {contact_name}, please initiate service provisioning for {service} ({company_name}) in the VAS Partners portal. Open Provisioning and submit the resource allocation request with your service activation letter. {portal_url} — Ethio telecom
+Dear {contact_name}, please initiate service activation for {service} ({company_name}) in the VAS Partners portal. Open Service activation and submit the request with your service activation letter. {portal_url} — Ethio telecom
+SMS,
+
+        'provisioning_message' => <<<'SMS'
+Dear {contact_name}, new message on service activation {prv_number} ({service}): {note} Open the portal. {portal_url} — Ethio telecom
 SMS,
 
     ],
@@ -279,7 +283,9 @@ SMS,
 
         'subscription_contract_signed' => 'Contract sign-off for {service} ({company_name}) completed successfully on {contract_signed_at}.',
 
-        'subscription_provisioning_invite' => 'Please initiate service provisioning for {service} ({company_name}). Open Provisioning and submit the resource allocation request with your service activation letter.',
+        'subscription_provisioning_invite' => 'Please initiate service activation for {service} ({company_name}). Open Service activation and submit the request with your service activation letter.',
+
+        'provisioning_message' => 'New message on service activation {prv_number} ({service}): {note}',
 
     ],
 
@@ -295,7 +301,7 @@ SMS,
     'provisioning' => [
         'provisioning.step_waiting_partner' => '[{prv_number}] {step}. Action needed in the VAS Partners portal for {service}. — Ethio telecom',
         'provisioning.step_waiting_staff' => '[{prv_number}] {step}: {from} → {to}. {company} / {service} (short code {short_code}).',
-        'provisioning.go_live' => '[{prv_number}] Your {service} provisioning is Go Live approved. Open the portal for details. — Ethio telecom',
+        'provisioning.go_live' => '[{prv_number}] Your {service} is Go Live. Use Subscription → Manage in the portal for further changes. — Ethio telecom',
         'provisioning.credentials_ready' => '[{prv_number}] Service credentials are ready in the VAS Partners portal for {service}. Do not share this SMS. — Ethio telecom',
     ],
 

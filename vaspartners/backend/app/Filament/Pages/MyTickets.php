@@ -31,15 +31,15 @@ class MyTickets extends Page implements HasActions, HasSchemas, HasTable
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-inbox-stack';
 
-    protected static ?string $navigationLabel = 'My Tickets';
+    protected static ?string $navigationLabel = 'My service requests';
 
-    protected static ?string $title = 'My Tickets';
+    protected static ?string $title = 'My service requests';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Tickets';
+    protected static string|\UnitEnum|null $navigationGroup = 'Services';
 
     protected static ?int $navigationSort = 1;
 
-    protected static ?string $slug = 'my-tickets';
+    protected static ?string $slug = 'my-service-requests';
 
     #[Url(as: 'tab')]
     public ?string $activeTab = null;
@@ -74,7 +74,7 @@ class MyTickets extends Page implements HasActions, HasSchemas, HasTable
 
     public static function getNavigationBadgeTooltip(): ?string
     {
-        return 'Pending tickets assigned to you or waiting for your approval';
+        return 'Open service requests assigned to you or waiting for your approval';
     }
 
     public function content(Schema $schema): Schema

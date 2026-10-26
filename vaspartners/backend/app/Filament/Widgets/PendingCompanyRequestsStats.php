@@ -15,7 +15,7 @@ class PendingCompanyRequestsStats extends StatsOverviewWidget
 {
     use AppliesDashboardFilters;
 
-    protected static ?int $sort = 5;
+    protected static ?int $sort = 6;
 
     protected ?string $heading = 'Change requests';
 

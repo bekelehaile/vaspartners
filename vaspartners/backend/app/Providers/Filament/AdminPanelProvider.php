@@ -78,8 +78,7 @@ class AdminPanelProvider extends PanelProvider
             ->sidebarCollapsibleOnDesktop()
             ->navigationGroups([
                 // Top → bottom (Website last)
-                NavigationGroup::make()->label('Tickets')->icon(Heroicon::Ticket),
-                NavigationGroup::make()->label('Provisioning')->icon(Heroicon::RocketLaunch),
+                NavigationGroup::make()->label('Services')->icon(Heroicon::Ticket),
                 NavigationGroup::make()->label('Reports')->icon(Heroicon::ChartBarSquare),
                 NavigationGroup::make()->label('Partners')->icon(Heroicon::BuildingOffice),
                 NavigationGroup::make()->label('User Management')->icon(Heroicon::UserGroup),
