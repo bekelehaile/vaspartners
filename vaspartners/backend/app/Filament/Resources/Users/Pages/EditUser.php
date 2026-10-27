@@ -22,7 +22,6 @@ class EditUser extends EditRecord
     protected function mutateFormDataBeforeFill(array $data): array
     {
         $this->wasSuperAdmin = $this->record->hasRole(Utils::getSuperAdminName());
-        $data['departments'] = $this->record->provisioningDepartments();
 
         return $data;
     }
@@ -35,11 +34,6 @@ class EditUser extends EditRecord
         } elseif ($this->record->hasRole(Utils::getSuperAdminName())) {
             $this->record->removeRole(Utils::getSuperAdminName());
         }
-
-        UserResource::syncDepartments(
-            $this->record,
-            $this->data['departments'] ?? [],
-        );
     }
 
     protected function getHeaderActions(): array

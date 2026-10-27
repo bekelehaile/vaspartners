@@ -82,11 +82,6 @@ class AccountManagerPerformance extends Page implements HasSchemas, HasTable
         return 'Measure how account handlers clear requests: backlog, throughput, pickup speed, cycle time, and quality.';
     }
 
-    public static function canAccess(): bool
-    {
-        return parent::canAccess();
-    }
-
     /**
      * @return array<class-string>
      */

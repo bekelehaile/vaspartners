@@ -36,11 +36,6 @@ class CreateUser extends CreateRecord
             $this->record->removeRole('super_admin');
         }
 
-        UserResource::syncDepartments(
-            $this->record,
-            $this->data['departments'] ?? [],
-        );
-
         $sent = $this->sendTemporaryCredentialsSms();
 
         Notification::make()

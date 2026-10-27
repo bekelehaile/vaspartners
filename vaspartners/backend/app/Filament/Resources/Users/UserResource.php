@@ -17,8 +17,6 @@ use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Collection;
-use Spatie\Permission\Models\Role;
 use STS\FilamentImpersonate\Actions\Impersonate;
 use UnitEnum;
 
@@ -66,28 +64,13 @@ class UserResource extends Resource
                 ->relationship(
                     name: 'roles',
                     titleAttribute: 'name',
-                    modifyQueryUsing: fn (Builder $query) => $query
-                        ->where('name', '!=', 'super_admin')
-                        ->whereNotIn('name', static::departmentRoleNames())
-                        ->orderBy('name'),
+                    modifyQueryUsing: fn (Builder $query) => $query->orderBy('name'),
                 )
                 ->multiple()
                 ->preload()
                 ->searchable()
                 ->required()
-                ->helperText('Job roles such as account manager or supervisor.')
-                ->columnSpanFull(),
-            Select::make('departments')
-                ->label('Belongs to sections')
-                ->options(static::departmentOptions())
-                ->helperText('Provisioning sections this user can act for (e.g. VAS Sales, VAS Operation).')
-                ->multiple()
-                ->searchable()
-                ->preload()
-                ->nullable()
-                ->dehydrated(false)
-                ->placeholder('Optional — e.g. VAS Operation, IS Billing, IS Security')
-                ->helperText('Optional for third-party / section staff (VAS Operation, MA, IS Billing, IS Security; also VAS Sales if needed). A user may belong to many. Account managers do not need this — when a case is assigned to them they already act as VAS Sales.')
+                ->helperText('Job roles and provisioning sections (e.g. account_manager, is_billing, vas_operation).')
                 ->columnSpanFull(),
             Select::make('manager_id')
                 ->label('Reports to')
@@ -191,39 +174,4 @@ class UserResource extends Resource
             ->all();
     }
 
-    /**
-     * @return array<string, string>
-     */
-    public static function departmentOptions(): array
-    {
-        return collect(ProvisioningDepartment::cases())
-            ->reject(fn (ProvisioningDepartment $d) => $d === ProvisioningDepartment::Partner)
-            ->mapWithKeys(fn (ProvisioningDepartment $d) => [$d->value => $d->label()])
-            ->all();
-    }
-
-    /**
-     * Sync optional multi-department Spatie roles without touching other roles.
-     *
-     * @param  list<string>|Collection<int, string>|null  $departments
-     */
-    public static function syncDepartments(User $user, array|Collection|null $departments): void
-    {
-        $selected = collect($departments ?? [])
-            ->map(fn ($v) => (string) $v)
-            ->filter(fn (string $v) => in_array($v, static::departmentRoleNames(), true))
-            ->unique()
-            ->values();
-
-        foreach (static::departmentRoleNames() as $roleName) {
-            Role::findOrCreate($roleName, 'web');
-            if ($selected->contains($roleName)) {
-                if (! $user->hasRole($roleName)) {
-                    $user->assignRole($roleName);
-                }
-            } elseif ($user->hasRole($roleName)) {
-                $user->removeRole($roleName);
-            }
-        }
-    }
 }
