@@ -48,8 +48,9 @@ class ServiceProvisioningsRelationManager extends RelationManager
                     )?->getColor() ?? 'gray'),
                 TextColumn::make('current_step_key')->label('Current step')->toggleable(),
                 TextColumn::make('overall_days')
-                    ->label('Overall days')
-                    ->state(fn (ServiceProvisioning $record): int => $record->overallElapsedDays()),
+                    ->label('OLA')
+                    ->state(fn (ServiceProvisioning $record): string => $record->overallElapsedOlaLabel())
+                    ->description(fn (ServiceProvisioning $record): string => $record->overallElapsedHours().' hour(s)'),
                 TextColumn::make('started_at')->dateTime()->sortable()->toggleable(),
                 TextColumn::make('completed_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),

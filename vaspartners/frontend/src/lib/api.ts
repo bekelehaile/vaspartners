@@ -543,6 +543,8 @@ export type ProvisioningCase = {
   service?: { id?: number; name?: string; slug?: string } | null;
   subscription_public_id?: string | null;
   overall_days?: number;
+  overall_hours?: number;
+  overall_ola?: string;
   started_at?: string | null;
   completed_at?: string | null;
   company_name?: string | null;

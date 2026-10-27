@@ -92,7 +92,7 @@ export default function ProvisioningDetailPage() {
         title={data?.public_id || "Service activation"}
         description={
           data
-            ? `${data.service?.name || "Service"} · ${data.status_label || data.status} · ${data.overall_days ?? 0} day(s) overall`
+            ? `${data.service?.name || "Service"} · ${data.status_label || data.status} · OLA ${data.overall_ola || `${data.overall_days ?? 0}d`}${data.overall_hours != null ? ` (${data.overall_hours}h)` : ""}`
             : "Service activation details"
         }
         actions={

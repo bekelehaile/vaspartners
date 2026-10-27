@@ -162,8 +162,9 @@ class ServiceProvisioningResource extends Resource
                         return $waiting->isEmpty() ? null : $waiting->implode(', ');
                     }),
                 TextEntry::make('overall_days')
-                    ->label('Elapsed')
-                    ->state(fn (ServiceProvisioning $record): string => $record->overallElapsedDays().' day(s)'),
+                    ->label('Elapsed (OLA)')
+                    ->state(fn (ServiceProvisioning $record): string => $record->overallElapsedOlaLabel()
+                        .' ('.$record->overallElapsedHours().' hour(s))'),
                 TextEntry::make('started_at')->label('Started')->dateTime()->placeholder('—'),
                 TextEntry::make('completed_at')->label('Completed')->dateTime()->placeholder('—'),
             ])->columns(2),
@@ -259,14 +260,6 @@ class ServiceProvisioningResource extends Resource
                     ->label('CRM order')
                     ->placeholder('—')
                     ->state(fn (ServiceProvisioning $record): ?string => static::payloadValue($record, 'crm_order')),
-                TextEntry::make('detail_tariff')
-                    ->label('Tariff')
-                    ->placeholder('—')
-                    ->state(fn (ServiceProvisioning $record): ?string => static::payloadValue($record, 'tariff')),
-                TextEntry::make('detail_service_price')
-                    ->label('Service price')
-                    ->placeholder('—')
-                    ->state(fn (ServiceProvisioning $record): ?string => static::payloadValue($record, 'service_price')),
                 TextEntry::make('detail_payer_party_type')
                     ->label('Payer party')
                     ->placeholder('—')
@@ -274,7 +267,16 @@ class ServiceProvisioningResource extends Resource
                 TextEntry::make('detail_free_trial_period')
                     ->label('Free trial period')
                     ->placeholder('—')
-                    ->state(fn (ServiceProvisioning $record): ?string => static::payloadValue($record, 'free_trial_period')),
+                    ->state(function (ServiceProvisioning $record): ?string {
+                        $value = static::payloadValue($record, 'free_trial_period');
+                        if ($value === null || $value === '') {
+                            return null;
+                        }
+
+                        return is_numeric($value)
+                            ? ((int) $value).' day(s)'
+                            : (string) $value;
+                    }),
                 TextEntry::make('detail_packages')
                     ->label('Subscription packages')
                     ->placeholder('—')
@@ -293,6 +295,7 @@ class ServiceProvisioningResource extends Resource
 
                                 return collect([
                                     $row['package'] ?? null,
+                                    isset($row['tariff']) ? 'tariff '.$row['tariff'] : null,
                                     isset($row['price_point']) ? 'price '.$row['price_point'] : null,
                                     isset($row['sub_keyword']) ? 'sub '.$row['sub_keyword'] : null,
                                     isset($row['unsub_keyword']) ? 'unsub '.$row['unsub_keyword'] : null,
@@ -304,7 +307,7 @@ class ServiceProvisioningResource extends Resource
             ])
                 ->columns(2)
                 ->visible(fn (ServiceProvisioning $record): bool => static::sectionHasPayload($record, [
-                    'crm_order', 'tariff', 'service_price', 'payer_party_type', 'free_trial_period', 'packages',
+                    'crm_order', 'payer_party_type', 'free_trial_period', 'packages',
                 ])),
 
             Section::make('Product configuration')
@@ -500,8 +503,9 @@ class ServiceProvisioningResource extends Resource
                     ->toggleable(),
                 TextColumn::make('current_step_key')->label('Current step')->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('overall_days')
-                    ->label('Overall days')
-                    ->state(fn (ServiceProvisioning $record): int => $record->overallElapsedDays())
+                    ->label('OLA')
+                    ->state(fn (ServiceProvisioning $record): string => $record->overallElapsedOlaLabel())
+                    ->description(fn (ServiceProvisioning $record): string => $record->overallElapsedHours().' hour(s)')
                     ->sortable(query: function (Builder $query, string $direction): Builder {
                         return $query->orderByRaw('COALESCE(completed_at, NOW()) - COALESCE(started_at, created_at) '.$direction);
                     }),

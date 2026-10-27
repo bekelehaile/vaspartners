@@ -35,6 +35,17 @@ class ProvisioningNotificationService
         ]));
     }
 
+    /**
+     * Partner credentials SMS — only after VAS Sales / AM completes Share credentials.
+     */
+    public function notifyCredentialsReady(ServiceProvisioning $case): void
+    {
+        $this->notifyPartners($case, 'provisioning.credentials_ready', $this->partnerPlaceholders($case, [
+            'short_code' => (string) (($case->shared_payload ?? [])['short_code'] ?? ''),
+            'step' => 'Credentials shared',
+        ]));
+    }
+
     protected function notifyStepWaiting(ServiceProvisioning $case, ServiceProvisioningStep $step): void
     {
         $placeholders = $this->partnerPlaceholders($case, [
@@ -45,27 +56,17 @@ class ProvisioningNotificationService
         ]);
 
         $from = $step->from_department?->value;
-        $to = $step->to_department?->value;
-        $def = app(ProvisioningWorkflowRegistry::class)->step($case->workflow_key, $step->step_key) ?? [];
 
-        // Credentials shared with partner — dedicated SMS (editable in App settings).
-        if (! empty($def['releases_credentials_to_partner']) && $to === 'partner') {
-            $this->notifyPartners($case, 'provisioning.credentials_ready', $placeholders);
+        // Actor is always the FROM department. Do not SMS the partner just because
+        // the next handoff targets them (e.g. Share credentials waiting on VAS Sales).
+        if ($from === 'partner') {
+            $this->notifyPartners($case, 'provisioning.step_waiting_partner', $placeholders);
 
             return;
         }
 
-        // Partner acts when they are the FROM department (e.g. resource allocation request).
-        if ($from === 'partner' || $to === 'partner') {
-            $this->notifyPartners($case, 'provisioning.step_waiting_partner', $placeholders);
-
-            if ($from === 'partner') {
-                return;
-            }
-        }
-
-        if ($to && $to !== 'partner') {
-            $this->notifyStaffRole($to, 'provisioning.step_waiting_staff', $placeholders);
+        if ($from && $from !== 'partner') {
+            $this->notifyStaffRole($from, 'provisioning.step_waiting_staff', $placeholders);
         }
     }
 

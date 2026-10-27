@@ -290,6 +290,8 @@ class ProvisioningPortalController extends Controller
             'started_at' => optional($p->started_at)?->toIso8601String(),
             'completed_at' => optional($p->completed_at)?->toIso8601String(),
             'overall_days' => $p->overallElapsedDays(),
+            'overall_hours' => $p->overallElapsedHours(),
+            'overall_ola' => $p->overallElapsedOlaLabel(),
         ];
 
         if ($forPartner) {

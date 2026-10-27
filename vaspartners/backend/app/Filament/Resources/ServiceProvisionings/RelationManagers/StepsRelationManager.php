@@ -9,10 +9,7 @@ use App\Models\ServiceProvisioningStep;
 use App\Services\Provisioning\ProvisioningWorkflowRegistry;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
-use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\TextInput;
 use Filament\Resources\RelationManagers\RelationManager;
-use Filament\Schemas\Components\Grid;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -57,8 +54,9 @@ class StepsRelationManager extends RelationManager
                         : ProvisioningStepStatus::tryFrom((string) $state)
                     )?->getColor() ?? 'gray'),
                 TextColumn::make('days')
-                    ->label('Days')
-                    ->state(fn (ServiceProvisioningStep $record): int => $record->daysInStep()),
+                    ->label('OLA')
+                    ->state(fn (ServiceProvisioningStep $record): string => $record->elapsedOlaLabel())
+                    ->description(fn (ServiceProvisioningStep $record): string => $record->hoursInStep().' hour(s)'),
                 TextColumn::make('remark')->limit(40)->placeholder('—')->toggleable(),
                 TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('completed_at')->dateTime()->sortable()->placeholder('—')->toggleable(),
@@ -81,22 +79,8 @@ class StepsRelationManager extends RelationManager
                     ->modalHeading(fn (ServiceProvisioningStep $record): string => $record->label ?: 'Follow-up step')
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Close')
-                    ->form([
-                        Grid::make(2)->schema([
-                            TextInput::make('what')->label('What')->disabled()->dehydrated(false),
-                            TextInput::make('where')->label('Where')->disabled()->dehydrated(false),
-                            TextInput::make('status')->label('Status')->disabled()->dehydrated(false),
-                            TextInput::make('days')->label('Days in step')->disabled()->dehydrated(false),
-                            Textarea::make('remark')->label('Remark')->rows(3)->disabled()->dehydrated(false)->columnSpanFull(),
-                        ]),
-                    ])
-                    ->fillForm(fn (ServiceProvisioningStep $record): array => [
-                        'what' => $record->label,
-                        'where' => $record->whereLabel(),
-                        'status' => $record->status?->label() ?? '—',
-                        'days' => (string) $record->daysInStep(),
-                        'remark' => filled($record->remark) ? (string) $record->remark : '—',
-                    ]),
+                    ->form(fn (ServiceProvisioningStep $record): array => ProvisioningStepActions::viewFormSchema($record))
+                    ->fillForm(fn (ServiceProvisioningStep $record): array => ProvisioningStepActions::viewFormState($record)),
                 ActionGroup::make([
                     Action::make('submit_step')
                         ->label(fn (ServiceProvisioningStep $record): string => ProvisioningStepActions::submitToLabel($record))
@@ -111,7 +95,7 @@ class StepsRelationManager extends RelationManager
                             $def = app(ProvisioningWorkflowRegistry::class)
                                 ->step($case->workflow_key, $record->step_key) ?? [];
 
-                            return ProvisioningStepActions::formFields($def);
+                            return ProvisioningStepActions::formFields($def, $case instanceof ServiceProvisioning ? $case : null);
                         })
                         ->action(function (ServiceProvisioningStep $record, array $data): void {
                             /** @var ServiceProvisioning $case */

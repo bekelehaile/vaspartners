@@ -30,6 +30,7 @@ type ProvisioningRow = {
   status: string;
   statusLabel: string;
   overallDays: number | null;
+  overallOla: string | null;
   contractSignedAt: string | null;
   startable?: ProvisioningStartable;
   caseRow?: ProvisioningCase;
@@ -70,11 +71,13 @@ export function ProvisioningTable() {
         out.push({
           key: `ready-${s.public_id}`,
           kind: "ready",
-          reference: s.public_id,
+          // PRV-… is assigned only when activation starts — do not show subscription id here.
+          reference: "—",
           serviceName: s.service?.name || "—",
           status: "ready",
           statusLabel: "Ready to start",
           overallDays: null,
+          overallOla: null,
           contractSignedAt: s.contract_signed_at ?? null,
           startable: s,
         });
@@ -82,14 +85,22 @@ export function ProvisioningTable() {
     }
 
     for (const c of data?.data ?? []) {
+      const raw = String(c.public_id || "").trim();
+      const prv =
+        raw === ""
+          ? "—"
+          : raw.toUpperCase().startsWith("PRV-")
+            ? raw
+            : `PRV-${raw}`;
       out.push({
         key: `case-${c.public_id}`,
         kind: "case",
-        reference: c.public_id,
+        reference: prv,
         serviceName: c.service?.name || "—",
         status: String(c.status || "").toLowerCase(),
         statusLabel: c.status_label || c.status || "—",
         overallDays: c.overall_days ?? 0,
+        overallOla: c.overall_ola ?? (c.overall_hours != null ? `${c.overall_hours}h` : null),
         contractSignedAt: null,
         caseRow: c,
       });
@@ -124,17 +135,21 @@ export function ProvisioningTable() {
         header: "Reference",
         cell: (info) => {
           const row = info.row.original;
-          if (row.kind === "case") {
+          if (row.kind === "case" && row.caseRow?.public_id) {
             return (
               <Link
-                href={`/portal/provisioning/${encodeURIComponent(row.reference)}`}
-                className="table-link"
+                href={`/portal/provisioning/${encodeURIComponent(row.caseRow.public_id)}`}
+                className="table-link font-mono text-xs"
               >
                 {row.reference}
               </Link>
             );
           }
-          return <span className="font-mono text-xs">{row.reference}</span>;
+          return (
+            <span className="font-mono text-xs text-muted-foreground" title="Assigned when you start activation">
+              {row.reference === "—" ? "Pending" : row.reference}
+            </span>
+          );
         },
       }),
       columnHelper.accessor("serviceName", { header: "Service" }),
@@ -150,9 +165,13 @@ export function ProvisioningTable() {
           );
         },
       }),
-      columnHelper.accessor("overallDays", {
-        header: "Days",
-        cell: (info) => (info.getValue() == null ? "—" : String(info.getValue())),
+      columnHelper.accessor("overallOla", {
+        header: "OLA",
+        cell: (info) => {
+          const row = info.row.original;
+          if (row.kind !== "case") return "—";
+          return row.overallOla || (row.overallDays != null ? `${row.overallDays}d` : "—");
+        },
       }),
       columnHelper.display({
         id: "actions",
@@ -161,16 +180,16 @@ export function ProvisioningTable() {
           const row = info.row.original;
           return (
             <span className="table-actions">
-              {row.kind === "case" && row.caseRow?.can_act_step ? (
+              {row.kind === "case" && row.caseRow?.can_act_step && row.caseRow.public_id ? (
                 <Link
-                  href={`/portal/provisioning/${encodeURIComponent(row.reference)}`}
+                  href={`/portal/provisioning/${encodeURIComponent(row.caseRow.public_id)}`}
                   className="btn-primary table-action"
                 >
                   {row.caseRow.can_act_submit_label || "Continue"}
                 </Link>
-              ) : row.kind === "case" ? (
+              ) : row.kind === "case" && row.caseRow?.public_id ? (
                 <Link
-                  href={`/portal/provisioning/${encodeURIComponent(row.reference)}`}
+                  href={`/portal/provisioning/${encodeURIComponent(row.caseRow.public_id)}`}
                   className="btn-ghost table-action"
                 >
                   View
@@ -266,7 +285,11 @@ export function ProvisioningTable() {
                   <div className="portal-mobile-card-top">
                     <div>
                       <p className="portal-mobile-card-title">{row.serviceName}</p>
-                      <p className="portal-mobile-card-meta">{row.reference}</p>
+                      <p className="portal-mobile-card-meta font-mono">
+                        {row.kind === "ready"
+                          ? "Reference pending"
+                          : row.reference}
+                      </p>
                     </div>
                     <span
                       className={`status-chip${
@@ -282,20 +305,20 @@ export function ProvisioningTable() {
                     <span>
                       {row.kind === "ready"
                         ? `Contract ${formatDate(row.contractSignedAt)}`
-                        : `${row.overallDays ?? 0} day(s)`}
+                        : `OLA ${row.overallOla || `${row.overallDays ?? 0}d`}`}
                     </span>
                   </div>
                   <div className="portal-mobile-card-actions">
-                    {row.kind === "case" && row.caseRow?.can_act_step ? (
+                    {row.kind === "case" && row.caseRow?.can_act_step && row.caseRow.public_id ? (
                       <Link
-                        href={`/portal/provisioning/${encodeURIComponent(row.reference)}`}
+                        href={`/portal/provisioning/${encodeURIComponent(row.caseRow.public_id)}`}
                         className="btn-primary table-action"
                       >
                         {row.caseRow.can_act_submit_label || "Continue"}
                       </Link>
-                    ) : row.kind === "case" ? (
+                    ) : row.kind === "case" && row.caseRow?.public_id ? (
                       <Link
-                        href={`/portal/provisioning/${encodeURIComponent(row.reference)}`}
+                        href={`/portal/provisioning/${encodeURIComponent(row.caseRow.public_id)}`}
                         className="btn-ghost table-action"
                       >
                         View
@@ -409,7 +432,9 @@ function ActivationRequestForm({
           <h3 className="text-sm font-semibold">
             Service activation request — {subscription.service?.name || "Service"}
           </h3>
-          <p className="text-xs text-muted-foreground font-mono">{subscription.public_id}</p>
+          <p className="text-xs text-muted-foreground">
+            A <span className="font-mono">PRV-</span> reference is assigned when you submit.
+          </p>
         </div>
         <button type="button" className="btn-ghost" onClick={onCancel}>
           Cancel

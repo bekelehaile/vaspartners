@@ -101,6 +101,11 @@ class ServiceProvisioning extends Model
 
     public function overallElapsedDays(): int
     {
+        return intdiv($this->overallElapsedHours(), 24);
+    }
+
+    public function overallElapsedHours(): int
+    {
         $start = $this->started_at ?? $this->created_at;
         if (! $start) {
             return 0;
@@ -108,7 +113,15 @@ class ServiceProvisioning extends Model
 
         $end = $this->completed_at ?? Carbon::now();
 
-        return max(0, (int) $start->diffInDays($end));
+        return max(0, (int) $start->diffInHours($end));
+    }
+
+    /**
+     * Compact OLA elapsed label, e.g. "5h", "2d", "2d 5h".
+     */
+    public function overallElapsedOlaLabel(): string
+    {
+        return ServiceProvisioningStep::formatOlaElapsed($this->overallElapsedHours());
     }
 
     public function currentStep(): ?ServiceProvisioningStep

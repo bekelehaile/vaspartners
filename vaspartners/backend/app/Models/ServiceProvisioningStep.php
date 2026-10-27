@@ -64,6 +64,11 @@ class ServiceProvisioningStep extends Model
 
     public function daysInStep(): int
     {
+        return intdiv($this->hoursInStep(), 24);
+    }
+
+    public function hoursInStep(): int
+    {
         $start = $this->created_at;
         if (! $start) {
             return 0;
@@ -71,7 +76,32 @@ class ServiceProvisioningStep extends Model
 
         $end = $this->completed_at ?? Carbon::now();
 
-        return max(0, (int) $start->diffInDays($end));
+        return max(0, (int) $start->diffInHours($end));
+    }
+
+    /**
+     * Compact OLA elapsed label, e.g. "5h", "2d", "2d 5h".
+     */
+    public function elapsedOlaLabel(): string
+    {
+        return static::formatOlaElapsed($this->hoursInStep());
+    }
+
+    public static function formatOlaElapsed(int $hours): string
+    {
+        $hours = max(0, $hours);
+        $days = intdiv($hours, 24);
+        $remainder = $hours % 24;
+
+        if ($days > 0 && $remainder > 0) {
+            return $days.'d '.$remainder.'h';
+        }
+
+        if ($days > 0) {
+            return $days.'d';
+        }
+
+        return $remainder.'h';
     }
 
     public function whereLabel(): string

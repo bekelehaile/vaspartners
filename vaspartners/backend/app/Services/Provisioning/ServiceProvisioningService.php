@@ -13,6 +13,7 @@ use App\Models\ServiceProvisioning;
 use App\Models\ServiceProvisioningMedia;
 use App\Models\ServiceProvisioningStep;
 use App\Models\Subscription;
+use App\Models\TicketDocument;
 use App\Models\User;
 use App\Services\SubscriptionProvisioningLogService;
 use App\Support\SecureUploadedFile;
@@ -300,7 +301,8 @@ class ServiceProvisioningService
             $mergedShared['credentials_released_to_partner'] = false;
         }
 
-        if (! empty($def['releases_credentials_to_partner'])) {
+        $releasedCredentials = ! empty($def['releases_credentials_to_partner']);
+        if ($releasedCredentials) {
             $mergedShared['credentials_released_to_partner'] = true;
             $mergedShared['credentials_released_at'] = now()->toIso8601String();
         }
@@ -344,6 +346,13 @@ class ServiceProvisioningService
             $this->markGoLive($case, $actor);
 
             return;
+        }
+
+        // Credentials SMS only when VAS Sales / AM completes Share credentials — not when that step becomes waiting.
+        if ($releasedCredentials) {
+            $this->notifications->notifyCredentialsReady(
+                $case->fresh(['company', 'service', 'subscription'])
+            );
         }
 
         $this->advance($case);
@@ -499,7 +508,8 @@ class ServiceProvisioningService
             }
 
             if ($value !== null && $value !== '') {
-                if (($field['type'] ?? '') === 'select' && is_array($field['options'] ?? null)) {
+                $type = $field['type'] ?? 'text';
+                if ($type === 'select' && is_array($field['options'] ?? null)) {
                     $allowed = array_map('strval', array_keys($field['options']));
                     if (! in_array((string) $value, $allowed, true)) {
                         throw ValidationException::withMessages([
@@ -507,7 +517,12 @@ class ServiceProvisioningService
                         ]);
                     }
                 }
-                $payload[$name] = $value;
+                if (in_array($type, ['integer', 'number'], true) && ! preg_match('/^\d+$/', (string) $value)) {
+                    throw ValidationException::withMessages([
+                        $name => ($field['label'] ?? $name).' must be a whole number.',
+                    ]);
+                }
+                $payload[$name] = in_array($type, ['integer', 'number'], true) ? (int) $value : $value;
             }
         }
 
@@ -542,6 +557,95 @@ class ServiceProvisioningService
         unset($shared['credentials'], $shared['smsc_password'], $shared['smsc_username']);
 
         return $shared;
+    }
+
+    /**
+     * Latest matching service-request document on the subscription (e.g. Well Developed Proposal).
+     *
+     * @param  array<string, mixed>  $stepDef
+     * @return array{document: TicketDocument, label: string}|null
+     */
+    public function findPrefillAttachment(ServiceProvisioning $case, array $stepDef): ?array
+    {
+        $codes = array_values(array_filter(array_map(
+            'strval',
+            $stepDef['prefill_attachment_from_document_codes'] ?? []
+        )));
+        if ($codes === []) {
+            return null;
+        }
+
+        $case->loadMissing('subscription');
+        $subscription = $case->subscription;
+        if (! $subscription) {
+            return null;
+        }
+
+        /** @var TicketDocument|null $document */
+        $document = $subscription->documents()
+            ->with(['documentType', 'ticket:id,tt_number,subscription_id'])
+            ->whereHas('documentType', fn ($q) => $q->whereIn('code', $codes))
+            ->whereNotNull('path')
+            ->latest('ticket_documents.id')
+            ->first();
+
+        if (! $document || ! filled($document->path)) {
+            return null;
+        }
+
+        $disk = $document->disk ?: 'local';
+        if (! Storage::disk($disk)->exists($document->path)) {
+            return null;
+        }
+
+        $tt = $document->ticket?->tt_number;
+        $name = $document->original_name ?: basename((string) $document->path);
+        $type = $document->documentType?->name ?: 'Proposal';
+
+        return [
+            'document' => $document,
+            'label' => trim($type.' · '.$name.($tt ? ' (request '.$tt.')' : '')),
+        ];
+    }
+
+    /**
+     * Build an UploadedFile from the subscription service-request proposal for step submit.
+     *
+     * @param  array<string, mixed>  $stepDef
+     */
+    public function makeUploadedFileFromPrefill(ServiceProvisioning $case, array $stepDef): ?UploadedFile
+    {
+        $prefill = $this->findPrefillAttachment($case, $stepDef);
+        if (! $prefill) {
+            return null;
+        }
+
+        $document = $prefill['document'];
+        $disk = $document->disk ?: 'local';
+        $absolute = Storage::disk($disk)->path($document->path);
+        if (! is_string($absolute) || ! is_file($absolute)) {
+            // Remote / non-local disks: stage a temp copy.
+            $contents = Storage::disk($disk)->get($document->path);
+            if ($contents === null) {
+                return null;
+            }
+            $tmp = tempnam(sys_get_temp_dir(), 'prv-prefill-');
+            if ($tmp === false) {
+                return null;
+            }
+            file_put_contents($tmp, $contents);
+            $absolute = $tmp;
+        }
+
+        $name = $document->original_name ?: basename((string) $document->path);
+
+        return new UploadedFile(
+            $absolute,
+            $name,
+            $document->mime_type ?: mime_content_type($absolute) ?: 'application/octet-stream',
+            null,
+            true,
+        );
     }
 
     /**

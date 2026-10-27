@@ -19,6 +19,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Section;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
@@ -216,67 +217,433 @@ class ProvisioningStepActions
     }
 
     /**
+     * Read-only follow-up View: metadata + every submitted attribute.
+     *
+     * @return list<\Filament\Schemas\Components\Component|\Filament\Forms\Components\Component>
+     */
+    public static function viewFormSchema(ServiceProvisioningStep $step): array
+    {
+        $entries = static::visiblePayloadEntries($step->payload ?? []);
+        $sections = [
+            Section::make('Step')
+                ->schema([
+                    Grid::make(2)->schema([
+                        TextInput::make('what')->label('What')->disabled()->dehydrated(false),
+                        TextInput::make('where')->label('Where')->disabled()->dehydrated(false),
+                        TextInput::make('status')->label('Status')->disabled()->dehydrated(false),
+                        TextInput::make('days')->label('OLA (days · hours)')->disabled()->dehydrated(false),
+                        Textarea::make('remark')->label('Remark')->rows(3)->disabled()->dehydrated(false)->columnSpanFull(),
+                    ]),
+                ]),
+        ];
+
+        foreach (static::payloadSections($entries) as $title => $fields) {
+            if ($fields === []) {
+                continue;
+            }
+
+            $sections[] = Section::make($title)
+                ->schema([
+                    Grid::make(2)->schema($fields),
+                ]);
+        }
+
+        return $sections;
+    }
+
+    /**
+     * Group formatted payload entries into Overview-aligned sections.
+     *
+     * @param  array<string, string>  $entries
+     * @return array<string, list<\Filament\Forms\Components\Component>>
+     */
+    public static function payloadSections(array $entries): array
+    {
+        $groups = [
+            'Customer' => ['company_name', 'customer_name', 'contact_number', 'contact_email'],
+            'Service' => ['service_name', 'service_type'],
+            'Resource allocation' => ['short_code', 'data_sync_url'],
+            'Commercial' => ['crm_order', 'payer_party_type', 'free_trial_period', 'packages'],
+            'Product configuration' => ['service_id', 'product_id', 'partner_id', 'spid', 'port'],
+            'Outcome' => ['completion_status'],
+        ];
+
+        $assigned = [];
+        $sections = [];
+
+        foreach ($groups as $title => $keys) {
+            $fields = [];
+            foreach ($keys as $key) {
+                if (! array_key_exists($key, $entries)) {
+                    continue;
+                }
+                $fields[] = static::readOnlyPayloadField($key, $entries[$key]);
+                $assigned[$key] = true;
+            }
+            if ($fields !== []) {
+                $sections[$title] = $fields;
+            }
+        }
+
+        $other = [];
+        foreach ($entries as $key => $formatted) {
+            if (isset($assigned[$key])) {
+                continue;
+            }
+            $other[] = static::readOnlyPayloadField($key, $formatted);
+        }
+        if ($other !== []) {
+            $sections['Other parameters'] = $other;
+        }
+
+        return $sections;
+    }
+
+    /**
+     * @return \Filament\Forms\Components\Textarea|\Filament\Forms\Components\TextInput
+     */
+    public static function readOnlyPayloadField(string $key, string $formatted)
+    {
+        $rows = max(1, min(8, substr_count($formatted, "\n") + 1));
+        $field = Textarea::make('attr_'.$key)
+            ->label(static::payloadFieldLabel($key))
+            ->rows($rows)
+            ->disabled()
+            ->dehydrated(false);
+
+        if ($rows > 1 || in_array($key, ['packages', 'data_sync_url'], true)) {
+            return $field->columnSpanFull();
+        }
+
+        return $field;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public static function viewFormState(ServiceProvisioningStep $step): array
+    {
+        $state = [
+            'what' => $step->label,
+            'where' => $step->whereLabel(),
+            'status' => $step->status?->label() ?? '—',
+            'days' => $step->elapsedOlaLabel().' ('.$step->hoursInStep().' hour(s))',
+            'remark' => filled($step->remark) ? (string) $step->remark : '—',
+        ];
+
+        foreach (static::visiblePayloadEntries($step->payload ?? []) as $key => $formatted) {
+            $state['attr_'.$key] = $formatted;
+        }
+
+        return $state;
+    }
+
+    /**
+     * Flatten payload for display; hide secrets / internal flags.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, string>
+     */
+    public static function visiblePayloadEntries(array $payload): array
+    {
+        $hidden = [
+            'credentials',
+            'credentials_released_to_partner',
+            'credentials_released_at',
+            'smsc_password',
+            'smsc_username',
+            'partner_messaging_closed_at',
+            'partner_messaging_closed_reason',
+        ];
+
+        $preferred = [
+            'short_code',
+            'data_sync_url',
+            'crm_order',
+            'payer_party_type',
+            'free_trial_period',
+            'packages',
+            'service_id',
+            'product_id',
+            'partner_id',
+            'spid',
+            'port',
+            'completion_status',
+            'company_name',
+            'customer_name',
+            'contact_number',
+            'contact_email',
+            'service_name',
+            'service_type',
+        ];
+
+        $entries = [];
+        foreach ($payload as $key => $value) {
+            $key = (string) $key;
+            if (in_array($key, $hidden, true)) {
+                continue;
+            }
+            $formatted = static::formatPayloadValue($key, $value);
+            if ($formatted === null) {
+                continue;
+            }
+            $entries[$key] = $formatted;
+        }
+
+        uksort($entries, function (string $a, string $b) use ($preferred): int {
+            $ia = array_search($a, $preferred, true);
+            $ib = array_search($b, $preferred, true);
+            $ia = $ia === false ? 1000 : $ia;
+            $ib = $ib === false ? 1000 : $ib;
+            if ($ia !== $ib) {
+                return $ia <=> $ib;
+            }
+
+            return strcasecmp($a, $b);
+        });
+
+        return $entries;
+    }
+
+    public static function payloadFieldLabel(string $key): string
+    {
+        return match ($key) {
+            'short_code' => 'Short code',
+            'data_sync_url' => 'Data Sync URL',
+            'crm_order' => 'CRM order',
+            'payer_party_type' => 'Payer party',
+            'free_trial_period' => 'Free trial period (days)',
+            'packages' => 'Subscription packages',
+            'service_id' => 'Service ID',
+            'product_id' => 'Product ID',
+            'partner_id' => 'Partner ID',
+            'spid' => 'SPID',
+            'port' => 'Port',
+            'completion_status' => 'Status',
+            'company_name' => 'Company name',
+            'customer_name' => 'Customer name',
+            'contact_number' => 'Contact number',
+            'contact_email' => 'Contact email',
+            'service_name' => 'Service name',
+            'service_type' => 'Service type',
+            default => str_replace('_', ' ', ucfirst($key)),
+        };
+    }
+
+    public static function formatPayloadValue(string $key, mixed $value): ?string
+    {
+        if ($value === null || $value === '' || $value === []) {
+            return null;
+        }
+
+        if ($key === 'free_trial_period' && is_numeric($value)) {
+            return ((int) $value).' day(s)';
+        }
+
+        if ($key === 'packages' && is_array($value)) {
+            $lines = collect($value)
+                ->map(function ($row): ?string {
+                    if (! is_array($row)) {
+                        return filled($row) ? (string) $row : null;
+                    }
+
+                    $parts = collect([
+                        $row['package'] ?? null,
+                        isset($row['tariff']) ? 'tariff '.$row['tariff'] : null,
+                        isset($row['price_point']) ? 'price '.$row['price_point'] : null,
+                        isset($row['sub_keyword']) ? 'sub '.$row['sub_keyword'] : null,
+                        isset($row['unsub_keyword']) ? 'unsub '.$row['unsub_keyword'] : null,
+                    ])->filter()->values();
+
+                    return $parts->isEmpty() ? null : $parts->implode(' · ');
+                })
+                ->filter()
+                ->values();
+
+            return $lines->isEmpty() ? null : $lines->implode("\n");
+        }
+
+        if (is_bool($value)) {
+            return $value ? 'Yes' : 'No';
+        }
+
+        if (is_scalar($value)) {
+            return (string) $value;
+        }
+
+        $json = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        if ($json === false || in_array($json, ['[]', '{}', 'null', ''], true)) {
+            return null;
+        }
+
+        return $json;
+    }
+
+    /**
+     * @param  array<string, mixed>  $field
+     */
+    public static function makeFormFieldComponent(array $field): mixed
+    {
+        $name = $field['name'];
+        $label = $field['label'] ?? $name;
+        $required = ! empty($field['required']);
+        $type = $field['type'] ?? 'text';
+
+        $component = match ($type) {
+            'textarea' => Textarea::make($name)->label($label)->rows(3)->columnSpanFull(),
+            'url' => TextInput::make($name)->label($label)->url(),
+            'password' => TextInput::make($name)->label($label)->password()->revealable(),
+            'number' => TextInput::make($name)
+                ->label($label)
+                ->numeric()
+                ->integer()
+                ->minValue(isset($field['min']) ? (int) $field['min'] : 0)
+                ->suffix('days'),
+            'integer' => TextInput::make($name)
+                ->label($label)
+                ->numeric()
+                ->integer()
+                ->inputMode('numeric')
+                ->rule('integer')
+                ->rule('min:0')
+                ->minValue(0),
+            'select' => Select::make($name)
+                ->label($label)
+                ->options(is_array($field['options'] ?? null) ? $field['options'] : [])
+                ->native(false)
+                ->searchable(false),
+            'file' => FileUpload::make($name)
+                ->label($label)
+                ->disk('local')
+                ->directory('provisioning-tmp')
+                ->columnSpanFull(),
+            'packages' => Repeater::make($name)
+                ->label($label)
+                ->schema([
+                    Select::make('package')
+                        ->label('Package')
+                        ->required()
+                        ->native(false)
+                        ->searchable(false)
+                        ->options([
+                            'Daily' => 'Daily',
+                            'Weekly' => 'Weekly',
+                            'Monthly' => 'Monthly',
+                        ]),
+                    TextInput::make('tariff')
+                        ->label('Tariff')
+                        ->required()
+                        ->numeric()
+                        ->inputMode('decimal')
+                        ->rule('numeric')
+                        ->rule('min:0')
+                        ->step(0.01),
+                    TextInput::make('price_point')->label('Price point')->required(),
+                    TextInput::make('sub_keyword')->label('Subscription keyword')->required(),
+                    TextInput::make('unsub_keyword')->label('Un-sub keyword')->required(),
+                ])
+                ->columns(2)
+                ->defaultItems(1)
+                ->collapsible()
+                ->itemLabel(fn (array $state): ?string => filled($state['package'] ?? null)
+                    ? (string) $state['package']
+                    : null)
+                ->columnSpanFull(),
+            default => TextInput::make($name)->label($label),
+        };
+
+        if ($required && $type !== 'file') {
+            $component = $component->required();
+        }
+
+        return $component;
+    }
+
+    /**
      * @param  array<string, mixed>  $def
      * @return list<\Filament\Schemas\Components\Component|\Filament\Forms\Components\Component>
      */
-    public static function formFields(array $def): array
+    public static function formFields(array $def, ?ServiceProvisioning $case = null): array
     {
-        $fields = [];
+        $formFields = array_values($def['form_fields'] ?? []);
+        $hasGroups = collect($formFields)->contains(fn (array $field): bool => filled($field['group'] ?? null));
 
-        // Required attributes first, then optional (stable within each group).
-        $sorted = collect($def['form_fields'] ?? [])
+        if ($hasGroups) {
+            $grouped = [];
+            foreach ($formFields as $index => $field) {
+                $group = filled($field['group'] ?? null) ? (string) $field['group'] : 'Details';
+                $grouped[$group][] = ['index' => $index, 'field' => $field];
+            }
+
+            $sections = [];
+            foreach ($grouped as $title => $items) {
+                $components = [];
+                foreach ($items as $item) {
+                    $components[] = static::makeFormFieldComponent($item['field']);
+                }
+
+                $sections[] = Section::make($title)
+                    ->schema([
+                        Grid::make(2)->schema($components),
+                    ]);
+            }
+
+            $sections[] = Section::make('Handoff')
+                ->schema([
+                    Grid::make(2)->schema(static::handoffFields($def, $case)),
+                ]);
+
+            return $sections;
+        }
+
+        // Required attributes first, then optional (preserve config order within each group).
+        $sorted = collect($formFields)
             ->values()
-            ->sortBy(fn (array $field): array => [
+            ->sortBy(fn (array $field, int $index): array => [
                 empty($field['required']) ? 1 : 0,
-                (string) ($field['label'] ?? $field['name'] ?? ''),
+                $index,
             ])
             ->values()
             ->all();
 
+        $fields = [];
         foreach ($sorted as $field) {
-            $name = $field['name'];
-            $label = $field['label'] ?? $name;
-            $required = ! empty($field['required']);
-
-            $type = $field['type'] ?? 'text';
-
-            $component = match ($type) {
-                'textarea' => Textarea::make($name)->label($label)->rows(3)->columnSpanFull(),
-                'url' => TextInput::make($name)->label($label)->url(),
-                'password' => TextInput::make($name)->label($label)->password()->revealable(),
-                'select' => Select::make($name)
-                    ->label($label)
-                    ->options(is_array($field['options'] ?? null) ? $field['options'] : [])
-                    ->native(false)
-                    ->searchable(false),
-                'file' => FileUpload::make($name)
-                    ->label($label)
-                    ->disk('local')
-                    ->directory('provisioning-tmp')
-                    ->columnSpanFull(),
-                'packages' => Repeater::make($name)
-                    ->label($label)
-                    ->schema([
-                        TextInput::make('package')->label('Package')->required(),
-                        TextInput::make('price_point')->label('Price point')->required(),
-                        TextInput::make('sub_keyword')->label('Subscription keyword')->required(),
-                        TextInput::make('unsub_keyword')->label('Un-sub keyword')->required(),
-                    ])
-                    ->columns(2)
-                    ->defaultItems(1)
-                    ->collapsible()
-                    ->columnSpanFull(),
-                default => TextInput::make($name)->label($label),
-            };
-
-            if ($required && $type !== 'file') {
-                $component = $component->required();
-            }
-
-            $fields[] = $component;
+            $fields[] = static::makeFormFieldComponent($field);
         }
 
-        $fields[] = Textarea::make('remark')->label('Remark')->rows(2)->required()->columnSpanFull();
+        foreach (static::handoffFields($def, $case) as $handoffField) {
+            $fields[] = $handoffField;
+        }
+
+        return [
+            Grid::make(2)->schema($fields),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $def
+     * @return list<\Filament\Forms\Components\Component>
+     */
+    public static function handoffFields(array $def, ?ServiceProvisioning $case = null): array
+    {
+        $fields = [
+            Textarea::make('remark')->label('Remark')->rows(2)->required()->columnSpanFull(),
+        ];
+
+        $prefill = $case
+            ? app(ServiceProvisioningService::class)->findPrefillAttachment($case, $def)
+            : null;
+
+        if ($prefill) {
+            $fields[] = TextInput::make('prefilled_proposal')
+                ->label((string) ($def['attachment_label'] ?? 'Service proposal'))
+                ->default($prefill['label'])
+                ->disabled()
+                ->dehydrated(false)
+                ->columnSpanFull();
+
+            return $fields;
+        }
 
         $attachmentLabel = (string) ($def['attachment_label'] ?? 'Attachment');
         $attachment = FileUpload::make('attachment')
@@ -289,10 +656,7 @@ class ProvisioningStepActions
         }
         $fields[] = $attachment;
 
-        // Action has no ->columns(); wrap fields in a 2-col Grid (textarea/attachment span full).
-        return [
-            Grid::make(2)->schema($fields),
-        ];
+        return $fields;
     }
 
     public static function makeStepAction(
@@ -312,7 +676,7 @@ class ProvisioningStepActions
             ->slideOver()
             ->modalHeading($submitLabel)
             ->modalDescription($step->whereLabel().(filled($step->label) ? ' · '.$step->label : ''))
-            ->form(static::formFields($def))
+            ->form(static::formFields($def, $case))
             ->action(function (array $data) use ($case, $step, $afterSuccess): void {
                 static::runStep($case, $step->step_key, $data);
                 if ($afterSuccess) {
@@ -330,9 +694,15 @@ class ProvisioningStepActions
             $attachment = static::resolveUploadedFile($data['attachment'] ?? null)
                 ?? static::resolveUploadedFile($data['service_proposal'] ?? null);
 
-            unset($data['attachment'], $data['service_proposal']);
+            unset($data['attachment'], $data['service_proposal'], $data['prefilled_proposal']);
 
-            app(ServiceProvisioningService::class)->submitStep(
+            $service = app(ServiceProvisioningService::class);
+            if (! $attachment instanceof UploadedFile) {
+                $def = app(ProvisioningWorkflowRegistry::class)->step($case->workflow_key, $stepKey) ?? [];
+                $attachment = $service->makeUploadedFileFromPrefill($case, $def);
+            }
+
+            $service->submitStep(
                 $case,
                 $stepKey,
                 auth()->user(),
