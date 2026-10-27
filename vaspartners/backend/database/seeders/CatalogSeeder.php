@@ -191,6 +191,17 @@ class CatalogSeeder extends Seeder
             }
         }
 
+        // Every subscription-based service must expose "New subscription" for the Subscribe journey.
+        // Legacy catalog sometimes only linked Revenue Request (creates_subscription) — that must not
+        // become the partner-facing starter when New subscription exists.
+        if ($newSubscriptionId) {
+            Service::query()
+                ->where('is_active', true)
+                ->where('is_subscription_based', true)
+                ->whereDoesntHave('requisitions', fn ($q) => $q->where('requisitions.id', $newSubscriptionId))
+                ->each(fn (Service $service) => $service->requisitions()->syncWithoutDetaching([(int) $newSubscriptionId]));
+        }
+
         // Same pattern as New subscription: every subscription-based service must expose Termination.
         $terminationId = Requisition::query()
             ->where('terminates_subscription', true)

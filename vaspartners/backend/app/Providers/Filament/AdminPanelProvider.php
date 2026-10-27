@@ -16,6 +16,7 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Route;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use App\Http\Middleware\EnsureAdminPasswordChanged;
 use App\Filament\Pages\Auth\ForcePasswordChange;
@@ -52,6 +53,12 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([])
+            ->routes(function (): void {
+                // Older DB notifications still link to /admin/tickets/{tt}.
+                Route::get('/tickets/{tt}', function (string $tt) {
+                    return redirect('/admin/service-requests/'.$tt);
+                })->where('tt', '[A-Za-z0-9_-]+');
+            })
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,

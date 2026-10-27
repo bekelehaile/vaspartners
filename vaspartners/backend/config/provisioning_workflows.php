@@ -149,10 +149,9 @@ return [
                     'from' => Dept::VasSales->value,
                     'to' => Dept::IsSecurity->value,
                     'seq' => 10,
-                    'form_fields' => [
-                        ['name' => 'service_proposal', 'label' => 'Service proposal', 'type' => 'file', 'required' => true],
-                        ['name' => 'service_proposal_note', 'label' => 'Proposal note', 'type' => 'textarea', 'required' => false],
-                    ],
+                    'form_fields' => [],
+                    'requires_attachment' => true,
+                    'attachment_label' => 'Service proposal',
                 ],
                 [
                     'key' => 'security_clearance',

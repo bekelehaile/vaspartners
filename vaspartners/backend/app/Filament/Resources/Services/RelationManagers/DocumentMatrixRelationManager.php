@@ -9,6 +9,7 @@ use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 class DocumentMatrixRelationManager extends RelationManager
@@ -39,12 +40,32 @@ class DocumentMatrixRelationManager extends RelationManager
     {
         return $table
             ->defaultSort('created_at', 'desc')
+            ->searchable()
             ->columns([
-                TextColumn::make('requisition.name')->label('Request type')->sortable(),
-                TextColumn::make('documentType.name')->label('Document'),
+                TextColumn::make('requisition.name')
+                    ->label('Request type')
+                    ->sortable()
+                    ->searchable(),
+                TextColumn::make('documentType.name')
+                    ->label('Document')
+                    ->sortable()
+                    ->searchable(),
                 IconColumn::make('is_required')->boolean(),
                 TextColumn::make('sort_order')->label('#')->sortable(),
                 TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->filters([
+                SelectFilter::make('requisition_id')
+                    ->label('Request type')
+                    ->relationship('requisition', 'name')
+                    ->searchable()
+                    ->preload(),
+                SelectFilter::make('is_required')
+                    ->label('Required')
+                    ->options([
+                        '1' => 'Required',
+                        '0' => 'Optional',
+                    ]),
             ])
             ->headerActions([
                 \Filament\Actions\CreateAction::make(),

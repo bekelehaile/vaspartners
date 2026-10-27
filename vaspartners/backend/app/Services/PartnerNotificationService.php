@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\TicketStatus;
 use App\Filament\Resources\CompanyChangeRequests\CompanyChangeRequestResource;
 use App\Filament\Resources\Tickets\TicketResource;
+use App\Models\AppSetting;
 use App\Models\Contact;
 use App\Models\Company;
 use App\Models\CompanyChangeRequest;
@@ -1164,7 +1165,7 @@ class PartnerNotificationService
             'documents_need_attention' => 'Documents required',
             'documents_passed' => 'Documents accepted',
             'documents_incomplete_auto' => 'Documents incomplete',
-            'ticket_completed' => 'Request completed',
+            'ticket_completed' => 'Service proposal accepted',
             'ticket_rejected' => 'Request not approved',
             'ticket_closed' => 'Request closed',
             'profile_completed' => 'Profile updated',
@@ -1195,7 +1196,12 @@ class PartnerNotificationService
 
     protected function render(string $group, string $template, array $placeholders): string
     {
-        $message = config("notifications.{$group}.{$template}");
+        $message = null;
+        if ($group === 'templates') {
+            $message = AppSetting::partnerSmsTemplate($template);
+        } else {
+            $message = config("notifications.{$group}.{$template}");
+        }
 
         if (! is_string($message) || $message === '') {
             throw new \InvalidArgumentException("Notification template '{$group}.{$template}' not found.");

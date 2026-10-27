@@ -376,7 +376,7 @@ HTML;
                         ->native(false)
                         ->displayFormat('d M Y')
                         ->closeOnDateSelection()
-                        ->maxDate(now())
+                        // No min/max vs today — past signing dates are allowed (paper already signed).
                         ->suffixIcon(Heroicon::Calendar, isInline: true)
                         ->suffixIconColor('gray')
                         ->required($must)
@@ -385,11 +385,9 @@ HTML;
                         ->rules([
                             $must ? 'required' : 'nullable',
                             'date',
-                            'before_or_equal:today',
                         ])
                         ->validationMessages([
                             'required' => 'Contract signing date is required.',
-                            'before_or_equal' => 'Contract signing date cannot be in the future.',
                         ])
                         ->markAsRequired($must)
                         ->columnSpan(1),

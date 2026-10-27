@@ -144,12 +144,28 @@ class ProvisioningPortalController extends Controller
         $case = $this->findForContact($request, $publicId);
         $contact = $this->contact($request);
 
-        $data = $request->validate([
+        $rules = [
             'remark' => ['required', 'string', 'min:1', 'max:2000'],
             'attachment' => ['nullable', 'file'],
             'short_code' => ['nullable', 'string', 'max:64'],
             'data_sync_url' => ['nullable', 'url', 'max:500'],
-        ]);
+            // Partner config confirmation (Completed / Cancelled).
+            'completion_status' => ['nullable', 'string', 'in:completed,cancelled'],
+        ];
+
+        // Accept any other simple text form fields declared on the waiting step.
+        $def = app(ProvisioningWorkflowRegistry::class)->step($case->workflow_key, $stepKey) ?? [];
+        foreach ($def['form_fields'] ?? [] as $field) {
+            $name = (string) ($field['name'] ?? '');
+            if ($name === '' || isset($rules[$name]) || ($field['type'] ?? '') === 'file') {
+                continue;
+            }
+            $rules[$name] = ! empty($field['required'])
+                ? ['required', 'string', 'max:2000']
+                : ['nullable', 'string', 'max:2000'];
+        }
+
+        $data = $request->validate($rules);
 
         $case = $service->submitStep(
             $case,

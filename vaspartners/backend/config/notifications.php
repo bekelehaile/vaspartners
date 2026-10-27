@@ -124,7 +124,7 @@ Dear {contact_name}, documents for VAS request number {tt_number} ({service}) we
 SMS,
 
         'ticket_completed' => <<<'SMS'
-Dear {contact_name}, VAS request number {tt_number} for {service} has been completed. — Ethio telecom
+Dear {contact_name}, your service proposal for {service} (request number {tt_number}) has been accepted. Please bring the required original legal documents and copies to our office to finalise the contractual agreement. — Ethio telecom
 SMS,
 
         'ticket_rejected' => <<<'SMS'
@@ -216,7 +216,7 @@ Dear {contact_name}, contract sign-off for {service} ({company_name}) was comple
 SMS,
 
         'subscription_provisioning_invite' => <<<'SMS'
-Dear {contact_name}, please initiate service activation for {service} ({company_name}) in the VAS Partners portal. Open Service activation and submit the request with your service activation letter. {portal_url} — Ethio telecom
+Dear {contact_name}, contract sign-off for {service} ({company_name}) is complete. Please start Service activation in the VAS Partners portal and submit your service activation letter. {portal_url} — Ethio telecom
 SMS,
 
         'provisioning_message' => <<<'SMS'
@@ -235,7 +235,7 @@ SMS,
 
         'documents_passed' => 'Documents for request number {tt_number} ({service}) were accepted. Your request is under review.',
 
-        'ticket_completed' => 'Request number {tt_number} for {service} has been approved and completed.',
+        'ticket_completed' => 'Your service proposal for {service} (request number {tt_number}) has been accepted. Please bring the required original legal documents and copies to our office to finalise the contractual agreement.',
 
         'ticket_rejected' => 'Request number {tt_number} for {service} was not approved. {note} Please review the request in the portal.',
 
@@ -283,7 +283,7 @@ SMS,
 
         'subscription_contract_signed' => 'Contract sign-off for {service} ({company_name}) completed successfully on {contract_signed_at}.',
 
-        'subscription_provisioning_invite' => 'Please initiate service activation for {service} ({company_name}). Open Service activation and submit the request with your service activation letter.',
+        'subscription_provisioning_invite' => 'Contract sign-off for {service} ({company_name}) is complete. Please start Service activation and submit your service activation letter.',
 
         'provisioning_message' => 'New message on service activation {prv_number} ({service}): {note}',
 
@@ -301,8 +301,8 @@ SMS,
     'provisioning' => [
         'provisioning.step_waiting_partner' => '[{prv_number}] {step}. Action needed in the VAS Partners portal for {service}. — Ethio telecom',
         'provisioning.step_waiting_staff' => '[{prv_number}] {step}: {from} → {to}. {company} / {service} (short code {short_code}).',
-        'provisioning.go_live' => '[{prv_number}] Your {service} is Go Live. Use Subscription → Manage in the portal for further changes. — Ethio telecom',
-        'provisioning.credentials_ready' => '[{prv_number}] Service credentials are ready in the VAS Partners portal for {service}. Do not share this SMS. — Ethio telecom',
+        'provisioning.go_live' => 'Dear {contact_name}, congratulations — {service} (ref. {prv_number}) is now Go Live. Manage your subscription in the VAS Partners portal for renewals and further changes. {portal_url} — Ethio telecom',
+        'provisioning.credentials_ready' => 'Dear {contact_name}, Ethio telecom has shared credentials for {service} (ref. {prv_number}). Please sign in to the VAS Partners portal, complete configuration, then Confirm configuration. Keep credentials confidential. {portal_url} — Ethio telecom',
     ],
 
 ];

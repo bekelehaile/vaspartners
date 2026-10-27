@@ -3,6 +3,7 @@
 namespace App\Services\Provisioning;
 
 use App\Enums\ProvisioningStepStatus;
+use App\Models\AppSetting;
 use App\Models\Contact;
 use App\Models\ServiceProvisioning;
 use App\Models\ServiceProvisioningStep;
@@ -29,28 +30,30 @@ class ProvisioningNotificationService
 
     public function notifyGoLive(ServiceProvisioning $case): void
     {
-        $this->notifyPartners($case, 'provisioning.go_live', [
-            'prv_number' => $case->public_id,
-            'company' => $case->company?->name,
-            'service' => $case->service?->name,
+        $this->notifyPartners($case, 'provisioning.go_live', $this->partnerPlaceholders($case, [
             'step' => 'Go Live',
-        ]);
+        ]));
     }
 
     protected function notifyStepWaiting(ServiceProvisioning $case, ServiceProvisioningStep $step): void
     {
-        $placeholders = [
-            'prv_number' => $case->public_id,
-            'company' => $case->company?->name ?? '',
-            'service' => $case->service?->name ?? '',
+        $placeholders = $this->partnerPlaceholders($case, [
             'short_code' => (string) (($case->shared_payload ?? [])['short_code'] ?? ''),
             'step' => $step->label,
             'from' => $step->from_department?->label() ?? '',
             'to' => $step->to_department?->label() ?? '',
-        ];
+        ]);
 
         $from = $step->from_department?->value;
         $to = $step->to_department?->value;
+        $def = app(ProvisioningWorkflowRegistry::class)->step($case->workflow_key, $step->step_key) ?? [];
+
+        // Credentials shared with partner — dedicated SMS (editable in App settings).
+        if (! empty($def['releases_credentials_to_partner']) && $to === 'partner') {
+            $this->notifyPartners($case, 'provisioning.credentials_ready', $placeholders);
+
+            return;
+        }
 
         // Partner acts when they are the FROM department (e.g. resource allocation request).
         if ($from === 'partner' || $to === 'partner') {
@@ -64,6 +67,28 @@ class ProvisioningNotificationService
         if ($to && $to !== 'partner') {
             $this->notifyStaffRole($to, 'provisioning.step_waiting_staff', $placeholders);
         }
+    }
+
+    /**
+     * @param  array<string, scalar|null>  $extra
+     * @return array<string, scalar|null>
+     */
+    protected function partnerPlaceholders(ServiceProvisioning $case, array $extra = []): array
+    {
+        $case->loadMissing(['subscription.contact', 'company', 'service']);
+        $contact = $case->subscription?->contact;
+        $portalPath = '/portal/provisioning/'.$case->public_id;
+        $portalBase = rtrim((string) config('vas.frontend_url', config('app.frontend_url', config('app.url'))), '/');
+        $portalUrl = $portalBase !== '' ? $portalBase.$portalPath : $portalPath;
+
+        return array_merge([
+            'prv_number' => $case->public_id,
+            'company' => $case->company?->name ?? '',
+            'company_name' => $case->company?->name ?? '',
+            'service' => $case->service?->name ?? '',
+            'contact_name' => $contact?->name ?: 'Partner',
+            'portal_url' => $portalUrl,
+        ], $extra);
     }
 
     /**
@@ -124,9 +149,14 @@ class ProvisioningNotificationService
      */
     protected function render(string $templateKey, array $placeholders): string
     {
-        $templates = config('notifications.provisioning', []);
-        $template = $templates[$templateKey]
-            ?? '[{prv_number}] {step}: {from} → {to}. {company} / {service}.';
+        $provisioningTemplates = config('notifications.provisioning', []);
+        $template = match ($templateKey) {
+            'provisioning.go_live' => AppSetting::smsTemplateGoLive(),
+            'provisioning.credentials_ready' => AppSetting::smsTemplateCredentialsReady(),
+            default => (string) (is_array($provisioningTemplates)
+                ? ($provisioningTemplates[$templateKey] ?? '[{prv_number}] {step}: {from} → {to}. {company} / {service}.')
+                : '[{prv_number}] {step}: {from} → {to}. {company} / {service}.'),
+        };
 
         $out = $template;
         foreach ($placeholders as $key => $value) {

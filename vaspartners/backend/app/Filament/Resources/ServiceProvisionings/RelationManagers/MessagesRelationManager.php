@@ -15,7 +15,6 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
-use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
@@ -109,10 +108,19 @@ class MessagesRelationManager extends RelationManager
                     ->label('Message')
                     ->wrap()
                     ->limit(80),
-                IconColumn::make('has_pdf')
+                TextColumn::make('attachment')
                     ->label('Attachment')
-                    ->boolean()
-                    ->getStateUsing(fn (ServiceProvisioningMessage $record): bool => $record->hasAttachment()),
+                    ->state(fn (ServiceProvisioningMessage $record): string => $record->hasAttachment()
+                        ? ($record->attachment_original_name ?: 'PDF')
+                        : '—')
+                    ->url(
+                        fn (ServiceProvisioningMessage $record): ?string => $record->hasAttachment()
+                            ? route('filament.admin.provisioning-messages.attachment', $record)
+                            : null,
+                        shouldOpenInNewTab: true,
+                    )
+                    ->color(fn (ServiceProvisioningMessage $record): ?string => $record->hasAttachment() ? 'primary' : null)
+                    ->placeholder('—'),
                 TextColumn::make('created_at')
                     ->label('Sent')
                     ->dateTime()
@@ -183,6 +191,19 @@ class MessagesRelationManager extends RelationManager
                         'body' => (string) $record->body,
                     ])
                     ->visible(fn (ServiceProvisioningMessage $record): bool => filled($record->body)),
+                Action::make('open')
+                    ->label('Open PDF')
+                    ->icon(false)
+                    ->color('primary')
+                    ->button()
+                    ->url(
+                        fn (ServiceProvisioningMessage $record): string => route(
+                            'filament.admin.provisioning-messages.attachment',
+                            $record,
+                        ),
+                        shouldOpenInNewTab: true,
+                    )
+                    ->visible(fn (ServiceProvisioningMessage $record): bool => $record->hasAttachment()),
             ])
             ->toolbarActions([])
             ->bulkActions([])

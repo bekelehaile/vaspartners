@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\PartnerSmsTemplates;
 use App\Support\RevenueDuplicatePolicy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
@@ -44,6 +45,15 @@ class AppSetting extends Model
     public const KEY_CONTRACT_RENEWAL_SMS_DAYS_BEFORE = 'contract_renewal_sms_days_before';
 
     public const DEFAULT_CONTRACT_RENEWAL_SMS_DAYS_BEFORE = '30,7,0';
+
+    /** @deprecated Prefer PartnerSmsTemplates::STORAGE_KEY JSON map. */
+    public const KEY_SMS_SERVICE_ACTIVATION = 'sms_template_service_activation';
+
+    /** @deprecated Prefer PartnerSmsTemplates::STORAGE_KEY JSON map. */
+    public const KEY_SMS_CREDENTIALS_READY = 'sms_template_credentials_ready';
+
+    /** @deprecated Prefer PartnerSmsTemplates::STORAGE_KEY JSON map. */
+    public const KEY_SMS_GO_LIVE = 'sms_template_go_live';
 
     /**
      * Monthly Revenue duplicate policy (JSON). Replaces the old on/off toggle.
@@ -261,6 +271,121 @@ class AppSetting extends Model
                 ? self::DEFAULT_CONTRACT_RENEWAL_SMS_DAYS_BEFORE
                 : implode(',', $normalized),
         );
+    }
+
+    public static function smsTemplateServiceActivation(): string
+    {
+        return static::partnerSmsTemplate('subscription_provisioning_invite');
+    }
+
+    public static function smsTemplateCredentialsReady(): string
+    {
+        return static::partnerSmsTemplate('provisioning.credentials_ready');
+    }
+
+    public static function smsTemplateGoLive(): string
+    {
+        return static::partnerSmsTemplate('provisioning.go_live');
+    }
+
+    /**
+     * Resolved partner SMS body (App settings override → config default).
+     */
+    public static function partnerSmsTemplate(string $templateKey): string
+    {
+        $stored = static::partnerSmsTemplatesMap();
+        if (filled($stored[$templateKey] ?? null)) {
+            return trim((string) $stored[$templateKey]);
+        }
+
+        // Legacy single-key settings (pre-unified store).
+        $legacy = match ($templateKey) {
+            'subscription_provisioning_invite' => static::getValue(self::KEY_SMS_SERVICE_ACTIVATION),
+            'provisioning.credentials_ready' => static::getValue(self::KEY_SMS_CREDENTIALS_READY),
+            'provisioning.go_live' => static::getValue(self::KEY_SMS_GO_LIVE),
+            default => null,
+        };
+        if (filled($legacy)) {
+            return trim((string) $legacy);
+        }
+
+        return PartnerSmsTemplates::defaultBody($templateKey);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function partnerSmsTemplatesMap(): array
+    {
+        $raw = static::getValue(PartnerSmsTemplates::STORAGE_KEY);
+        if (! filled($raw)) {
+            return [];
+        }
+
+        $decoded = json_decode((string) $raw, true);
+
+        return is_array($decoded)
+            ? array_map(static fn ($v): string => trim((string) $v), $decoded)
+            : [];
+    }
+
+    /**
+     * @param  array<string, string>  $templates
+     */
+    public static function setPartnerSmsTemplates(array $templates): void
+    {
+        $clean = [];
+        foreach (array_keys(PartnerSmsTemplates::catalog()) as $key) {
+            if (array_key_exists($key, $templates)) {
+                $clean[$key] = trim((string) $templates[$key]);
+            }
+        }
+
+        static::setValue(PartnerSmsTemplates::STORAGE_KEY, json_encode($clean, JSON_UNESCAPED_UNICODE));
+    }
+
+    public static function ensurePartnerSmsDefaults(): void
+    {
+        $current = static::partnerSmsTemplatesMap();
+        $defaults = PartnerSmsTemplates::defaultBodies();
+        $merged = $current;
+
+        foreach ($defaults as $key => $body) {
+            if (! filled($merged[$key] ?? null) && filled($body)) {
+                $merged[$key] = $body;
+            }
+        }
+
+        // Migrate legacy three keys once.
+        $legacyMap = [
+            'subscription_provisioning_invite' => static::getValue(self::KEY_SMS_SERVICE_ACTIVATION),
+            'provisioning.credentials_ready' => static::getValue(self::KEY_SMS_CREDENTIALS_READY),
+            'provisioning.go_live' => static::getValue(self::KEY_SMS_GO_LIVE),
+        ];
+        foreach ($legacyMap as $key => $body) {
+            if (! filled($merged[$key] ?? null) && filled($body)) {
+                $merged[$key] = trim((string) $body);
+            }
+        }
+
+        static::setPartnerSmsTemplates($merged);
+    }
+
+    public static function restorePartnerSmsDefaults(): void
+    {
+        static::setPartnerSmsTemplates(PartnerSmsTemplates::defaultBodies());
+    }
+
+    /** @deprecated Use ensurePartnerSmsDefaults() */
+    public static function ensureServiceActivationSmsDefaults(): void
+    {
+        static::ensurePartnerSmsDefaults();
+    }
+
+    /** @deprecated Use restorePartnerSmsDefaults() */
+    public static function restoreServiceActivationSmsDefaults(): void
+    {
+        static::restorePartnerSmsDefaults();
     }
 
     /**

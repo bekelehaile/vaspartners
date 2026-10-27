@@ -12,6 +12,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use App\Support\PartnerSmsTemplates;
 use App\Support\RevenueDuplicatePolicy;
 use App\Models\User;
 use Filament\Notifications\Notification;
@@ -19,6 +20,7 @@ use Filament\Pages\Page;
 use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\EmbeddedSchema;
 use Filament\Schemas\Components\Form;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
@@ -62,6 +64,7 @@ class ManageAppSettings extends Page
 
     public function mount(): void
     {
+        AppSetting::ensurePartnerSmsDefaults();
         $this->form->fill($this->formStateFromStore());
     }
 
@@ -120,6 +123,9 @@ class ManageAppSettings extends Page
                                         'regex' => 'Use comma-separated non-negative numbers, e.g. 30,7,0.',
                                     ]),
                             ]),
+                        Tab::make('Partner SMS')
+                            ->icon('heroicon-o-device-phone-mobile')
+                            ->schema($this->partnerSmsTabSchema()),
                         Tab::make('TIN lookup')
                             ->icon('heroicon-o-building-library')
                             ->schema([
@@ -348,6 +354,13 @@ class ManageAppSettings extends Page
                 : AppSetting::DEFAULT_CONTRACT_RENEWAL_SMS_DAYS_BEFORE,
         );
 
+        $smsMap = [];
+        foreach (array_keys(PartnerSmsTemplates::catalog()) as $templateKey) {
+            $field = PartnerSmsTemplates::formField($templateKey);
+            $smsMap[$templateKey] = trim((string) ($data[$field] ?? ''));
+        }
+        AppSetting::setPartnerSmsTemplates($smsMap);
+
         AppSetting::setRevenueDuplicatePolicy(RevenueDuplicatePolicy::fromSimpleToggles(
             blockSameImport: (bool) ($data['revenue_block_same_import'] ?? false),
             blockAlreadySent: (bool) ($data['revenue_block_already_sent'] ?? false),
@@ -482,6 +495,7 @@ class ManageAppSettings extends Page
             'notify_partner_email' => AppSetting::partnerEmailEnabled(),
             'notify_contract_renewal_sms' => AppSetting::contractRenewalSmsEnabled(),
             'contract_renewal_sms_days_before' => implode(',', AppSetting::contractRenewalSmsDaysBefore()),
+            ...$this->partnerSmsFormState(),
             'erca_tin_mode' => AppSetting::ercaTinMode(),
             'erca_tin_outage_message' => AppSetting::getValue(AppSetting::KEY_ERCA_TIN_OUTAGE_MESSAGE),
             'revenue_block_same_import' => $policy->checksWithinImport(),
@@ -515,5 +529,72 @@ class ManageAppSettings extends Page
             ->get(['id', 'name'])
             ->mapWithKeys(fn (User $user): array => [$user->id => $user->name])
             ->all();
+    }
+
+    /**
+     * @return list<\Filament\Schemas\Components\Component>
+     */
+    protected function partnerSmsTabSchema(): array
+    {
+        $byGroup = [];
+        foreach (PartnerSmsTemplates::catalog() as $key => $meta) {
+            $byGroup[$meta['group']][$key] = $meta;
+        }
+
+        $sections = [
+            Placeholder::make('partner_sms_hint')
+                ->hiddenLabel()
+                ->content('All partner SMS bodies are editable here. Save to apply. Requires Notifications → SMS to be on.'),
+        ];
+
+        foreach ($byGroup as $group => $items) {
+            $fields = [];
+            foreach ($items as $key => $meta) {
+                $fields[] = Textarea::make(PartnerSmsTemplates::formField($key))
+                    ->label($meta['label'])
+                    ->rows(3)
+                    ->required()
+                    ->maxLength(600)
+                    ->columnSpanFull()
+                    ->helperText('Placeholders: '.$meta['help']);
+            }
+
+            $sections[] = Section::make($group)
+                ->collapsed()
+                ->collapsible()
+                ->schema($fields);
+        }
+
+        $sections[] = Actions::make([
+            Action::make('restore_partner_sms_defaults')
+                ->label('Restore all SMS defaults')
+                ->color('gray')
+                ->requiresConfirmation()
+                ->modalHeading('Restore all partner SMS defaults?')
+                ->modalDescription('This replaces every partner SMS template with the built-in defaults and saves immediately.')
+                ->action(function (): void {
+                    AppSetting::restorePartnerSmsDefaults();
+                    $this->form->fill($this->formStateFromStore());
+                    Notification::make()
+                        ->title('Partner SMS defaults restored')
+                        ->success()
+                        ->send();
+                }),
+        ])->alignment(Alignment::Start);
+
+        return $sections;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function partnerSmsFormState(): array
+    {
+        $state = [];
+        foreach (array_keys(PartnerSmsTemplates::catalog()) as $key) {
+            $state[PartnerSmsTemplates::formField($key)] = AppSetting::partnerSmsTemplate($key);
+        }
+
+        return $state;
     }
 }

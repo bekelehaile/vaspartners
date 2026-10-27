@@ -8,6 +8,7 @@ use Filament\Forms\Components\Select;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -56,16 +57,43 @@ class FinalApproversRelationManager extends RelationManager
                 fn (Builder $q) => $q->where('creates_subscription', true),
             ))
             ->defaultSort('created_at', 'desc')
+            ->searchable()
             ->description('Optional per request type. Configured → approval chain. Not configured → AM closes after docs.')
             ->columns([
-                TextColumn::make('requisition.name')->label('Request type')->sortable(),
-                TextColumn::make('user.name')->label('Final approver')->sortable(),
+                TextColumn::make('requisition.name')
+                    ->label('Request type')
+                    ->sortable()
+                    ->searchable(),
+                TextColumn::make('user.name')
+                    ->label('Final approver')
+                    ->sortable()
+                    ->searchable(),
                 TextColumn::make('user.is_active')
                     ->label('Active')
                     ->badge()
                     ->formatStateUsing(fn ($state): string => $state ? 'Yes' : 'No')
                     ->color(fn ($state): string => $state ? 'success' : 'danger'),
                 TextColumn::make('created_at')->dateTime()->sortable()->toggleable(isToggledHiddenByDefault: true),
+            ])
+            ->filters([
+                SelectFilter::make('requisition_id')
+                    ->label('Request type')
+                    ->relationship(
+                        'requisition',
+                        'name',
+                        fn (Builder $query) => $query->where('creates_subscription', true)->orderBy('name'),
+                    )
+                    ->searchable()
+                    ->preload(),
+                SelectFilter::make('user_id')
+                    ->label('Final approver')
+                    ->relationship(
+                        'user',
+                        'name',
+                        fn (Builder $query) => $query->where('is_active', true)->orderBy('name'),
+                    )
+                    ->searchable()
+                    ->preload(),
             ])
             ->headerActions([
                 \Filament\Actions\CreateAction::make()

@@ -551,11 +551,8 @@ class SubscriptionLifecycleService
                 }
 
                 if ($signed !== null) {
-                    if ($signed->greaterThan(now()->startOfDay())) {
-                        $errors['contract_signed_at'] = 'Contract signing date cannot be in the future.';
-                    } else {
-                        $payload['contract_signed_at'] = $signed->toDateString();
-                    }
+                    // Past and future calendar dates are allowed (no “less than / greater than today” rule).
+                    $payload['contract_signed_at'] = $signed->toDateString();
                 }
             }
         }
