@@ -140,7 +140,7 @@ export function ProvisioningChatPanel({
             {blockReason === "not_ready"
               ? "Messaging opens after Ethio telecom shares credentials for you to configure."
               : blockReason === "closed"
-                ? "Go Live is complete — use Subscription Manage for further changes."
+                ? "Messaging is closed after you submit Completed or Cancelled."
                 : `Chat with your account manager while configuring credentials. PDF up to ${maxKb} KB.`}
           </p>
         </div>

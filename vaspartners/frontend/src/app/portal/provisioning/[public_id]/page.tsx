@@ -8,6 +8,25 @@ import { PortalPageHeader } from "@/components/PortalPageHeader";
 import { ProvisioningChatPanel } from "@/components/ProvisioningChatPanel";
 import { getToken, getProvisioning, submitProvisioningStep } from "@/lib/api";
 
+function EyeIcon({ slash }: { slash?: boolean }) {
+  if (slash) {
+    return (
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+        <path d="M3 3l18 18" />
+        <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+        <path d="M9.9 5.1A10.5 10.5 0 0 1 12 5c7 0 10 7 10 7a13.3 13.3 0 0 1-3.3 3.9" />
+        <path d="M6.1 6.1A13.4 13.4 0 0 0 2 12s3 7 10 7a9.8 9.8 0 0 0 4.4-1" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
 export default function ProvisioningDetailPage() {
   const params = useParams<{ public_id: string | string[] }>();
   const raw = params.public_id;
@@ -15,7 +34,13 @@ export default function ProvisioningDetailPage() {
   const [remark, setRemark] = useState("");
   const [fields, setFields] = useState<Record<string, string>>({});
   const [attachment, setAttachment] = useState<File | null>(null);
+  const [revealedSecrets, setRevealedSecrets] = useState<Record<string, boolean>>({});
   const qc = useQueryClient();
+
+  const isSecretCredentialKey = (key: string) => {
+    const k = key.toLowerCase();
+    return k.includes("password") || k.includes("secret") || k === "smsc_password";
+  };
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["provisioning", publicId],
@@ -50,12 +75,16 @@ export default function ProvisioningDetailPage() {
       setAttachment(null);
       qc.invalidateQueries({ queryKey: ["provisioning", publicId] });
       qc.invalidateQueries({ queryKey: ["provisioning", "list"] });
+      qc.invalidateQueries({ queryKey: ["provisioning", publicId, "messages"] });
     },
   });
 
   const manageHref = data?.subscription_public_id
     ? `/portal/subscriptions/${encodeURIComponent(data.subscription_public_id)}`
     : "/portal/subscriptions";
+
+  const isTerminal =
+    data?.status === "go_live" || data?.status === "cancelled" || data?.status === "rejected";
 
   return (
     <>
@@ -68,7 +97,7 @@ export default function ProvisioningDetailPage() {
         }
         actions={
           <div className="flex flex-wrap gap-2">
-            {data?.chat_locked ? (
+            {data?.chat_locked || isTerminal ? (
               <Link href={manageHref} className="btn-primary">
                 Manage subscription
               </Link>
@@ -86,14 +115,23 @@ export default function ProvisioningDetailPage() {
         ) : isError ? (
           <p className="text-sm text-destructive">{(error as Error)?.message || "Failed to load."}</p>
         ) : data ? (
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+            <ProvisioningChatPanel
+              publicId={publicId}
+              chatLocked={!!data.chat_locked}
+              chatBlockReason={data.chat_block_reason}
+              maxKb={data.chat_attachment_max_kb ?? 2048}
+              initialMessages={data.messages ?? []}
+              subscriptionPublicId={data.subscription_public_id}
+            />
+
             <div className="space-y-6">
-              {data.chat_locked ? (
+              {data.status === "go_live" ? (
                 <div className="rounded-lg border border-border p-4 space-y-2">
-                  <h2 className="text-base font-semibold">Go Live complete</h2>
+                  <h2 className="text-base font-semibold">Completed</h2>
                   <p className="text-sm text-muted-foreground">
-                    Service activation is finished. Use Subscription Manage for renewals and further
-                    changes.
+                    Service activation is finished. Messaging is closed. Use Subscription Manage for
+                    renewals and further changes.
                   </p>
                   <Link href={manageHref} className="btn-primary inline-flex">
                     Manage subscription
@@ -101,16 +139,57 @@ export default function ProvisioningDetailPage() {
                 </div>
               ) : null}
 
+              {data.status === "cancelled" ? (
+                <div className="rounded-lg border border-border p-4 space-y-2">
+                  <h2 className="text-base font-semibold">Cancelled</h2>
+                  <p className="text-sm text-muted-foreground">
+                    This activation was cancelled. Messaging is closed.
+                  </p>
+                </div>
+              ) : null}
+
+              {data.chat_locked && data.status === "in_progress" ? (
+                <div className="rounded-lg border border-border p-4 space-y-2">
+                  <h2 className="text-base font-semibold">Configuration submitted</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Your completion was recorded. Support messaging is closed while Ethio telecom
+                    continues the remaining steps.
+                  </p>
+                </div>
+              ) : null}
+
               {data.credentials ? (
                 <div className="rounded-lg border border-border p-4">
                   <h2 className="mb-2 text-base font-semibold">Shared credentials</h2>
-                  <dl className="grid gap-2 text-sm sm:grid-cols-2">
-                    {Object.entries(data.credentials).map(([k, v]) => (
-                      <div key={k}>
-                        <dt className="text-muted-foreground">{k.replaceAll("_", " ")}</dt>
-                        <dd className="font-medium break-all">{String(v)}</dd>
-                      </div>
-                    ))}
+                  <dl className="grid gap-3 text-sm sm:grid-cols-2">
+                    {Object.entries(data.credentials).map(([k, v]) => {
+                      const secret = isSecretCredentialKey(k);
+                      const shown = !!revealedSecrets[k];
+                      const text = String(v ?? "");
+                      return (
+                        <div key={k} className="rounded-md bg-muted/40 px-3 py-2">
+                          <dt className="text-muted-foreground">{k.replaceAll("_", " ")}</dt>
+                          <dd className="mt-1 flex items-start gap-2 font-medium">
+                            <code className="min-w-0 flex-1 break-all text-sm">
+                              {secret && !shown ? "••••••••••••" : text || "—"}
+                            </code>
+                            {secret ? (
+                              <button
+                                type="button"
+                                className="btn-ghost shrink-0 px-2 py-1"
+                                aria-label={shown ? "Hide password" : "Show password"}
+                                title={shown ? "Hide" : "Show"}
+                                onClick={() =>
+                                  setRevealedSecrets((prev) => ({ ...prev, [k]: !prev[k] }))
+                                }
+                              >
+                                <EyeIcon slash={shown} />
+                              </button>
+                            ) : null}
+                          </dd>
+                        </div>
+                      );
+                    })}
                   </dl>
                 </div>
               ) : null}
@@ -121,7 +200,8 @@ export default function ProvisioningDetailPage() {
                     {data.can_act_submit_label || data.can_act_label || "Your action"}
                   </h2>
                   <p className="text-sm text-muted-foreground">
-                    Complete the fields below, then submit to continue activation.
+                    Choose status, complete any fields, then submit. After Completed or Cancelled,
+                    support messaging closes.
                   </p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     {(data.can_act_fields ?? []).map((f) => (
@@ -143,6 +223,22 @@ export default function ProvisioningDetailPage() {
                             }
                             required={!!f.required}
                           />
+                        ) : f.type === "select" ? (
+                          <select
+                            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                            value={fields[f.name] ?? ""}
+                            onChange={(e) =>
+                              setFields((prev) => ({ ...prev, [f.name]: e.target.value }))
+                            }
+                            required={!!f.required}
+                          >
+                            <option value="">Select…</option>
+                            {(f.options ?? []).map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </select>
                         ) : (
                           <input
                             className="w-full rounded-md border border-border bg-background px-3 py-2"
@@ -244,15 +340,6 @@ export default function ProvisioningDetailPage() {
                 </ul>
               </div>
             </div>
-
-            <ProvisioningChatPanel
-              publicId={publicId}
-              chatLocked={!!data.chat_locked}
-              chatBlockReason={data.chat_block_reason}
-              maxKb={data.chat_attachment_max_kb ?? 2048}
-              initialMessages={data.messages ?? []}
-              subscriptionPublicId={data.subscription_public_id}
-            />
           </div>
         ) : null}
       </div>

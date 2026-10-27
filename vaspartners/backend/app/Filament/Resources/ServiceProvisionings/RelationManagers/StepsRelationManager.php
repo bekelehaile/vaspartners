@@ -88,31 +88,15 @@ class StepsRelationManager extends RelationManager
                             TextInput::make('status')->label('Status')->disabled()->dehydrated(false),
                             TextInput::make('days')->label('Days in step')->disabled()->dehydrated(false),
                             Textarea::make('remark')->label('Remark')->rows(3)->disabled()->dehydrated(false)->columnSpanFull(),
-                            Textarea::make('payload')
-                                ->label('Submitted attributes')
-                                ->rows(6)
-                                ->disabled()
-                                ->dehydrated(false)
-                                ->columnSpanFull(),
                         ]),
                     ])
-                    ->fillForm(function (ServiceProvisioningStep $record): array {
-                        $payload = collect($record->payload ?? [])
-                            ->map(fn ($v, $k) => $k.': '.(is_scalar($v) || $v === null
-                                ? (string) ($v ?? '—')
-                                : json_encode($v)))
-                            ->sortKeys()
-                            ->implode("\n");
-
-                        return [
-                            'what' => $record->label,
-                            'where' => $record->whereLabel(),
-                            'status' => $record->status?->label() ?? '—',
-                            'days' => (string) $record->daysInStep(),
-                            'remark' => filled($record->remark) ? (string) $record->remark : '—',
-                            'payload' => $payload !== '' ? $payload : '—',
-                        ];
-                    }),
+                    ->fillForm(fn (ServiceProvisioningStep $record): array => [
+                        'what' => $record->label,
+                        'where' => $record->whereLabel(),
+                        'status' => $record->status?->label() ?? '—',
+                        'days' => (string) $record->daysInStep(),
+                        'remark' => filled($record->remark) ? (string) $record->remark : '—',
+                    ]),
                 ActionGroup::make([
                     Action::make('submit_step')
                         ->label(fn (ServiceProvisioningStep $record): string => ProvisioningStepActions::submitToLabel($record))

@@ -121,6 +121,46 @@ class ServiceProvisioning extends Model
             ?? $this->steps()->where('step_key', $this->current_step_key)->first();
     }
 
+    /**
+     * Account manager handling this activation (from subscription tickets).
+     */
+    public function accountHandler(): ?User
+    {
+        $this->loadMissing([
+            'subscription.activatedByTicket.assignee',
+            'subscription.activatedByTicket.currentApprover',
+        ]);
+
+        $activationTicket = $this->subscription?->activatedByTicket;
+        if ($activationTicket?->assignee instanceof User) {
+            return $activationTicket->assignee;
+        }
+        if ($activationTicket?->currentApprover instanceof User) {
+            return $activationTicket->currentApprover;
+        }
+
+        $this->loadMissing([
+            'subscription.tickets' => fn ($q) => $q
+                ->with(['assignee', 'currentApprover'])
+                ->where(function ($q): void {
+                    $q->whereNotNull('assigned_to_user_id')
+                        ->orWhereNotNull('current_approver_user_id');
+                })
+                ->latest('id'),
+        ]);
+
+        foreach ($this->subscription?->tickets ?? [] as $ticket) {
+            if ($ticket->assignee instanceof User) {
+                return $ticket->assignee;
+            }
+            if ($ticket->currentApprover instanceof User) {
+                return $ticket->currentApprover;
+            }
+        }
+
+        return null;
+    }
+
     public function getRouteKeyName(): string
     {
         return 'public_id';

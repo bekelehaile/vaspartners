@@ -17,6 +17,7 @@ use Filament\Actions\ActionGroup;
 use Filament\Actions\ViewAction;
 use Filament\Infolists\Components\KeyValueEntry;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Components\ViewEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -49,7 +50,14 @@ class ServiceProvisioningResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery()->with(['company', 'service', 'subscription', 'steps']);
+        $query = parent::getEloquentQuery()->with([
+            'company',
+            'service',
+            'subscription.contact',
+            'subscription.activatedByTicket.assignee',
+            'subscription.activatedByTicket.currentApprover',
+            'steps',
+        ]);
 
         /** @var User|null $user */
         $user = auth()->user();
@@ -100,68 +108,344 @@ class ServiceProvisioningResource extends Resource
 
     public static function infolist(Schema $schema): Schema
     {
-        return $schema
-            ->columns(1)
-            ->components([
-            Section::make('Overview')
-                ->compact()
-                ->columnSpanFull()
-                ->columns(3)
+        return $schema->components([
+            Section::make('Case')
                 ->schema([
-                    TextEntry::make('public_id')
-                        ->label('PRV')
-                        ->weight(FontWeight::SemiBold)
-                        ->copyable()
-                        ->copyMessage('PRV copied'),
-                    TextEntry::make('status')->badge(),
-                    TextEntry::make('workflow_key')->label('Workflow')->badge()->placeholder('—'),
-                    TextEntry::make('company.name')->label('Company')->placeholder('—')->wrap(),
-                    TextEntry::make('service.name')->label('Service')->placeholder('—')->wrap(),
-                    TextEntry::make('subscription.public_id')
-                        ->label('Subscription')
-                        ->placeholder('—')
-                        ->url(fn (ServiceProvisioning $record): ?string => $record->subscription
-                            ? \App\Filament\Resources\Subscriptions\SubscriptionResource::getUrl('view', ['record' => $record->subscription])
-                            : null),
-                    TextEntry::make('current_step')
-                        ->label('Current step')
-                        ->badge()
-                        ->color('warning')
-                        ->weight(FontWeight::SemiBold)
-                        ->columnSpanFull()
-                        ->placeholder('—')
-                        ->state(function (ServiceProvisioning $record): ?string {
-                            $key = $record->current_step_key;
-                            if (! filled($key)) {
-                                return null;
-                            }
-                            $label = $record->steps
-                                ->firstWhere('step_key', $key)
-                                ?->label;
+                TextEntry::make('public_id')
+                    ->label('Case number')
+                    ->weight(FontWeight::SemiBold)
+                    ->copyable()
+                    ->copyMessage('Case number copied'),
+                TextEntry::make('status')
+                    ->badge()
+                    ->formatStateUsing(fn ($state): string => $state instanceof ProvisioningStatus
+                        ? $state->label()
+                        : (ProvisioningStatus::tryFrom((string) $state)?->label() ?? (string) $state))
+                    ->color(fn ($state): string => ($state instanceof ProvisioningStatus
+                        ? $state
+                        : ProvisioningStatus::tryFrom((string) $state)
+                    )?->getColor() ?? 'gray'),
+                TextEntry::make('workflow_key')
+                    ->label('Workflow')
+                    ->badge()
+                    ->placeholder('—')
+                    ->formatStateUsing(fn ($state): string => $state instanceof \App\Enums\ProvisioningWorkflow
+                        ? $state->label()
+                        : str_replace('_', ' ', ucfirst((string) $state))),
+                TextEntry::make('current_step')
+                    ->label('Current step')
+                    ->badge()
+                    ->color('warning')
+                    ->placeholder('—')
+                    ->state(function (ServiceProvisioning $record): ?string {
+                        $key = $record->current_step_key;
+                        if (! filled($key)) {
+                            return null;
+                        }
 
-                            return filled($label) ? $label.' ('.$key.')' : (string) $key;
-                        }),
-                    TextEntry::make('overall_days')
-                        ->label('Elapsed days')
-                        ->state(fn (ServiceProvisioning $record): string => $record->overallElapsedDays().' day(s)'),
-                    TextEntry::make('started_at')->label('Started')->dateTime('d M Y, H:i')->placeholder('—'),
-                    TextEntry::make('completed_at')->label('Completed')->dateTime('d M Y, H:i')->placeholder('—'),
-                ]),
-            Section::make('Shared credentials')
-                ->compact()
-                ->columnSpanFull()
+                        return $record->steps->firstWhere('step_key', $key)?->label ?: (string) $key;
+                    }),
+                TextEntry::make('waiting_on')
+                    ->label('Waiting on')
+                    ->badge()
+                    ->placeholder('—')
+                    ->state(function (ServiceProvisioning $record): ?string {
+                        $waiting = $record->steps
+                            ->filter(fn ($s) => $s->status === ProvisioningStepStatus::Waiting)
+                            ->map(fn ($s): string => $s->from_department instanceof ProvisioningDepartment
+                                ? $s->from_department->label()
+                                : (string) $s->from_department)
+                            ->filter()
+                            ->unique()
+                            ->values();
+
+                        return $waiting->isEmpty() ? null : $waiting->implode(', ');
+                    }),
+                TextEntry::make('overall_days')
+                    ->label('Elapsed')
+                    ->state(fn (ServiceProvisioning $record): string => $record->overallElapsedDays().' day(s)'),
+                TextEntry::make('started_at')->label('Started')->dateTime()->placeholder('—'),
+                TextEntry::make('completed_at')->label('Completed')->dateTime()->placeholder('—'),
+            ])->columns(2),
+
+            Section::make('Customer')
+                ->schema([
+                TextEntry::make('company.name')
+                    ->label('Company')
+                    ->placeholder('—')
+                    ->weight(FontWeight::SemiBold)
+                    ->color('primary')
+                    ->url(fn (ServiceProvisioning $record): ?string => $record->company
+                        ? \App\Filament\Resources\Companies\CompanyResource::getUrl('view', ['record' => $record->company])
+                        : null),
+                TextEntry::make('company.legal_name')->label('Legal name')->placeholder('—')->wrap(),
+                TextEntry::make('company.tin')->label('TIN number')->placeholder('—')->copyable(),
+                TextEntry::make('subscription.contact.name')
+                    ->label('Contact')
+                    ->placeholder('—')
+                    ->url(fn (ServiceProvisioning $record): ?string => $record->subscription?->contact
+                        ? \App\Filament\Resources\Contacts\ContactResource::getUrl('view', ['record' => $record->subscription->contact])
+                        : null),
+                TextEntry::make('customer_phone')
+                    ->label('Phone')
+                    ->placeholder('—')
+                    ->state(fn (ServiceProvisioning $record): ?string => $record->company?->claimPhone()
+                        ?: $record->subscription?->contact?->phone_number
+                        ?: ($record->shared_payload['contact_number'] ?? null)),
+                TextEntry::make('customer_email')
+                    ->label('Email')
+                    ->placeholder('—')
+                    ->state(fn (ServiceProvisioning $record): ?string => $record->company?->email
+                        ?: $record->subscription?->contact?->email
+                        ?: ($record->shared_payload['contact_email'] ?? null)),
+            ])->columns(2),
+
+            Section::make('Service')
+                ->collapsible()
+                ->collapsed()
+                ->schema([
+                TextEntry::make('service.name')->label('Service')->placeholder('—'),
+                TextEntry::make('service_type')
+                    ->label('Service type')
+                    ->placeholder('—')
+                    ->state(fn (ServiceProvisioning $record): ?string => $record->service?->type
+                        ?: ($record->shared_payload['service_type'] ?? null)),
+                TextEntry::make('subscription.public_id')
+                    ->label('Subscription')
+                    ->placeholder('—')
+                    ->url(fn (ServiceProvisioning $record): ?string => $record->subscription
+                        ? \App\Filament\Resources\Subscriptions\SubscriptionResource::getUrl('view', ['record' => $record->subscription])
+                        : null),
+                TextEntry::make('subscription.status')
+                    ->label('Subscription status')
+                    ->badge()
+                    ->placeholder('—')
+                    ->formatStateUsing(fn ($state): string => \App\Enums\SubscriptionStatus::tryLabel($state) ?? (string) $state)
+                    ->color(fn ($state): string => \App\Enums\SubscriptionStatus::tryColor($state)),
+                TextEntry::make('subscription.contract_signed_at')
+                    ->label('Contract signing date')
+                    ->date()
+                    ->placeholder('—'),
+                TextEntry::make('subscription.operational_status')
+                    ->label('Uptime status')
+                    ->badge()
+                    ->placeholder('—')
+                    ->formatStateUsing(fn ($state): string => \App\Enums\ServiceOperationalStatus::tryLabel($state) ?? (string) $state)
+                    ->color(fn ($state): string => \App\Enums\ServiceOperationalStatus::tryColor($state)),
+            ])->columns(2),
+
+            Section::make('Resource allocation')
+                ->collapsible()
+                ->collapsed()
+                ->schema([
+                TextEntry::make('detail_short_code')
+                    ->label('Short code')
+                    ->placeholder('—')
+                    ->state(fn (ServiceProvisioning $record): ?string => static::payloadValue($record, 'short_code')),
+                TextEntry::make('detail_data_sync_url')
+                    ->label('Data sync URL')
+                    ->placeholder('—')
+                    ->wrap()
+                    ->state(fn (ServiceProvisioning $record): ?string => static::payloadValue($record, 'data_sync_url')),
+            ])
+                ->columns(2)
+                ->visible(fn (ServiceProvisioning $record): bool => static::sectionHasPayload($record, ['short_code', 'data_sync_url'])),
+
+            Section::make('Commercial')
+                ->collapsible()
+                ->collapsed()
+                ->schema([
+                TextEntry::make('detail_crm_order')
+                    ->label('CRM order')
+                    ->placeholder('—')
+                    ->state(fn (ServiceProvisioning $record): ?string => static::payloadValue($record, 'crm_order')),
+                TextEntry::make('detail_tariff')
+                    ->label('Tariff')
+                    ->placeholder('—')
+                    ->state(fn (ServiceProvisioning $record): ?string => static::payloadValue($record, 'tariff')),
+                TextEntry::make('detail_service_price')
+                    ->label('Service price')
+                    ->placeholder('—')
+                    ->state(fn (ServiceProvisioning $record): ?string => static::payloadValue($record, 'service_price')),
+                TextEntry::make('detail_payer_party_type')
+                    ->label('Payer party')
+                    ->placeholder('—')
+                    ->state(fn (ServiceProvisioning $record): ?string => static::payloadValue($record, 'payer_party_type')),
+                TextEntry::make('detail_free_trial_period')
+                    ->label('Free trial period')
+                    ->placeholder('—')
+                    ->state(fn (ServiceProvisioning $record): ?string => static::payloadValue($record, 'free_trial_period')),
+                TextEntry::make('detail_packages')
+                    ->label('Subscription packages')
+                    ->placeholder('—')
+                    ->columnSpanFull()
+                    ->state(function (ServiceProvisioning $record): ?string {
+                        $packages = $record->shared_payload['packages'] ?? null;
+                        if (! is_array($packages) || $packages === []) {
+                            return null;
+                        }
+
+                        return collect($packages)
+                            ->map(function ($row): string {
+                                if (! is_array($row)) {
+                                    return (string) $row;
+                                }
+
+                                return collect([
+                                    $row['package'] ?? null,
+                                    isset($row['price_point']) ? 'price '.$row['price_point'] : null,
+                                    isset($row['sub_keyword']) ? 'sub '.$row['sub_keyword'] : null,
+                                    isset($row['unsub_keyword']) ? 'unsub '.$row['unsub_keyword'] : null,
+                                ])->filter()->implode(' · ');
+                            })
+                            ->filter()
+                            ->implode("\n");
+                    }),
+            ])
+                ->columns(2)
+                ->visible(fn (ServiceProvisioning $record): bool => static::sectionHasPayload($record, [
+                    'crm_order', 'tariff', 'service_price', 'payer_party_type', 'free_trial_period', 'packages',
+                ])),
+
+            Section::make('Product configuration')
+                ->collapsible()
+                ->collapsed()
+                ->schema([
+                TextEntry::make('detail_service_id')
+                    ->label('Service ID')
+                    ->placeholder('—')
+                    ->state(fn (ServiceProvisioning $record): ?string => static::payloadValue($record, 'service_id')),
+                TextEntry::make('detail_product_id')
+                    ->label('Product ID')
+                    ->placeholder('—')
+                    ->state(fn (ServiceProvisioning $record): ?string => static::payloadValue($record, 'product_id')),
+                TextEntry::make('detail_partner_id')
+                    ->label('Partner ID')
+                    ->placeholder('—')
+                    ->state(fn (ServiceProvisioning $record): ?string => static::payloadValue($record, 'partner_id')),
+                TextEntry::make('detail_spid')
+                    ->label('SPID')
+                    ->placeholder('—')
+                    ->state(fn (ServiceProvisioning $record): ?string => static::payloadValue($record, 'spid')),
+                TextEntry::make('detail_port')
+                    ->label('Port')
+                    ->placeholder('—')
+                    ->state(fn (ServiceProvisioning $record): ?string => static::payloadValue($record, 'port')),
+            ])
+                ->columns(2)
+                ->visible(fn (ServiceProvisioning $record): bool => static::sectionHasPayload($record, [
+                    'service_id', 'product_id', 'partner_id', 'spid', 'port',
+                ])),
+
+            Section::make('Other parameters')
+                ->collapsible()
+                ->collapsed()
+                ->schema([
+                KeyValueEntry::make('other_activation_details')
+                    ->label('')
+                    ->columnSpanFull()
+                    ->state(fn (ServiceProvisioning $record): array => static::otherActivationDetails($record)),
+            ])
+                ->columns(1)
+                ->visible(fn (ServiceProvisioning $record): bool => static::otherActivationDetails($record) !== []),
+
+            Section::make('Credentials')
                 ->collapsed()
                 ->collapsible()
                 ->visible(fn (ServiceProvisioning $record): bool => (bool) ($record->shared_payload['credentials_released_to_partner'] ?? false)
                     && filled($record->shared_payload['credentials'] ?? null)
                     && (auth()->user()?->can('viewCredentials', $record) ?? false))
                 ->schema([
-                    KeyValueEntry::make('credentials')
+                    ViewEntry::make('credentials')
                         ->label('')
                         ->columnSpanFull()
+                        ->view('filament.infolists.secret-credentials')
                         ->state(fn (ServiceProvisioning $record): array => (array) ($record->shared_payload['credentials'] ?? [])),
                 ]),
         ]);
+    }
+
+    /**
+     * @param  list<string>  $keys
+     */
+    public static function sectionHasPayload(ServiceProvisioning $record, array $keys): bool
+    {
+        foreach ($keys as $key) {
+            $value = $record->shared_payload[$key] ?? null;
+            if ($value === null || $value === '' || $value === []) {
+                continue;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    public static function payloadValue(ServiceProvisioning $record, string $key): ?string
+    {
+        $value = $record->shared_payload[$key] ?? null;
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return is_scalar($value) ? (string) $value : null;
+    }
+
+    /**
+     * Remaining shared payload keys not shown as named Overview fields.
+     *
+     * @return array<string, string>
+     */
+    public static function otherActivationDetails(ServiceProvisioning $record): array
+    {
+        $known = [
+            'credentials',
+            'credentials_released_to_partner',
+            'credentials_released_at',
+            'smsc_password',
+            'smsc_username',
+            'company_name',
+            'customer_name',
+            'contact_number',
+            'contact_email',
+            'service_type',
+            'service_name',
+            'short_code',
+            'data_sync_url',
+            'crm_order',
+            'tariff',
+            'service_price',
+            'payer_party_type',
+            'free_trial_period',
+            'service_id',
+            'product_id',
+            'partner_id',
+            'spid',
+            'port',
+            'packages',
+        ];
+
+        return collect($record->shared_payload ?? [])
+            ->except($known)
+            ->mapWithKeys(function ($value, $key): array {
+                $label = str_replace('_', ' ', ucfirst((string) $key));
+                if (is_scalar($value) || $value === null) {
+                    $formatted = filled($value) || $value === 0 || $value === '0'
+                        ? (string) $value
+                        : null;
+                } else {
+                    $formatted = json_encode($value, JSON_UNESCAPED_UNICODE);
+                    if (in_array($formatted, ['[]', '{}', 'null', ''], true)) {
+                        $formatted = null;
+                    }
+                }
+
+                return $formatted === null ? [] : [$label => $formatted];
+            })
+            ->filter()
+            ->sortKeys()
+            ->all();
     }
 
     public static function table(Table $table): Table
@@ -172,6 +456,28 @@ class ServiceProvisioningResource extends Resource
                 TextColumn::make('public_id')->label('PRV')->searchable()->sortable(),
                 TextColumn::make('company.name')->label('Company')->searchable()->wrap(),
                 TextColumn::make('service.name')->label('Service')->wrap(),
+                TextColumn::make('am_handler')
+                    ->label('AM handler')
+                    ->state(fn (ServiceProvisioning $record): string => $record->accountHandler()?->name ?: '—')
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->where(function (Builder $q) use ($search): void {
+                            $q->whereHas('subscription.activatedByTicket.assignee', function (Builder $users) use ($search): void {
+                                $users->where('name', 'ilike', "%{$search}%");
+                            })->orWhereHas('subscription.tickets.assignee', function (Builder $users) use ($search): void {
+                                $users->where('name', 'ilike', "%{$search}%");
+                            });
+                        });
+                    })
+                    ->sortable(query: function (Builder $query, string $direction): Builder {
+                        return $query
+                            ->leftJoin('subscriptions as am_subs', 'am_subs.id', '=', 'service_provisionings.subscription_id')
+                            ->leftJoin('tickets as am_tickets', 'am_tickets.id', '=', 'am_subs.activated_by_ticket_id')
+                            ->leftJoin('users as am_users', 'am_users.id', '=', 'am_tickets.assigned_to_user_id')
+                            ->orderBy('am_users.name', $direction)
+                            ->select('service_provisionings.*');
+                    })
+                    ->toggleable()
+                    ->wrap(),
                 TextColumn::make('status')->badge()->sortable(),
                 TextColumn::make('waiting_on')
                     ->label('Waiting on')

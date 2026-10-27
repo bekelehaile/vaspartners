@@ -35,8 +35,7 @@ class AttachmentsRelationManager extends RelationManager
             ->description('Files uploaded on activation steps (letters, proposals, and other attachments).')
             ->modifyQueryUsing(fn ($query) => $query->with(['step', 'uploadedBy']))
             ->columns([
-                TextColumn::make('original_name')->label('File')->searchable()->wrap(),
-                TextColumn::make('step.label')->label('Step')->placeholder('—')->wrap(),
+                TextColumn::make('step.label')->label('Step')->placeholder('—')->wrap()->searchable(),
                 TextColumn::make('mime')->label('Type')->toggleable(),
                 TextColumn::make('size')
                     ->label('Size')

@@ -64,12 +64,12 @@ class ProvisioningPortalController extends Controller
             return [];
         }
 
-        $openSubIds = ServiceProvisioning::query()
+        // Once a PRV exists (including completed), partner uses View on that case — not a fresh Submit.
+        $provisionedSubIds = ServiceProvisioning::query()
             ->where('company_id', $companyId)
-            ->whereIn('status', [
-                ProvisioningStatus::Draft->value,
-                ProvisioningStatus::InProgress->value,
-                ProvisioningStatus::Blocked->value,
+            ->whereNotIn('status', [
+                ProvisioningStatus::Cancelled->value,
+                ProvisioningStatus::Rejected->value,
             ])
             ->pluck('subscription_id')
             ->all();
@@ -84,7 +84,7 @@ class ProvisioningPortalController extends Controller
             ])
             ->whereNotNull('contract_signed_at')
             ->whereHas('service', fn ($q) => $q->whereNotNull('provisioning_workflow')->where('provisioning_workflow', '!=', ''))
-            ->when($openSubIds !== [], fn ($q) => $q->whereNotIn('id', $openSubIds))
+            ->when($provisionedSubIds !== [], fn ($q) => $q->whereNotIn('id', $provisionedSubIds))
             ->latest('id')
             ->get()
             ->map(fn (Subscription $s) => [
@@ -327,12 +327,25 @@ class ProvisioningPortalController extends Controller
         if ($canAct) {
             $def = app(ProvisioningWorkflowRegistry::class)->step($p->workflow_key, $canAct) ?? [];
             $formFields = collect($def['form_fields'] ?? [])
-                ->map(fn (array $f) => [
-                    'name' => $f['name'],
-                    'label' => $f['label'] ?? $f['name'],
-                    'type' => $f['type'] ?? 'text',
-                    'required' => (bool) ($f['required'] ?? false),
-                ])
+                ->map(function (array $f) {
+                    $row = [
+                        'name' => $f['name'],
+                        'label' => $f['label'] ?? $f['name'],
+                        'type' => $f['type'] ?? 'text',
+                        'required' => (bool) ($f['required'] ?? false),
+                    ];
+                    if (($f['type'] ?? '') === 'select' && is_array($f['options'] ?? null)) {
+                        $row['options'] = collect($f['options'])
+                            ->map(fn ($label, $value) => [
+                                'value' => (string) $value,
+                                'label' => (string) $label,
+                            ])
+                            ->values()
+                            ->all();
+                    }
+
+                    return $row;
+                })
                 ->values()
                 ->all();
             $requiresAttachment = (bool) ($def['requires_attachment'] ?? false);

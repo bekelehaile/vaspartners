@@ -305,8 +305,13 @@ class ServiceProvisioningService
             $mergedShared['credentials_released_at'] = now()->toIso8601String();
         }
 
+        $partnerCancelled = ($payload['completion_status'] ?? null) === 'cancelled'
+            && ($step->from_department?->value === 'partner');
+
         $step->forceFill([
-            'status' => ProvisioningStepStatus::Completed,
+            'status' => $partnerCancelled
+                ? ProvisioningStepStatus::Rejected
+                : ProvisioningStepStatus::Completed,
             'payload' => array_merge($this->tableSnapshot($case), $payload),
             'remark' => filled($remark) ? trim((string) $remark) : null,
             'completed_by_type' => $actor::class,
@@ -318,9 +323,22 @@ class ServiceProvisioningService
             $this->storeAttachment($step, $actor, $attachment);
         }
 
+        if (! empty($def['closes_partner_messaging'])) {
+            $mergedShared['partner_messaging_closed_at'] = now()->toIso8601String();
+            $mergedShared['partner_messaging_closed_reason'] = $partnerCancelled
+                ? 'cancelled'
+                : 'completed';
+        }
+
         $case->forceFill([
             'shared_payload' => $mergedShared,
         ])->save();
+
+        if ($partnerCancelled) {
+            $this->markCancelled($case, $actor);
+
+            return;
+        }
 
         if (! empty($def['is_go_live'])) {
             $this->markGoLive($case, $actor);
@@ -330,6 +348,23 @@ class ServiceProvisioningService
 
         $this->advance($case);
         $this->notifications->notifyHandoff($case->fresh(['steps', 'company', 'service']));
+    }
+
+    protected function markCancelled(ServiceProvisioning $case, Model $actor): void
+    {
+        unset($actor);
+
+        $case->steps()
+            ->whereIn('status', [
+                ProvisioningStepStatus::Pending->value,
+                ProvisioningStepStatus::Waiting->value,
+            ])
+            ->update(['status' => ProvisioningStepStatus::Skipped->value]);
+
+        $case->forceFill([
+            'status' => ProvisioningStatus::Cancelled,
+            'completed_at' => now(),
+        ])->save();
     }
 
     protected function advance(ServiceProvisioning $case): void
@@ -464,6 +499,14 @@ class ServiceProvisioningService
             }
 
             if ($value !== null && $value !== '') {
+                if (($field['type'] ?? '') === 'select' && is_array($field['options'] ?? null)) {
+                    $allowed = array_map('strval', array_keys($field['options']));
+                    if (! in_array((string) $value, $allowed, true)) {
+                        throw ValidationException::withMessages([
+                            $name => 'Select a valid '.strtolower((string) ($field['label'] ?? $name)).'.',
+                        ]);
+                    }
+                }
                 $payload[$name] = $value;
             }
         }

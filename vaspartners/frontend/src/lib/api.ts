@@ -554,6 +554,7 @@ export type ProvisioningCase = {
     label: string;
     type: string;
     required?: boolean;
+    options?: Array<{ value: string; label: string }>;
   }>;
   requires_attachment?: boolean;
   attachment_label?: string | null;

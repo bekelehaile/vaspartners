@@ -3,6 +3,7 @@
 namespace App\Services\Provisioning;
 
 use App\Enums\ProvisioningStatus;
+use App\Enums\ProvisioningStepStatus;
 use App\Models\Contact;
 use App\Models\ServiceProvisioning;
 use App\Models\ServiceProvisioningMessage;
@@ -33,7 +34,8 @@ class ServiceProvisioningMessageService
     }
 
     /**
-     * Partner may message only after credentials / configuration were shared with them.
+     * Partner may message after credentials are shared, until they submit completion
+     * (Completed / Cancelled on configuration confirmation).
      */
     public function partnerMessagingOpen(ServiceProvisioning $case): bool
     {
@@ -42,8 +44,27 @@ class ServiceProvisioningMessageService
         }
 
         $shared = $case->shared_payload ?? [];
+        if (! (bool) ($shared['credentials_released_to_partner'] ?? false)) {
+            return false;
+        }
 
-        return (bool) ($shared['credentials_released_to_partner'] ?? false);
+        if (! empty($shared['partner_messaging_closed_at'])) {
+            return false;
+        }
+
+        $configStep = $case->relationLoaded('steps')
+            ? $case->steps->firstWhere('step_key', 'partner_config_completed')
+            : $case->steps()->where('step_key', 'partner_config_completed')->first();
+
+        if ($configStep && in_array($configStep->status, [
+            ProvisioningStepStatus::Completed,
+            ProvisioningStepStatus::Rejected,
+            ProvisioningStepStatus::Skipped,
+        ], true)) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -71,8 +92,15 @@ class ServiceProvisioningMessageService
             return 'closed';
         }
 
+        $shared = $case->shared_payload ?? [];
+        if (! empty($shared['partner_messaging_closed_at'])
+            || ! (bool) ($shared['credentials_released_to_partner'] ?? false)) {
+            // After completion submit, or before credentials — same partner-facing lock states.
+            return ! empty($shared['partner_messaging_closed_at']) ? 'closed' : 'not_ready';
+        }
+
         if (! $this->partnerMessagingOpen($case)) {
-            return 'not_ready';
+            return 'closed';
         }
 
         return null;

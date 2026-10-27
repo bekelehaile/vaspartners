@@ -43,7 +43,16 @@ return [
                     'seq' => 2,
                     'form_fields' => [
                         ['name' => 'crm_order', 'label' => 'CRM order', 'type' => 'text', 'required' => true],
-                        ['name' => 'payer_party_type', 'label' => 'Payer party type', 'type' => 'text', 'required' => true],
+                        [
+                            'name' => 'payer_party_type',
+                            'label' => 'Payer party',
+                            'type' => 'select',
+                            'required' => true,
+                            'options' => [
+                                'A Party' => 'A Party',
+                                'B Party' => 'B Party',
+                            ],
+                        ],
                         ['name' => 'service_price', 'label' => 'Service price', 'type' => 'text', 'required' => true],
                         ['name' => 'tariff', 'label' => 'Tariff', 'type' => 'text', 'required' => true],
                         ['name' => 'packages', 'label' => 'Subscription packages', 'type' => 'packages', 'required' => true],
@@ -119,7 +128,20 @@ return [
                     'from' => Dept::Partner->value,
                     'to' => Dept::VasSales->value,
                     'seq' => 9,
-                    'form_fields' => [],
+                    'form_fields' => [
+                        [
+                            'name' => 'completion_status',
+                            'label' => 'Status',
+                            'type' => 'select',
+                            'required' => true,
+                            'options' => [
+                                'completed' => 'Completed',
+                                'cancelled' => 'Cancelled',
+                            ],
+                        ],
+                    ],
+                    // Partner chat stays open until this step is submitted.
+                    'closes_partner_messaging' => true,
                 ],
                 [
                     'key' => 'sales_to_security',

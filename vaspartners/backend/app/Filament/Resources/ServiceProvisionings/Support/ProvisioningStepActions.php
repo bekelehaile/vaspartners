@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Gate;
 use Filament\Actions\Action;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
@@ -243,6 +244,11 @@ class ProvisioningStepActions
                 'textarea' => Textarea::make($name)->label($label)->rows(3)->columnSpanFull(),
                 'url' => TextInput::make($name)->label($label)->url(),
                 'password' => TextInput::make($name)->label($label)->password()->revealable(),
+                'select' => Select::make($name)
+                    ->label($label)
+                    ->options(is_array($field['options'] ?? null) ? $field['options'] : [])
+                    ->native(false)
+                    ->searchable(false),
                 'file' => FileUpload::make($name)
                     ->label($label)
                     ->disk('local')
