@@ -149,7 +149,11 @@ class MessagesRelationManager extends RelationManager
                         );
 
                         if ($notifyPartner) {
-                            app(PartnerNotificationService::class)->provisioningMessagePosted($case, $user, $message);
+                            try {
+                                app(PartnerNotificationService::class)->provisioningMessagePosted($case, $user, $message);
+                            } catch (\Throwable $e) {
+                                report($e);
+                            }
                         }
 
                         return $message;

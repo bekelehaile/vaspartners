@@ -164,7 +164,8 @@ class User extends Authenticatable implements CanResetPasswordContract, Filament
             return true;
         }
 
-        return $this->hasRole(['super_admin', 'admin', 'supervisor']);
+        // Do not reference roles that are not seeded (Spatie throws RoleDoesNotExist).
+        return $this->hasRole(['super_admin', 'admin']);
     }
 
     /**

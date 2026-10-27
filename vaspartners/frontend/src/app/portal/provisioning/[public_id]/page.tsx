@@ -200,8 +200,8 @@ export default function ProvisioningDetailPage() {
                     {data.can_act_submit_label || data.can_act_label || "Your action"}
                   </h2>
                   <p className="text-sm text-muted-foreground">
-                    Choose status, complete any fields, then submit. After Completed or Cancelled,
-                    support messaging closes.
+                    Choose Completed or Cancelled, add a remark, then Confirm configuration.
+                    Messaging closes after you submit.
                   </p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     {(data.can_act_fields ?? []).map((f) => (

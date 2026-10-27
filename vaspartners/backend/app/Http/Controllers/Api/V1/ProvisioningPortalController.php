@@ -206,7 +206,11 @@ class ProvisioningPortalController extends Controller
             $request->file('attachment'),
         );
 
-        $notifications->provisioningMessagePosted($case, $contact, $message);
+        try {
+            $notifications->provisioningMessagePosted($case, $contact, $message);
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         return response()->json([
             'data' => $messages->serialize($case, $message->load('author')),
@@ -293,14 +297,15 @@ class ProvisioningPortalController extends Controller
     }
 
     /**
-     * Same destination wording as admin ActionGroup items: "Submit to VAS Sales".
+     * Partner-facing action labels (no internal department names like "VAS Sales").
      */
     protected function partnerSubmitLabel(?ServiceProvisioningStep $waiting): string
     {
-        $to = $waiting?->to_department;
-        $name = $to?->label() ?: 'next section';
-
-        return 'Submit to '.$name;
+        return match ($waiting?->step_key) {
+            'partner_resource_request' => 'Submit activation request',
+            'partner_config_completed' => 'Confirm configuration',
+            default => 'Submit',
+        };
     }
 
     /**
@@ -423,7 +428,7 @@ class ProvisioningPortalController extends Controller
             $p->status === ProvisioningStatus::GoLive => 'Service activation is complete (Go Live).',
             $p->status === ProvisioningStatus::Cancelled => 'This activation was cancelled.',
             $p->status === ProvisioningStatus::Rejected => 'This activation was not approved.',
-            $waitingOnPartner => 'Action needed from you — use Submit to continue, or check messages.',
+            $waitingOnPartner => 'Action needed from you — complete the form below, or check messages.',
             $awaitingEthio => 'Ethio telecom is processing your activation. We will notify you when something is ready.',
             default => 'Activation in progress.',
         };

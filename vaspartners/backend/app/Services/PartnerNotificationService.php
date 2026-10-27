@@ -564,15 +564,27 @@ class PartnerNotificationService
         }
 
         if ($author instanceof Contact) {
-            $recipients = User::query()
-                ->where('is_active', true)
-                ->role([
+            // Only roles that exist for guard `web` — Spatie::role() throws on missing names.
+            $roleNames = \Spatie\Permission\Models\Role::query()
+                ->where('guard_name', 'web')
+                ->whereIn('name', [
                     ProvisioningDepartment::VasSales->value,
                     User::ROLE_ACCOUNT_MANAGER,
                     'super_admin',
-                    'supervisor',
+                    'admin',
                 ])
-                ->get()
+                ->pluck('name')
+                ->all();
+
+            $recipients = collect();
+            if ($roleNames !== []) {
+                $recipients = User::query()
+                    ->where('is_active', true)
+                    ->role($roleNames)
+                    ->get();
+            }
+
+            $recipients = $recipients
                 ->merge($this->managementUsers())
                 ->unique('id');
 
@@ -1139,7 +1151,7 @@ class PartnerNotificationService
             ->where('is_active', true)
             ->where(function ($q) {
                 $q->where('is_management', true)
-                    ->orWhereHas('roles', fn ($r) => $r->whereIn('name', ['super_admin', 'supervisor']));
+                    ->orWhereHas('roles', fn ($r) => $r->whereIn('name', ['super_admin', 'admin']));
             })
             ->get();
     }

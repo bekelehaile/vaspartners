@@ -182,7 +182,7 @@ export function ProvisioningTable() {
                   className="btn-primary table-action"
                   onClick={() => setActivating(row.startable ?? null)}
                 >
-                  Submit to VAS Sales
+                  Start activation
                 </button>
               ) : null}
             </span>
@@ -307,7 +307,7 @@ export function ProvisioningTable() {
                         className="btn-primary table-action"
                         onClick={() => setActivating(row.startable ?? null)}
                       >
-                        Submit to VAS Sales
+                        Start activation
                       </button>
                     ) : null}
                   </div>
@@ -480,7 +480,7 @@ function ActivationRequestForm({
         disabled={mutate.isPending || !shortCode.trim() || !letter || !remark.trim()}
         onClick={() => mutate.mutate()}
       >
-        {mutate.isPending ? "Submitting…" : "Submit to VAS Sales"}
+        {mutate.isPending ? "Submitting…" : "Submit activation request"}
       </button>
     </div>
   );
