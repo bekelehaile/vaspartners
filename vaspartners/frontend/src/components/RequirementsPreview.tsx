@@ -103,7 +103,7 @@ export function RequirementsPreview({
       </label>
       {required.length > 0 && (
         <p className="muted" style={{ marginTop: "0.35rem" }}>
-          Attach every file marked <strong>*</strong>, then submit. You can delete the
+          Attach every file marked <strong className="req">*</strong>, then submit. You can delete the
           request later if Ethio telecom has not started handling it yet.
         </p>
       )}
@@ -121,7 +121,14 @@ export function RequirementsPreview({
             >
               <label>
                 {r.document_type.name}
-                {softOptional ? " (optional)" : " *"}
+                {softOptional ? (
+                  " (optional)"
+                ) : (
+                  <span className="req" aria-hidden="true">
+                    {" "}
+                    *
+                  </span>
+                )}
               </label>
               <small className="muted">
                 {acceptAttrFromMimes(r.document_type.accepted_mimes)

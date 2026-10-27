@@ -33,7 +33,7 @@ export function JoinCompanyPanel({
       <p className="muted">{description}</p>
       <div className="field">
         <label htmlFor="attach-tin">
-          TIN number <span aria-hidden="true">*</span>
+          TIN number <span className="req" aria-hidden="true">*</span>
         </label>
         <input
           id="attach-tin"

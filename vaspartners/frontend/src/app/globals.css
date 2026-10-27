@@ -4197,6 +4197,7 @@ button.portal-mobile-card-hit {
   color: var(--et-muted);
 }
 
+.req,
 .field .req {
   color: var(--et-red);
   font-weight: 700;

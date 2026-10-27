@@ -418,7 +418,9 @@ function ActivationRequestForm({
 
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block text-sm">
-          <span className="mb-1 block font-medium">Short code *</span>
+          <span className="mb-1 block font-medium">
+            Short code <span className="req" aria-hidden="true">*</span>
+          </span>
           <input
             className="w-full rounded-md border border-border bg-background px-3 py-2"
             value={shortCode}
@@ -437,7 +439,9 @@ function ActivationRequestForm({
           />
         </label>
         <label className="block text-sm sm:col-span-2">
-          <span className="mb-1 block font-medium">Remark *</span>
+          <span className="mb-1 block font-medium">
+            Remark <span className="req" aria-hidden="true">*</span>
+          </span>
           <textarea
             className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
             rows={2}
@@ -447,7 +451,9 @@ function ActivationRequestForm({
           />
         </label>
         <label className="block text-sm sm:col-span-2">
-          <span className="mb-1 block font-medium">Service activation letter *</span>
+          <span className="mb-1 block font-medium">
+            Service activation letter <span className="req" aria-hidden="true">*</span>
+          </span>
           <input
             className="w-full rounded-md border border-border bg-background px-3 py-2"
             type="file"

@@ -211,7 +211,12 @@ export default function ProvisioningDetailPage() {
                       >
                         <span className="mb-1 block font-medium">
                           {f.label}
-                          {f.required ? " *" : ""}
+                          {f.required ? (
+                            <span className="req" aria-hidden="true">
+                              {" "}
+                              *
+                            </span>
+                          ) : null}
                         </span>
                         {f.type === "textarea" ? (
                           <textarea
@@ -254,7 +259,9 @@ export default function ProvisioningDetailPage() {
                       </label>
                     ))}
                     <label className="block text-sm sm:col-span-2">
-                      <span className="mb-1 block font-medium">Remark *</span>
+                      <span className="mb-1 block font-medium">
+                        Remark <span className="req" aria-hidden="true">*</span>
+                      </span>
                       <textarea
                         className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                         rows={3}
@@ -267,7 +274,12 @@ export default function ProvisioningDetailPage() {
                       <label className="block text-sm sm:col-span-2">
                         <span className="mb-1 block font-medium">
                           {data.attachment_label || "Attachment"}
-                          {data.requires_attachment ? " *" : ""}
+                          {data.requires_attachment ? (
+                            <span className="req" aria-hidden="true">
+                              {" "}
+                              *
+                            </span>
+                          ) : null}
                         </span>
                         <input
                           className="w-full rounded-md border border-border bg-background px-3 py-2"

@@ -126,7 +126,7 @@ function PhoneEditor({
       </p>
       <div className="field">
         <label htmlFor={`member-phone-${member.public_id}`}>
-          Phone <span aria-hidden="true">*</span>
+          Phone <span className="req" aria-hidden="true">*</span>
         </label>
         <input
           id={`member-phone-${member.public_id}`}
@@ -196,7 +196,7 @@ function AddMemberForm({
         </p>
         <div className="field">
           <label htmlFor="add-member-name">
-            Full name <span aria-hidden="true">*</span>
+            Full name <span className="req" aria-hidden="true">*</span>
           </label>
           <input
             id="add-member-name"
@@ -208,7 +208,7 @@ function AddMemberForm({
         </div>
         <div className="field">
           <label htmlFor="add-member-phone">
-            Mobile number <span aria-hidden="true">*</span>
+            Mobile number <span className="req" aria-hidden="true">*</span>
           </label>
           <input
             id="add-member-phone"
