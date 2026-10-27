@@ -437,6 +437,16 @@ function ActivationRequestForm({
           />
         </label>
         <label className="block text-sm sm:col-span-2">
+          <span className="mb-1 block font-medium">Remark *</span>
+          <textarea
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+            rows={2}
+            value={remark}
+            onChange={(e) => setRemark(e.target.value)}
+            required
+          />
+        </label>
+        <label className="block text-sm sm:col-span-2">
           <span className="mb-1 block font-medium">Service activation letter *</span>
           <input
             className="w-full rounded-md border border-border bg-background px-3 py-2"
@@ -449,16 +459,6 @@ function ActivationRequestForm({
             {acceptedMimes || "pdf,doc,docx,png,jpg,jpeg"}
             {maxKb ? ` · max ${maxKb} KB` : ""}
           </span>
-        </label>
-        <label className="block text-sm sm:col-span-2">
-          <span className="mb-1 block font-medium">Remark *</span>
-          <textarea
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-            rows={2}
-            value={remark}
-            onChange={(e) => setRemark(e.target.value)}
-            required
-          />
         </label>
       </div>
 

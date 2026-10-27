@@ -48,8 +48,12 @@ class MessagesRelationManager extends RelationManager
         $maxKb = app(ServiceProvisioningMessageService::class)->maxAttachmentKb();
 
         return $schema
-            ->columns(1)
+            ->columns(2)
             ->components([
+                Toggle::make('notify_partner')
+                    ->label('Notify partner')
+                    ->helperText('Off = internal only. On = visible to partner + portal/SMS alert.')
+                    ->default(true),
                 Textarea::make('body')
                     ->label('Message')
                     ->rows(5)
@@ -63,11 +67,6 @@ class MessagesRelationManager extends RelationManager
                     ->storeFiles(false)
                     ->columnSpanFull()
                     ->helperText("Optional. PDF only, max {$maxKb} KB."),
-                Toggle::make('notify_partner')
-                    ->label('Notify partner')
-                    ->helperText('Off = internal only. On = visible to partner + portal/SMS alert.')
-                    ->default(true)
-                    ->columnSpanFull(),
             ]);
     }
 
@@ -130,6 +129,7 @@ class MessagesRelationManager extends RelationManager
             ->headerActions([
                 CreateAction::make()
                     ->label('Add message')
+                    ->slideOver()
                     ->modalHeading('Message partner / internal note')
                     ->createAnother(false)
                     ->visible(fn (): bool => ! $locked)
@@ -158,8 +158,10 @@ class MessagesRelationManager extends RelationManager
             ->recordActions([
                 Action::make('view')
                     ->label('View')
-                    ->icon('heroicon-o-eye')
+                    ->icon(false)
                     ->color('gray')
+                    ->button()
+                    ->slideOver()
                     ->modalHeading(fn (ServiceProvisioningMessage $record): string => sprintf(
                         'Message · %s',
                         $record->created_at?->format('M j, Y H:i') ?? '—',

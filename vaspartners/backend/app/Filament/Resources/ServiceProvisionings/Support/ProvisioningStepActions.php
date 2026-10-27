@@ -270,6 +270,8 @@ class ProvisioningStepActions
             $fields[] = $component;
         }
 
+        $fields[] = Textarea::make('remark')->label('Remark')->rows(2)->required()->columnSpanFull();
+
         $attachmentLabel = (string) ($def['attachment_label'] ?? 'Attachment');
         $attachment = FileUpload::make('attachment')
             ->label($attachmentLabel)
@@ -280,8 +282,6 @@ class ProvisioningStepActions
             $attachment = $attachment->required();
         }
         $fields[] = $attachment;
-
-        $fields[] = Textarea::make('remark')->label('Remark')->rows(2)->required()->columnSpanFull();
 
         // Action has no ->columns(); wrap fields in a 2-col Grid (textarea/attachment span full).
         return [

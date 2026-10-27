@@ -100,7 +100,7 @@ class ProvisioningStatsOverview extends StatsOverviewWidget
                 ->color($waitingPartner > 0 ? 'warning' : 'gray')
                 ->url($indexUrl),
             Stat::make('Waiting staff', $waitingStaff)
-                ->description('Internal departments')
+                ->description('Internal sections')
                 ->descriptionIcon(Heroicon::OutlinedBuildingOffice)
                 ->color($waitingStaff > 0 ? 'warning' : 'gray')
                 ->url($indexUrl),

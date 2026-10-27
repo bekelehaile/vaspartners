@@ -585,7 +585,7 @@ class ServiceProvisioningService
 
             if (! $actor->canActAsProvisioningDepartment($from)) {
                 throw ValidationException::withMessages([
-                    'step' => 'Your role cannot act on this department step.',
+                    'step' => 'Your role cannot act on this section step.',
                 ]);
             }
 

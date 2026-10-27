@@ -78,8 +78,9 @@ class UserResource extends Resource
                 ->helperText('Job roles such as account manager or supervisor.')
                 ->columnSpanFull(),
             Select::make('departments')
-                ->label('Belongs to departments')
+                ->label('Belongs to sections')
                 ->options(static::departmentOptions())
+                ->helperText('Provisioning sections this user can act for (e.g. VAS Sales, VAS Operation).')
                 ->multiple()
                 ->searchable()
                 ->preload()
@@ -141,7 +142,7 @@ class UserResource extends Resource
                         ->all())
                     ->placeholder('—'),
                 TextColumn::make('departments')
-                    ->label('Departments')
+                    ->label('Sections')
                     ->badge()
                     ->state(fn (User $record): array => collect($record->provisioningDepartments())
                         ->map(fn (string $value): string => ProvisioningDepartment::tryFrom($value)?->label() ?? $value)

@@ -33,7 +33,7 @@ class ServiceProvisioningsRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->description('Activation cases (PRV) for this subscription. Open a case for department steps and partner messaging.')
+            ->description('Activation cases (PRV) for this subscription. Open a case for section steps and partner messaging.')
             ->modifyQueryUsing(fn ($query) => $query->with(['service', 'company']))
             ->columns([
                 TextColumn::make('public_id')->label('PRV')->searchable()->sortable(),

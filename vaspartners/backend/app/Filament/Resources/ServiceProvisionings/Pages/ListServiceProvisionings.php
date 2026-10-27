@@ -16,6 +16,6 @@ class ListServiceProvisionings extends ListRecords
 
     public function getSubheading(): ?string
     {
-        return 'Track activation cases (PRV), overall time, and department queues.';
+        return 'Track activation cases (PRV), overall time, and section queues.';
     }
 }

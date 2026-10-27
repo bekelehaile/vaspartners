@@ -207,7 +207,7 @@ class ServiceProvisioningResource extends Resource
                     fn (ProvisioningStatus $s) => [$s->value => $s->label()]
                 )),
                 SelectFilter::make('waiting_department')
-                    ->label('Waiting department')
+                    ->label('Waiting section')
                     ->options(
                         collect(ProvisioningDepartment::cases())
                             ->reject(fn (ProvisioningDepartment $d) => $d === ProvisioningDepartment::Partner)
@@ -227,7 +227,8 @@ class ServiceProvisioningResource extends Resource
                     }),
             ])
             ->recordActions([
-                ViewAction::make(),
+                ViewAction::make()
+                    ->slideOver(),
                 ActionGroup::make(ProvisioningStepActions::forTable())
                     ->label(fn (ServiceProvisioning $record): string => ProvisioningStepActions::groupLabel($record))
                     ->icon(false)
